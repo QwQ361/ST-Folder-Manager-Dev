@@ -2060,13 +2060,11 @@ jQuery(async () => {
       currentResourceType = tab;
       popup.find(".cfm-tab").removeClass("cfm-tab-active");
       $(this).addClass("cfm-tab-active");
-      // 切换标签时清空多选状态
+      // 切换标签时清空多选状态并关闭多选模式
+      cfmMultiSelectMode = false;
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").toggleClass(
-        "cfm-multisel-active",
-        cfmMultiSelectMode,
-      );
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -2783,6 +2781,31 @@ jQuery(async () => {
         seen.add(char.avatar);
         appendCharRow(list, char, true);
       }
+
+      // 多选工具栏（搜索模式下也可用）
+      if (cfmMultiSelectMode) {
+        const visible = getVisibleResourceIds();
+        const allSel = visible.length > 0 && visible.every(id => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          selectAllVisible();
+          executeGlobalSearch();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          executeGlobalSearch();
+        });
+        list.prepend(toolbar);
+      }
     }
   }
 
@@ -2896,6 +2919,10 @@ jQuery(async () => {
       for (const p of matched) {
         const isActive = p.value === currentVal;
         const fav = isResFavorite("presets", p.name);
+        const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
+        const msCheckHtml = cfmMultiSelectMode
+          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+          : "";
         const pFolderPath = (() => {
           const grp = groups[p.name];
           if (grp && getResFolderTree("presets")[grp])
@@ -2905,7 +2932,8 @@ jQuery(async () => {
           return null;
         })();
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
+            ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name">${escapeHtml(p.name)}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -2925,6 +2953,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmMultiSelectMode) {
+            toggleMultiSelectItem(p.name, e.shiftKey);
+            executePresetSearch();
+            return;
+          }
           applyPreset(p.value);
           rightList
             .find(".cfm-rv-item-active")
@@ -2932,7 +2965,43 @@ jQuery(async () => {
           row.addClass("cfm-rv-item-active");
           toastr.success(`已应用预设「${p.name}」`);
         });
+        // 拖拽支持（搜索模式下也可拖拽）
+        row.attr("draggable", "true");
+        row.on("dragstart", (e) => {
+          const singleData = { type: "preset", name: p.name, value: p.value };
+          const dragData = getMultiDragData(singleData);
+          e.originalEvent.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+        });
+        touchDragMgr.bind(row, () => {
+          const singleData = { type: "preset", name: p.name, value: p.value };
+          return getMultiDragData(singleData);
+        });
         rightList.append(row);
+      }
+
+      // 多选工具栏（搜索模式下也可用）
+      if (cfmMultiSelectMode) {
+        const visible = getVisibleResourceIds();
+        const allSel = visible.length > 0 && visible.every(id => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          selectAllVisible();
+          executePresetSearch();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          executePresetSearch();
+        });
+        rightList.prepend(toolbar);
       }
     }
   }
@@ -3042,6 +3111,10 @@ jQuery(async () => {
         }
         for (const n of matched) {
           const fav = isResFavorite("worldinfo", n);
+          const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
+          const msCheckHtml = cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
           const wFolderPath = (() => {
             const grp = groups[n];
             if (grp && getResFolderTree("worldinfo")[grp])
@@ -3051,7 +3124,8 @@ jQuery(async () => {
             return null;
           })();
           const row = $(`
-            <div class="cfm-row cfm-row-char">
+            <div class="cfm-row cfm-row-char ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
+              ${msCheckHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name">${escapeHtml(n)}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -3071,9 +3145,50 @@ jQuery(async () => {
           });
           row.on("click", (e) => {
             if ($(e.target).closest(".cfm-row-star").length) return;
+            if (cfmMultiSelectMode) {
+              toggleMultiSelectItem(n, e.shiftKey);
+              executeWorldInfoSearch();
+              return;
+            }
             openWorldInfoEditor(n);
           });
+          // 拖拽支持（搜索模式下也可拖拽）
+          row.attr("draggable", "true");
+          row.on("dragstart", (e) => {
+            const singleData = { type: "worldinfo", name: n };
+            const dragData = getMultiDragData(singleData);
+            e.originalEvent.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+          });
+          touchDragMgr.bind(row, () => {
+            const singleData = { type: "worldinfo", name: n };
+            return getMultiDragData(singleData);
+          });
           rightList.append(row);
+        }
+
+        // 多选工具栏（搜索模式下也可用）
+        if (cfmMultiSelectMode) {
+          const visible = getVisibleResourceIds();
+          const allSel = visible.length > 0 && visible.every(id => cfmMultiSelected.has(id));
+          const toolbar = $(`
+            <div class="cfm-multisel-toolbar">
+              <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+              <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+              <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+            </div>
+          `);
+          toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+            e.preventDefault(); e.stopPropagation();
+            selectAllVisible();
+            executeWorldInfoSearch();
+          });
+          toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+            e.preventDefault(); e.stopPropagation();
+            cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+            if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+            executeWorldInfoSearch();
+          });
+          rightList.prepend(toolbar);
         }
       });
     }
@@ -3457,6 +3572,30 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char);
+      // 多选工具栏（未归类视图）
+      if (cfmMultiSelectMode) {
+        const visible = getVisibleResourceIds();
+        const allSel = visible.length > 0 && visible.every(id => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          selectAllVisible();
+          renderRightPane();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          renderRightPane();
+        });
+        list.prepend(toolbar);
+      }
       return;
     }
 
@@ -3474,6 +3613,30 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char, true);
+      // 多选工具栏（收藏视图）
+      if (cfmMultiSelectMode) {
+        const visible = getVisibleResourceIds();
+        const allSel = visible.length > 0 && visible.every(id => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          selectAllVisible();
+          renderRightPane();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          renderRightPane();
+        });
+        list.prepend(toolbar);
+      }
       return;
     }
 
