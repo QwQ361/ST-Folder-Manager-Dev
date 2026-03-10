@@ -3043,8 +3043,14 @@ jQuery(async () => {
     node.on("click", (e) => {
       e.preventDefault();
       selectedTreeNode = folderId;
-      renderLeftTree();
-      renderRightPane();
+      refreshSelection();
+      // 如果搜索栏有内容，保持搜索模式
+      const searchQuery = $("#cfm-global-search").val();
+      if (searchQuery && searchQuery.trim()) {
+        executeGlobalSearch();
+      } else {
+        renderRightPane();
+      }
     });
 
     // 移动端触摸拖拽
@@ -3227,14 +3233,15 @@ jQuery(async () => {
     const list = $("#cfm-right-list");
     const pathEl = $("#cfm-rh-path");
     const countEl = $("#cfm-rh-count");
-    list.empty();
 
-    // 如果搜索栏有内容，保持搜索模式
+    // 如果搜索栏有内容，保持搜索模式（必须在 list.empty() 之前检查）
     const searchQuery = $("#cfm-global-search").val();
     if (searchQuery && searchQuery.trim()) {
       executeGlobalSearch();
       return;
     }
+
+    list.empty();
 
     if (!selectedTreeNode) {
       pathEl.text("选择左侧文件夹查看内容");
@@ -5251,14 +5258,14 @@ jQuery(async () => {
     }
 
     // 右侧渲染
-    rightList.empty();
-
-    // 如果搜索栏有内容，保持搜索模式
+    // 如果搜索栏有内容，保持搜索模式（必须在 rightList.empty() 之前检查）
     const presetSearchQuery = $("#cfm-preset-global-search").val();
     if (presetSearchQuery && presetSearchQuery.trim()) {
       executePresetSearch();
       return;
     }
+
+    rightList.empty();
 
     const pm = getContext().getPresetManager();
     const currentVal = pm && pm.select ? pm.select.val() : null;
@@ -5841,14 +5848,14 @@ jQuery(async () => {
     }
 
     // 右侧渲染
-    rightList.empty();
-
-    // 如果搜索栏有内容，保持搜索模式
+    // 如果搜索栏有内容，保持搜索模式（必须在 rightList.empty() 之前检查）
     const wiSearchQuery = $("#cfm-worldinfo-global-search").val();
     if (wiSearchQuery && wiSearchQuery.trim()) {
       executeWorldInfoSearch();
       return;
     }
+
+    rightList.empty();
 
     let displayItems = [];
     let displayTitle = "选择左侧文件夹查看内容";
