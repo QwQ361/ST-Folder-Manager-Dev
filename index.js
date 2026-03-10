@@ -1782,7 +1782,10 @@ jQuery(async () => {
                     <div class="cfm-tab" data-tab="presets"><i class="fa-solid fa-sliders"></i> 预设</div>
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
-                    <input type="text" class="cfm-global-search-input" id="cfm-global-search" placeholder="搜索..." />
+                    <div class="cfm-search-input-wrapper">
+                        <input type="text" class="cfm-global-search-input" id="cfm-global-search" placeholder="搜索..." />
+                        <button class="cfm-search-clear-btn" id="cfm-global-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
                     <select id="cfm-search-scope" class="cfm-search-select" title="搜索范围">
                         <option value="current">当前文件夹</option>
                         <option value="all">全部文件夹</option>
@@ -1793,7 +1796,10 @@ jQuery(async () => {
                     </select>
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-preset-search-bar" style="display:none;">
-                    <input type="text" class="cfm-global-search-input" id="cfm-preset-global-search" placeholder="搜索..." />
+                    <div class="cfm-search-input-wrapper">
+                        <input type="text" class="cfm-global-search-input" id="cfm-preset-global-search" placeholder="搜索..." />
+                        <button class="cfm-search-clear-btn" id="cfm-preset-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
                     <select id="cfm-preset-search-scope" class="cfm-search-select" title="搜索范围">
                         <option value="current">当前文件夹</option>
                         <option value="all">全部文件夹</option>
@@ -1804,7 +1810,10 @@ jQuery(async () => {
                     </select>
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-worldinfo-search-bar" style="display:none;">
-                    <input type="text" class="cfm-global-search-input" id="cfm-worldinfo-global-search" placeholder="搜索..." />
+                    <div class="cfm-search-input-wrapper">
+                        <input type="text" class="cfm-global-search-input" id="cfm-worldinfo-global-search" placeholder="搜索..." />
+                        <button class="cfm-search-clear-btn" id="cfm-worldinfo-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
                     <select id="cfm-worldinfo-search-scope" class="cfm-search-select" title="搜索范围">
                         <option value="current">当前文件夹</option>
                         <option value="all">全部文件夹</option>
@@ -2398,7 +2407,16 @@ jQuery(async () => {
 
     // 全局搜索框事件绑定
     popup.find("#cfm-global-search").on("input", function () {
+      const hasText = $(this).val().trim().length > 0;
+      $(this).closest(".cfm-search-input-wrapper").toggleClass("cfm-has-text", hasText);
       executeGlobalSearch();
+    });
+    popup.find("#cfm-global-search-clear").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-global-search").val("").focus();
+      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
+      renderRightPane();
     });
     popup.find("#cfm-search-scope").on("change", function () {
       executeGlobalSearch();
@@ -2414,7 +2432,16 @@ jQuery(async () => {
 
     // 预设搜索框事件绑定
     popup.find("#cfm-preset-global-search").on("input", function () {
+      const hasText = $(this).val().trim().length > 0;
+      $(this).closest(".cfm-search-input-wrapper").toggleClass("cfm-has-text", hasText);
       executePresetSearch();
+    });
+    popup.find("#cfm-preset-search-clear").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-preset-global-search").val("").focus();
+      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
+      renderPresetsView();
     });
     popup.find("#cfm-preset-search-scope").on("change", function () {
       executePresetSearch();
@@ -2430,7 +2457,16 @@ jQuery(async () => {
 
     // 世界书搜索框事件绑定
     popup.find("#cfm-worldinfo-global-search").on("input", function () {
+      const hasText = $(this).val().trim().length > 0;
+      $(this).closest(".cfm-search-input-wrapper").toggleClass("cfm-has-text", hasText);
       executeWorldInfoSearch();
+    });
+    popup.find("#cfm-worldinfo-search-clear").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-worldinfo-global-search").val("").focus();
+      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
+      renderWorldInfoView();
     });
     popup.find("#cfm-worldinfo-search-scope").on("change", function () {
       executeWorldInfoSearch();
@@ -3007,10 +3043,7 @@ jQuery(async () => {
     node.on("click", (e) => {
       e.preventDefault();
       selectedTreeNode = folderId;
-      // 自动展开
-      if (hasChildren && !expandedNodes.has(folderId))
-        expandedNodes.add(folderId);
-      refreshSelection();
+      renderLeftTree();
       renderRightPane();
     });
 
@@ -3195,8 +3228,13 @@ jQuery(async () => {
     const pathEl = $("#cfm-rh-path");
     const countEl = $("#cfm-rh-count");
     list.empty();
-    // 切换文件夹时清空搜索框
-    $("#cfm-char-search").val("");
+
+    // 如果搜索栏有内容，保持搜索模式
+    const searchQuery = $("#cfm-global-search").val();
+    if (searchQuery && searchQuery.trim()) {
+      executeGlobalSearch();
+      return;
+    }
 
     if (!selectedTreeNode) {
       pathEl.text("选择左侧文件夹查看内容");
@@ -5023,8 +5061,6 @@ jQuery(async () => {
       node.on("click", (e) => {
         e.preventDefault();
         selectedPresetFolder = folderId;
-        if (hasChildren && !presetExpandedNodes.has(folderId))
-          presetExpandedNodes.add(folderId);
         renderPresetsView();
       });
 
@@ -5216,6 +5252,14 @@ jQuery(async () => {
 
     // 右侧渲染
     rightList.empty();
+
+    // 如果搜索栏有内容，保持搜索模式
+    const presetSearchQuery = $("#cfm-preset-global-search").val();
+    if (presetSearchQuery && presetSearchQuery.trim()) {
+      executePresetSearch();
+      return;
+    }
+
     const pm = getContext().getPresetManager();
     const currentVal = pm && pm.select ? pm.select.val() : null;
 
@@ -5591,8 +5635,6 @@ jQuery(async () => {
       node.on("click", (e) => {
         e.preventDefault();
         selectedWorldInfoFolder = folderId;
-        if (hasChildren && !worldInfoExpandedNodes.has(folderId))
-          worldInfoExpandedNodes.add(folderId);
         renderWorldInfoView();
       });
 
@@ -5800,6 +5842,14 @@ jQuery(async () => {
 
     // 右侧渲染
     rightList.empty();
+
+    // 如果搜索栏有内容，保持搜索模式
+    const wiSearchQuery = $("#cfm-worldinfo-global-search").val();
+    if (wiSearchQuery && wiSearchQuery.trim()) {
+      executeWorldInfoSearch();
+      return;
+    }
+
     let displayItems = [];
     let displayTitle = "选择左侧文件夹查看内容";
     let childFolders = [];
