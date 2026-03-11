@@ -312,6 +312,9 @@ jQuery(async () => {
       extension_settings[extensionName].buttonMode = "topbar";
     if (extension_settings[extensionName].firstInitDone === undefined)
       extension_settings[extensionName].firstInitDone = false;
+    // 被用户主动删除（但保留标签）的文件夹ID列表，防止自动重新导入
+    if (!Array.isArray(extension_settings[extensionName].excludedTagIds))
+      extension_settings[extensionName].excludedTagIds = [];
   }
   ensureSettings();
 
@@ -345,9 +348,12 @@ jQuery(async () => {
     if (extension_settings[extensionName].firstInitDone) return;
     const tags = getTagList();
     const existingIds = Object.keys(extension_settings[extensionName].folders);
+    const excludedSet = new Set(
+      extension_settings[extensionName].excludedTagIds || [],
+    );
     let imported = 0;
     for (const tag of tags) {
-      if (!existingIds.includes(tag.id)) {
+      if (!existingIds.includes(tag.id) && !excludedSet.has(tag.id)) {
         extension_settings[extensionName].folders[tag.id] = {
           parentId: null,
         };
@@ -370,9 +376,12 @@ jQuery(async () => {
   function detectAndImportNewTags() {
     const tags = getTagList();
     const existingIds = Object.keys(config.folders);
+    const excludedSet = new Set(
+      extension_settings[extensionName].excludedTagIds || [],
+    );
     const newIds = [];
     for (const tag of tags) {
-      if (!existingIds.includes(tag.id)) {
+      if (!existingIds.includes(tag.id) && !excludedSet.has(tag.id)) {
         config.folders[tag.id] = { parentId: null };
         newIds.push(tag.id);
       }
@@ -405,6 +414,7 @@ jQuery(async () => {
   function oneClickImportAllTags() {
     const tags = getTagList();
     const existingIds = getFolderTagIds();
+    const excluded = extension_settings[extensionName].excludedTagIds || [];
     let imported = 0,
       skipped = 0;
     for (const tag of tags) {
@@ -413,9 +423,15 @@ jQuery(async () => {
         continue;
       }
       config.folders[tag.id] = { parentId: null };
+      // 从排除列表中移除（用户主动一键导入意味着重新纳入管理）
+      const exIdx = excluded.indexOf(tag.id);
+      if (exIdx >= 0) excluded.splice(exIdx, 1);
       imported++;
     }
-    if (imported > 0) saveConfig(config);
+    if (imported > 0) {
+      saveConfig(config);
+      getContext().saveSettingsDebounced();
+    }
     toastr.success(`已导入 ${imported} 个标签`);
     return imported;
   }
@@ -4171,6 +4187,10 @@ jQuery(async () => {
       config.folders[tagId] = {
         parentId: configSelectedFolderId || null,
       };
+      // 从排除列表中移除（用户主动添加意味着重新纳入管理）
+      const _ex = extension_settings[extensionName].excludedTagIds;
+      const _exi = _ex.indexOf(tagId);
+      if (_exi >= 0) _ex.splice(_exi, 1);
       saveConfig(config);
       const parentHint = configSelectedFolderId
         ? `「${getTagName(configSelectedFolderId)}」的子级`
@@ -5080,14 +5100,20 @@ jQuery(async () => {
           config.folders[childId].parentId = parentId;
           reparentedChildren.push(childId);
         }
-        if (alsoDeleteTags) deleteTagFromSystem(folderId);
+        if (alsoDeleteTags) {
+          deleteTagFromSystem(folderId);
+        } else {
+          // 仅删除文件夹但保留标签：加入排除列表防止自动重新导入
+          const excluded = extension_settings[extensionName].excludedTagIds;
+          if (!excluded.includes(folderId)) excluded.push(folderId);
+        }
         delete config.folders[folderId];
         saveConfig(config);
         // 重建被提升的子文件夹的标签名
         for (const childId of reparentedChildren) {
           recursiveRebuildTagNames(childId);
         }
-        if (alsoDeleteTags) getContext().saveSettingsDebounced();
+        getContext().saveSettingsDebounced();
         if (configSelectedFolderId === folderId) configSelectedFolderId = null;
         const suffix = alsoDeleteTags ? "（标签已同步删除）" : "";
         toastr.info(`已移除文件夹「${name}」${suffix}`);
@@ -5241,7 +5267,13 @@ jQuery(async () => {
           }
         }
         deletedNames.push(getTagName(folderId));
-        if (alsoDeleteTags) deleteTagFromSystem(folderId);
+        if (alsoDeleteTags) {
+          deleteTagFromSystem(folderId);
+        } else {
+          // 仅删除文件夹但保留标签：加入排除列表防止自动重新导入
+          const excluded = extension_settings[extensionName].excludedTagIds;
+          if (!excluded.includes(folderId)) excluded.push(folderId);
+        }
         delete config.folders[folderId];
         if (configSelectedFolderId === folderId) configSelectedFolderId = null;
       }
@@ -5249,7 +5281,7 @@ jQuery(async () => {
       for (const childId of allReparented) {
         recursiveRebuildTagNames(childId);
       }
-      if (alsoDeleteTags) getContext().saveSettingsDebounced();
+      getContext().saveSettingsDebounced();
       cfmDeleteSelected.clear();
       cfmDeleteCascade = false;
       cfmDeleteLastClickedId = null;
@@ -5281,6 +5313,10 @@ jQuery(async () => {
           config.folders[tag.id].displayName = displayName;
           prefixCount++;
         }
+        // 从排除列表中移除
+        const _ex = extension_settings[extensionName].excludedTagIds;
+        const _exi = _ex.indexOf(tag.id);
+        if (_exi >= 0) _ex.splice(_exi, 1);
       }
       created.push(displayName || name);
     }
@@ -5443,6 +5479,10 @@ jQuery(async () => {
           config.folders[tag.id].displayName = displayName;
           prefixCount++;
         }
+        // 从排除列表中移除
+        const _ex = extension_settings[extensionName].excludedTagIds;
+        const _exi = _ex.indexOf(tag.id);
+        if (_exi >= 0) _ex.splice(_exi, 1);
         count++;
       }
       for (const child of node.children) processNode(child, tag.id);
@@ -6879,6 +6919,10 @@ jQuery(async () => {
               sortOrder: folderDef.sortOrder ?? 0,
             };
             if (dn) config.folders[tag.id].displayName = dn;
+            // 从排除列表中移除
+            const _ex = extension_settings[extensionName].excludedTagIds;
+            const _exi = _ex.indexOf(tag.id);
+            if (_exi >= 0) _ex.splice(_exi, 1);
             pathToTagId[pathKey] = tag.id;
             report.foldersCreated++;
           }
