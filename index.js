@@ -963,12 +963,12 @@ jQuery(async () => {
         } else if (targetId) {
           avatars.forEach((av) => {
             const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(av, targetId, ch?.name || av);
+            handleCharDropToFolder(av, targetId, ch?.name || av, count > 1);
           });
           toastr.success(
             count > 1
-              ? `已将 ${count} 个角色移动到「${getTagName(targetId)}」`
-              : `已将「${d.name || d.avatar}」移动到「${getTagName(targetId)}」`,
+              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(targetId)}」`
+              : `已将「${d.name || d.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(targetId)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderLeftTree();
@@ -982,12 +982,17 @@ jQuery(async () => {
         ) {
           avatars.forEach((av) => {
             const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(av, selectedTreeNode, ch?.name || av);
+            handleCharDropToFolder(
+              av,
+              selectedTreeNode,
+              ch?.name || av,
+              count > 1,
+            );
           });
           toastr.success(
             count > 1
-              ? `已将 ${count} 个角色移动到「${getTagName(selectedTreeNode)}」`
-              : `已将「${d.name || d.avatar}」移动到「${getTagName(selectedTreeNode)}」`,
+              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(selectedTreeNode)}」`
+              : `已将「${d.name || d.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(selectedTreeNode)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderLeftTree();
@@ -1338,13 +1343,16 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
   // 处理角色拖放到文件夹（根据复制模式决定行为）
-  function handleCharDropToFolder(avatar, folderId, charName) {
+  // silent: 批量操作时为true，抑制单条toastr消息
+  function handleCharDropToFolder(avatar, folderId, charName, silent) {
     if (cfmCopyMode) {
       copyCharToFolder(avatar, folderId);
-      toastr.success(`已将「${charName}」复制到「${getTagName(folderId)}」`);
+      if (!silent)
+        toastr.success(`已将「${charName}」复制到「${getTagName(folderId)}」`);
     } else {
       moveCharToFolder(avatar, folderId);
-      toastr.success(`已将「${charName}」移动到「${getTagName(folderId)}」`);
+      if (!silent)
+        toastr.success(`已将「${charName}」移动到「${getTagName(folderId)}」`);
     }
   }
   // 自动清理多余的路径标签（只保留最深层的叶子标签）
@@ -3534,12 +3542,13 @@ jQuery(async () => {
         const count = avatars.length;
         avatars.forEach((av) => {
           const ch = getCharacters().find((c) => c.avatar === av);
-          handleCharDropToFolder(av, folderId, ch?.name || av);
+          handleCharDropToFolder(av, folderId, ch?.name || av, count > 1);
         });
-        if (count > 1)
-          toastr.success(
-            `已将 ${count} 个角色移动到「${getTagName(folderId)}」`,
-          );
+        toastr.success(
+          count > 1
+            ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
+            : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
+        );
         if (data.multiSelect) clearMultiSelect();
         renderLeftTree();
         renderRightPane();
@@ -3832,12 +3841,13 @@ jQuery(async () => {
           const count = avatars.length;
           avatars.forEach((av) => {
             const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(av, childId, ch?.name || av);
+            handleCharDropToFolder(av, childId, ch?.name || av, count > 1);
           });
-          if (count > 1)
-            toastr.success(
-              `已将 ${count} 个角色移动到「${getTagName(childId)}」`,
-            );
+          toastr.success(
+            count > 1
+              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
+              : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
+          );
           if (data.multiSelect) clearMultiSelect();
           renderLeftTree();
           renderRightPane();
@@ -3919,12 +3929,13 @@ jQuery(async () => {
         const count = avatars.length;
         avatars.forEach((av) => {
           const ch = getCharacters().find((c) => c.avatar === av);
-          handleCharDropToFolder(av, folderId, ch?.name || av);
+          handleCharDropToFolder(av, folderId, ch?.name || av, count > 1);
         });
-        if (count > 1)
-          toastr.success(
-            `已将 ${count} 个角色移动到「${getTagName(folderId)}」`,
-          );
+        toastr.success(
+          count > 1
+            ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
+            : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
+        );
         if (data.multiSelect) clearMultiSelect();
         renderLeftTree();
         renderRightPane();
