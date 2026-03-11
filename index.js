@@ -2045,6 +2045,7 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-right-sort-btn" title="角色排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2073,6 +2074,7 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-preset-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-preset-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-preset-btn" title="导入预设"><i class="fa-solid fa-file-import"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-preset-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-preset-right-sort-btn" title="预设排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2101,6 +2103,7 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-worldinfo-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-worldinfo-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-worldinfo-btn" title="导入世界书"><i class="fa-solid fa-file-import"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-worldinfo-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-worldinfo-right-sort-btn" title="世界书排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2623,6 +2626,226 @@ jQuery(async () => {
       if (currentResourceType === "chars") renderRightPane();
       else if (currentResourceType === "presets") renderPresetsView();
       else renderWorldInfoView();
+    });
+
+    // ==================== 导入资源功能 ====================
+    // 角色卡导入
+    popup.find("#cfm-import-char-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = $(
+        '<input type="file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none">',
+      );
+      input.on("change", async function (ev) {
+        const files = ev.target.files;
+        if (!files || files.length === 0) return;
+        const targetFolder = selectedTreeNode;
+        let successCount = 0;
+        let failCount = 0;
+        for (const file of files) {
+          try {
+            const ext = file.name.match(/\.(\w+)$/);
+            if (
+              !ext ||
+              !["json", "png", "yaml", "yml", "charx", "byaf"].includes(
+                ext[1].toLowerCase(),
+              )
+            ) {
+              failCount++;
+              continue;
+            }
+            const format = ext[1].toLowerCase();
+            const formData = new FormData();
+            formData.append("avatar", file);
+            formData.append("file_type", format);
+            const result = await fetch("/api/characters/import", {
+              method: "POST",
+              body: formData,
+              headers: getContext().getRequestHeaders({
+                omitContentType: true,
+              }),
+              cache: "no-cache",
+            });
+            if (!result.ok) {
+              failCount++;
+              continue;
+            }
+            const data = await result.json();
+            if (data.file_name !== undefined) {
+              const avatarFileName = `${data.file_name}.png`;
+              successCount++;
+              // 分配到当前文件夹
+              if (
+                targetFolder &&
+                targetFolder !== "__ungrouped__" &&
+                targetFolder !== "__favorites__"
+              ) {
+                addTagToChar(avatarFileName, targetFolder);
+              }
+            } else {
+              failCount++;
+            }
+          } catch (err) {
+            console.error("导入角色卡失败:", err);
+            failCount++;
+          }
+        }
+        // 刷新酒馆角色列表
+        if (successCount > 0) {
+          await getContext().getCharacters();
+          toastr.success(
+            `成功导入 ${successCount} 个角色卡${targetFolder && targetFolder !== "__ungrouped__" && targetFolder !== "__favorites__" ? "，已归入「" + getTagName(targetFolder) + "」" : ""}${failCount > 0 ? "，" + failCount + " 个失败" : ""}`,
+          );
+          renderRightPane();
+        } else if (failCount > 0) {
+          toastr.error(`导入失败：${failCount} 个文件无法导入`);
+        }
+        input.remove();
+      });
+      input.trigger("click");
+    });
+
+    // 世界书导入
+    popup.find("#cfm-import-worldinfo-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = $(
+        '<input type="file" multiple accept=".json,.lorebook" style="display:none">',
+      );
+      input.on("change", async function (ev) {
+        const files = ev.target.files;
+        if (!files || files.length === 0) return;
+        const targetFolder = selectedWorldInfoFolder;
+        let successCount = 0;
+        let failCount = 0;
+        for (const file of files) {
+          try {
+            const formData = new FormData();
+            formData.append("avatar", file);
+            // 处理特殊格式转换
+            try {
+              const text = await file.text();
+              const jsonData = JSON.parse(text);
+              if (jsonData.lorebookVersion !== undefined) {
+                // Novel AI lorebook 格式不在插件中转换，交给服务器处理
+              }
+            } catch (_) {
+              /* 非JSON文件或解析失败，直接上传 */
+            }
+            const result = await fetch("/api/worldinfo/import", {
+              method: "POST",
+              headers: getContext().getRequestHeaders({
+                omitContentType: true,
+              }),
+              body: formData,
+              cache: "no-cache",
+            });
+            if (!result.ok) {
+              failCount++;
+              continue;
+            }
+            const data = await result.json();
+            if (data.name) {
+              successCount++;
+              // 分配到当前文件夹
+              if (
+                targetFolder &&
+                targetFolder !== "__ungrouped__" &&
+                targetFolder !== "__favorites__"
+              ) {
+                setItemGroup("worldinfo", data.name, targetFolder);
+              }
+            } else {
+              failCount++;
+            }
+          } catch (err) {
+            console.error("导入世界书失败:", err);
+            failCount++;
+          }
+        }
+        if (successCount > 0) {
+          _worldInfoNamesCache = null; // 清除缓存
+          await getWorldInfoNames(true);
+          toastr.success(
+            `成功导入 ${successCount} 个世界书${targetFolder && targetFolder !== "__ungrouped__" && targetFolder !== "__favorites__" ? "，已归入「" + targetFolder + "」" : ""}${failCount > 0 ? "，" + failCount + " 个失败" : ""}`,
+          );
+          renderWorldInfoView();
+        } else if (failCount > 0) {
+          toastr.error(`导入失败：${failCount} 个文件无法导入`);
+        }
+        input.remove();
+      });
+      input.trigger("click");
+    });
+
+    // 预设导入
+    popup.find("#cfm-import-preset-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = $(
+        '<input type="file" multiple accept=".json,.settings" style="display:none">',
+      );
+      input.on("change", async function (ev) {
+        const files = ev.target.files;
+        if (!files || files.length === 0) return;
+        const targetFolder = selectedPresetFolder;
+        const apiId = getCurrentPresetApiId();
+        let successCount = 0;
+        let failCount = 0;
+        for (const file of files) {
+          try {
+            const text = await file.text();
+            let presetBody;
+            try {
+              presetBody = JSON.parse(text);
+            } catch (_) {
+              failCount++;
+              continue;
+            }
+            const name = file.name.replace(/\.[^/.]+$/, "");
+            const result = await fetch("/api/presets/save", {
+              method: "POST",
+              headers: getContext().getRequestHeaders(),
+              body: JSON.stringify({
+                apiId: apiId,
+                name: name,
+                preset: presetBody,
+              }),
+            });
+            if (!result.ok) {
+              failCount++;
+              continue;
+            }
+            const data = await result.json();
+            if (data.name) {
+              successCount++;
+              // 分配到当前文件夹
+              if (
+                targetFolder &&
+                targetFolder !== "__ungrouped__" &&
+                targetFolder !== "__favorites__"
+              ) {
+                setItemGroup("presets", data.name, targetFolder);
+              }
+            } else {
+              failCount++;
+            }
+          } catch (err) {
+            console.error("导入预设失败:", err);
+            failCount++;
+          }
+        }
+        if (successCount > 0) {
+          toastr.success(
+            `成功导入 ${successCount} 个预设${targetFolder && targetFolder !== "__ungrouped__" && targetFolder !== "__favorites__" ? "，已归入「" + targetFolder + "」" : ""}${failCount > 0 ? "，" + failCount + " 个失败" : ""}`,
+          );
+          renderPresetsView();
+        } else if (failCount > 0) {
+          toastr.error(`导入失败：${failCount} 个文件无法导入`);
+        }
+        input.remove();
+      });
+      input.trigger("click");
     });
 
     // 重置排序状态
