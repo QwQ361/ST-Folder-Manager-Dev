@@ -2076,6 +2076,8 @@ jQuery(async () => {
     }
     // 如果删除模式开着，先关闭
     if (cfmResDeleteMode) exitResDeleteMode();
+    // 如果编辑模式开着，先关闭
+    if (cfmEditMode) exitEditMode();
     // 更新导出按钮外观
     $(".cfm-export-btn").addClass("cfm-export-active");
     $(".cfm-export-btn")
@@ -2411,6 +2413,8 @@ jQuery(async () => {
     }
     // 如果导出模式开着，先关闭
     if (cfmExportMode) exitExportMode();
+    // 如果编辑模式开着，先关闭
+    if (cfmEditMode) exitEditMode();
     // 更新删除按钮外观
     $(".cfm-res-delete-btn").addClass("cfm-res-delete-active");
     $(".cfm-res-delete-btn")
@@ -2622,6 +2626,264 @@ jQuery(async () => {
     rerenderCurrentView();
   }
 
+  // ==================== 角色卡快速编辑模式 ====================
+  let cfmEditMode = false;
+  let cfmEditSelected = new Set();
+  let cfmEditRangeMode = false;
+  let cfmEditLastClicked = null;
+
+  function enterEditMode() {
+    cfmEditMode = true;
+    cfmEditSelected.clear();
+    cfmEditRangeMode = false;
+    cfmEditLastClicked = null;
+    // 关闭其他模式
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    // 更新按钮外观
+    $("#cfm-edit-char-btn").addClass("cfm-edit-active");
+    $("#cfm-edit-char-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-edit-char-btn").attr("title", "确认编辑");
+    $(".cfm-popup").addClass("cfm-edit-mode");
+    rerenderCurrentView();
+  }
+
+  function exitEditMode() {
+    cfmEditMode = false;
+    cfmEditSelected.clear();
+    cfmEditRangeMode = false;
+    cfmEditLastClicked = null;
+    $("#cfm-edit-char-btn").removeClass("cfm-edit-active");
+    $("#cfm-edit-char-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-edit-char-btn").attr("title", "快速编辑角色卡");
+    $(".cfm-popup").removeClass("cfm-edit-mode");
+    rerenderCurrentView();
+  }
+
+  function toggleEditItem(id, shiftKey) {
+    if ((shiftKey || cfmEditRangeMode) && cfmEditLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmEditLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmEditSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmEditSelected.has(id)) cfmEditSelected.delete(id);
+      else cfmEditSelected.add(id);
+    }
+    cfmEditLastClicked = id;
+  }
+
+  function prependEditToolbar(listContainer, renderFn) {
+    if (!cfmEditMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmEditSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmEditRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmEditRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmEditSelected.size > 0 ? `已选 ${cfmEditSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmEditSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmEditSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmEditRangeMode = !cfmEditRangeMode;
+      if (cfmEditRangeMode) cfmEditLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitEditMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 显示编辑弹窗（支持单个或批量）
+  async function showEditPopup(avatars) {
+    if (!avatars || avatars.length === 0) return;
+    const characters = getContext().characters;
+    // 单个角色时预填当前值
+    let defaultCreator = "";
+    let defaultVersion = "";
+    if (avatars.length === 1) {
+      const char = characters.find((c) => c.avatar === avatars[0]);
+      if (char) {
+        defaultCreator = char.data?.creator || "";
+        defaultVersion = char.data?.character_version || "";
+      }
+    }
+    const charNames = avatars.map((av) => {
+      const c = characters.find((ch) => ch.avatar === av);
+      return c ? c.name : av;
+    });
+    const nameListHtml =
+      avatars.length <= 5
+        ? charNames
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : charNames
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${avatars.length} 个角色卡</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">快速编辑角色卡</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>作者名 (Creator)</label>
+            <input type="text" class="cfm-edit-input" id="cfm-edit-creator" value="${escapeHtml(defaultCreator)}" placeholder="${avatars.length > 1 ? "留空则不修改" : "输入作者名"}">
+          </div>
+          <div class="cfm-edit-popup-field">
+            <label>版本名 (Version)</label>
+            <input type="text" class="cfm-edit-input" id="cfm-edit-version" value="${escapeHtml(defaultVersion)}" placeholder="${avatars.length > 1 ? "留空则不修改" : "输入版本名"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-edit-creator").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const creator = overlay.find("#cfm-edit-creator").val().trim();
+        const version = overlay.find("#cfm-edit-version").val().trim();
+        overlay.remove();
+        resolve({ creator, version });
+      });
+      // Enter键确认
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  // 执行角色卡编辑
+  async function executeCharEdit(avatars) {
+    const result = await showEditPopup(avatars);
+    if (!result) return;
+    const { creator, version } = result;
+    const isBatch = avatars.length > 1;
+    // 批量模式下，留空表示不修改
+    if (isBatch && !creator && !version) {
+      toastr.warning("请至少填写一个字段");
+      return;
+    }
+    const characters = getContext().characters;
+    const headers = getContext().getRequestHeaders();
+    let success = 0;
+    let fail = 0;
+    toastr.info(`正在更新 ${avatars.length} 个角色卡...`);
+
+    for (const avatar of avatars) {
+      const char = characters.find((c) => c.avatar === avatar);
+      if (!char) {
+        fail++;
+        continue;
+      }
+      const data = {
+        avatar: char.avatar,
+        data: {},
+      };
+      // 单个模式：直接用输入值（可以清空）；批量模式：留空不修改
+      if (isBatch) {
+        if (creator) data.data.creator = creator;
+        if (version) data.data.character_version = version;
+      } else {
+        data.data.creator = creator;
+        data.data.character_version = version;
+      }
+      try {
+        const resp = await fetch("/api/characters/merge-attributes", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify(data),
+        });
+        if (resp.ok) {
+          // 更新本地缓存
+          if (!char.data) char.data = {};
+          if (isBatch) {
+            if (creator) char.data.creator = creator;
+            if (version) char.data.character_version = version;
+          } else {
+            char.data.creator = creator;
+            char.data.character_version = version;
+          }
+          success++;
+        } else {
+          fail++;
+        }
+      } catch (e) {
+        console.warn(`[CFM] 编辑角色卡 ${avatar} 失败`, e);
+        fail++;
+      }
+    }
+    if (success > 0) {
+      toastr.success(
+        `已更新 ${success} 个角色卡${fail > 0 ? `，${fail} 个失败` : ""}`,
+      );
+    } else {
+      toastr.error("更新失败");
+    }
+    rerenderCurrentView();
+  }
+
   // PC端dragstart辅助：存储拖拽数据到全局变量并设置自定义拖拽图像
   function pcDragStart(e, dragData) {
     _pcDragData = dragData;
@@ -2757,6 +3019,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
+                            <button class="cfm-edit-char-btn" id="cfm-edit-char-btn" title="快速编辑角色卡"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-char-btn" title="导出角色卡"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-char-btn" title="删除角色卡"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-right-sort-wrapper">
@@ -3373,6 +3636,24 @@ jQuery(async () => {
         executeResourceDelete();
       } else {
         enterResDeleteMode();
+      }
+    });
+
+    // ==================== 角色卡快速编辑功能 ====================
+    popup.find("#cfm-edit-char-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmEditMode) {
+        // 已在编辑模式，执行编辑
+        if (cfmEditSelected.size === 0) {
+          toastr.warning("请先选择要编辑的角色卡");
+          return;
+        }
+        const avatars = Array.from(cfmEditSelected);
+        executeCharEdit(avatars).then(() => exitEditMode());
+      } else {
+        // 进入编辑模式
+        enterEditMode();
       }
     });
 
@@ -3999,6 +4280,8 @@ jQuery(async () => {
       prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（搜索角色卡）
       prependExportToolbar(list, renderRightPane);
+      // 编辑工具栏（搜索角色卡）
+      prependEditToolbar(list, renderRightPane);
       // 多选工具栏（搜索模式下也可用）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -4838,6 +5121,8 @@ jQuery(async () => {
       prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（未归类视图）
       prependExportToolbar(list, renderRightPane);
+      // 编辑工具栏（未归类视图）
+      prependEditToolbar(list, renderRightPane);
       // 多选工具栏（未归类视图）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -4886,6 +5171,8 @@ jQuery(async () => {
       prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（收藏视图）
       prependExportToolbar(list, renderRightPane);
+      // 编辑工具栏（收藏视图）
+      prependEditToolbar(list, renderRightPane);
       // 多选工具栏（收藏视图）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -5081,6 +5368,8 @@ jQuery(async () => {
     prependResDeleteToolbar(list, renderRightPane);
     // 导出工具栏（主角色卡视图）
     prependExportToolbar(list, renderRightPane);
+    // 编辑工具栏（主角色卡视图）
+    prependEditToolbar(list, renderRightPane);
     // 多选工具栏（在行渲染后添加，确保getVisibleResourceIds可用）
     if (cfmMultiSelectMode) {
       const visible = getVisibleResourceIds();
@@ -5194,18 +5483,27 @@ jQuery(async () => {
         );
       charMetaHtml = `<span class="cfm-char-meta-info">${parts.join('<span class="cfm-char-meta-sep"> · </span>')}</span>`;
     }
+    const isEditSel = cfmEditMode && cfmEditSelected.has(char.avatar);
     const checkboxHtml = cfmResDeleteMode
       ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
       : cfmExportMode
         ? `<div class="cfm-export-checkbox ${isExportSel ? "cfm-export-checked" : ""}"><i class="fa-${isExportSel ? "solid" : "regular"} fa-square${isExportSel ? "-check" : ""}"></i></div>`
-        : cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
-          : "";
+        : cfmEditMode
+          ? `<div class="cfm-edit-checkbox ${isEditSel ? "cfm-edit-checked" : ""}"><i class="fa-${isEditSel ? "solid" : "regular"} fa-square${isEditSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
+            : "";
+    // 非模式状态下显示单个编辑铅笔按钮
+    const singleEditBtn =
+      !cfmExportMode && !cfmResDeleteMode && !cfmEditMode && !cfmMultiSelectMode
+        ? `<div class="cfm-row-edit-btn" title="编辑作者名/版本名"><i class="fa-solid fa-pen-to-square"></i></div>`
+        : "";
     const row = $(`
-            <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
+            <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
+                ${singleEditBtn}
                 <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
         `);
@@ -5228,10 +5526,17 @@ jQuery(async () => {
         renderRightPane();
       }
     });
+    // 单个铅笔按钮点击事件
+    row.find(".cfm-row-edit-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      executeCharEdit([char.avatar]);
+    });
     // 点击行为：多选模式下切换选中，否则打开角色聊天
     row.on("click", (e) => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
+      if ($(e.target).closest(".cfm-row-edit-btn").length) return;
       if (cfmResDeleteMode) {
         toggleResDeleteItem(char.avatar, e.shiftKey);
         renderRightPane();
@@ -5239,6 +5544,11 @@ jQuery(async () => {
       }
       if (cfmExportMode) {
         toggleExportItem(char.avatar, e.shiftKey);
+        renderRightPane();
+        return;
+      }
+      if (cfmEditMode) {
+        toggleEditItem(char.avatar, e.shiftKey);
         renderRightPane();
         return;
       }
@@ -8880,7 +9190,8 @@ jQuery(async () => {
     if (!select.length) return;
     // 同时处理 PresetManager 的 select（可能是同一个元素）
     const pm = getContext().getPresetManager();
-    const targetSelect = pm && pm.select && pm.select.length ? pm.select : select;
+    const targetSelect =
+      pm && pm.select && pm.select.length ? pm.select : select;
 
     // 先恢复之前 detach 的 option
     if (_presetDetachedOptions.length > 0) {
@@ -8927,8 +9238,15 @@ jQuery(async () => {
       _sortSelectOptions(select);
       // 重建 select2
       if (hasSelect2) {
-        try { select.select2("destroy"); } catch (e) { /* ignore */ }
-        select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
+        try {
+          select.select2("destroy");
+        } catch (e) {
+          /* ignore */
+        }
+        select.select2({
+          placeholder: "--- Pick to Edit ---",
+          allowClear: true,
+        });
       }
     }
 
@@ -8950,7 +9268,11 @@ jQuery(async () => {
     });
     // 刷新 select2
     if (hasSelect2) {
-      try { select.select2("destroy"); } catch (e) { /* ignore */ }
+      try {
+        select.select2("destroy");
+      } catch (e) {
+        /* ignore */
+      }
       select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
     }
   }
@@ -8961,7 +9283,11 @@ jQuery(async () => {
   function _sortSelectOptions(selectEl) {
     const options = selectEl.find("option").detach();
     const placeholder = options.filter(function () {
-      return $(this).val() === "" || $(this).val() === "gui" || $(this).val() === "default";
+      return (
+        $(this).val() === "" ||
+        $(this).val() === "gui" ||
+        $(this).val() === "default"
+      );
     });
     const rest = options.filter(function () {
       const v = $(this).val();

@@ -2000,6 +2000,253 @@
   animation: cfm-range-pulse 1.5s ease-in-out infinite;
 }
 
+/* ==================== 角色卡快速编辑模式 ==================== */
+
+/* 编辑按钮 */
+.cfm-edit-char-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  opacity: 0.6 !important;
+  transition:
+    opacity 0.15s,
+    background-color 0.15s,
+    color 0.15s !important;
+  flex-shrink: 0;
+}
+.cfm-edit-char-btn:hover {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #89b4fa !important;
+}
+.cfm-edit-char-btn.cfm-edit-active {
+  opacity: 1 !important;
+  color: #89b4fa !important;
+  background-color: rgba(137, 180, 250, 0.15) !important;
+  border: 1px solid rgba(137, 180, 250, 0.4) !important;
+}
+
+/* 编辑模式遮罩 */
+.cfm-popup.cfm-edit-mode .cfm-left-pane {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.cfm-popup.cfm-edit-mode .cfm-tab {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* 编辑勾选框 */
+.cfm-edit-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  cursor: pointer;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0.5;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+.cfm-edit-checkbox.cfm-edit-checked {
+  color: #89b4fa;
+  opacity: 1;
+}
+
+/* 编辑选中行 */
+.cfm-edit-row-selected {
+  background-color: rgba(137, 180, 250, 0.1) !important;
+  border-left: 2px solid #89b4fa !important;
+}
+
+/* 编辑工具栏 */
+.cfm-edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(137, 180, 250, 0.08);
+  border-bottom: 1px solid rgba(137, 180, 250, 0.15);
+  flex-shrink: 0;
+}
+.cfm-edit-toolbar .cfm-edit-count {
+  flex: 1;
+  font-size: 12px;
+  color: #89b4fa;
+}
+.cfm-edit-toolbar .cfm-edit-cancel {
+  color: #f38ba8 !important;
+  border-color: rgba(243, 139, 168, 0.4) !important;
+}
+.cfm-edit-toolbar .cfm-edit-cancel:hover {
+  background-color: rgba(243, 139, 168, 0.15) !important;
+}
+.cfm-edit-toolbar .cfm-btn {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.cfm-edit-toolbar .cfm-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+/* 编辑框选模式激活 */
+.cfm-edit-toolbar .cfm-range-active {
+  background-color: rgba(137, 180, 250, 0.3) !important;
+  border-color: #89b4fa !important;
+  color: #89b4fa !important;
+  animation: cfm-range-pulse 1.5s ease-in-out infinite;
+}
+
+/* 单行编辑铅笔按钮 */
+.cfm-row-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  cursor: pointer;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+  font-size: 12px;
+  border-radius: 3px;
+}
+.cfm-row:hover .cfm-row-edit-btn {
+  opacity: 0.5;
+}
+.cfm-row-edit-btn:hover {
+  opacity: 1 !important;
+  color: #89b4fa !important;
+  background-color: rgba(137, 180, 250, 0.15);
+}
+
+/* 编辑弹窗 */
+.cfm-edit-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  animation: cfm-fade-in 0.15s ease;
+}
+.cfm-edit-popup {
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 10px;
+  padding: 20px 24px;
+  min-width: 360px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.cfm-edit-popup-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #89b4fa;
+  margin-bottom: 12px;
+}
+.cfm-edit-popup-names {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-edit-name-item {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-edit-name-more {
+  color: #a6adc8;
+  font-style: italic;
+}
+.cfm-edit-popup-field {
+  margin-bottom: 12px;
+}
+.cfm-edit-popup-field label {
+  display: block;
+  font-size: 12px;
+  color: #a6adc8;
+  margin-bottom: 4px;
+}
+.cfm-edit-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.cfm-edit-input:focus {
+  border-color: #89b4fa;
+}
+.cfm-edit-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.cfm-edit-popup-actions .cfm-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  transition: all 0.15s;
+}
+.cfm-edit-popup-actions .cfm-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.cfm-edit-popup-actions .cfm-edit-popup-confirm {
+  background: rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+  border-color: rgba(137, 180, 250, 0.4);
+}
+.cfm-edit-popup-actions .cfm-edit-popup-confirm:hover {
+  background: rgba(137, 180, 250, 0.35);
+}
+.cfm-edit-popup-actions .cfm-edit-popup-cancel {
+  color: #a6adc8;
+}
+.cfm-edit-popup-actions .cfm-edit-popup-cancel:hover {
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.4);
+  background: rgba(243, 139, 168, 0.1);
+}
+
 /* 多选切换按钮 */
 .cfm-multisel-toggle {
   background: none !important;
