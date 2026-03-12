@@ -2072,6 +2072,8 @@ jQuery(async () => {
       cfmMultiSelectRangeMode = false;
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
     }
+    // 如果删除模式开着，先关闭
+    if (cfmResDeleteMode) exitResDeleteMode();
     // 更新导出按钮外观
     $(".cfm-export-btn").addClass("cfm-export-active");
     $(".cfm-export-btn")
@@ -2365,6 +2367,204 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 资源删除模式状态 ====================
+  let cfmResDeleteMode = false;
+  let cfmResDeleteSelected = new Set();
+
+  function enterResDeleteMode() {
+    cfmResDeleteMode = true;
+    cfmResDeleteSelected.clear();
+    // 如果多选模式开着，先关闭
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    // 如果导出模式开着，先关闭
+    if (cfmExportMode) exitExportMode();
+    // 更新删除按钮外观
+    $(".cfm-res-delete-btn").addClass("cfm-res-delete-active");
+    $(".cfm-res-delete-btn")
+      .find("i")
+      .removeClass("fa-trash-can")
+      .addClass("fa-check");
+    $(".cfm-res-delete-btn").attr("title", "确认删除");
+    $(".cfm-popup").addClass("cfm-res-delete-mode");
+    rerenderCurrentView();
+  }
+
+  function exitResDeleteMode() {
+    cfmResDeleteMode = false;
+    cfmResDeleteSelected.clear();
+    $(".cfm-res-delete-btn").removeClass("cfm-res-delete-active");
+    $(".cfm-res-delete-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-trash-can");
+    $(".cfm-res-delete-btn").attr("title", function () {
+      if ($(this).attr("id") === "cfm-res-delete-char-btn") return "删除角色卡";
+      if ($(this).attr("id") === "cfm-res-delete-preset-btn") return "删除预设";
+      return "删除世界书";
+    });
+    $(".cfm-popup").removeClass("cfm-res-delete-mode");
+    rerenderCurrentView();
+  }
+
+  function toggleResDeleteItem(id) {
+    if (cfmResDeleteSelected.has(id)) cfmResDeleteSelected.delete(id);
+    else cfmResDeleteSelected.add(id);
+  }
+
+  function prependResDeleteToolbar(listContainer, renderFn) {
+    if (!cfmResDeleteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmResDeleteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-res-delete-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-res-delete-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <span class="cfm-res-delete-count">${cfmResDeleteSelected.size > 0 ? `已选 ${cfmResDeleteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-res-delete-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-res-delete-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmResDeleteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmResDeleteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-res-delete-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitResDeleteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 删除核心：根据资源类型删除选中的资源
+  async function executeResourceDelete() {
+    if (cfmResDeleteSelected.size === 0) {
+      toastr.warning("请先选择要删除的资源");
+      return;
+    }
+    const selected = Array.from(cfmResDeleteSelected);
+    const count = selected.length;
+    const typeLabel =
+      currentResourceType === "chars"
+        ? "角色卡"
+        : currentResourceType === "presets"
+          ? "预设"
+          : "世界书";
+
+    // 确认弹窗
+    const confirmed = confirm(
+      `确定要删除 ${count} 个${typeLabel}吗？\n此操作不可撤销！`,
+    );
+    if (!confirmed) return;
+
+    const headers = getContext().getRequestHeaders();
+    let success = 0;
+    let fail = 0;
+
+    try {
+      toastr.info(`正在删除 ${count} 个${typeLabel}...`);
+
+      if (currentResourceType === "chars") {
+        for (const avatar of selected) {
+          try {
+            const resp = await fetch("/api/characters/delete", {
+              method: "POST",
+              headers: headers,
+              body: JSON.stringify({ avatar_url: avatar, delete_chats: false }),
+              cache: "no-cache",
+            });
+            if (resp.ok) {
+              // 清理 tag_map（文件夹分配）
+              const tagMap = getTagMap();
+              if (tagMap[avatar]) delete tagMap[avatar];
+              // 清理收藏
+              const favSet = extension_settings[extensionName].favorites;
+              if (favSet && favSet instanceof Set) favSet.delete(avatar);
+              else if (Array.isArray(favSet)) {
+                const idx = favSet.indexOf(avatar);
+                if (idx !== -1) favSet.splice(idx, 1);
+              }
+              success++;
+            } else {
+              fail++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 删除角色卡 ${avatar} 失败`, e);
+            fail++;
+          }
+        }
+        // 刷新角色列表
+        await getContext().getCharacters();
+      } else if (currentResourceType === "presets") {
+        const pm = getContext().getPresetManager();
+        if (!pm) throw new Error("预设管理器不可用");
+        for (const name of selected) {
+          try {
+            const ok = await pm.deletePreset(name);
+            if (ok !== false) {
+              // 清理文件夹分配
+              const groups = extension_settings[extensionName].presetGroups;
+              if (groups && groups[name]) delete groups[name];
+              success++;
+            } else fail++;
+          } catch (e) {
+            console.warn(`[CFM] 删除预设 ${name} 失败`, e);
+            fail++;
+          }
+        }
+      } else {
+        for (const name of selected) {
+          try {
+            const resp = await fetch("/api/worldinfo/delete", {
+              method: "POST",
+              headers: headers,
+              body: JSON.stringify({ name: name }),
+            });
+            if (resp.ok) {
+              // 清理文件夹分配
+              const groups = extension_settings[extensionName].worldInfoGroups;
+              if (groups && groups[name]) delete groups[name];
+              success++;
+            } else {
+              fail++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 删除世界书 ${name} 失败`, e);
+            fail++;
+          }
+        }
+        // 刷新世界书缓存
+        _worldInfoNamesCache = null;
+      }
+
+      if (success > 0) {
+        toastr.success(
+          `已删除 ${success} 个${typeLabel}${fail > 0 ? `，${fail} 个失败` : ""}`,
+        );
+        // 保存文件夹分配变更
+        getContext().saveSettingsDebounced();
+      } else {
+        toastr.error(`删除失败`);
+      }
+    } catch (err) {
+      console.error("[CFM] 删除失败", err);
+      toastr.error("删除失败: " + err.message);
+    }
+    exitResDeleteMode();
+    // 重新渲染
+    rerenderCurrentView();
+  }
+
   // PC端dragstart辅助：存储拖拽数据到全局变量并设置自定义拖拽图像
   function pcDragStart(e, dragData) {
     _pcDragData = dragData;
@@ -2501,6 +2701,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-char-btn" title="导出角色卡"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-char-btn" title="删除角色卡"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-right-sort-btn" title="角色排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2532,6 +2733,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-preset-btn" title="导入预设"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-preset-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-preset-btn" title="导出预设"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-preset-btn" title="删除预设"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-preset-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-preset-right-sort-btn" title="预设排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2563,6 +2765,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-worldinfo-btn" title="导入世界书"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-worldinfo-file" multiple accept=".json,.png" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-worldinfo-btn" title="导出世界书"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-worldinfo-btn" title="删除世界书"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-worldinfo-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-worldinfo-right-sort-btn" title="世界书排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2593,6 +2796,7 @@ jQuery(async () => {
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
       // 切换标签时清空导出模式
       if (cfmExportMode) exitExportMode();
+      if (cfmResDeleteMode) exitResDeleteMode();
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -3075,8 +3279,8 @@ jQuery(async () => {
     popup.find(".cfm-multisel-toggle").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      // 导出模式下不允许切换多选
-      if (cfmExportMode) return;
+      // 导出/删除模式下不允许切换多选
+      if (cfmExportMode || cfmResDeleteMode) return;
       cfmMultiSelectMode = !cfmMultiSelectMode;
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
@@ -3101,6 +3305,17 @@ jQuery(async () => {
       } else {
         // 进入导出模式
         enterExportMode();
+      }
+    });
+
+    // ==================== 删除资源功能 ====================
+    popup.find(".cfm-res-delete-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmResDeleteMode) {
+        executeResourceDelete();
+      } else {
+        enterResDeleteMode();
       }
     });
 
@@ -3503,6 +3718,9 @@ jQuery(async () => {
     // 重置导出模式
     cfmExportMode = false;
     cfmExportSelected.clear();
+    // 重置删除模式
+    cfmResDeleteMode = false;
+    cfmResDeleteSelected.clear();
 
     renderLeftTree();
 
@@ -3716,6 +3934,8 @@ jQuery(async () => {
         appendCharRow(list, char, true);
       }
 
+      // 删除工具栏（搜索角色卡）
+      prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（搜索角色卡）
       prependExportToolbar(list, renderRightPane);
       // 多选工具栏（搜索模式下也可用）
@@ -3860,11 +4080,14 @@ jQuery(async () => {
         const fav = isResFavorite("presets", p.name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
-        const msCheckHtml = cfmExportMode
-          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-          : cfmMultiSelectMode
-            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-            : "";
+        const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(p.name);
+        const msCheckHtml = cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : "";
         const pFolderPath = (() => {
           const grp = groups[p.name];
           if (grp && getResFolderTree("presets")[grp])
@@ -3874,7 +4097,7 @@ jQuery(async () => {
           return null;
         })();
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name">${escapeHtml(p.name)}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
@@ -3895,6 +4118,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmResDeleteMode) {
+            toggleResDeleteItem(p.name);
+            executePresetSearch();
+            return;
+          }
           if (cfmExportMode) {
             toggleExportItem(p.name);
             executePresetSearch();
@@ -3927,6 +4155,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 删除工具栏（搜索预设）
+      prependResDeleteToolbar(rightList, executePresetSearch);
       // 导出工具栏（搜索预设）
       prependExportToolbar(rightList, executePresetSearch);
       // 多选工具栏（搜索模式下也可用）
@@ -4066,11 +4296,14 @@ jQuery(async () => {
           const fav = isResFavorite("worldinfo", n);
           const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
           const isExpSel = cfmExportMode && cfmExportSelected.has(n);
-          const msCheckHtml = cfmExportMode
-            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+          const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+          const msCheckHtml = cfmResDeleteMode
+            ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+            : cfmExportMode
+              ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+              : cfmMultiSelectMode
+                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                : "";
           const wFolderPath = (() => {
             const grp = groups[n];
             if (grp && getResFolderTree("worldinfo")[grp])
@@ -4080,7 +4313,7 @@ jQuery(async () => {
             return null;
           })();
           const row = $(`
-            <div class="cfm-row cfm-row-char ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
+            <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name">${escapeHtml(n)}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
@@ -4101,6 +4334,11 @@ jQuery(async () => {
           });
           row.on("click", (e) => {
             if ($(e.target).closest(".cfm-row-star").length) return;
+            if (cfmExportMode) {
+              toggleResDeleteItem(n);
+              executeWorldInfoSearch();
+              return;
+            }
             if (cfmExportMode) {
               toggleExportItem(n);
               executeWorldInfoSearch();
@@ -4128,6 +4366,8 @@ jQuery(async () => {
           rightList.append(row);
         }
 
+        // 删除工具栏（搜索世界书）
+        prependResDeleteToolbar(rightList, executeWorldInfoSearch);
         // 导出工具栏（搜索世界书）
         prependExportToolbar(rightList, executeWorldInfoSearch);
         // 多选工具栏（搜索模式下也可用）
@@ -4533,6 +4773,8 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char);
+      // 删除工具栏（未归类视图）
+      prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（未归类视图）
       prependExportToolbar(list, renderRightPane);
       // 多选工具栏（未归类视图）
@@ -4579,6 +4821,8 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char, true);
+      // 删除工具栏（收藏视图）
+      prependResDeleteToolbar(list, renderRightPane);
       // 导出工具栏（收藏视图）
       prependExportToolbar(list, renderRightPane);
       // 多选工具栏（收藏视图）
@@ -4772,6 +5016,8 @@ jQuery(async () => {
     // 角色卡行
     for (const char of chars) appendCharRow(list, char);
 
+    // 删除工具栏（主角色卡视图）
+    prependResDeleteToolbar(list, renderRightPane);
     // 导出工具栏（主角色卡视图）
     prependExportToolbar(list, renderRightPane);
     // 多选工具栏（在行渲染后添加，确保getVisibleResourceIds可用）
@@ -4862,6 +5108,7 @@ jQuery(async () => {
     const fav = isFavorite(char.avatar);
     const isSelected = cfmMultiSelectMode && cfmMultiSelected.has(char.avatar);
     const isExportSel = cfmExportMode && cfmExportSelected.has(char.avatar);
+    const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(char.avatar);
     const folderPathHtml = showFolderPath
       ? (() => {
           const p = findCharFolderPath(char.avatar);
@@ -4886,13 +5133,15 @@ jQuery(async () => {
         );
       charMetaHtml = `<span class="cfm-char-meta-info">${parts.join('<span class="cfm-char-meta-sep"> · </span>')}</span>`;
     }
-    const checkboxHtml = cfmExportMode
-      ? `<div class="cfm-export-checkbox ${isExportSel ? "cfm-export-checked" : ""}"><i class="fa-${isExportSel ? "solid" : "regular"} fa-square${isExportSel ? "-check" : ""}"></i></div>`
-      : cfmMultiSelectMode
-        ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
-        : "";
+    const checkboxHtml = cfmResDeleteMode
+      ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+      : cfmExportMode
+        ? `<div class="cfm-export-checkbox ${isExportSel ? "cfm-export-checked" : ""}"><i class="fa-${isExportSel ? "solid" : "regular"} fa-square${isExportSel ? "-check" : ""}"></i></div>`
+        : cfmMultiSelectMode
+          ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
+          : "";
     const row = $(`
-            <div class="cfm-row cfm-row-char ${isExportSel ? "cfm-export-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
+            <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
@@ -4922,6 +5171,11 @@ jQuery(async () => {
     row.on("click", (e) => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
+      if (cfmResDeleteMode) {
+        toggleResDeleteItem(char.avatar);
+        renderRightPane();
+        return;
+      }
       if (cfmExportMode) {
         toggleExportItem(char.avatar);
         renderRightPane();
@@ -6929,13 +7183,16 @@ jQuery(async () => {
         const fav = isResFavorite("presets", p.name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
-        const msCheckHtml = cfmExportMode
-          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-          : cfmMultiSelectMode
-            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-            : "";
+        const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(p.name);
+        const msCheckHtml = cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name">${escapeHtml(p.name)}</div>
@@ -6966,6 +7223,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmResDeleteMode) {
+            toggleResDeleteItem(p.name);
+            renderPresetsView();
+            return;
+          }
           if (cfmExportMode) {
             toggleExportItem(p.name);
             renderPresetsView();
@@ -6996,6 +7258,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 删除工具栏（预设文件夹视图）
+      prependResDeleteToolbar(rightList, renderPresetsView);
       // 导出工具栏（预设文件夹视图）
       prependExportToolbar(rightList, renderPresetsView);
       // 多选工具栏（预设）
@@ -7604,13 +7868,16 @@ jQuery(async () => {
         const fav = isResFavorite("worldinfo", n);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
         const isExpSel = cfmExportMode && cfmExportSelected.has(n);
-        const msCheckHtml = cfmExportMode
-          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-          : cfmMultiSelectMode
-            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-            : "";
+        const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+        const msCheckHtml = cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
             <div class="cfm-row-name">${escapeHtml(n)}</div>
@@ -7641,6 +7908,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmResDeleteMode) {
+            toggleResDeleteItem(n);
+            renderWorldInfoView();
+            return;
+          }
           if (cfmExportMode) {
             toggleExportItem(n);
             renderWorldInfoView();
@@ -7666,6 +7938,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 删除工具栏（世界书文件夹视图）
+      prependResDeleteToolbar(rightList, renderWorldInfoView);
       // 导出工具栏（世界书文件夹视图）
       prependExportToolbar(rightList, renderWorldInfoView);
       // 多选工具栏（世界书）
