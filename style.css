@@ -1763,6 +1763,27 @@
 }
 
 /* ========== 多选模式 ========== */
+/* 导入按钮 */
+.cfm-import-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  opacity: 0.6 !important;
+  transition:
+    opacity 0.15s,
+    background-color 0.15s !important;
+  flex-shrink: 0;
+}
+.cfm-import-btn:hover {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #89b4fa !important;
+}
+
 /* 多选切换按钮 */
 .cfm-multisel-toggle {
   background: none !important;
