@@ -2646,10 +2646,11 @@ option.cfm-nf-hidden {
   color: var(--SmartThemeBodyColor, #ccc);
   width: 560px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .cfm-cb-header {
   display: flex;
@@ -2902,18 +2903,22 @@ option.cfm-nf-hidden {
   #cfm-charbook-classify-overlay {
     align-items: flex-start !important;
     padding: 8px !important;
+    overflow-y: auto !important;
   }
   .cfm-cb-popup {
-    width: 95vw;
-    max-height: none;
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
     margin: auto 0;
+    border-radius: 8px;
   }
   .cfm-cb-body {
-    max-height: calc(100vh - 160px);
+    padding: 10px 14px;
     overflow-y: auto;
+    flex: 1;
+    min-height: 0;
   }
   .cfm-cb-list {
-    max-height: 150px;
+    max-height: 120px;
   }
   .cfm-cb-row-meta {
     flex-wrap: wrap;
@@ -2930,10 +2935,16 @@ option.cfm-nf-hidden {
   .cfm-cb-header {
     padding: 10px 14px;
   }
-  .cfm-cb-body {
-    padding: 10px 14px;
-  }
   .cfm-cb-footer {
     padding: 10px 14px;
+  }
+  .cfm-cb-section-title {
+    font-size: 12px;
+  }
+  .cfm-cb-section-desc {
+    font-size: 10px;
+  }
+  .cfm-cb-auto-setting {
+    padding: 8px 10px;
   }
 }
