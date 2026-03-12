@@ -2902,14 +2902,16 @@ option.cfm-nf-hidden {
 @media (max-width: 768px) {
   #cfm-charbook-classify-overlay {
     align-items: flex-start !important;
+    justify-content: center !important;
     padding: 8px !important;
     overflow-y: auto !important;
   }
   .cfm-cb-popup {
     width: calc(100vw - 16px);
     max-height: calc(100dvh - 16px);
-    margin: auto 0;
+    margin: 8px auto;
     border-radius: 8px;
+    flex-shrink: 0;
   }
   .cfm-cb-body {
     padding: 10px 14px;
