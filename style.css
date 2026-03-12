@@ -2899,9 +2899,24 @@ option.cfm-nf-hidden {
 
 /* 移动端适配 */
 @media (max-width: 768px) {
+  #cfm-charbook-classify-overlay {
+    padding: 8px !important;
+    overflow-y: auto !important;
+    align-items: flex-start !important;
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+  }
   .cfm-cb-popup {
     width: 95vw;
-    max-height: 90vh;
+    max-height: none;
+    flex-shrink: 0;
+  }
+  .cfm-cb-body {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .cfm-cb-list {
+    max-height: 150px;
   }
   .cfm-cb-row-meta {
     flex-wrap: wrap;
@@ -2914,5 +2929,11 @@ option.cfm-nf-hidden {
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
+  }
+  .cfm-cb-header {
+    padding: 10px 14px;
+  }
+  .cfm-cb-footer {
+    padding: 10px 14px;
   }
 }
