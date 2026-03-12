@@ -224,7 +224,24 @@ jQuery(async () => {
   let _worldInfoPreloadPromise = null;
   async function getWorldInfoNames(forceRefresh) {
     if (_worldInfoNamesCache && !forceRefresh) return _worldInfoNamesCache;
-    // 优先从DOM读取（同步，无延迟）
+    // forceRefresh 时直接走API获取最新数据（导入后DOM可能未更新）
+    if (forceRefresh) {
+      try {
+        const resp = await fetch("/api/settings/get", {
+          method: "POST",
+          headers: getContext().getRequestHeaders(),
+          body: JSON.stringify({}),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          _worldInfoNamesCache = data.world_names || [];
+          return _worldInfoNamesCache;
+        }
+      } catch (e) {
+        console.error("[CFM] 强制刷新世界书列表失败", e);
+      }
+    }
+    // 非强制刷新时优先从DOM读取（同步，无延迟）
     const names = [];
     $("#world_editor_select option").each(function () {
       const v = $(this).val();
@@ -2908,7 +2925,17 @@ jQuery(async () => {
         }
       }
 
-      // 刷新世界书列表缓存
+      // 调用SillyTavern原生的updateWorldInfoList来同步world_names变量和DOM
+      try {
+        const ctx = getContext();
+        if (typeof ctx.updateWorldInfoList === "function") {
+          await ctx.updateWorldInfoList();
+        }
+      } catch (updateErr) {
+        console.warn("[CFM] 调用updateWorldInfoList失败", updateErr);
+      }
+
+      // 刷新插件内部的世界书名称缓存
       _worldInfoNamesCache = null;
       await getWorldInfoNames(true);
 
