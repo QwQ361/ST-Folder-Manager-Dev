@@ -885,6 +885,85 @@
   box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.4);
 }
 
+/* 批量创建模板区域 */
+.cfm-tpl-section {
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cfm-tpl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-tpl-label {
+  font-size: 12px;
+  color: #89b4fa;
+  font-weight: 600;
+}
+.cfm-tpl-label i {
+  margin-right: 4px;
+}
+.cfm-tpl-save-btn {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}
+.cfm-tpl-list {
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.cfm-tpl-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cfm-tpl-item:hover {
+  background: rgba(137, 180, 250, 0.1);
+}
+.cfm-tpl-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-tpl-del {
+  background: none;
+  border: none;
+  color: #a6adc8;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    color 0.12s;
+}
+.cfm-tpl-item:hover .cfm-tpl-del {
+  opacity: 0.7;
+}
+.cfm-tpl-del:hover {
+  opacity: 1 !important;
+  color: #f38ba8 !important;
+  background: rgba(243, 139, 168, 0.1);
+}
+.cfm-tpl-empty {
+  font-size: 11px;
+  color: #a6adc8;
+  text-align: center;
+  padding: 8px;
+  opacity: 0.6;
+}
+
 /* ========== 新导入标签高亮 ========== */
 .cfm-new-badge {
   display: inline-block;

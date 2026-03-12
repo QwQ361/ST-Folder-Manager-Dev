@@ -454,8 +454,109 @@ jQuery(async () => {
     // 被用户主动删除（但保留标签）的文件夹ID列表，防止自动重新导入
     if (!Array.isArray(extension_settings[extensionName].excludedTagIds))
       extension_settings[extensionName].excludedTagIds = [];
+    // 批量创建文件夹结构模板（按类型分开存储）
+    if (!extension_settings[extensionName].batchTemplates || Array.isArray(extension_settings[extensionName].batchTemplates)) {
+      // 迁移旧的数组格式到新的对象格式
+      const oldArr = Array.isArray(extension_settings[extensionName].batchTemplates) ? extension_settings[extensionName].batchTemplates : [];
+      extension_settings[extensionName].batchTemplates = {
+        characters: oldArr,
+        presets: [],
+        worldinfo: [],
+      };
+    }
+    if (!extension_settings[extensionName].batchTemplates.characters)
+      extension_settings[extensionName].batchTemplates.characters = [];
+    if (!extension_settings[extensionName].batchTemplates.presets)
+      extension_settings[extensionName].batchTemplates.presets = [];
+    if (!extension_settings[extensionName].batchTemplates.worldinfo)
+      extension_settings[extensionName].batchTemplates.worldinfo = [];
   }
   ensureSettings();
+
+  // ==================== 批量创建模板管理 ====================
+  function getBatchTemplates(type) {
+    const all = extension_settings[extensionName].batchTemplates || {};
+    return all[type] || [];
+  }
+  function saveBatchTemplate(type, name, content) {
+    const templates = getBatchTemplates(type);
+    templates.push({ name, content });
+    extension_settings[extensionName].batchTemplates[type] = templates;
+    getContext().saveSettingsDebounced();
+  }
+  function deleteBatchTemplate(type, index) {
+    const templates = getBatchTemplates(type);
+    if (index >= 0 && index < templates.length) {
+      templates.splice(index, 1);
+      extension_settings[extensionName].batchTemplates[type] = templates;
+      getContext().saveSettingsDebounced();
+    }
+  }
+  // 生成模板区域HTML
+  function buildBatchTemplateHtml(type) {
+    const templates = getBatchTemplates(type);
+    let listHtml = "";
+    if (templates.length > 0) {
+      listHtml = templates
+        .map(
+          (t, i) =>
+            `<div class="cfm-tpl-item" data-tpl-idx="${i}"><span class="cfm-tpl-name" title="点击加载此模板">${escapeHtml(t.name)}</span><button class="cfm-tpl-del" data-tpl-idx="${i}" title="删除模板"><i class="fa-solid fa-xmark"></i></button></div>`,
+        )
+        .join("");
+    } else {
+      listHtml = '<div class="cfm-tpl-empty">暂无保存的模板</div>';
+    }
+    return `
+      <div class="cfm-tpl-section">
+        <div class="cfm-tpl-header">
+          <span class="cfm-tpl-label"><i class="fa-solid fa-bookmark"></i> 模板</span>
+          <button class="cfm-btn cfm-tpl-save-btn"><i class="fa-solid fa-floppy-disk"></i> 保存当前为模板</button>
+        </div>
+        <div class="cfm-tpl-list">${listHtml}</div>
+      </div>
+    `;
+  }
+  // 绑定模板区域事件（type: 模板类型, popup: jQuery弹窗, textareaSelector: textarea选择器, refreshFn: 刷新模板列表的回调）
+  function bindBatchTemplateEvents(type, popup, textareaSelector, refreshFn) {
+    // 保存模板
+    popup.find(".cfm-tpl-save-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const content = popup.find(textareaSelector).val().trim();
+      if (!content) {
+        toastr.warning("请先输入文件夹结构");
+        return;
+      }
+      const name = prompt("请输入模板名称：");
+      if (!name || !name.trim()) return;
+      saveBatchTemplate(type, name.trim(), content);
+      toastr.success(`模板「${name.trim()}」已保存`);
+      refreshFn();
+    });
+    // 加载模板
+    popup.find(".cfm-tpl-item .cfm-tpl-name").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt($(this).parent().attr("data-tpl-idx"));
+      const templates = getBatchTemplates(type);
+      if (templates[idx]) {
+        popup.find(textareaSelector).val(templates[idx].content);
+        toastr.info(`已加载模板「${templates[idx].name}」`);
+      }
+    });
+    // 删除模板
+    popup.find(".cfm-tpl-del").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt($(this).attr("data-tpl-idx"));
+      const templates = getBatchTemplates(type);
+      if (templates[idx] && confirm(`确定删除模板「${templates[idx].name}」？`)) {
+        deleteBatchTemplate(type, idx);
+        toastr.success("模板已删除");
+        refreshFn();
+      }
+    });
+  }
 
   // ==================== 收藏管理 ====================
   function getFavorites() {
@@ -6384,6 +6485,7 @@ jQuery(async () => {
         <div style="padding:16px;overflow-y:auto;flex:1;min-height:0;">
           <div class="cfm-create-tag-hint" style="margin-bottom:10px;">每行一个标签名，用缩进表示层级（每2个空格深入一层）。<br>行首的 <code>-</code> 是可选装饰，会被忽略。示例：</div>
           <pre style="background:#1a1a2e;color:#aaa;padding:10px;border-radius:6px;font-size:12px;margin-bottom:12px;">1\n  -1.1\n    -1.1.1\n    -1.1.2\n  -1.2\n2\n  -2.1</pre>
+          <div id="cfm-res-batch-tpl-area"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
             <button id="cfm-res-smart-indent-child" class="cfm-btn" style="font-size:12px;padding:3px 10px;" title="开启后，回车将比当前行多缩进2格（创建子级）。关闭时，回车保持同级缩进。退格键始终回退2个空格。"><i class="fa-solid fa-indent"></i> 添加子级</button>
             <span style="font-size:11px;opacity:0.5;">Enter 智能缩进 · Backspace 回退层级</span>
@@ -6399,6 +6501,14 @@ jQuery(async () => {
     `);
     overlay.append(popup);
     $("body").append(overlay);
+    // 渲染模板区域
+    const tplType = type === "presets" ? "presets" : "worldinfo";
+    function refreshResBatchTemplates() {
+      const tplArea = popup.find("#cfm-res-batch-tpl-area");
+      tplArea.html(buildBatchTemplateHtml(tplType));
+      bindBatchTemplateEvents(tplType, popup, "#cfm-res-batch-textarea", refreshResBatchTemplates);
+    }
+    refreshResBatchTemplates();
 
     popup.find("#cfm-res-batch-close").on("click touchend", (e) => {
       e.preventDefault();
@@ -6887,6 +6997,7 @@ jQuery(async () => {
                 <div style="padding:16px;overflow-y:auto;flex:1;min-height:0;">
                     <div class="cfm-create-tag-hint" style="margin-bottom:10px;">每行一个标签名，用缩进表示层级（每2个空格深入一层）。<br>行首的 <code>-</code> 是可选装饰，会被忽略。示例：</div>
                     <pre style="background:#1a1a2e;color:#aaa;padding:10px;border-radius:6px;font-size:12px;margin-bottom:12px;">1\n  -1.1\n    -1.1.1\n    -1.1.2\n  -1.2\n2\n  -2.1</pre>
+                    <div id="cfm-batch-tpl-area"></div>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                         <button id="cfm-smart-indent-child" class="cfm-btn" style="font-size:12px;padding:3px 10px;" title="开启后，回车将比当前行多缩进2格（创建子级）。关闭时，回车保持同级缩进。退格键始终回退2个空格。"><i class="fa-solid fa-indent"></i> 添加子级</button>
                         <span style="font-size:11px;opacity:0.5;">Enter 智能缩进 · Backspace 回退层级</span>
@@ -6902,6 +7013,13 @@ jQuery(async () => {
         `);
     overlay.append(popup);
     $("body").append(overlay);
+    // 渲染模板区域
+    function refreshBatchTemplates() {
+      const tplArea = popup.find("#cfm-batch-tpl-area");
+      tplArea.html(buildBatchTemplateHtml("characters"));
+      bindBatchTemplateEvents("characters", popup, "#cfm-batch-textarea", refreshBatchTemplates);
+    }
+    refreshBatchTemplates();
     popup.find("#cfm-batch-close").on("click touchend", (e) => {
       e.preventDefault();
       overlay.remove();
