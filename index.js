@@ -8623,6 +8623,11 @@ jQuery(async () => {
     );
     panel.append(treeContainer);
 
+    // 阻止面板内的所有鼠标事件冒泡，防止酒馆原生面板关闭逻辑被触发
+    panel.on("mousedown mouseup click touchstart touchend", function (e) {
+      e.stopPropagation();
+    });
+
     // 定位面板
     $("body").append(panel);
     const anchorRect = anchorEl[0].getBoundingClientRect();
@@ -8693,6 +8698,7 @@ jQuery(async () => {
       else nativeFilterWorldInfo = null;
       applyNativeFilter(type);
       panel.remove();
+      $(document).off("mousedown.cfmNfPanel touchstart.cfmNfPanel");
       updateNativeFilterBtnState(type);
     });
 
@@ -8705,6 +8711,7 @@ jQuery(async () => {
       else nativeFilterWorldInfo = fid;
       applyNativeFilter(type);
       panel.remove();
+      $(document).off("mousedown.cfmNfPanel touchstart.cfmNfPanel");
       updateNativeFilterBtnState(type);
     });
 
