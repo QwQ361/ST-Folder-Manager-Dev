@@ -8039,6 +8039,7 @@ jQuery(async () => {
       background: "rgba(0,0,0,0.6)", zIndex: 99999,
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "16px", boxSizing: "border-box",
+      overflowY: "auto",
     }).html(dialogHtml);
 
     $("body").append(overlay);
