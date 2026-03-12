@@ -2058,6 +2058,313 @@ jQuery(async () => {
     };
   }
 
+  // ==================== 导出模式状态 ====================
+  let cfmExportMode = false;
+  let cfmExportSelected = new Set(); // 导出模式下选中的资源标识符
+
+  function enterExportMode() {
+    cfmExportMode = true;
+    cfmExportSelected.clear();
+    // 如果多选模式开着，先关闭
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    // 更新导出按钮外观
+    $(".cfm-export-btn").addClass("cfm-export-active");
+    $(".cfm-export-btn")
+      .find("i")
+      .removeClass("fa-file-export")
+      .addClass("fa-check");
+    $(".cfm-export-btn").attr("title", "确认导出");
+    // 添加导出模式遮罩样式
+    $(".cfm-popup").addClass("cfm-export-mode");
+    // 重新渲染当前视图以显示勾选框
+    rerenderCurrentView();
+  }
+
+  function exitExportMode() {
+    cfmExportMode = false;
+    cfmExportSelected.clear();
+    $(".cfm-export-btn").removeClass("cfm-export-active");
+    $(".cfm-export-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-file-export");
+    $(".cfm-export-btn").attr("title", function () {
+      if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
+      if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
+      return "导出世界书";
+    });
+    $(".cfm-popup").removeClass("cfm-export-mode");
+    rerenderCurrentView();
+  }
+
+  function toggleExportItem(id) {
+    if (cfmExportSelected.has(id)) cfmExportSelected.delete(id);
+    else cfmExportSelected.add(id);
+  }
+
+  function rerenderCurrentView() {
+    if (currentResourceType === "chars") renderRightPane();
+    else if (currentResourceType === "presets") renderPresetsView();
+    else renderWorldInfoView();
+  }
+
+  // 生成导出工具栏并插入到列表容器
+  function prependExportToolbar(listContainer, renderFn) {
+    if (!cfmExportMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmExportSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-export-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-export-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <span class="cfm-export-count">${cfmExportSelected.size > 0 ? `已选 ${cfmExportSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-export-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-export-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmExportSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmExportSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-export-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitExportMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 导出核心：根据资源类型导出选中的资源
+  async function executeResourceExport() {
+    if (cfmExportSelected.size === 0) {
+      toastr.warning("请先选择要导出的资源");
+      return;
+    }
+    const selected = Array.from(cfmExportSelected);
+    const count = selected.length;
+    const headers = getContext().getRequestHeaders();
+
+    try {
+      if (currentResourceType === "chars") {
+        await exportCharacters(selected, headers);
+      } else if (currentResourceType === "presets") {
+        await exportPresets(selected, headers);
+      } else {
+        await exportWorldInfos(selected, headers);
+      }
+    } catch (err) {
+      console.error("[CFM] 导出失败", err);
+      toastr.error("导出失败: " + err.message);
+    }
+    exitExportMode();
+  }
+
+  // 角色卡导出
+  async function exportCharacters(avatars, headers) {
+    if (avatars.length === 1) {
+      // 单个角色卡直接下载
+      const resp = await fetch("/api/characters/export", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ format: "png", avatar_url: avatars[0] }),
+      });
+      if (!resp.ok) throw new Error("导出角色卡失败");
+      const blob = await resp.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = avatars[0];
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success("角色卡已导出");
+    } else {
+      // 多个角色卡打包zip
+      if (!window.JSZip) {
+        await import("../../../../lib/jszip.min.js");
+      }
+      const zip = new JSZip();
+      let success = 0;
+      toastr.info(`正在导出 ${avatars.length} 个角色卡...`);
+      for (const avatar of avatars) {
+        try {
+          const resp = await fetch("/api/characters/export", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ format: "png", avatar_url: avatar }),
+          });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            zip.file(avatar, blob);
+            success++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 导出角色卡 ${avatar} 失败`, e);
+        }
+      }
+      if (success === 0) throw new Error("没有成功导出任何角色卡");
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "角色卡.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success(`已导出 ${success} 个角色卡`);
+    }
+  }
+
+  // 预设导出
+  async function exportPresets(presetNames, headers) {
+    const pm = getContext().getPresetManager();
+    if (!pm) throw new Error("预设管理器不可用");
+
+    // 获取预设数据：优先用 getCompletionPresetByName 按名称查找实际预设数据
+    function getPresetData(name) {
+      // 先尝试按名称从预设列表中查找
+      if (typeof pm.getCompletionPresetByName === "function") {
+        const preset = pm.getCompletionPresetByName(name);
+        if (preset) {
+          const result = structuredClone(preset);
+          result.name = name;
+          return result;
+        }
+      }
+      // 回退：通过 getPresetList 手动查找
+      if (typeof pm.getPresetList === "function") {
+        const { presets, preset_names } = pm.getPresetList();
+        let found;
+        if (Array.isArray(preset_names)) {
+          const idx = preset_names.indexOf(name);
+          if (idx >= 0) found = presets[idx];
+        } else if (preset_names && typeof preset_names === "object") {
+          if (preset_names[name] !== undefined)
+            found = presets[preset_names[name]];
+        }
+        if (found) {
+          const result = structuredClone(found);
+          result.name = name;
+          return result;
+        }
+      }
+      return null;
+    }
+
+    if (presetNames.length === 1) {
+      const preset = getPresetData(presetNames[0]);
+      if (!preset) throw new Error(`找不到预设: ${presetNames[0]}`);
+      const data = JSON.stringify(preset, null, 4);
+      const blob = new Blob([data], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${presetNames[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success("预设已导出");
+    } else {
+      if (!window.JSZip) {
+        await import("../../../../lib/jszip.min.js");
+      }
+      const zip = new JSZip();
+      let success = 0;
+      toastr.info(`正在导出 ${presetNames.length} 个预设...`);
+      for (const name of presetNames) {
+        try {
+          const preset = getPresetData(name);
+          if (preset) {
+            const data = JSON.stringify(preset, null, 4);
+            zip.file(`${name}.json`, data);
+            success++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 导出预设 ${name} 失败`, e);
+        }
+      }
+      if (success === 0) throw new Error("没有成功导出任何预设");
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "预设.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success(`已导出 ${success} 个预设`);
+    }
+  }
+
+  // 世界书导出
+  async function exportWorldInfos(wiNames, headers) {
+    if (wiNames.length === 1) {
+      const resp = await fetch("/api/worldinfo/get", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ name: wiNames[0] }),
+        cache: "no-cache",
+      });
+      if (!resp.ok) throw new Error("获取世界书数据失败");
+      const data = await resp.json();
+      const jsonStr = JSON.stringify(data, null, 4);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${wiNames[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success("世界书已导出");
+    } else {
+      if (!window.JSZip) {
+        await import("../../../../lib/jszip.min.js");
+      }
+      const zip = new JSZip();
+      let success = 0;
+      toastr.info(`正在导出 ${wiNames.length} 个世界书...`);
+      for (const name of wiNames) {
+        try {
+          const resp = await fetch("/api/worldinfo/get", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: name }),
+            cache: "no-cache",
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            const jsonStr = JSON.stringify(data, null, 4);
+            zip.file(`${name}.json`, jsonStr);
+            success++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 导出世界书 ${name} 失败`, e);
+        }
+      }
+      if (success === 0) throw new Error("没有成功导出任何世界书");
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "世界书.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success(`已导出 ${success} 个世界书`);
+    }
+  }
+
   // PC端dragstart辅助：存储拖拽数据到全局变量并设置自定义拖拽图像
   function pcDragStart(e, dragData) {
     _pcDragData = dragData;
@@ -2193,6 +2500,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
+                            <button class="cfm-export-btn" id="cfm-export-char-btn" title="导出角色卡"><i class="fa-solid fa-file-export"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-right-sort-btn" title="角色排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2223,6 +2531,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-preset-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-preset-btn" title="导入预设"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-preset-file" multiple accept=".json" style="display:none;">
+                            <button class="cfm-export-btn" id="cfm-export-preset-btn" title="导出预设"><i class="fa-solid fa-file-export"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-preset-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-preset-right-sort-btn" title="预设排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2253,6 +2562,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-worldinfo-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-worldinfo-btn" title="导入世界书"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-worldinfo-file" multiple accept=".json,.png" style="display:none;">
+                            <button class="cfm-export-btn" id="cfm-export-worldinfo-btn" title="导出世界书"><i class="fa-solid fa-file-export"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-worldinfo-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-worldinfo-right-sort-btn" title="世界书排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -2281,6 +2591,8 @@ jQuery(async () => {
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+      // 切换标签时清空导出模式
+      if (cfmExportMode) exitExportMode();
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -2763,6 +3075,8 @@ jQuery(async () => {
     popup.find(".cfm-multisel-toggle").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
+      // 导出模式下不允许切换多选
+      if (cfmExportMode) return;
       cfmMultiSelectMode = !cfmMultiSelectMode;
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
@@ -2775,6 +3089,19 @@ jQuery(async () => {
       if (currentResourceType === "chars") renderRightPane();
       else if (currentResourceType === "presets") renderPresetsView();
       else renderWorldInfoView();
+    });
+
+    // ==================== 导出资源功能 ====================
+    popup.find(".cfm-export-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmExportMode) {
+        // 已在导出模式，执行导出
+        executeResourceExport();
+      } else {
+        // 进入导出模式
+        enterExportMode();
+      }
     });
 
     // ==================== 导入资源功能 ====================
@@ -3173,6 +3500,9 @@ jQuery(async () => {
     cfmMultiSelectMode = false;
     clearMultiSelect();
     cfmMultiSelectRangeMode = false;
+    // 重置导出模式
+    cfmExportMode = false;
+    cfmExportSelected.clear();
 
     renderLeftTree();
 
@@ -3386,6 +3716,8 @@ jQuery(async () => {
         appendCharRow(list, char, true);
       }
 
+      // 导出工具栏（搜索角色卡）
+      prependExportToolbar(list, renderRightPane);
       // 多选工具栏（搜索模式下也可用）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -3527,9 +3859,12 @@ jQuery(async () => {
         const isActive = p.value === currentVal;
         const fav = isResFavorite("presets", p.name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
-        const msCheckHtml = cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-          : "";
+        const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
+        const msCheckHtml = cfmExportMode
+          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
         const pFolderPath = (() => {
           const grp = groups[p.name];
           if (grp && getResFolderTree("presets")[grp])
@@ -3539,7 +3874,7 @@ jQuery(async () => {
           return null;
         })();
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name">${escapeHtml(p.name)}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
@@ -3560,6 +3895,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmExportMode) {
+            toggleExportItem(p.name);
+            executePresetSearch();
+            return;
+          }
           if (cfmMultiSelectMode) {
             toggleMultiSelectItem(p.name, e.shiftKey);
             executePresetSearch();
@@ -3587,6 +3927,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 导出工具栏（搜索预设）
+      prependExportToolbar(rightList, executePresetSearch);
       // 多选工具栏（搜索模式下也可用）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -3723,9 +4065,12 @@ jQuery(async () => {
         for (const n of matched) {
           const fav = isResFavorite("worldinfo", n);
           const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
-          const msCheckHtml = cfmMultiSelectMode
-            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-            : "";
+          const isExpSel = cfmExportMode && cfmExportSelected.has(n);
+          const msCheckHtml = cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : "";
           const wFolderPath = (() => {
             const grp = groups[n];
             if (grp && getResFolderTree("worldinfo")[grp])
@@ -3735,7 +4080,7 @@ jQuery(async () => {
             return null;
           })();
           const row = $(`
-            <div class="cfm-row cfm-row-char ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
+            <div class="cfm-row cfm-row-char ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name">${escapeHtml(n)}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
@@ -3756,6 +4101,11 @@ jQuery(async () => {
           });
           row.on("click", (e) => {
             if ($(e.target).closest(".cfm-row-star").length) return;
+            if (cfmExportMode) {
+              toggleExportItem(n);
+              executeWorldInfoSearch();
+              return;
+            }
             if (cfmMultiSelectMode) {
               toggleMultiSelectItem(n, e.shiftKey);
               executeWorldInfoSearch();
@@ -3778,6 +4128,8 @@ jQuery(async () => {
           rightList.append(row);
         }
 
+        // 导出工具栏（搜索世界书）
+        prependExportToolbar(rightList, executeWorldInfoSearch);
         // 多选工具栏（搜索模式下也可用）
         if (cfmMultiSelectMode) {
           const visible = getVisibleResourceIds();
@@ -4181,6 +4533,8 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char);
+      // 导出工具栏（未归类视图）
+      prependExportToolbar(list, renderRightPane);
       // 多选工具栏（未归类视图）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -4225,6 +4579,8 @@ jQuery(async () => {
         return;
       }
       for (const char of chars) appendCharRow(list, char, true);
+      // 导出工具栏（收藏视图）
+      prependExportToolbar(list, renderRightPane);
       // 多选工具栏（收藏视图）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -4416,6 +4772,8 @@ jQuery(async () => {
     // 角色卡行
     for (const char of chars) appendCharRow(list, char);
 
+    // 导出工具栏（主角色卡视图）
+    prependExportToolbar(list, renderRightPane);
     // 多选工具栏（在行渲染后添加，确保getVisibleResourceIds可用）
     if (cfmMultiSelectMode) {
       const visible = getVisibleResourceIds();
@@ -4503,6 +4861,7 @@ jQuery(async () => {
     const thumbUrl = getThumbnailUrl("avatar", char.avatar);
     const fav = isFavorite(char.avatar);
     const isSelected = cfmMultiSelectMode && cfmMultiSelected.has(char.avatar);
+    const isExportSel = cfmExportMode && cfmExportSelected.has(char.avatar);
     const folderPathHtml = showFolderPath
       ? (() => {
           const p = findCharFolderPath(char.avatar);
@@ -4527,11 +4886,13 @@ jQuery(async () => {
         );
       charMetaHtml = `<span class="cfm-char-meta-info">${parts.join('<span class="cfm-char-meta-sep"> · </span>')}</span>`;
     }
-    const checkboxHtml = cfmMultiSelectMode
-      ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
-      : "";
+    const checkboxHtml = cfmExportMode
+      ? `<div class="cfm-export-checkbox ${isExportSel ? "cfm-export-checked" : ""}"><i class="fa-${isExportSel ? "solid" : "regular"} fa-square${isExportSel ? "-check" : ""}"></i></div>`
+      : cfmMultiSelectMode
+        ? `<div class="cfm-multisel-checkbox ${isSelected ? "cfm-multisel-checked" : ""}"><i class="fa-${isSelected ? "solid" : "regular"} fa-square${isSelected ? "-check" : ""}"></i></div>`
+        : "";
     const row = $(`
-            <div class="cfm-row cfm-row-char ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
+            <div class="cfm-row cfm-row-char ${isExportSel ? "cfm-export-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
@@ -4561,9 +4922,13 @@ jQuery(async () => {
     row.on("click", (e) => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
+      if (cfmExportMode) {
+        toggleExportItem(char.avatar);
+        renderRightPane();
+        return;
+      }
       if (cfmMultiSelectMode) {
         toggleMultiSelectItem(char.avatar, e.shiftKey);
-        // 更新视觉状态
         renderRightPane();
         return;
       }
@@ -6563,11 +6928,14 @@ jQuery(async () => {
         const isActive = p.value === currentVal;
         const fav = isResFavorite("presets", p.name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
-        const msCheckHtml = cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-          : "";
+        const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
+        const msCheckHtml = cfmExportMode
+          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name">${escapeHtml(p.name)}</div>
@@ -6598,6 +6966,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmExportMode) {
+            toggleExportItem(p.name);
+            renderPresetsView();
+            return;
+          }
           if (cfmMultiSelectMode) {
             toggleMultiSelectItem(p.name, e.shiftKey);
             renderPresetsView();
@@ -6623,6 +6996,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 导出工具栏（预设文件夹视图）
+      prependExportToolbar(rightList, renderPresetsView);
       // 多选工具栏（预设）
       if (cfmMultiSelectMode && selectedPresetFolder) {
         const visible = getVisibleResourceIds();
@@ -7228,11 +7603,14 @@ jQuery(async () => {
       for (const n of displayItems) {
         const fav = isResFavorite("worldinfo", n);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
-        const msCheckHtml = cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-          : "";
+        const isExpSel = cfmExportMode && cfmExportSelected.has(n);
+        const msCheckHtml = cfmExportMode
+          ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
             <div class="cfm-row-name">${escapeHtml(n)}</div>
@@ -7263,6 +7641,11 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
+          if (cfmExportMode) {
+            toggleExportItem(n);
+            renderWorldInfoView();
+            return;
+          }
           if (cfmMultiSelectMode) {
             toggleMultiSelectItem(n, e.shiftKey);
             renderWorldInfoView();
@@ -7283,6 +7666,8 @@ jQuery(async () => {
         rightList.append(row);
       }
 
+      // 导出工具栏（世界书文件夹视图）
+      prependExportToolbar(rightList, renderWorldInfoView);
       // 多选工具栏（世界书）
       if (cfmMultiSelectMode && selectedWorldInfoFolder) {
         const visible = getVisibleResourceIds();
