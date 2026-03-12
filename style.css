@@ -1854,12 +1854,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 14px;
   background: rgba(166, 227, 161, 0.08);
-  border-bottom: 1px solid rgba(166, 227, 161, 0.2);
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  border-bottom: 1px solid rgba(166, 227, 161, 0.15);
+  flex-shrink: 0;
 }
 .cfm-export-toolbar .cfm-export-count {
   flex: 1;
@@ -1872,6 +1870,26 @@
 }
 .cfm-export-toolbar .cfm-export-cancel:hover {
   background-color: rgba(243, 139, 168, 0.15) !important;
+}
+.cfm-export-toolbar .cfm-btn {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.cfm-export-toolbar .cfm-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+/* 导出框选模式激活 */
+.cfm-export-toolbar .cfm-range-active {
+  background-color: rgba(166, 227, 161, 0.3) !important;
+  border-color: #a6e3a1 !important;
+  color: #a6e3a1 !important;
+  animation: cfm-range-pulse 1.5s ease-in-out infinite;
 }
 
 /* 删除按钮 */
@@ -1944,12 +1962,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 14px;
   background: rgba(243, 139, 168, 0.08);
-  border-bottom: 1px solid rgba(243, 139, 168, 0.2);
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  border-bottom: 1px solid rgba(243, 139, 168, 0.15);
+  flex-shrink: 0;
 }
 .cfm-res-delete-toolbar .cfm-res-delete-count {
   flex: 1;
@@ -1962,6 +1978,26 @@
 }
 .cfm-res-delete-toolbar .cfm-res-delete-cancel:hover {
   background-color: rgba(166, 173, 200, 0.15) !important;
+}
+.cfm-res-delete-toolbar .cfm-btn {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+.cfm-res-delete-toolbar .cfm-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+/* 删除框选模式激活 */
+.cfm-res-delete-toolbar .cfm-range-active {
+  background-color: rgba(243, 139, 168, 0.3) !important;
+  border-color: #f38ba8 !important;
+  color: #f38ba8 !important;
+  animation: cfm-range-pulse 1.5s ease-in-out infinite;
 }
 
 /* 多选切换按钮 */
@@ -2074,6 +2110,40 @@
     min-height: 36px;
   }
   .cfm-multisel-checkbox {
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+    margin-right: 8px;
+  }
+  /* 移动端导出工具栏适配 */
+  .cfm-export-toolbar {
+    padding: 8px 14px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cfm-export-toolbar .cfm-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    min-height: 36px;
+  }
+  .cfm-export-checkbox {
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+    margin-right: 8px;
+  }
+  /* 移动端删除工具栏适配 */
+  .cfm-res-delete-toolbar {
+    padding: 8px 14px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cfm-res-delete-toolbar .cfm-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+    min-height: 36px;
+  }
+  .cfm-res-delete-checkbox {
     width: 28px;
     height: 28px;
     font-size: 20px;

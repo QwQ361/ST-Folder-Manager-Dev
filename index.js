@@ -2059,6 +2059,8 @@ jQuery(async () => {
   }
 
   // ==================== 导出模式状态 ====================
+  let cfmExportRangeMode = false;
+  let cfmExportLastClicked = null;
   let cfmExportMode = false;
   let cfmExportSelected = new Set(); // 导出模式下选中的资源标识符
 
@@ -2090,6 +2092,8 @@ jQuery(async () => {
   function exitExportMode() {
     cfmExportMode = false;
     cfmExportSelected.clear();
+    cfmExportRangeMode = false;
+    cfmExportLastClicked = null;
     $(".cfm-export-btn").removeClass("cfm-export-active");
     $(".cfm-export-btn")
       .find("i")
@@ -2104,9 +2108,21 @@ jQuery(async () => {
     rerenderCurrentView();
   }
 
-  function toggleExportItem(id) {
-    if (cfmExportSelected.has(id)) cfmExportSelected.delete(id);
-    else cfmExportSelected.add(id);
+  function toggleExportItem(id, shiftKey) {
+    if ((shiftKey || cfmExportRangeMode) && cfmExportLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmExportLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmExportSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmExportSelected.has(id)) cfmExportSelected.delete(id);
+      else cfmExportSelected.add(id);
+    }
+    cfmExportLastClicked = id;
   }
 
   function rerenderCurrentView() {
@@ -2124,6 +2140,7 @@ jQuery(async () => {
     const toolbar = $(`
       <div class="cfm-export-toolbar">
         <button class="cfm-btn cfm-btn-sm cfm-export-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-export-range ${cfmExportRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmExportRangeMode ? "(开)" : ""}</button>
         <span class="cfm-export-count">${cfmExportSelected.size > 0 ? `已选 ${cfmExportSelected.size} 项` : ""}</span>
         <button class="cfm-btn cfm-btn-sm cfm-export-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
       </div>
@@ -2136,6 +2153,13 @@ jQuery(async () => {
       } else {
         visible.forEach((id) => cfmExportSelected.add(id));
       }
+      renderFn();
+    });
+    toolbar.find(".cfm-export-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmExportRangeMode = !cfmExportRangeMode;
+      if (cfmExportRangeMode) cfmExportLastClicked = null;
       renderFn();
     });
     toolbar.find(".cfm-export-cancel").on("click touchend", (e) => {
@@ -2370,10 +2394,14 @@ jQuery(async () => {
   // ==================== 资源删除模式状态 ====================
   let cfmResDeleteMode = false;
   let cfmResDeleteSelected = new Set();
+  let cfmResDeleteRangeMode = false;
+  let cfmResDeleteLastClicked = null;
 
   function enterResDeleteMode() {
     cfmResDeleteMode = true;
     cfmResDeleteSelected.clear();
+    cfmResDeleteRangeMode = false;
+    cfmResDeleteLastClicked = null;
     // 如果多选模式开着，先关闭
     if (cfmMultiSelectMode) {
       cfmMultiSelectMode = false;
@@ -2397,6 +2425,8 @@ jQuery(async () => {
   function exitResDeleteMode() {
     cfmResDeleteMode = false;
     cfmResDeleteSelected.clear();
+    cfmResDeleteRangeMode = false;
+    cfmResDeleteLastClicked = null;
     $(".cfm-res-delete-btn").removeClass("cfm-res-delete-active");
     $(".cfm-res-delete-btn")
       .find("i")
@@ -2411,9 +2441,21 @@ jQuery(async () => {
     rerenderCurrentView();
   }
 
-  function toggleResDeleteItem(id) {
-    if (cfmResDeleteSelected.has(id)) cfmResDeleteSelected.delete(id);
-    else cfmResDeleteSelected.add(id);
+  function toggleResDeleteItem(id, shiftKey) {
+    if ((shiftKey || cfmResDeleteRangeMode) && cfmResDeleteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmResDeleteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmResDeleteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmResDeleteSelected.has(id)) cfmResDeleteSelected.delete(id);
+      else cfmResDeleteSelected.add(id);
+    }
+    cfmResDeleteLastClicked = id;
   }
 
   function prependResDeleteToolbar(listContainer, renderFn) {
@@ -2424,6 +2466,7 @@ jQuery(async () => {
     const toolbar = $(`
       <div class="cfm-res-delete-toolbar">
         <button class="cfm-btn cfm-btn-sm cfm-res-delete-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-res-delete-range ${cfmResDeleteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmResDeleteRangeMode ? "(开)" : ""}</button>
         <span class="cfm-res-delete-count">${cfmResDeleteSelected.size > 0 ? `已选 ${cfmResDeleteSelected.size} 项` : ""}</span>
         <button class="cfm-btn cfm-btn-sm cfm-res-delete-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
       </div>
@@ -2436,6 +2479,13 @@ jQuery(async () => {
       } else {
         visible.forEach((id) => cfmResDeleteSelected.add(id));
       }
+      renderFn();
+    });
+    toolbar.find(".cfm-res-delete-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmResDeleteRangeMode = !cfmResDeleteRangeMode;
+      if (cfmResDeleteRangeMode) cfmResDeleteLastClicked = null;
       renderFn();
     });
     toolbar.find(".cfm-res-delete-cancel").on("click touchend", (e) => {
@@ -3725,9 +3775,13 @@ jQuery(async () => {
     // 重置导出模式
     cfmExportMode = false;
     cfmExportSelected.clear();
+    cfmExportRangeMode = false;
+    cfmExportLastClicked = null;
     // 重置删除模式
     cfmResDeleteMode = false;
     cfmResDeleteSelected.clear();
+    cfmResDeleteRangeMode = false;
+    cfmResDeleteLastClicked = null;
 
     renderLeftTree();
 
@@ -4126,12 +4180,12 @@ jQuery(async () => {
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
           if (cfmResDeleteMode) {
-            toggleResDeleteItem(p.name);
+            toggleResDeleteItem(p.name, e.shiftKey);
             executePresetSearch();
             return;
           }
           if (cfmExportMode) {
-            toggleExportItem(p.name);
+            toggleExportItem(p.name, e.shiftKey);
             executePresetSearch();
             return;
           }
@@ -4341,13 +4395,13 @@ jQuery(async () => {
           });
           row.on("click", (e) => {
             if ($(e.target).closest(".cfm-row-star").length) return;
-            if (cfmExportMode) {
-              toggleResDeleteItem(n);
+            if (cfmResDeleteMode) {
+              toggleResDeleteItem(n, e.shiftKey);
               executeWorldInfoSearch();
               return;
             }
             if (cfmExportMode) {
-              toggleExportItem(n);
+              toggleExportItem(n, e.shiftKey);
               executeWorldInfoSearch();
               return;
             }
@@ -5179,12 +5233,12 @@ jQuery(async () => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
       if (cfmResDeleteMode) {
-        toggleResDeleteItem(char.avatar);
+        toggleResDeleteItem(char.avatar, e.shiftKey);
         renderRightPane();
         return;
       }
       if (cfmExportMode) {
-        toggleExportItem(char.avatar);
+        toggleExportItem(char.avatar, e.shiftKey);
         renderRightPane();
         return;
       }
@@ -7231,12 +7285,12 @@ jQuery(async () => {
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
           if (cfmResDeleteMode) {
-            toggleResDeleteItem(p.name);
+            toggleResDeleteItem(p.name, e.shiftKey);
             renderPresetsView();
             return;
           }
           if (cfmExportMode) {
-            toggleExportItem(p.name);
+            toggleExportItem(p.name, e.shiftKey);
             renderPresetsView();
             return;
           }
@@ -7916,12 +7970,12 @@ jQuery(async () => {
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star").length) return;
           if (cfmResDeleteMode) {
-            toggleResDeleteItem(n);
+            toggleResDeleteItem(n, e.shiftKey);
             renderWorldInfoView();
             return;
           }
           if (cfmExportMode) {
-            toggleExportItem(n);
+            toggleExportItem(n, e.shiftKey);
             renderWorldInfoView();
             return;
           }
