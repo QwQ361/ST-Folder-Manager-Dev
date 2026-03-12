@@ -8035,11 +8035,10 @@ jQuery(async () => {
     `;
 
     const overlay = $("<div id='cfm-charbook-classify-overlay'>").css({
-      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
       background: "rgba(0,0,0,0.6)", zIndex: 99999,
-      display: "flex", alignItems: "safe center", justifyContent: "center",
+      display: "flex", alignItems: "center", justifyContent: "center",
       padding: "16px", boxSizing: "border-box",
-      overflowY: "auto",
     }).html(dialogHtml);
 
     $("body").append(overlay);
