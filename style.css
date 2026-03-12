@@ -2150,3 +2150,131 @@
     margin-right: 8px;
   }
 }
+
+/* ==================== 原生界面文件夹过滤按钮 ==================== */
+.cfm-nf-btn {
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 0.2s,
+    color 0.2s;
+  font-size: 14px;
+}
+.cfm-nf-btn:hover {
+  opacity: 1;
+}
+.cfm-nf-btn-active {
+  opacity: 1;
+  color: #89b4fa !important;
+}
+
+/* ==================== 原生界面文件夹浮动面板 ==================== */
+.cfm-nf-panel {
+  position: fixed;
+  z-index: 10000;
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+.cfm-nf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+.cfm-nf-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+.cfm-nf-title i {
+  margin-right: 4px;
+}
+.cfm-nf-toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+.cfm-nf-toolbar-actions i {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.cfm-nf-toolbar-actions i:hover {
+  opacity: 1;
+}
+.cfm-nf-tree {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+.cfm-nf-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+  gap: 6px;
+  user-select: none;
+}
+.cfm-nf-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.cfm-nf-item.cfm-nf-active {
+  background: rgba(137, 180, 250, 0.15);
+  color: #89b4fa;
+}
+.cfm-nf-show-all {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-left: 12px !important;
+}
+.cfm-nf-arrow {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s;
+  font-size: 10px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.cfm-nf-arrow:hover {
+  opacity: 1;
+}
+.cfm-nf-arrow.cfm-nf-expanded {
+  transform: rotate(90deg);
+}
+.cfm-nf-arrow-placeholder {
+  width: 14px;
+  flex-shrink: 0;
+}
+.cfm-nf-icon {
+  font-size: 12px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.cfm-nf-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfm-nf-count {
+  font-size: 11px;
+  opacity: 0.5;
+  flex-shrink: 0;
+  margin-left: auto;
+}

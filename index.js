@@ -8495,10 +8495,464 @@ jQuery(async () => {
     });
   }
 
+  // ==================== 原生界面文件夹过滤 ====================
+  // 当前过滤状态
+  let nativeFilterChar = null; // 角色卡当前过滤的文件夹tagId，null=不过滤
+  let nativeFilterPreset = null; // 预设当前过滤的文件夹id
+  let nativeFilterWorldInfo = null; // 世界书当前过滤的文件夹id
+
+  /**
+   * 构建文件夹树HTML（递归），用于原生界面浮动面板
+   * @param {string} type - 'chars' | 'presets' | 'worldinfo'
+   * @param {string|null} parentId - 父文件夹ID
+   * @param {number} depth - 缩进深度
+   * @param {Set} expandedSet - 已展开的文件夹ID集合
+   * @param {string|null} activeId - 当前选中的文件夹ID
+   * @returns {string} HTML字符串
+   */
+  function buildNativeFolderTreeHtml(
+    type,
+    parentId,
+    depth,
+    expandedSet,
+    activeId,
+  ) {
+    let folderIds, getDisplayName, getChildren, countFn;
+    if (type === "chars") {
+      folderIds = parentId
+        ? sortFolders(getChildFolders(parentId))
+        : sortFolders(getTopLevelFolders());
+      getDisplayName = (id) => getTagName(id);
+      getChildren = (id) => getChildFolders(id);
+      countFn = (id) => countCharsInFolderRecursive(id);
+    } else {
+      const resType = type === "presets" ? "presets" : "worldinfo";
+      folderIds = parentId
+        ? sortResFolders(resType, getResChildFolders(resType, parentId))
+        : sortResFolders(resType, getResTopLevelFolders(resType));
+      getDisplayName = (id) => getResFolderDisplayName(resType, id);
+      getChildren = (id) => getResChildFolders(resType, id);
+      countFn = (id) => {
+        const groups = getResourceGroups(resType);
+        let count = 0;
+        for (const [, fid] of Object.entries(groups)) {
+          if (fid === id) count++;
+        }
+        // 递归子文件夹
+        for (const cid of getChildren(id)) count += countFn(cid);
+        return count;
+      };
+    }
+    let html = "";
+    for (const fid of folderIds) {
+      const name = getDisplayName(fid);
+      const children = getChildren(fid);
+      const hasChildren = children.length > 0;
+      const isExpanded = expandedSet.has(fid);
+      const isActive = fid === activeId;
+      const count = countFn(fid);
+      html += `<div class="cfm-nf-item${isActive ? " cfm-nf-active" : ""}" data-folder-id="${fid}" data-type="${type}" style="padding-left:${12 + depth * 16}px;">`;
+      if (hasChildren) {
+        html += `<span class="cfm-nf-arrow ${isExpanded ? "cfm-nf-expanded" : ""}" data-folder-id="${fid}"><i class="fa-solid fa-chevron-right"></i></span>`;
+      } else {
+        html += `<span class="cfm-nf-arrow-placeholder"></span>`;
+      }
+      html += `<i class="fa-solid fa-folder cfm-nf-icon"></i>`;
+      html += `<span class="cfm-nf-name">${escapeHtml(name)}</span>`;
+      html += `<span class="cfm-nf-count">${count}</span>`;
+      html += `</div>`;
+      if (hasChildren && isExpanded) {
+        html += buildNativeFolderTreeHtml(
+          type,
+          fid,
+          depth + 1,
+          expandedSet,
+          activeId,
+        );
+      }
+    }
+    return html;
+  }
+
+  /**
+   * 创建并显示原生界面文件夹浮动面板
+   * @param {jQuery} anchorEl - 锚点元素（文件夹图标按钮）
+   * @param {string} type - 'chars' | 'presets' | 'worldinfo'
+   */
+  function showNativeFolderPanel(anchorEl, type) {
+    // 移除已有面板
+    $(".cfm-nf-panel").remove();
+
+    const currentFilter =
+      type === "chars"
+        ? nativeFilterChar
+        : type === "presets"
+          ? nativeFilterPreset
+          : nativeFilterWorldInfo;
+
+    // 展开状态集合（持久化到会话中）
+    if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
+    if (!showNativeFolderPanel._expanded[type])
+      showNativeFolderPanel._expanded[type] = new Set();
+    const expandedSet = showNativeFolderPanel._expanded[type];
+
+    const panel = $(`<div class="cfm-nf-panel" data-nf-type="${type}"></div>`);
+
+    // 顶部工具栏
+    const toolbar = $(`<div class="cfm-nf-toolbar">
+      <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
+      <span class="cfm-nf-toolbar-actions">
+        <i class="fa-solid fa-angles-down cfm-nf-expand-all" title="展开全部"></i>
+        <i class="fa-solid fa-angles-up cfm-nf-collapse-all" title="收起全部"></i>
+      </span>
+    </div>`);
+    panel.append(toolbar);
+
+    // "显示全部" 按钮
+    const showAllBtn =
+      $(`<div class="cfm-nf-item cfm-nf-show-all${!currentFilter ? " cfm-nf-active" : ""}">
+      <i class="fa-solid fa-layer-group cfm-nf-icon"></i>
+      <span class="cfm-nf-name">显示全部</span>
+    </div>`);
+    panel.append(showAllBtn);
+
+    // 文件夹树
+    const treeContainer = $(`<div class="cfm-nf-tree"></div>`);
+    treeContainer.html(
+      buildNativeFolderTreeHtml(type, null, 0, expandedSet, currentFilter),
+    );
+    panel.append(treeContainer);
+
+    // 定位面板
+    $("body").append(panel);
+    const anchorRect = anchorEl[0].getBoundingClientRect();
+    let top = anchorRect.bottom + 4;
+    let left = anchorRect.left;
+    // 确保不超出视口
+    const panelWidth = panel.outerWidth();
+    const panelHeight = panel.outerHeight();
+    if (left + panelWidth > window.innerWidth)
+      left = window.innerWidth - panelWidth - 8;
+    if (left < 4) left = 4;
+    if (top + panelHeight > window.innerHeight)
+      top = anchorRect.top - panelHeight - 4;
+    panel.css({ top: top + "px", left: left + "px" });
+
+    // 事件：展开/收起箭头
+    panel.on("click", ".cfm-nf-arrow", function (e) {
+      e.stopPropagation();
+      const fid = $(this).data("folder-id");
+      if (expandedSet.has(fid)) expandedSet.delete(fid);
+      else expandedSet.add(fid);
+      treeContainer.html(
+        buildNativeFolderTreeHtml(type, null, 0, expandedSet, currentFilter),
+      );
+    });
+
+    // 事件：展开全部
+    toolbar.find(".cfm-nf-expand-all").on("click", function (e) {
+      e.stopPropagation();
+      let allIds;
+      if (type === "chars") {
+        allIds = getFolderTagIds();
+      } else {
+        const resType = type === "presets" ? "presets" : "worldinfo";
+        allIds = getResFolderIds(resType);
+      }
+      allIds.forEach((id) => expandedSet.add(id));
+      const cf =
+        type === "chars"
+          ? nativeFilterChar
+          : type === "presets"
+            ? nativeFilterPreset
+            : nativeFilterWorldInfo;
+      treeContainer.html(
+        buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
+      );
+    });
+
+    // 事件：收起全部
+    toolbar.find(".cfm-nf-collapse-all").on("click", function (e) {
+      e.stopPropagation();
+      expandedSet.clear();
+      const cf =
+        type === "chars"
+          ? nativeFilterChar
+          : type === "presets"
+            ? nativeFilterPreset
+            : nativeFilterWorldInfo;
+      treeContainer.html(
+        buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
+      );
+    });
+
+    // 事件：点击"显示全部"
+    showAllBtn.on("click", function () {
+      if (type === "chars") nativeFilterChar = null;
+      else if (type === "presets") nativeFilterPreset = null;
+      else nativeFilterWorldInfo = null;
+      applyNativeFilter(type);
+      panel.remove();
+      updateNativeFilterBtnState(type);
+    });
+
+    // 事件：点击文件夹项
+    panel.on("click", ".cfm-nf-item[data-folder-id]", function (e) {
+      if ($(e.target).closest(".cfm-nf-arrow").length) return;
+      const fid = $(this).data("folder-id");
+      if (type === "chars") nativeFilterChar = fid;
+      else if (type === "presets") nativeFilterPreset = fid;
+      else nativeFilterWorldInfo = fid;
+      applyNativeFilter(type);
+      panel.remove();
+      updateNativeFilterBtnState(type);
+    });
+
+    // 点击外部关闭
+    setTimeout(() => {
+      $(document).on(
+        "mousedown.cfmNfPanel touchstart.cfmNfPanel",
+        function (e) {
+          if (!$(e.target).closest(".cfm-nf-panel, .cfm-nf-btn").length) {
+            $(".cfm-nf-panel").remove();
+            $(document).off("mousedown.cfmNfPanel touchstart.cfmNfPanel");
+          }
+        },
+      );
+    }, 0);
+  }
+
+  /**
+   * 获取文件夹下所有资源名称（递归包含子文件夹）
+   */
+  function getAllItemsInFolderRecursive(type, folderId) {
+    const items = new Set();
+    if (type === "chars") {
+      // 获取当前文件夹的角色
+      for (const ch of getCharactersInFolder(folderId)) {
+        items.add(ch.avatar);
+      }
+      // 递归子文件夹
+      for (const childId of getChildFolders(folderId)) {
+        for (const av of getAllItemsInFolderRecursive("chars", childId)) {
+          items.add(av);
+        }
+      }
+    } else {
+      const resType = type === "presets" ? "presets" : "worldinfo";
+      const groups = getResourceGroups(resType);
+      for (const [name, fid] of Object.entries(groups)) {
+        if (fid === folderId) items.add(name);
+      }
+      for (const childId of getResChildFolders(resType, folderId)) {
+        for (const name of getAllItemsInFolderRecursive(type, childId)) {
+          items.add(name);
+        }
+      }
+    }
+    return items;
+  }
+
+  /**
+   * 应用原生界面过滤
+   */
+  function applyNativeFilter(type) {
+    if (type === "chars") {
+      applyCharFilter();
+    } else if (type === "presets") {
+      applyPresetFilter();
+    } else {
+      applyWorldInfoFilter();
+    }
+  }
+
+  /**
+   * 角色卡过滤：隐藏/显示 #rm_print_characters_block 中的角色卡
+   */
+  function applyCharFilter() {
+    const block = $("#rm_print_characters_block");
+    if (!nativeFilterChar) {
+      // 显示全部
+      block.find(".character_select").show();
+      return;
+    }
+    const allowedAvatars = getAllItemsInFolderRecursive(
+      "chars",
+      nativeFilterChar,
+    );
+    const chars = getCharacters();
+    block.find(".character_select").each(function () {
+      const chid = $(this).attr("data-chid");
+      if (chid !== undefined && chid !== null && chid !== "") {
+        const char = chars[parseInt(chid)];
+        if (char && allowedAvatars.has(char.avatar)) {
+          $(this).show();
+        } else {
+          $(this).hide();
+        }
+      }
+    });
+  }
+
+  /**
+   * 预设过滤：隐藏/显示 #settings_preset_openai 中的 option
+   */
+  function applyPresetFilter() {
+    const select = $("#settings_preset_openai");
+    if (!nativeFilterPreset) {
+      select.find("option").show();
+      return;
+    }
+    const allowedNames = getAllItemsInFolderRecursive(
+      "presets",
+      nativeFilterPreset,
+    );
+    select.find("option").each(function () {
+      const val = $(this).val();
+      const text = $(this).text();
+      if (val === "" || val === "gui" || val === "default") {
+        $(this).show(); // 保留默认选项
+      } else if (allowedNames.has(text)) {
+        $(this).show();
+      } else {
+        $(this).hide();
+      }
+    });
+  }
+
+  /**
+   * 世界书过滤：隐藏/显示 #world_editor_select 中的 option
+   */
+  function applyWorldInfoFilter() {
+    const select = $("#world_editor_select");
+    if (!nativeFilterWorldInfo) {
+      select.find("option").show();
+      return;
+    }
+    const allowedNames = getAllItemsInFolderRecursive(
+      "worldinfo",
+      nativeFilterWorldInfo,
+    );
+    select.find("option").each(function () {
+      const val = $(this).val();
+      const text = $(this).text();
+      if (val === "") {
+        $(this).show(); // 保留默认占位选项
+      } else if (allowedNames.has(text)) {
+        $(this).show();
+      } else {
+        $(this).hide();
+      }
+    });
+  }
+
+  /**
+   * 更新文件夹按钮的激活状态
+   */
+  function updateNativeFilterBtnState(type) {
+    const filter =
+      type === "chars"
+        ? nativeFilterChar
+        : type === "presets"
+          ? nativeFilterPreset
+          : nativeFilterWorldInfo;
+    const btn = $(`.cfm-nf-btn[data-nf-type="${type}"]`);
+    if (filter) {
+      btn.addClass("cfm-nf-btn-active");
+      let name;
+      if (type === "chars") name = getTagName(filter);
+      else {
+        const resType = type === "presets" ? "presets" : "worldinfo";
+        name = getResFolderDisplayName(resType, filter);
+      }
+      btn.attr("title", `文件夹过滤: ${name}`);
+    } else {
+      btn.removeClass("cfm-nf-btn-active");
+      btn.attr("title", "文件夹过滤");
+    }
+  }
+
+  /**
+   * 注入原生界面文件夹过滤按钮
+   */
+  function injectNativeFilterButtons() {
+    // 1. 角色卡列表 - 注入到 #rm_button_bar
+    if ($("#rm_button_bar").length && !$("#rm_button_bar .cfm-nf-btn").length) {
+      const charBtn = $(
+        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="chars" title="文件夹过滤"></div>`,
+      );
+      $("#rm_button_bar #rm_buttons_container").after(charBtn);
+      charBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="chars"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "chars");
+      });
+    }
+
+    // 2. OpenAI 预设选择器 - 注入到 #settings_preset_openai 的父容器
+    if (
+      $("#settings_preset_openai").length &&
+      !$("#settings_preset_openai").parent().find(".cfm-nf-btn").length
+    ) {
+      const presetBtn = $(
+        `<div class="cfm-nf-btn menu_button menu_button_icon fa-solid fa-folder-tree" data-nf-type="presets" title="文件夹过滤"></div>`,
+      );
+      $("#settings_preset_openai").after(presetBtn);
+      presetBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="presets"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "presets");
+      });
+    }
+
+    // 3. 世界书选择器 - 注入到 #world_editor_select 旁
+    if (
+      $("#world_editor_select").length &&
+      !$("#world_editor_select").parent().find(".cfm-nf-btn").length
+    ) {
+      const wiBtn = $(
+        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="worldinfo" title="文件夹过滤"></div>`,
+      );
+      $("#world_editor_select").after(wiBtn);
+      wiBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="worldinfo"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "worldinfo");
+      });
+    }
+  }
+
   // ==================== 初始化 ====================
   autoImportAllTags(); // 首次加载自动导入所有标签
   config = loadConfig(); // 刷新配置（autoImport可能改了settings）
   autoCleanRedundantTags(); // 自动清理多余的路径标签
   initButton();
+  injectNativeFilterButtons();
+
+  // 监听角色卡列表重新渲染事件，自动重新应用过滤
+  const eventSource = getContext().eventSource;
+  const event_types = getContext().eventTypes;
+  if (eventSource && event_types) {
+    // 角色卡列表翻页/重新渲染后重新应用过滤
+    eventSource.on(event_types.CHARACTER_PAGE_LOADED, () => {
+      if (nativeFilterChar) {
+        // 延迟一帧确保DOM已更新
+        requestAnimationFrame(() => applyCharFilter());
+      }
+    });
+  }
+
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
