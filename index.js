@@ -470,6 +470,9 @@ jQuery(async () => {
       extension_settings[extensionName].batchTemplates.presets = [];
     if (!extension_settings[extensionName].batchTemplates.worldinfo)
       extension_settings[extensionName].batchTemplates.worldinfo = [];
+    // 导入角色卡时自动提取内嵌世界书的目标文件夹（null=不自动提取）
+    if (extension_settings[extensionName].autoCharBookFolder === undefined)
+      extension_settings[extensionName].autoCharBookFolder = null;
   }
   ensureSettings();
 
@@ -3175,6 +3178,7 @@ jQuery(async () => {
                                 </div>
                                 <button id="cfm-worldinfo-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
                                 <button id="cfm-worldinfo-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
+                                <button id="cfm-charbook-classify-btn" title="角色世界书归类"><i class="fa-solid fa-user-tag"></i></button>
                             </span>
                         </div>
                         <div class="cfm-left-tree" id="cfm-worldinfo-left-tree"></div>
@@ -3467,6 +3471,13 @@ jQuery(async () => {
       e.preventDefault();
       worldInfoExpandedNodes.clear();
       renderWorldInfoView();
+    });
+
+    // 角色世界书归类按钮
+    popup.find("#cfm-charbook-classify-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showCharBookClassifyPopup();
     });
 
     // 预设左栏排序
@@ -3838,6 +3849,44 @@ jQuery(async () => {
       if (targetFolder) {
         for (const avatar of importedAvatars) {
           moveCharToFolder(avatar, targetFolder);
+        }
+      }
+
+      // 自动处理导入角色卡的内嵌世界书
+      const charBookSetting = extension_settings[extensionName].autoCharBookFolder;
+      if (charBookSetting) {
+        let embImported = 0;
+        const characters = getCharacters();
+        for (const avatar of importedAvatars) {
+          const ch = characters.find(c => c.avatar === avatar);
+          if (!ch?.data?.character_book) continue;
+          try {
+            const bookName = ch.data.character_book.name || `${ch.name}'s Lorebook`;
+            const characterBook = ch.data.character_book;
+            const formData = new FormData();
+            const blob = new Blob([JSON.stringify(characterBook)], { type: "application/json" });
+            formData.append("avatar", new File([blob], bookName + ".json", { type: "application/json" }));
+            formData.append("convertedData", JSON.stringify(characterBook));
+            const result = await fetch("/api/worldinfo/import", {
+              method: "POST",
+              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              body: formData,
+              cache: "no-cache",
+            });
+            if (result.ok) {
+              const data = await result.json();
+              if (data.name) {
+                setItemGroup("worldinfo", data.name, charBookSetting);
+                embImported++;
+              }
+            }
+          } catch (err) {
+            console.error("[CFM] 自动提取内嵌世界书失败:", avatar, err);
+          }
+        }
+        if (embImported > 0) {
+          _worldInfoNamesCache = null;
+          toastr.info(`自动提取了 ${embImported} 个内嵌世界书`, "角色世界书");
         }
       }
 
@@ -7835,6 +7884,281 @@ jQuery(async () => {
         }
       });
     }
+  }
+
+  // ==================== 角色世界书归类 ====================
+  /**
+   * 扫描所有角色卡，收集关联的世界书名称
+   */
+  async function scanCharacterWorldBooks() {
+    const characters = getCharacters();
+    const wiNames = new Set(await getWorldInfoNames(true));
+    const linked = new Map(); // 世界书名 -> 关联角色名列表
+    const embedded = new Map(); // avatar -> {name, bookName, alreadyImported}
+    for (const ch of characters) {
+      const worldName = ch.data?.extensions?.world;
+      if (worldName && wiNames.has(worldName)) {
+        if (!linked.has(worldName)) linked.set(worldName, []);
+        linked.get(worldName).push(ch.name || ch.avatar);
+      }
+      if (ch.data?.character_book) {
+        const bookName = ch.data.character_book.name || `${ch.name}'s Lorebook`;
+        embedded.set(ch.avatar, {
+          name: ch.name || ch.avatar,
+          bookName,
+          alreadyImported: wiNames.has(bookName),
+        });
+      }
+    }
+    return { linked, embedded };
+  }
+
+  /**
+   * 显示角色世界书归类弹窗
+   */
+  async function showCharBookClassifyPopup() {
+    if ($("#cfm-charbook-classify-overlay").length > 0) return;
+
+    const { linked, embedded } = await scanCharacterWorldBooks();
+    const wiGroups = getResourceGroups("worldinfo");
+
+    // 构建文件夹选项
+    function buildFolderOptions() {
+      const tree = getResFolderTree("worldinfo");
+      const options = ['<option value="">— 不归类 —</option>'];
+      function addOpts(parentId, depth) {
+        const children = sortResFolders("worldinfo", Object.keys(tree).filter(id => tree[id].parentId === (parentId || null)));
+        for (const id of children) {
+          const indent = "&nbsp;".repeat(depth * 4);
+          options.push(`<option value="${escapeHtml(id)}">${indent}${escapeHtml(getResFolderDisplayName("worldinfo", id))}</option>`);
+          addOpts(id, depth + 1);
+        }
+      }
+      addOpts(null, 0);
+      return options.join("");
+    }
+
+    // 当前选中的世界书文件夹作为默认目标
+    const defaultFolder = selectedWorldInfoFolder && selectedWorldInfoFolder !== "__ungrouped__" && selectedWorldInfoFolder !== "__favorites__" ? selectedWorldInfoFolder : "";
+
+    // 构建关联世界书列表HTML
+    let linkedHtml = "";
+    if (linked.size === 0) {
+      linkedHtml = '<div class="cfm-cb-empty">未发现角色卡关联的世界书</div>';
+    } else {
+      for (const [wiName, charNames] of linked) {
+        const currentFolder = wiGroups[wiName] || null;
+        const currentDisplay = currentFolder ? getResFolderDisplayName("worldinfo", currentFolder) : "未归类";
+        const charList = charNames.length <= 3 ? charNames.join("、") : charNames.slice(0, 3).join("、") + `...等${charNames.length}个`;
+        linkedHtml += `
+          <div class="cfm-cb-row" data-wi-name="${escapeHtml(wiName)}">
+            <label class="cfm-cb-check-label"><input type="checkbox" class="cfm-cb-check" checked>
+              <span class="cfm-cb-wi-name">${escapeHtml(wiName)}</span></label>
+            <div class="cfm-cb-row-meta">
+              <span class="cfm-cb-chars" title="${escapeHtml(charNames.join("、"))}">关联: ${escapeHtml(charList)}</span>
+              <span class="cfm-cb-cur">当前: ${escapeHtml(currentDisplay)}</span>
+            </div>
+          </div>`;
+      }
+    }
+
+    // 构建内嵌世界书列表HTML
+    let embeddedHtml = "";
+    const embEntries = [...embedded.entries()];
+    if (embEntries.length === 0) {
+      embeddedHtml = '<div class="cfm-cb-empty">未发现角色卡内嵌的世界书</div>';
+    } else {
+      for (const [avatar, info] of embEntries) {
+        const statusText = info.alreadyImported ? "已导入" : "未导入";
+        const statusClass = info.alreadyImported ? "cfm-cb-imported" : "cfm-cb-not-imported";
+        embeddedHtml += `
+          <div class="cfm-cb-row cfm-cb-embed-row" data-avatar="${escapeHtml(avatar)}">
+            <label class="cfm-cb-check-label"><input type="checkbox" class="cfm-cb-embed-check" ${info.alreadyImported ? "" : "checked"}>
+              <span class="cfm-cb-wi-name">${escapeHtml(info.name)}</span></label>
+            <div class="cfm-cb-row-meta">
+              <span class="cfm-cb-bookname">世界书: ${escapeHtml(info.bookName)}</span>
+              <span class="cfm-cb-status ${statusClass}">${statusText}</span>
+            </div>
+          </div>`;
+      }
+    }
+
+    const folderOpts = buildFolderOptions();
+    const dialogHtml = `
+      <div class="cfm-cb-popup">
+        <div class="cfm-cb-header">
+          <span class="cfm-cb-title"><i class="fa-solid fa-user-tag"></i> 角色世界书归类</span>
+          <button class="cfm-cb-close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="cfm-cb-body">
+          <div class="cfm-cb-section">
+            <div class="cfm-cb-section-title">
+              <i class="fa-solid fa-link"></i> 关联世界书 (extensions.world)
+              <span class="cfm-cb-section-count">${linked.size} 个</span>
+            </div>
+            <div class="cfm-cb-section-desc">角色卡通过 extensions.world 字段关联的已存在世界书</div>
+            <div class="cfm-cb-list cfm-cb-linked-list">${linkedHtml}</div>
+            <div class="cfm-cb-select-actions">
+              <button class="cfm-cb-sel-all" data-target="linked">全选</button>
+              <button class="cfm-cb-sel-none" data-target="linked">全不选</button>
+            </div>
+          </div>
+          <div class="cfm-cb-section">
+            <div class="cfm-cb-section-title">
+              <i class="fa-solid fa-book-bookmark"></i> 内嵌世界书 (character_book)
+              <span class="cfm-cb-section-count">${embEntries.length} 个</span>
+            </div>
+            <div class="cfm-cb-section-desc">角色卡内嵌的世界书数据，勾选未导入的可自动提取并归类</div>
+            <div class="cfm-cb-list cfm-cb-embed-list">${embeddedHtml}</div>
+            <div class="cfm-cb-select-actions">
+              <button class="cfm-cb-sel-all" data-target="embed">全选</button>
+              <button class="cfm-cb-sel-none" data-target="embed">全不选</button>
+            </div>
+          </div>
+          <div class="cfm-cb-target">
+            <label class="cfm-cb-target-label"><i class="fa-solid fa-folder"></i> 目标文件夹:</label>
+            <select class="cfm-cb-target-select" id="cfm-cb-target-folder">${folderOpts}</select>
+          </div>
+          <div class="cfm-cb-auto-setting">
+            <label class="cfm-cb-check-label">
+              <input type="checkbox" id="cfm-cb-auto-extract" ${extension_settings[extensionName].autoCharBookFolder ? "checked" : ""}>
+              <span>导入角色卡时自动提取内嵌世界书到上方选定的文件夹</span>
+            </label>
+            <div class="cfm-cb-auto-hint">启用后，每次通过资源管理器导入角色卡时，会自动提取内嵌世界书并归类到设定的文件夹</div>
+          </div>
+        </div>
+        <div class="cfm-cb-footer">
+          <button class="cfm-cb-cancel">取消</button>
+          <button class="cfm-cb-confirm">确认归类</button>
+        </div>
+      </div>
+    `;
+
+    const overlay = $("<div id='cfm-charbook-classify-overlay'>").css({
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      background: "rgba(0,0,0,0.6)", zIndex: 99999,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "16px", boxSizing: "border-box",
+    }).html(dialogHtml);
+
+    $("body").append(overlay);
+
+    // 设置默认文件夹
+    if (defaultFolder) overlay.find("#cfm-cb-target-folder").val(defaultFolder);
+
+    // 全选/全不选
+    overlay.find(".cfm-cb-sel-all").on("click", function () {
+      const target = $(this).data("target");
+      const selector = target === "linked" ? ".cfm-cb-linked-list .cfm-cb-check" : ".cfm-cb-embed-list .cfm-cb-embed-check";
+      overlay.find(selector).prop("checked", true);
+    });
+    overlay.find(".cfm-cb-sel-none").on("click", function () {
+      const target = $(this).data("target");
+      const selector = target === "linked" ? ".cfm-cb-linked-list .cfm-cb-check" : ".cfm-cb-embed-list .cfm-cb-embed-check";
+      overlay.find(selector).prop("checked", false);
+    });
+
+    // 关闭
+    const closePopup = () => overlay.remove();
+    overlay.find(".cfm-cb-close, .cfm-cb-cancel").on("click", closePopup);
+    overlay.on("click", (e) => { if ($(e.target).is(overlay)) closePopup(); });
+
+    // 确认归类
+    overlay.find(".cfm-cb-confirm").on("click", async function () {
+      const targetFolder = overlay.find("#cfm-cb-target-folder").val() || null;
+
+      // 保存自动提取设置
+      const autoExtract = overlay.find("#cfm-cb-auto-extract").prop("checked");
+      extension_settings[extensionName].autoCharBookFolder = autoExtract ? (targetFolder || null) : null;
+      getContext().saveSettingsDebounced();
+
+      let movedCount = 0;
+      let importedCount = 0;
+      let failCount = 0;
+
+      // 1. 处理关联世界书归类
+      overlay.find(".cfm-cb-linked-list .cfm-cb-row").each(function () {
+        const checked = $(this).find(".cfm-cb-check").prop("checked");
+        if (!checked) return;
+        const wiName = $(this).data("wi-name");
+        if (wiName) {
+          setItemGroup("worldinfo", wiName, targetFolder);
+          movedCount++;
+        }
+      });
+
+      // 2. 处理内嵌世界书提取+归类
+      const embedRows = overlay.find(".cfm-cb-embed-list .cfm-cb-embed-row");
+      for (let i = 0; i < embedRows.length; i++) {
+        const row = $(embedRows[i]);
+        if (!row.find(".cfm-cb-embed-check").prop("checked")) continue;
+        const avatar = row.data("avatar");
+        const info = embedded.get(avatar);
+        if (!info) continue;
+
+        if (info.alreadyImported) {
+          // 已导入的直接归类
+          if (targetFolder) {
+            setItemGroup("worldinfo", info.bookName, targetFolder);
+            movedCount++;
+          }
+        } else {
+          // 未导入的需要先提取导入
+          try {
+            const ch = getCharacters().find(c => c.avatar === avatar);
+            if (!ch?.data?.character_book) continue;
+            const bookName = info.bookName;
+            // 使用酒馆的 convertCharacterBook 和 saveWorldInfo
+            // 由于这些函数可能不在全局作用域，我们通过API方式导入
+            const characterBook = ch.data.character_book;
+            const formData = new FormData();
+            const blob = new Blob([JSON.stringify(characterBook)], { type: "application/json" });
+            formData.append("avatar", new File([blob], bookName + ".json", { type: "application/json" }));
+            formData.append("convertedData", JSON.stringify(characterBook));
+            const result = await fetch("/api/worldinfo/import", {
+              method: "POST",
+              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              body: formData,
+              cache: "no-cache",
+            });
+            if (result.ok) {
+              const data = await result.json();
+              if (data.name && targetFolder) {
+                setItemGroup("worldinfo", data.name, targetFolder);
+              }
+              importedCount++;
+            } else {
+              failCount++;
+            }
+          } catch (err) {
+            console.error("[CFM] 提取内嵌世界书失败:", avatar, err);
+            failCount++;
+          }
+        }
+      }
+
+      closePopup();
+
+      // 刷新缓存和视图
+      _worldInfoNamesCache = null;
+      renderWorldInfoView();
+
+      // 汇报结果
+      let msg = "";
+      if (movedCount > 0) msg += `归类了 ${movedCount} 个世界书`;
+      if (importedCount > 0) msg += `${msg ? "，" : ""}提取并导入了 ${importedCount} 个内嵌世界书`;
+      if (failCount > 0) msg += `${msg ? "，" : ""}${failCount} 个失败`;
+      if (!msg) msg = "未选择任何世界书";
+      if (failCount > 0) toastr.warning(msg, "角色世界书归类");
+      else if (movedCount > 0 || importedCount > 0) toastr.success(msg, "角色世界书归类");
+      else toastr.info(msg, "角色世界书归类");
+    });
+
+    // ESC关闭
+    const escHandler = (evt) => {
+      if (evt.key === "Escape") { closePopup(); document.removeEventListener("keydown", escHandler); }
+    };
+    document.addEventListener("keydown", escHandler);
   }
 
   // ==================== 世界书视图渲染（双栏 + 树形嵌套） ====================

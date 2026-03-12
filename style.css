@@ -2618,3 +2618,301 @@ option.cfm-nf-hidden {
   flex-shrink: 0;
   margin-left: auto;
 }
+
+/* ==================== 角色世界书归类弹窗 ==================== */
+#cfm-charbook-classify-btn {
+  background: none !important;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a) !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  opacity: 0.6 !important;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s !important;
+  flex-shrink: 0;
+}
+#cfm-charbook-classify-btn:hover {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f9e2af !important;
+}
+
+.cfm-cb-popup {
+  background: var(--SmartThemeBlurTintColor, #1a1a2e);
+  border: 1px solid var(--SmartThemeBorderColor, #444);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color: var(--SmartThemeBodyColor, #ccc);
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cfm-cb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+.cfm-cb-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f9e2af;
+}
+.cfm-cb-title i {
+  margin-right: 6px;
+}
+.cfm-cb-close {
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor, #ccc);
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  padding: 4px;
+}
+.cfm-cb-close:hover {
+  opacity: 1;
+  color: #f38ba8;
+}
+.cfm-cb-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 18px;
+}
+.cfm-cb-section {
+  margin-bottom: 16px;
+}
+.cfm-cb-section:last-of-type {
+  margin-bottom: 12px;
+}
+.cfm-cb-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cfm-cb-section-title i {
+  color: #89b4fa;
+}
+.cfm-cb-section-count {
+  font-size: 11px;
+  color: #a6adc8;
+  font-weight: normal;
+  margin-left: auto;
+}
+.cfm-cb-section-desc {
+  font-size: 11px;
+  color: #a6adc8;
+  margin-bottom: 8px;
+}
+.cfm-cb-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.cfm-cb-row {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 0.1s;
+}
+.cfm-cb-row:last-child {
+  border-bottom: none;
+}
+.cfm-cb-row:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.cfm-cb-check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cfm-cb-check-label input[type="checkbox"] {
+  accent-color: #f9e2af;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.cfm-cb-wi-name {
+  font-weight: 500;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfm-cb-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 3px;
+  padding-left: 23px;
+  font-size: 11px;
+  color: #a6adc8;
+}
+.cfm-cb-chars {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 250px;
+}
+.cfm-cb-cur {
+  flex-shrink: 0;
+}
+.cfm-cb-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.cfm-cb-imported {
+  color: #a6e3a1;
+  background: rgba(166, 227, 161, 0.12);
+}
+.cfm-cb-not-imported {
+  color: #f9e2af;
+  background: rgba(249, 226, 175, 0.12);
+}
+.cfm-cb-empty {
+  padding: 16px;
+  text-align: center;
+  color: #a6adc8;
+  font-size: 13px;
+}
+.cfm-cb-select-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.cfm-cb-select-actions button {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #a6adc8;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cfm-cb-select-actions button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+}
+.cfm-cb-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cfm-cb-target-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.cfm-cb-target-label i {
+  margin-right: 4px;
+  color: #f9e2af;
+}
+.cfm-cb-target-select {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 6px;
+  outline: none;
+}
+.cfm-cb-target-select:focus {
+  border-color: #f9e2af;
+}
+.cfm-cb-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+.cfm-cb-cancel, .cfm-cb-confirm {
+  padding: 7px 18px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  transition: all 0.15s;
+}
+.cfm-cb-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: #a6adc8;
+}
+.cfm-cb-cancel:hover {
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.4);
+  background: rgba(243, 139, 168, 0.1);
+}
+.cfm-cb-confirm {
+  background: rgba(249, 226, 175, 0.2);
+  color: #f9e2af;
+  border-color: rgba(249, 226, 175, 0.4);
+}
+.cfm-cb-confirm:hover {
+  background: rgba(249, 226, 175, 0.35);
+}
+
+.cfm-cb-auto-setting {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(249, 226, 175, 0.06);
+  border: 1px solid rgba(249, 226, 175, 0.15);
+  border-radius: 6px;
+}
+.cfm-cb-auto-setting .cfm-cb-check-label {
+  font-size: 12px;
+}
+.cfm-cb-auto-setting .cfm-cb-check-label input[type="checkbox"] {
+  accent-color: #f9e2af;
+}
+.cfm-cb-auto-hint {
+  font-size: 11px;
+  color: #a6adc8;
+  margin-top: 4px;
+  padding-left: 23px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .cfm-cb-popup {
+    width: 95vw;
+    max-height: 90vh;
+  }
+  .cfm-cb-row-meta {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .cfm-cb-chars {
+    max-width: 100%;
+  }
+  .cfm-cb-target {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+}
