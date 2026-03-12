@@ -1967,6 +1967,8 @@ jQuery(async () => {
     // 每次打开主弹窗时检测新标签
     detectAndImportNewTags();
     config = loadConfig(); // 刷新配置
+    // 重置资源类型为角色卡，确保与HTML模板中默认active标签一致
+    currentResourceType = "chars";
     selectedTreeNode = null;
     expandedNodes.clear();
     selectedPresetFolder = null;
