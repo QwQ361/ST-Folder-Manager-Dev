@@ -8867,101 +8867,111 @@ jQuery(async () => {
     });
   }
 
+  // 缓存被 detach 的 option，用于恢复
+  let _presetDetachedOptions = [];
+  let _worldInfoDetachedOptions = [];
+
   /**
-   * 预设过滤：隐藏/显示 #settings_preset_openai 中的 option
-   * 使用 CSS class 方式而非 jQuery hide/show（原生 select option 的 hide 在部分浏览器不生效）
+   * 预设过滤：通过 detach/append option 实现过滤
+   * 兼容原生 select、select2、以及第三方美化脚本
    */
   function applyPresetFilter() {
     const select = $("#settings_preset_openai");
-    if (!select.length) {
-      console.log("[CFM-NF] 预设select未找到");
-      return;
-    }
-    // 同时尝试 PresetManager 的 select
+    if (!select.length) return;
+    // 同时处理 PresetManager 的 select（可能是同一个元素）
     const pm = getContext().getPresetManager();
-    const selects = pm && pm.select ? select.add(pm.select) : select;
-    if (!nativeFilterPreset) {
-      selects
-        .find("option")
-        .removeAttr("disabled")
-        .removeClass("cfm-nf-hidden");
-      console.log("[CFM-NF] 预设过滤已清除");
-      return;
+    const targetSelect = pm && pm.select && pm.select.length ? pm.select : select;
+
+    // 先恢复之前 detach 的 option
+    if (_presetDetachedOptions.length > 0) {
+      for (const opt of _presetDetachedOptions) {
+        targetSelect.append(opt);
+      }
+      _presetDetachedOptions = [];
+      // 按原始顺序排序（通过 value）
+      _sortSelectOptions(targetSelect);
     }
+
+    if (!nativeFilterPreset) return;
+
     const allowedNames = getAllItemsInFolderRecursive(
       "presets",
       nativeFilterPreset,
     );
-    console.log("[CFM-NF] 预设过滤 folderId:", nativeFilterPreset, "允许的名称:", [...allowedNames]);
-    // 打印前几个option的text用于对比
-    const sampleTexts = [];
-    selects.find("option").slice(0, 5).each(function () {
-      sampleTexts.push({ val: $(this).val(), text: $(this).text().trim() });
-    });
-    console.log("[CFM-NF] 预设option样本:", sampleTexts);
-    let hiddenCount = 0;
-    let shownCount = 0;
-    selects.find("option").each(function () {
+    // detach 不匹配的 option
+    targetSelect.find("option").each(function () {
       const val = $(this).val();
       const text = $(this).text().trim();
-      if (val === "" || val === "gui" || val === "default") {
-        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
-      } else if (allowedNames.has(text)) {
-        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
-        shownCount++;
-      } else {
-        $(this).attr("disabled", "disabled").addClass("cfm-nf-hidden");
-        hiddenCount++;
+      if (val === "" || val === "gui" || val === "default") return; // 保留默认选项
+      if (!allowedNames.has(text)) {
+        _presetDetachedOptions.push($(this).detach());
       }
     });
-    console.log("[CFM-NF] 预设过滤结果: 显示", shownCount, "隐藏", hiddenCount);
   }
 
   /**
-   * 世界书过滤：隐藏/显示 #world_editor_select 中的 option
+   * 世界书过滤：通过 detach/append option 实现过滤
    */
   function applyWorldInfoFilter() {
     const select = $("#world_editor_select");
-    if (!select.length) {
-      console.log("[CFM-NF] 世界书select未找到");
-      return;
-    }
-    if (!nativeFilterWorldInfo) {
-      select.find("option").removeAttr("disabled").removeClass("cfm-nf-hidden");
-      // 刷新 select2（如果存在）
-      if (select.hasClass("select2-hidden-accessible")) {
+    if (!select.length) return;
+
+    // 先恢复之前 detach 的 option
+    if (_worldInfoDetachedOptions.length > 0) {
+      // 如果有 select2，先销毁
+      const hasSelect2 = select.hasClass("select2-hidden-accessible");
+      for (const opt of _worldInfoDetachedOptions) {
+        select.append(opt);
+      }
+      _worldInfoDetachedOptions = [];
+      _sortSelectOptions(select);
+      // 重建 select2
+      if (hasSelect2) {
         try { select.select2("destroy"); } catch (e) { /* ignore */ }
         select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
       }
-      console.log("[CFM-NF] 世界书过滤已清除");
-      return;
     }
+
+    if (!nativeFilterWorldInfo) return;
+
     const allowedNames = getAllItemsInFolderRecursive(
       "worldinfo",
       nativeFilterWorldInfo,
     );
-    console.log("[CFM-NF] 世界书过滤 folderId:", nativeFilterWorldInfo, "允许的名称:", [...allowedNames]);
-    let hiddenCount = 0;
-    let shownCount = 0;
+    const hasSelect2 = select.hasClass("select2-hidden-accessible");
+    // detach 不匹配的 option
     select.find("option").each(function () {
       const val = $(this).val();
       const text = $(this).text().trim();
-      if (val === "") {
-        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
-      } else if (allowedNames.has(text)) {
-        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
-        shownCount++;
-      } else {
-        $(this).attr("disabled", "disabled").addClass("cfm-nf-hidden");
-        hiddenCount++;
+      if (val === "") return; // 保留默认占位选项
+      if (!allowedNames.has(text)) {
+        _worldInfoDetachedOptions.push($(this).detach());
       }
     });
-    // 刷新 select2（如果存在）
-    if (select.hasClass("select2-hidden-accessible")) {
+    // 刷新 select2
+    if (hasSelect2) {
       try { select.select2("destroy"); } catch (e) { /* ignore */ }
       select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
     }
-    console.log("[CFM-NF] 世界书过滤结果: 显示", shownCount, "隐藏", hiddenCount);
+  }
+
+  /**
+   * 辅助：按 option text 字母顺序排序 select 的 options
+   */
+  function _sortSelectOptions(selectEl) {
+    const options = selectEl.find("option").detach();
+    const placeholder = options.filter(function () {
+      return $(this).val() === "" || $(this).val() === "gui" || $(this).val() === "default";
+    });
+    const rest = options.filter(function () {
+      const v = $(this).val();
+      return v !== "" && v !== "gui" && v !== "default";
+    });
+    rest.sort(function (a, b) {
+      return $(a).text().trim().localeCompare($(b).text().trim());
+    });
+    selectEl.append(placeholder);
+    selectEl.append(rest);
   }
 
   /**
