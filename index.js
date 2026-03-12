@@ -268,6 +268,119 @@ jQuery(async () => {
     _worldInfoNamesCache = [];
     return [];
   }
+
+  /**
+   * 导入重名冲突处理弹窗
+   * @param {string[]} duplicateNames - 重名的文件名列表
+   * @param {number} totalCount - 总文件数
+   * @param {string} resourceType - 资源类型显示名（"预设"/"世界书"）
+   * @returns {Promise<string>} 用户选择: 'overwrite' | 'rename' | 'skip' | 'cancel'
+   */
+  function showDuplicateImportDialog(duplicateNames, totalCount, resourceType) {
+    return new Promise((resolve) => {
+      const isBatch = totalCount > 1;
+      const dupCount = duplicateNames.length;
+      const dupListHtml =
+        duplicateNames.length <= 8
+          ? duplicateNames
+              .map(
+                (n) =>
+                  `<li style="margin:2px 0;color:var(--SmartThemeQuoteColor,#f5c542);">${n}</li>`,
+              )
+              .join("")
+          : duplicateNames
+              .slice(0, 7)
+              .map(
+                (n) =>
+                  `<li style="margin:2px 0;color:var(--SmartThemeQuoteColor,#f5c542);">${n}</li>`,
+              )
+              .join("") +
+            `<li style="margin:2px 0;color:var(--SmartThemeBodyColor);">...等共 ${dupCount} 个</li>`;
+
+      const dialogHtml = `
+        <div class="cfm-dup-dialog" style="padding:16px 20px;width:420px;box-sizing:border-box;">
+          <div style="margin-bottom:10px;font-size:14px;font-weight:bold;">
+            以下${resourceType}名称已存在：
+          </div>
+          <ul style="list-style:none;padding:0;margin:0 0 12px 8px;font-size:13px;">
+            ${dupListHtml}
+          </ul>
+          ${isBatch ? `<div style="margin-bottom:10px;font-size:13px;color:var(--SmartThemeEmColor,#aaa);">共 ${totalCount} 个文件，其中 ${dupCount} 个名称重复</div>` : ""}
+          <div style="margin-bottom:8px;font-size:13px;">请选择处理方式：</div>
+          <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+            ${isBatch ? `<button class="cfm-dup-btn menu_button" data-action="skip" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">跳过重复，仅导入不重复的（${totalCount - dupCount} 个）</button>` : ""}
+            <button class="cfm-dup-btn menu_button" data-action="overwrite" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">覆盖已有的${resourceType}</button>
+            <button class="cfm-dup-btn menu_button" data-action="rename" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">自动重命名（末尾加 -1）</button>
+            <button class="cfm-dup-btn menu_button" data-action="cancel" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">取消导入</button>
+          </div>
+        </div>
+      `;
+
+      const overlay = $("<div>").css({
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0,0,0,0.6)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "row",
+      });
+
+      const dialog = $("<div>")
+        .css({
+          background: "var(--SmartThemeBlurTintColor, #1a1a2e)",
+          border: "1px solid var(--SmartThemeBorderColor, #444)",
+          borderRadius: "8px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          color: "var(--SmartThemeBodyColor, #ccc)",
+          width: "auto",
+          maxWidth: "90vw",
+          writingMode: "horizontal-tb",
+          textOrientation: "mixed",
+        })
+        .html(dialogHtml);
+
+      overlay.append(dialog);
+      $("body").append(overlay);
+
+      overlay.find(".cfm-dup-btn").on("click", function () {
+        const action = $(this).data("action");
+        overlay.remove();
+        resolve(action);
+      });
+
+      // ESC 取消
+      const escHandler = (evt) => {
+        if (evt.key === "Escape") {
+          overlay.remove();
+          document.removeEventListener("keydown", escHandler);
+          resolve("cancel");
+        }
+      };
+      document.addEventListener("keydown", escHandler);
+    });
+  }
+
+  /**
+   * 生成不重复的名称（末尾加 -1, -2, ...）
+   * @param {string} baseName - 原始名称
+   * @param {Set<string>} existingNames - 已存在的名称集合
+   * @returns {string} 不重复的新名称
+   */
+  function getUniqueImportName(baseName, existingNames) {
+    let newName = baseName + "-1";
+    let counter = 1;
+    while (existingNames.has(newName)) {
+      counter++;
+      newName = baseName + "-" + counter;
+    }
+    return newName;
+  }
+
   function openWorldInfoEditor(name) {
     // 找到对应的option index
     let targetVal = null;
@@ -2772,7 +2885,6 @@ jQuery(async () => {
     popup.find("#cfm-import-preset-file").on("change", async function (e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      // 如果选中了普通文件夹则放入该文件夹，否则放入未归类
       const targetFolder =
         selectedPresetFolder &&
         selectedPresetFolder !== "__ungrouped__" &&
@@ -2786,19 +2898,13 @@ jQuery(async () => {
         return;
       }
 
-      const totalFiles = files.length;
-      let successCount = 0;
-      let failCount = 0;
+      // 获取现有预设名称集合
+      const existingPresets = new Set(getCurrentPresets().map((p) => p.name));
 
-      toastr.info(`正在导入 ${totalFiles} 个预设...`);
-
+      // 预解析所有文件，提取名称用于重名检测
+      const parsedFiles = [];
       for (const file of files) {
-        if (!file.name.endsWith(".json")) {
-          toastr.warning(`跳过不支持的文件: ${file.name}`);
-          failCount++;
-          continue;
-        }
-
+        if (!file.name.endsWith(".json")) continue;
         try {
           const text = await file.text();
           const data = JSON.parse(text);
@@ -2807,17 +2913,65 @@ jQuery(async () => {
             .replace(".settings", "");
           const name = data?.name ?? fileName;
           data["name"] = name;
+          parsedFiles.push({ file, data, name });
+        } catch (err) {
+          console.error(`解析预设文件失败: ${file.name}`, err);
+        }
+      }
 
-          await pm.savePreset(name, data);
+      if (parsedFiles.length === 0) {
+        toastr.warning("没有可导入的有效预设文件");
+        e.target.value = null;
+        return;
+      }
 
-          // 将预设分配到当前文件夹（如果有选中文件夹）
+      // 检测重名
+      const duplicateNames = parsedFiles
+        .filter((f) => existingPresets.has(f.name))
+        .map((f) => f.name);
+      let dupAction = null;
+      if (duplicateNames.length > 0) {
+        dupAction = await showDuplicateImportDialog(
+          duplicateNames,
+          parsedFiles.length,
+          "预设",
+        );
+        if (dupAction === "cancel") {
+          toastr.info("已取消导入");
+          e.target.value = null;
+          return;
+        }
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      let skipCount = 0;
+
+      for (const { file, data, name } of parsedFiles) {
+        try {
+          const isDuplicate = existingPresets.has(name);
+          let finalName = name;
+
+          if (isDuplicate) {
+            if (dupAction === "skip") {
+              skipCount++;
+              continue;
+            } else if (dupAction === "rename") {
+              finalName = getUniqueImportName(name, existingPresets);
+              data["name"] = finalName;
+            }
+            // 'overwrite' 时直接用原名覆盖
+          }
+
+          await pm.savePreset(finalName, data);
+          existingPresets.add(finalName);
+
           if (targetFolder) {
-            setItemGroup("presets", name, targetFolder);
+            setItemGroup("presets", finalName, targetFolder);
           }
           successCount++;
         } catch (error) {
           console.error(`导入预设失败: ${file.name}`, error);
-          toastr.error(`导入预设失败: ${file.name}`);
           failCount++;
         }
       }
@@ -2826,12 +2980,17 @@ jQuery(async () => {
       renderPresetsView();
 
       const folderHint = targetFolder ? `到「${targetFolder}」` : "（未归类）";
+      const parts = [];
+      if (successCount > 0)
+        parts.push(`成功导入 ${successCount} 个预设${folderHint}`);
+      if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
+      if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(
-          `成功导入 ${successCount} 个预设${folderHint}${failCount > 0 ? `，${failCount} 个失败` : ""}`,
-        );
+        toastr.success(parts.join("，"));
+      } else if (skipCount > 0 && failCount === 0) {
+        toastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(`导入失败，${failCount} 个文件无法导入`);
+        toastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -2847,7 +3006,6 @@ jQuery(async () => {
     popup.find("#cfm-import-worldinfo-file").on("change", async function (e) {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      // 如果选中了普通文件夹则放入该文件夹，否则放入未归类
       const targetFolder =
         selectedWorldInfoFolder &&
         selectedWorldInfoFolder !== "__ungrouped__" &&
@@ -2855,44 +3013,89 @@ jQuery(async () => {
           ? selectedWorldInfoFolder
           : null;
 
-      const totalFiles = files.length;
-      let successCount = 0;
-      let failCount = 0;
+      // 获取现有世界书名称集合
+      const existingWI = new Set(await getWorldInfoNames(true));
 
-      toastr.info(`正在导入 ${totalFiles} 个世界书...`);
-
+      // 预处理文件，提取世界书名称用于重名检测
+      const validFiles = [];
       for (const file of files) {
         const ext = file.name.match(/\.(\w+)$/);
-        if (!ext || !["json", "png"].includes(ext[1].toLowerCase())) {
-          toastr.warning(`跳过不支持的文件: ${file.name}`);
-          failCount++;
+        if (!ext || !["json", "png"].includes(ext[1].toLowerCase())) continue;
+        const worldName = file.name.substr(0, file.name.lastIndexOf("."));
+        validFiles.push({ file, worldName });
+      }
+
+      if (validFiles.length === 0) {
+        toastr.warning("没有可导入的有效世界书文件");
+        e.target.value = null;
+        return;
+      }
+
+      // 检测重名
+      const duplicateNames = validFiles
+        .filter((f) => existingWI.has(f.worldName))
+        .map((f) => f.worldName);
+      let dupAction = null;
+      if (duplicateNames.length > 0) {
+        dupAction = await showDuplicateImportDialog(
+          duplicateNames,
+          validFiles.length,
+          "世界书",
+        );
+        if (dupAction === "cancel") {
+          toastr.info("已取消导入");
+          e.target.value = null;
+          return;
+        }
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      let skipCount = 0;
+
+      for (const { file, worldName } of validFiles) {
+        const isDuplicate = existingWI.has(worldName);
+
+        if (isDuplicate && dupAction === "skip") {
+          skipCount++;
           continue;
         }
 
         try {
+          // 覆盖模式：先删除旧的世界书
+          if (isDuplicate && dupAction === "overwrite") {
+            await fetch("/api/worldinfo/delete", {
+              method: "POST",
+              headers: getContext().getRequestHeaders(),
+              body: JSON.stringify({ name: worldName }),
+            });
+          }
+
+          // 重命名模式：创建新文件名
+          let importFile = file;
+          let finalName = worldName;
+          if (isDuplicate && dupAction === "rename") {
+            finalName = getUniqueImportName(worldName, existingWI);
+            const fileExt = file.name.substr(file.name.lastIndexOf("."));
+            importFile = new File([file], finalName + fileExt, {
+              type: file.type,
+            });
+          }
+
           const formData = new FormData();
-          formData.append("avatar", file);
+          formData.append("avatar", importFile);
 
           // 处理不同格式的世界书数据
           if (file.name.endsWith(".json")) {
             const text = await file.text();
             const jsonData = JSON.parse(text);
-
-            // 转换 Novel Lorebook
             if (jsonData.lorebookVersion !== undefined) {
-              console.log("Converting Novel Lorebook");
               formData.append("convertedData", JSON.stringify(jsonData));
             }
-
-            // 转换 Agnai Memory Book
             if (jsonData.kind === "memory") {
-              console.log("Converting Agnai Memory Book");
               formData.append("convertedData", JSON.stringify(jsonData));
             }
-
-            // 转换 Risu Lorebook
             if (jsonData.type === "risu") {
-              console.log("Converting Risu Lorebook");
               formData.append("convertedData", JSON.stringify(jsonData));
             }
           }
@@ -2911,7 +3114,7 @@ jQuery(async () => {
           const data = await result.json();
 
           if (data.name) {
-            // 将世界书分配到当前文件夹（如果有选中文件夹）
+            existingWI.add(data.name);
             if (targetFolder) {
               setItemGroup("worldinfo", data.name, targetFolder);
             }
@@ -2943,12 +3146,17 @@ jQuery(async () => {
       await renderWorldInfoView();
 
       const folderHint = targetFolder ? `到「${targetFolder}」` : "（未归类）";
+      const parts = [];
+      if (successCount > 0)
+        parts.push(`成功导入 ${successCount} 个世界书${folderHint}`);
+      if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
+      if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(
-          `成功导入 ${successCount} 个世界书${folderHint}${failCount > 0 ? `，${failCount} 个失败` : ""}`,
-        );
+        toastr.success(parts.join("，"));
+      } else if (skipCount > 0 && failCount === 0) {
+        toastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(`导入失败，${failCount} 个文件无法导入`);
+        toastr.error(parts.join("，"));
       }
 
       e.target.value = null;
