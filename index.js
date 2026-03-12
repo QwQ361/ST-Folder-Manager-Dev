@@ -219,10 +219,23 @@ jQuery(async () => {
     }
   }
 
-  // 获取世界书列表（带缓存）
+  // 获取世界书列表（带缓存，优先从DOM读取避免网络延迟）
   let _worldInfoNamesCache = null;
+  let _worldInfoPreloadPromise = null;
   async function getWorldInfoNames(forceRefresh) {
     if (_worldInfoNamesCache && !forceRefresh) return _worldInfoNamesCache;
+    // 优先从DOM读取（同步，无延迟）
+    const names = [];
+    $("#world_editor_select option").each(function () {
+      const v = $(this).val();
+      const t = $(this).text();
+      if (v !== "" && t !== "--- 选择以编辑 ---") names.push(t);
+    });
+    if (names.length > 0) {
+      _worldInfoNamesCache = names;
+      return names;
+    }
+    // DOM为空时回退到API请求
     try {
       const resp = await fetch("/api/settings/get", {
         method: "POST",
@@ -235,15 +248,8 @@ jQuery(async () => {
         return _worldInfoNamesCache;
       }
     } catch (e) {}
-    // fallback: 从DOM读取
-    const names = [];
-    $("#world_editor_select option").each(function () {
-      const v = $(this).val();
-      const t = $(this).text();
-      if (v !== "" && t !== "--- 选择以编辑 ---") names.push(t);
-    });
-    _worldInfoNamesCache = names;
-    return names;
+    _worldInfoNamesCache = [];
+    return [];
   }
   function openWorldInfoEditor(name) {
     // 找到对应的option index
@@ -1967,6 +1973,9 @@ jQuery(async () => {
     selectedWorldInfoFolder = null;
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
+
+    // 预加载世界书数据，保存 Promise 以便切换标签时直接复用
+    _worldInfoPreloadPromise = getWorldInfoNames();
 
     const overlay = $('<div id="cfm-overlay"></div>');
     const popup = $(`
@@ -5519,6 +5528,26 @@ jQuery(async () => {
     const tree = getResFolderTree("presets");
     const allFolderIds = getResFolderIds("presets");
     const presets = getCurrentPresets();
+
+    // 预设管理器尚未就绪时显示提示并自动重试
+    if (presets.length === 0) {
+      const pm = getContext().getPresetManager();
+      if (!pm || !pm.select) {
+        rightList.html(
+          '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 预设管理器加载中，请稍后再试...</div>',
+        );
+        if (!renderPresetsView._retryCount) renderPresetsView._retryCount = 0;
+        if (renderPresetsView._retryCount < 20) {
+          renderPresetsView._retryCount++;
+          setTimeout(() => {
+            if (currentResourceType === "presets") renderPresetsView();
+          }, 500);
+        }
+        return;
+      }
+    }
+    renderPresetsView._retryCount = 0;
+
     const groups = getResourceGroups("presets");
 
     // 分类：直接属于某文件夹的预设
@@ -6142,10 +6171,16 @@ jQuery(async () => {
     const pathEl = $("#cfm-worldinfo-rh-path");
     const countEl = $("#cfm-worldinfo-rh-count");
 
-    // 缓存可用时同步获取，避免 await 微任务边界导致的闪烁
+    // 缓存可用时同步获取；否则复用预加载 Promise 避免重复请求和加载闪烁
     let names;
     if (_worldInfoNamesCache) {
       names = _worldInfoNamesCache;
+    } else if (_worldInfoPreloadPromise) {
+      leftTree.empty();
+      rightList.html(
+        '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
+      );
+      names = await _worldInfoPreloadPromise;
     } else {
       leftTree.empty();
       rightList.html(
