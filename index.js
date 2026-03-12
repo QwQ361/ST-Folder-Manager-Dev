@@ -298,7 +298,7 @@ jQuery(async () => {
             `<li style="margin:2px 0;color:var(--SmartThemeBodyColor);">...等共 ${dupCount} 个</li>`;
 
       const dialogHtml = `
-        <div class="cfm-dup-dialog" style="padding:16px 20px;width:420px;box-sizing:border-box;">
+        <div class="cfm-dup-dialog" style="padding:16px 20px;max-width:420px;width:100%;box-sizing:border-box;">
           <div style="margin-bottom:10px;font-size:14px;font-weight:bold;">
             以下${resourceType}名称已存在：
           </div>
@@ -307,11 +307,11 @@ jQuery(async () => {
           </ul>
           ${isBatch ? `<div style="margin-bottom:10px;font-size:13px;color:var(--SmartThemeEmColor,#aaa);">共 ${totalCount} 个文件，其中 ${dupCount} 个名称重复</div>` : ""}
           <div style="margin-bottom:8px;font-size:13px;">请选择处理方式：</div>
-          <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
-            ${isBatch ? `<button class="cfm-dup-btn menu_button" data-action="skip" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">跳过重复，仅导入不重复的（${totalCount - dupCount} 个）</button>` : ""}
-            <button class="cfm-dup-btn menu_button" data-action="overwrite" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">覆盖已有的${resourceType}</button>
-            <button class="cfm-dup-btn menu_button" data-action="rename" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">自动重命名（末尾加 -1）</button>
-            <button class="cfm-dup-btn menu_button" data-action="cancel" style="display:block;width:100%;padding:8px 12px;font-size:13px;text-align:center;white-space:normal;word-break:break-all;box-sizing:border-box;">取消导入</button>
+          <div style="display:flex !important;flex-direction:column !important;gap:8px;width:100%;">
+            ${isBatch ? `<button class="cfm-dup-btn" data-action="skip" style="display:block !important;width:100% !important;padding:10px 12px !important;font-size:13px !important;text-align:center !important;white-space:normal !important;word-break:break-word !important;box-sizing:border-box !important;cursor:pointer;background:var(--SmartThemeBlurTintColor,#2a2a3e) !important;color:var(--SmartThemeBodyColor,#ccc) !important;border:1px solid var(--SmartThemeBorderColor,#555) !important;border-radius:5px !important;margin:0 !important;">跳过重复，仅导入不重复的（${totalCount - dupCount} 个）</button>` : ""}
+            <button class="cfm-dup-btn" data-action="overwrite" style="display:block !important;width:100% !important;padding:10px 12px !important;font-size:13px !important;text-align:center !important;white-space:normal !important;word-break:break-word !important;box-sizing:border-box !important;cursor:pointer;background:var(--SmartThemeBlurTintColor,#2a2a3e) !important;color:var(--SmartThemeBodyColor,#ccc) !important;border:1px solid var(--SmartThemeBorderColor,#555) !important;border-radius:5px !important;margin:0 !important;">覆盖已有的${resourceType}</button>
+            <button class="cfm-dup-btn" data-action="rename" style="display:block !important;width:100% !important;padding:10px 12px !important;font-size:13px !important;text-align:center !important;white-space:normal !important;word-break:break-word !important;box-sizing:border-box !important;cursor:pointer;background:var(--SmartThemeBlurTintColor,#2a2a3e) !important;color:var(--SmartThemeBodyColor,#ccc) !important;border:1px solid var(--SmartThemeBorderColor,#555) !important;border-radius:5px !important;margin:0 !important;">自动重命名（末尾加 -1）</button>
+            <button class="cfm-dup-btn" data-action="cancel" style="display:block !important;width:100% !important;padding:10px 12px !important;font-size:13px !important;text-align:center !important;white-space:normal !important;word-break:break-word !important;box-sizing:border-box !important;cursor:pointer;background:var(--SmartThemeBlurTintColor,#2a2a3e) !important;color:var(--SmartThemeBodyColor,#ccc) !important;border:1px solid var(--SmartThemeBorderColor,#555) !important;border-radius:5px !important;margin:0 !important;">取消导入</button>
           </div>
         </div>
       `;
@@ -327,7 +327,9 @@ jQuery(async () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        flexDirection: "row",
+        padding: "16px",
+        boxSizing: "border-box",
+        overflow: "auto",
       });
 
       const dialog = $("<div>")
@@ -337,10 +339,11 @@ jQuery(async () => {
           borderRadius: "8px",
           boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           color: "var(--SmartThemeBodyColor, #ccc)",
-          width: "auto",
-          maxWidth: "90vw",
+          maxWidth: "calc(100vw - 32px)",
+          maxHeight: "calc(100vh - 32px)",
+          overflow: "auto",
           writingMode: "horizontal-tb",
-          textOrientation: "mixed",
+          boxSizing: "border-box",
         })
         .html(dialogHtml);
 
