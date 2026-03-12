@@ -7938,8 +7938,10 @@ jQuery(async () => {
       return options.join("");
     }
 
-    // 当前选中的世界书文件夹作为默认目标
-    const defaultFolder = selectedWorldInfoFolder && selectedWorldInfoFolder !== "__ungrouped__" && selectedWorldInfoFolder !== "__favorites__" ? selectedWorldInfoFolder : "";
+    // 优先使用已保存的自动归类文件夹，其次使用当前选中的世界书文件夹
+    const savedAutoFolder = extension_settings[extensionName].autoCharBookFolder || "";
+    const currentFolder = selectedWorldInfoFolder && selectedWorldInfoFolder !== "__ungrouped__" && selectedWorldInfoFolder !== "__favorites__" ? selectedWorldInfoFolder : "";
+    const defaultFolder = savedAutoFolder || currentFolder;
 
     // 构建关联世界书列表HTML
     let linkedHtml = "";
