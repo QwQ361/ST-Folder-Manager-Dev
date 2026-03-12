@@ -8571,6 +8571,39 @@ jQuery(async () => {
         );
       }
     }
+    // 顶层时追加"未归类"节点
+    if (parentId === null) {
+      let uncatCount = 0;
+      if (type === "chars") {
+        uncatCount = getUncategorizedCharacters().length;
+      } else {
+        const resType = type === "presets" ? "presets" : "worldinfo";
+        const groups = getResourceGroups(resType);
+        const tree = getResFolderTree(resType);
+        let allItems;
+        if (type === "presets") {
+          allItems = getCurrentPresets().map((p) => p.name);
+        } else {
+          allItems = [];
+          $("#world_editor_select option").each(function () {
+            const v = $(this).val();
+            const t = $(this).text();
+            if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
+          });
+        }
+        uncatCount = allItems.filter((name) => {
+          const grp = groups[name];
+          return !grp || !tree[grp];
+        }).length;
+      }
+      const isUncatActive = activeId === "__ungrouped__";
+      html += `<div class="cfm-nf-item cfm-nf-uncat${isUncatActive ? " cfm-nf-active" : ""}" data-folder-id="__ungrouped__" data-type="${type}" style="padding-left:12px;">`;
+      html += `<span class="cfm-nf-arrow-placeholder"></span>`;
+      html += `<i class="fa-solid fa-box-open cfm-nf-icon"></i>`;
+      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : "未归类世界书"}</span>`;
+      html += `<span class="cfm-nf-count">${uncatCount}</span>`;
+      html += `</div>`;
+    }
     return html;
   }
 
@@ -8646,7 +8679,7 @@ jQuery(async () => {
     // 事件：展开/收起箭头
     panel.on("click", ".cfm-nf-arrow", function (e) {
       e.stopPropagation();
-      const fid = $(this).data("folder-id");
+      const fid = $(this).attr("data-folder-id");
       if (expandedSet.has(fid)) expandedSet.delete(fid);
       else expandedSet.add(fid);
       treeContainer.html(
@@ -8705,7 +8738,8 @@ jQuery(async () => {
     // 事件：点击文件夹项
     panel.on("click", ".cfm-nf-item[data-folder-id]", function (e) {
       if ($(e.target).closest(".cfm-nf-arrow").length) return;
-      const fid = $(this).data("folder-id");
+      const fid = $(this).attr("data-folder-id"); // 用 attr 确保返回字符串
+      console.log("[CFM-NF] 选中文件夹:", type, fid);
       if (type === "chars") nativeFilterChar = fid;
       else if (type === "presets") nativeFilterPreset = fid;
       else nativeFilterWorldInfo = fid;
@@ -8730,10 +8764,42 @@ jQuery(async () => {
   }
 
   /**
-   * 获取文件夹下所有资源名称（递归包含子文件夹）
+   * 获取文件夹下所有资源名称（递归包含子文件夹），支持 __ungrouped__
    */
   function getAllItemsInFolderRecursive(type, folderId) {
     const items = new Set();
+    // 特殊处理：未归类
+    if (folderId === "__ungrouped__") {
+      if (type === "chars") {
+        for (const ch of getUncategorizedCharacters()) {
+          items.add(ch.avatar);
+        }
+      } else {
+        const resType = type === "presets" ? "presets" : "worldinfo";
+        const groups = getResourceGroups(resType);
+        const tree = getResFolderTree(resType);
+        let allNames;
+        if (type === "presets") {
+          allNames = getCurrentPresets().map((p) => p.name);
+        } else {
+          $("#world_editor_select option").each(function () {
+            const v = $(this).val();
+            const t = $(this).text();
+            if (v !== "" && t !== "--- 选择以编辑 ---") items.add(t);
+          });
+          // 过滤掉已分组的
+          for (const [name, fid] of Object.entries(groups)) {
+            if (fid && tree[fid]) items.delete(name);
+          }
+          return items;
+        }
+        for (const name of allNames) {
+          const grp = groups[name];
+          if (!grp || !tree[grp]) items.add(name);
+        }
+      }
+      return items;
+    }
     if (type === "chars") {
       // 获取当前文件夹的角色
       for (const ch of getCharactersInFolder(folderId)) {
@@ -8803,28 +8869,52 @@ jQuery(async () => {
 
   /**
    * 预设过滤：隐藏/显示 #settings_preset_openai 中的 option
+   * 使用 CSS class 方式而非 jQuery hide/show（原生 select option 的 hide 在部分浏览器不生效）
    */
   function applyPresetFilter() {
     const select = $("#settings_preset_openai");
+    if (!select.length) {
+      console.log("[CFM-NF] 预设select未找到");
+      return;
+    }
+    // 同时尝试 PresetManager 的 select
+    const pm = getContext().getPresetManager();
+    const selects = pm && pm.select ? select.add(pm.select) : select;
     if (!nativeFilterPreset) {
-      select.find("option").show();
+      selects
+        .find("option")
+        .removeAttr("disabled")
+        .removeClass("cfm-nf-hidden");
+      console.log("[CFM-NF] 预设过滤已清除");
       return;
     }
     const allowedNames = getAllItemsInFolderRecursive(
       "presets",
       nativeFilterPreset,
     );
-    select.find("option").each(function () {
+    console.log("[CFM-NF] 预设过滤 folderId:", nativeFilterPreset, "允许的名称:", [...allowedNames]);
+    // 打印前几个option的text用于对比
+    const sampleTexts = [];
+    selects.find("option").slice(0, 5).each(function () {
+      sampleTexts.push({ val: $(this).val(), text: $(this).text().trim() });
+    });
+    console.log("[CFM-NF] 预设option样本:", sampleTexts);
+    let hiddenCount = 0;
+    let shownCount = 0;
+    selects.find("option").each(function () {
       const val = $(this).val();
-      const text = $(this).text();
+      const text = $(this).text().trim();
       if (val === "" || val === "gui" || val === "default") {
-        $(this).show(); // 保留默认选项
+        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
       } else if (allowedNames.has(text)) {
-        $(this).show();
+        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
+        shownCount++;
       } else {
-        $(this).hide();
+        $(this).attr("disabled", "disabled").addClass("cfm-nf-hidden");
+        hiddenCount++;
       }
     });
+    console.log("[CFM-NF] 预设过滤结果: 显示", shownCount, "隐藏", hiddenCount);
   }
 
   /**
@@ -8832,25 +8922,46 @@ jQuery(async () => {
    */
   function applyWorldInfoFilter() {
     const select = $("#world_editor_select");
+    if (!select.length) {
+      console.log("[CFM-NF] 世界书select未找到");
+      return;
+    }
     if (!nativeFilterWorldInfo) {
-      select.find("option").show();
+      select.find("option").removeAttr("disabled").removeClass("cfm-nf-hidden");
+      // 刷新 select2（如果存在）
+      if (select.hasClass("select2-hidden-accessible")) {
+        try { select.select2("destroy"); } catch (e) { /* ignore */ }
+        select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
+      }
+      console.log("[CFM-NF] 世界书过滤已清除");
       return;
     }
     const allowedNames = getAllItemsInFolderRecursive(
       "worldinfo",
       nativeFilterWorldInfo,
     );
+    console.log("[CFM-NF] 世界书过滤 folderId:", nativeFilterWorldInfo, "允许的名称:", [...allowedNames]);
+    let hiddenCount = 0;
+    let shownCount = 0;
     select.find("option").each(function () {
       const val = $(this).val();
-      const text = $(this).text();
+      const text = $(this).text().trim();
       if (val === "") {
-        $(this).show(); // 保留默认占位选项
+        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
       } else if (allowedNames.has(text)) {
-        $(this).show();
+        $(this).removeAttr("disabled").removeClass("cfm-nf-hidden");
+        shownCount++;
       } else {
-        $(this).hide();
+        $(this).attr("disabled", "disabled").addClass("cfm-nf-hidden");
+        hiddenCount++;
       }
     });
+    // 刷新 select2（如果存在）
+    if (select.hasClass("select2-hidden-accessible")) {
+      try { select.select2("destroy"); } catch (e) { /* ignore */ }
+      select.select2({ placeholder: "--- Pick to Edit ---", allowClear: true });
+    }
+    console.log("[CFM-NF] 世界书过滤结果: 显示", shownCount, "隐藏", hiddenCount);
   }
 
   /**
@@ -8867,8 +8978,16 @@ jQuery(async () => {
     if (filter) {
       btn.addClass("cfm-nf-btn-active");
       let name;
-      if (type === "chars") name = getTagName(filter);
-      else {
+      if (filter === "__ungrouped__") {
+        name =
+          type === "chars"
+            ? "未归类角色"
+            : type === "presets"
+              ? "未归类预设"
+              : "未归类世界书";
+      } else if (type === "chars") {
+        name = getTagName(filter);
+      } else {
         const resType = type === "presets" ? "presets" : "worldinfo";
         name = getResFolderDisplayName(resType, filter);
       }

@@ -2168,6 +2168,21 @@
   color: #89b4fa !important;
 }
 
+/* 隐藏被过滤的 select option（原生 select 的 option 不支持 display:none，用 disabled + 视觉隐藏） */
+option.cfm-nf-hidden {
+  display: none !important;
+}
+
+/* 未归类节点样式 */
+.cfm-nf-uncat {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+.cfm-nf-uncat .cfm-nf-icon {
+  color: #a6adc8;
+}
+
 /* ==================== 原生界面文件夹浮动面板 ==================== */
 .cfm-nf-panel {
   position: fixed;
