@@ -990,22 +990,6 @@
   opacity: 0.6;
 }
 
-/* ========== 导入按钮 ========== */
-.cfm-import-btn {
-  background: none;
-  border: none;
-  color: var(--SmartThemeBodyColor, #cdd6f4);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 6px;
-  opacity: 0.7;
-  transition: opacity 0.15s, color 0.15s;
-}
-.cfm-import-btn:hover {
-  opacity: 1;
-  color: #89b4fa;
-}
-
 /* ========== 复制/移动模式按钮 ========== */
 .cfm-copymode-btn {
   font-size: 12px !important;
