@@ -1974,6 +1974,8 @@ jQuery(async () => {
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
 
+    // 清除世界书缓存，确保每次打开弹窗都获取最新数据（与酒馆原生界面同步）
+    _worldInfoNamesCache = null;
     // 预加载世界书数据，保存 Promise 以便切换标签时直接复用
     _worldInfoPreloadPromise = getWorldInfoNames();
 
@@ -5550,6 +5552,20 @@ jQuery(async () => {
 
     const groups = getResourceGroups("presets");
 
+    // 清理 groups 中已不存在的预设映射（同步外部删除）
+    const existingPresetNames = new Set(presets.map((p) => p.name));
+    let presetGroupsCleaned = false;
+    for (const key of Object.keys(groups)) {
+      if (!existingPresetNames.has(key)) {
+        delete groups[key];
+        presetGroupsCleaned = true;
+      }
+    }
+    if (presetGroupsCleaned) {
+      console.log("[CFM] 已清理不存在的预设分组映射");
+      getContext().saveSettingsDebounced();
+    }
+
     // 分类：直接属于某文件夹的预设
     const folderItems = {};
     const ungrouped = [];
@@ -6171,10 +6187,19 @@ jQuery(async () => {
     const pathEl = $("#cfm-worldinfo-rh-path");
     const countEl = $("#cfm-worldinfo-rh-count");
 
-    // 缓存可用时同步获取；否则复用预加载 Promise 避免重复请求和加载闪烁
+    // 每次渲染时清除缓存以确保与酒馆原生界面保持同步
+    _worldInfoNamesCache = null;
     let names;
-    if (_worldInfoNamesCache) {
-      names = _worldInfoNamesCache;
+    // 优先从DOM同步读取（getWorldInfoNames内部会先尝试DOM）
+    const domNames = [];
+    $("#world_editor_select option").each(function () {
+      const v = $(this).val();
+      const t = $(this).text();
+      if (v !== "" && t !== "--- 选择以编辑 ---") domNames.push(t);
+    });
+    if (domNames.length > 0) {
+      names = domNames;
+      _worldInfoNamesCache = domNames;
     } else if (_worldInfoPreloadPromise) {
       leftTree.empty();
       rightList.html(
@@ -6193,6 +6218,20 @@ jQuery(async () => {
     const tree = getResFolderTree("worldinfo");
     const allFolderIds = getResFolderIds("worldinfo");
     const groups = getResourceGroups("worldinfo");
+
+    // 清理 groups 中已不存在的世界书映射（同步外部删除）
+    const existingWiNames = new Set(names);
+    let wiGroupsCleaned = false;
+    for (const key of Object.keys(groups)) {
+      if (!existingWiNames.has(key)) {
+        delete groups[key];
+        wiGroupsCleaned = true;
+      }
+    }
+    if (wiGroupsCleaned) {
+      console.log("[CFM] 已清理不存在的世界书分组映射");
+      getContext().saveSettingsDebounced();
+    }
 
     // 分类
     const folderItems = {};
