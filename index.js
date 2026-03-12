@@ -2534,6 +2534,12 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].worldInfoGroups;
               if (groups && groups[name]) delete groups[name];
+              // 从酒馆原生DOM中移除对应option（防止renderWorldInfoView从DOM读到已删除的世界书）
+              $("#world_editor_select option")
+                .filter(function () {
+                  return $(this).text() === name;
+                })
+                .remove();
               success++;
             } else {
               fail++;
@@ -2543,8 +2549,9 @@ jQuery(async () => {
             fail++;
           }
         }
-        // 刷新世界书缓存
+        // 强制通过API刷新世界书缓存
         _worldInfoNamesCache = null;
+        await getWorldInfoNames(true);
       }
 
       if (success > 0) {
