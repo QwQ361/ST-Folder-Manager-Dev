@@ -4693,7 +4693,7 @@ jQuery(async () => {
           ? selectedThemeFolder
           : null;
 
-      const headers = getRequestHeaders();
+      const headers = getContext().getRequestHeaders();
 
       // 获取现有主题名称集合
       const existingThemes = new Set(getThemeNames());
