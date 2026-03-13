@@ -1727,15 +1727,19 @@ jQuery(async () => {
       "mousemove.cfmDrag touchmove.cfmDrag mouseup.cfmDrag touchend.cfmDrag",
     );
     $("#cfm-topbar-button").remove();
+    $("#cfm-wand-button").remove();
   }
   function switchButtonMode(newMode) {
     destroyAllButtons();
     setButtonMode(newMode);
     if (newMode === "topbar") createTopbarButton();
+    else if (newMode === "wand") createWandButton();
     else createFloatingButton();
   }
   function initButton() {
-    if (getButtonMode() === "topbar") createTopbarButton();
+    const mode = getButtonMode();
+    if (mode === "topbar") createTopbarButton();
+    else if (mode === "wand") createWandButton();
     else createFloatingButton();
   }
 
@@ -2186,6 +2190,28 @@ jQuery(async () => {
           JSON.stringify({ top: b.css("top"), left: b.css("left") }),
         );
       }, 150);
+    });
+  }
+
+  function createWandButton() {
+    if ($("#cfm-wand-button").length > 0) return;
+    const extensionsMenu = $("#extensionsMenu");
+    if (extensionsMenu.length === 0) {
+      // 如果魔术棒菜单还没加载，延迟重试
+      setTimeout(() => createWandButton(), 500);
+      return;
+    }
+    const buttonHtml = $(`
+      <div id="cfm-wand-button" class="list-group-item flex-container flexGap5 interactable" title="酒馆资源管理器">
+        <div class="fa-solid fa-folder extensionsMenuExtensionButton"></div>
+        <span>资源管理器</span>
+      </div>
+    `);
+    extensionsMenu.append(buttonHtml);
+    buttonHtml.on("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showMainPopup();
     });
   }
 
@@ -6104,6 +6130,7 @@ jQuery(async () => {
                 <div class="cfm-mode-toggle">
                     <button class="cfm-mode-btn ${currentMode === "topbar" ? "cfm-mode-active" : ""}" data-mode="topbar"><i class="fa-solid fa-bars"></i> 固定在顶栏</button>
                     <button class="cfm-mode-btn ${currentMode === "float" ? "cfm-mode-active" : ""}" data-mode="float"><i class="fa-solid fa-up-down-left-right"></i> 浮动按钮</button>
+                    <button class="cfm-mode-btn ${currentMode === "wand" ? "cfm-mode-active" : ""}" data-mode="wand"><i class="fa-solid fa-magic-wand-sparkles"></i> 魔术棒菜单</button>
                 </div>
             </div>
         `);
@@ -6112,9 +6139,12 @@ jQuery(async () => {
       const newMode = $(this).data("mode");
       if (newMode === getButtonMode()) return;
       switchButtonMode(newMode);
-      toastr.success(
-        newMode === "topbar" ? "已切换为顶栏按钮" : "已切换为浮动按钮",
-      );
+      const modeLabels = {
+        topbar: "已切换为顶栏按钮",
+        float: "已切换为浮动按钮",
+        wand: "已切换为魔术棒菜单",
+      };
+      toastr.success(modeLabels[newMode] || "已切换");
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
@@ -6525,6 +6555,7 @@ jQuery(async () => {
         <div class="cfm-mode-toggle">
           <button class="cfm-mode-btn ${currentMode === "topbar" ? "cfm-mode-active" : ""}" data-mode="topbar"><i class="fa-solid fa-bars"></i> 固定在顶栏</button>
           <button class="cfm-mode-btn ${currentMode === "float" ? "cfm-mode-active" : ""}" data-mode="float"><i class="fa-solid fa-up-down-left-right"></i> 浮动按钮</button>
+          <button class="cfm-mode-btn ${currentMode === "wand" ? "cfm-mode-active" : ""}" data-mode="wand"><i class="fa-solid fa-magic-wand-sparkles"></i> 魔术棒菜单</button>
         </div>
       </div>
     `);
@@ -6533,9 +6564,12 @@ jQuery(async () => {
       const newMode = $(this).data("mode");
       if (newMode === getButtonMode()) return;
       switchButtonMode(newMode);
-      toastr.success(
-        newMode === "topbar" ? "已切换为顶栏按钮" : "已切换为浮动按钮",
-      );
+      const modeLabels = {
+        topbar: "已切换为顶栏按钮",
+        float: "已切换为浮动按钮",
+        wand: "已切换为魔术棒菜单",
+      };
+      toastr.success(modeLabels[newMode] || "已切换");
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
