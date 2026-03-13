@@ -480,6 +480,9 @@ jQuery(async () => {
     // 导入角色卡时自动提取内嵌世界书的目标文件夹（null=不自动提取）
     if (extension_settings[extensionName].autoCharBookFolder === undefined)
       extension_settings[extensionName].autoCharBookFolder = null;
+    // 自定义顶栏图标URL（空字符串=使用默认FA图标，"auto"=自动检测，其他=指定URL）
+    if (extension_settings[extensionName].customTopbarIcon === undefined)
+      extension_settings[extensionName].customTopbarIcon = "";
   }
   ensureSettings();
 
@@ -1749,6 +1752,245 @@ jQuery(async () => {
       e.stopPropagation();
       showMainPopup();
     });
+    // 创建按钮后自动检测并应用自定义图标（延迟等待美化主题样式加载）
+    setTimeout(() => {
+      applyTopbarIconFromConfig();
+      // 启动主题切换自动监听
+      setupThemeChangeObserver();
+    }, 500);
+  }
+
+  // ==================== 顶栏图标美化适配 ====================
+
+  /**
+   * 检测邻居按钮（用户设定管理）的实际图标样式
+   * 通过 getComputedStyle 直接读取，不依赖 CSS 规则解析
+   * @returns {string|null} CSS url() 格式的图标URL，或 null
+   */
+  function detectNeighborIcon() {
+    const neighborIcon = document.querySelector(
+      "#persona-management-button .drawer-icon",
+    );
+    if (!neighborIcon) return null;
+    const computed = window.getComputedStyle(neighborIcon);
+    const bgImage = computed.backgroundImage;
+    if (bgImage && bgImage !== "none" && bgImage !== "") {
+      return bgImage;
+    }
+    return null;
+  }
+
+  /**
+   * 检测酒馆所有样式表中的顶栏图标替换规则（用于下拉选择器）
+   * 搜索所有 <style> 元素中包含 .drawer-icon 且带 background-image 的规则
+   * @returns {{ icons: Object<string, string>, uniqueUrls: string[] }}
+   *   icons: parentId → backgroundImage 映射
+   *   uniqueUrls: 去重后的图标URL列表
+   */
+  function detectThemeIcons() {
+    const iconMap = {};
+    for (const sheet of document.styleSheets) {
+      try {
+        // 只处理内联 <style> 元素（跳过外部 <link> 样式表以避免跨域问题）
+        if (
+          !sheet.ownerNode ||
+          sheet.ownerNode.tagName?.toUpperCase() !== "STYLE"
+        )
+          continue;
+        for (const rule of sheet.cssRules) {
+          if (!rule.selectorText || !rule.style) continue;
+          // 放宽匹配：任何包含 #xxx 和 .drawer-icon 的选择器
+          const match = rule.selectorText.match(
+            /#([\w-]+)(?:\s+|.*?)(?:\.drawer-icon)/,
+          );
+          if (
+            match &&
+            rule.style.backgroundImage &&
+            rule.style.backgroundImage !== "none" &&
+            rule.style.backgroundImage !== ""
+          ) {
+            iconMap[match[1]] = rule.style.backgroundImage;
+          }
+        }
+      } catch (e) {
+        // 跨域样式表，跳过
+      }
+    }
+    // 也通过 computed style 检测所有已知的顶栏按钮
+    const knownButtons = [
+      "user-settings-button",
+      "persona-management-button",
+      "ai-config-button",
+      "character-management-button",
+      "world-info-button",
+    ];
+    for (const btnId of knownButtons) {
+      if (iconMap[btnId]) continue; // CSS 规则已检测到
+      const iconEl = document.querySelector(`#${btnId} .drawer-icon`);
+      if (!iconEl) continue;
+      const computed = window.getComputedStyle(iconEl);
+      const bgImage = computed.backgroundImage;
+      if (bgImage && bgImage !== "none" && bgImage !== "") {
+        iconMap[btnId] = bgImage;
+      }
+    }
+    const uniqueUrls = [...new Set(Object.values(iconMap))];
+    return { icons: iconMap, uniqueUrls };
+  }
+
+  /**
+   * 从 CSS url() 值中提取纯URL
+   * @param {string} cssUrl - 如 'url("https://example.com/icon.png")'
+   * @returns {string} 纯URL
+   */
+  function extractUrlFromCss(cssUrl) {
+    return cssUrl.replace(/^url\(["']?/, "").replace(/["']?\)$/, "");
+  }
+
+  /**
+   * 将纯URL转为CSS url()格式
+   * @param {string} url
+   * @returns {string}
+   */
+  function toCssUrl(url) {
+    return `url("${url}")`;
+  }
+
+  /**
+   * 应用自定义图标到顶栏按钮
+   * @param {string} cssUrl - CSS url() 格式的图标链接
+   */
+  function applyCustomIcon(cssUrl) {
+    const icon = $("#cfm-topbar-button .drawer-icon");
+    if (icon.length === 0) return;
+    icon.addClass("cfm-custom-icon");
+    icon.css("background-image", cssUrl);
+  }
+
+  /**
+   * 清除自定义图标，恢复默认FA图标
+   */
+  function clearCustomIcon() {
+    const icon = $("#cfm-topbar-button .drawer-icon");
+    if (icon.length === 0) return;
+    icon.removeClass("cfm-custom-icon");
+    icon.css("background-image", "");
+  }
+
+  /**
+   * 根据配置自动应用顶栏图标
+   * 优先使用邻居按钮的 computed style，更可靠
+   * 如果用户手动指定了URL则使用手动指定的
+   */
+  function applyTopbarIconFromConfig() {
+    const saved = extension_settings[extensionName].customTopbarIcon || "";
+    if (saved) {
+      // 用户手动指定了URL
+      applyCustomIcon(toCssUrl(saved));
+      return;
+    }
+    // 自动检测：直接读取邻居按钮的实际样式
+    const neighborBg = detectNeighborIcon();
+    if (neighborBg) {
+      applyCustomIcon(neighborBg);
+      return;
+    }
+    // 没有美化主题或没有图标替换，保持默认FA图标
+    clearCustomIcon();
+  }
+
+  // ==================== 主题切换自动监听 ====================
+
+  /** 记录上一次邻居按钮的 background-image，用于检测变化 */
+  let _lastNeighborBg = null;
+  /** 主题变化轮询定时器 */
+  let _themeCheckTimer = null;
+
+  /**
+   * 启动主题切换监听
+   * 同时使用 MutationObserver 和轮询两种策略确保可靠检测
+   */
+  function setupThemeChangeObserver() {
+    // --- 策略1: MutationObserver 监听 <head> 中 style 元素的增删和内容变化 ---
+    const headObserver = new MutationObserver((mutations) => {
+      let styleChanged = false;
+      for (const mutation of mutations) {
+        // 检查是否有 style 节点被添加/删除
+        if (mutation.type === "childList") {
+          for (const node of [
+            ...mutation.addedNodes,
+            ...mutation.removedNodes,
+          ]) {
+            if (
+              node.nodeType === Node.ELEMENT_NODE &&
+              (node.tagName === "STYLE" || node.tagName === "LINK")
+            ) {
+              styleChanged = true;
+              break;
+            }
+          }
+        }
+        // 检查 style 元素内容变化
+        if (
+          mutation.type === "characterData" &&
+          mutation.target.parentNode?.tagName === "STYLE"
+        ) {
+          styleChanged = true;
+        }
+      }
+      if (styleChanged) {
+        // 延迟执行，等浏览器完成样式计算
+        setTimeout(() => onThemeStyleChange(), 300);
+      }
+    });
+    headObserver.observe(document.head, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    // --- 策略2: 监听 custom-style 元素的内容变化 ---
+    const customStyle = document.getElementById("custom-style");
+    if (customStyle) {
+      const customObserver = new MutationObserver(() => {
+        setTimeout(() => onThemeStyleChange(), 300);
+      });
+      customObserver.observe(customStyle, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
+    // --- 策略3: 轮询检测邻居按钮样式变化（兜底） ---
+    _lastNeighborBg = detectNeighborIcon();
+    _themeCheckTimer = setInterval(() => {
+      const currentBg = detectNeighborIcon();
+      if (currentBg !== _lastNeighborBg) {
+        _lastNeighborBg = currentBg;
+        onThemeStyleChange();
+      }
+    }, 2000);
+  }
+
+  /**
+   * 主题样式发生变化时的回调
+   * 如果用户没有手动指定图标（customTopbarIcon 为空），则自动重新检测并应用
+   */
+  function onThemeStyleChange() {
+    const saved = extension_settings[extensionName].customTopbarIcon || "";
+    if (saved) {
+      // 用户手动指定了URL，不自动覆盖
+      return;
+    }
+    // 自动模式：重新检测邻居图标
+    const neighborBg = detectNeighborIcon();
+    _lastNeighborBg = neighborBg;
+    if (neighborBg) {
+      applyCustomIcon(neighborBg);
+    } else {
+      clearCustomIcon();
+    }
   }
 
   function createFloatingButton() {
@@ -5829,6 +6071,7 @@ jQuery(async () => {
     resConfigDeleteCascade = false;
     resConfigDeleteLastClickedId = null;
     resConfigDeleteRangeMode = false;
+    $(document).off("click.cfmIconDropdown");
     $("#cfm-config-overlay").remove();
     if ($("#cfm-overlay").length > 0) {
       renderLeftTree();
@@ -5876,6 +6119,155 @@ jQuery(async () => {
       $(this).addClass("cfm-mode-active");
     });
     body.append(modeSection);
+
+    // 0.5 自定义顶栏图标（仅顶栏模式时显示）
+    if (currentMode === "topbar") {
+      const { icons: themeIcons, uniqueUrls } = detectThemeIcons();
+      const hasTheme = uniqueUrls.length > 0;
+      const savedIconUrl =
+        extension_settings[extensionName].customTopbarIcon || "";
+      const isAutoMode = !savedIconUrl && hasTheme;
+      const autoUrl = hasTheme
+        ? extractUrlFromCss(
+            themeIcons["persona-management-button"] ||
+              Object.values(themeIcons)[0],
+          )
+        : "";
+      const displayUrl = savedIconUrl || (isAutoMode ? autoUrl : "");
+
+      // 构建下拉项：每个唯一URL + 使用该URL的按钮名称映射
+      const parentIdNameMap = {
+        "ai-config-button": "AI配置",
+        "sys-settings-button": "API连接",
+        "advanced-formatting-button": "格式化",
+        "WI-SP-button": "世界书",
+        "user-settings-button": "用户设置",
+        logo_block: "Logo",
+        "extensions-settings-button": "扩展",
+        table_database_settings_drawer: "事件表",
+        "persona-management-button": "用户设定",
+        rightNavHolder: "角色管理",
+        "backgrounds-button": "背景",
+      };
+      let dropdownItemsHtml = "";
+      for (const url of uniqueUrls) {
+        const pureUrl = extractUrlFromCss(url);
+        const users = Object.entries(themeIcons)
+          .filter(([, v]) => v === url)
+          .map(([k]) => parentIdNameMap[k] || k)
+          .join("、");
+        const isSelected = pureUrl === displayUrl;
+        dropdownItemsHtml += `<div class="cfm-icon-dropdown-item ${isSelected ? "cfm-icon-selected" : ""}" data-url="${escapeHtml(pureUrl)}">
+          <div class="cfm-icon-preview" style="background-image:url('${escapeHtml(pureUrl)}')"></div>
+          <span class="cfm-icon-dropdown-label" title="${escapeHtml(pureUrl)}">${escapeHtml(pureUrl.split("/").pop())}</span>
+          <span class="cfm-icon-dropdown-users">${escapeHtml(users)}</span>
+        </div>`;
+      }
+
+      const iconSection = $(`
+        <div class="cfm-config-section cfm-icon-config-section">
+          <label>自定义顶栏图标</label>
+          <div class="cfm-icon-input-row">
+            <input type="text" id="cfm-icon-url-input" placeholder="${hasTheme ? "已自动检测美化主题图标" : "输入图标URL（留空使用默认图标）"}" value="${escapeHtml(savedIconUrl)}" />
+            ${
+              hasTheme
+                ? `<div class="cfm-icon-dropdown-wrapper">
+              <button class="cfm-icon-dropdown-btn" id="cfm-icon-dropdown-toggle" title="从美化主题中选择图标"><i class="fa-solid fa-caret-down"></i></button>
+              <div class="cfm-icon-dropdown-menu" id="cfm-icon-dropdown-menu">
+                ${dropdownItemsHtml}
+              </div>
+            </div>`
+                : ""
+            }
+            <button class="cfm-icon-clear-btn" id="cfm-icon-clear" title="清除自定义图标"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="cfm-icon-status" id="cfm-icon-status">
+            <span class="cfm-icon-status-dot ${displayUrl ? "cfm-status-active" : "cfm-status-inactive"}"></span>
+            ${displayUrl ? (isAutoMode ? "自动使用美化主题图标（用户设定管理）" : "使用自定义图标") : hasTheme ? "已检测到美化主题但未应用" : "使用默认图标"}
+          </div>
+          <div class="cfm-icon-config-hint">${hasTheme ? `检测到 ${uniqueUrls.length} 个美化主题图标，可从下拉菜单选择或手动输入URL` : "未检测到美化主题图标替换。启用美化主题后会自动检测并适配"}</div>
+        </div>
+      `);
+
+      // 下拉菜单切换
+      iconSection
+        .find("#cfm-icon-dropdown-toggle")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          $("#cfm-icon-dropdown-menu").toggleClass("cfm-dropdown-open");
+        });
+      // 点击其他地方关闭下拉
+      $(document).on("click.cfmIconDropdown", () => {
+        $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
+      });
+
+      // 选择下拉项
+      iconSection
+        .find(".cfm-icon-dropdown-item")
+        .on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const url = $(this).data("url");
+          $("#cfm-icon-url-input").val(url);
+          $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
+          // 立即应用并保存
+          extension_settings[extensionName].customTopbarIcon = url;
+          getContext().saveSettingsDebounced();
+          applyCustomIcon(toCssUrl(url));
+          // 更新选中状态
+          iconSection
+            .find(".cfm-icon-dropdown-item")
+            .removeClass("cfm-icon-selected");
+          $(this).addClass("cfm-icon-selected");
+          // 更新状态提示
+          $("#cfm-icon-status").html(
+            `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
+          );
+        });
+
+      // 手动输入URL后回车应用
+      iconSection.find("#cfm-icon-url-input").on("change", function () {
+        const url = $(this).val().trim();
+        extension_settings[extensionName].customTopbarIcon = url;
+        getContext().saveSettingsDebounced();
+        if (url) {
+          applyCustomIcon(toCssUrl(url));
+          $("#cfm-icon-status").html(
+            `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
+          );
+        } else {
+          // 清空输入 → 回到自动检测模式
+          applyTopbarIconFromConfig();
+          const autoActive = hasTheme;
+          $("#cfm-icon-status").html(
+            `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
+          );
+        }
+        // 更新下拉菜单选中状态
+        iconSection.find(".cfm-icon-dropdown-item").each(function () {
+          $(this).toggleClass("cfm-icon-selected", $(this).data("url") === url);
+        });
+      });
+
+      // 清除按钮
+      iconSection.find("#cfm-icon-clear").on("click touchend", (e) => {
+        e.preventDefault();
+        $("#cfm-icon-url-input").val("");
+        extension_settings[extensionName].customTopbarIcon = "";
+        getContext().saveSettingsDebounced();
+        applyTopbarIconFromConfig();
+        iconSection
+          .find(".cfm-icon-dropdown-item")
+          .removeClass("cfm-icon-selected");
+        const autoActive = hasTheme;
+        $("#cfm-icon-status").html(
+          `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
+        );
+      });
+
+      body.append(iconSection);
+    }
 
     // 1. 标签导入区域（一键导入 + 单个添加）
     const existingFolderIds = getFolderTagIds();
