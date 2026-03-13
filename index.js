@@ -1742,7 +1742,7 @@ jQuery(async () => {
   function createFloatingButton() {
     if ($("#cfm-folder-button").length > 0) return;
     const btn = $(
-      `<div id="cfm-folder-button" title="角色卡文件夹"><i class="fa-solid fa-folder"></i></div>`,
+      `<div id="cfm-folder-button" title="酒馆资源管理器"><i class="fa-solid fa-folder"></i></div>`,
     );
     $("body").append(btn);
     const savedPos = JSON.parse(
