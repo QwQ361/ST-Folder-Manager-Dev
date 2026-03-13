@@ -2849,12 +2849,13 @@ jQuery(async () => {
 
   // 主题导出
   async function exportThemes(themeNameList, headers) {
-    // 通过 /api/settings 获取完整主题数据（themes 变量是 power-user.js 模块私有的，无法直接访问）
+    // 通过 POST /api/settings/get 获取完整主题数据（themes 变量是 power-user.js 模块私有的，无法直接访问）
     let allThemes = [];
     try {
-      const resp = await fetch("/api/settings", {
-        method: "GET",
+      const resp = await fetch("/api/settings/get", {
+        method: "POST",
         headers,
+        body: JSON.stringify({}),
       });
       if (resp.ok) {
         const data = await resp.json();
