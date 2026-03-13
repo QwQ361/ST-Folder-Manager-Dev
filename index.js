@@ -11131,10 +11131,11 @@ jQuery(async () => {
   let nativeFilterChar = null; // 角色卡当前过滤的文件夹tagId，null=不过滤
   let nativeFilterPreset = null; // 预设当前过滤的文件夹id
   let nativeFilterWorldInfo = null; // 世界书当前过滤的文件夹id
+  let nativeFilterTheme = null; // 主题当前过滤的文件夹id
 
   /**
    * 构建文件夹树HTML（递归），用于原生界面浮动面板
-   * @param {string} type - 'chars' | 'presets' | 'worldinfo'
+   * @param {string} type - 'chars' | 'presets' | 'worldinfo' | 'themes'
    * @param {string|null} parentId - 父文件夹ID
    * @param {number} depth - 缩进深度
    * @param {Set} expandedSet - 已展开的文件夹ID集合
@@ -11157,7 +11158,12 @@ jQuery(async () => {
       getChildren = (id) => getChildFolders(id);
       countFn = (id) => countCharsInFolderRecursive(id);
     } else {
-      const resType = type === "presets" ? "presets" : "worldinfo";
+      const resType =
+        type === "presets"
+          ? "presets"
+          : type === "themes"
+            ? "themes"
+            : "worldinfo";
       folderIds = parentId
         ? sortResFolders(resType, getResChildFolders(resType, parentId))
         : sortResFolders(resType, getResTopLevelFolders(resType));
@@ -11208,12 +11214,19 @@ jQuery(async () => {
       if (type === "chars") {
         uncatCount = getUncategorizedCharacters().length;
       } else {
-        const resType = type === "presets" ? "presets" : "worldinfo";
+        const resType =
+          type === "presets"
+            ? "presets"
+            : type === "themes"
+              ? "themes"
+              : "worldinfo";
         const groups = getResourceGroups(resType);
         const tree = getResFolderTree(resType);
         let allItems;
         if (type === "presets") {
           allItems = getCurrentPresets().map((p) => p.name);
+        } else if (type === "themes") {
+          allItems = getThemeNames();
         } else {
           allItems = [];
           $("#world_editor_select option").each(function () {
@@ -11231,7 +11244,7 @@ jQuery(async () => {
       html += `<div class="cfm-nf-item cfm-nf-uncat${isUncatActive ? " cfm-nf-active" : ""}" data-folder-id="__ungrouped__" data-type="${type}" style="padding-left:12px;">`;
       html += `<span class="cfm-nf-arrow-placeholder"></span>`;
       html += `<i class="fa-solid fa-box-open cfm-nf-icon"></i>`;
-      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : "未归类世界书"}</span>`;
+      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : type === "themes" ? "未归类主题" : "未归类世界书"}</span>`;
       html += `<span class="cfm-nf-count">${uncatCount}</span>`;
       html += `</div>`;
     }
@@ -11241,7 +11254,7 @@ jQuery(async () => {
   /**
    * 创建并显示原生界面文件夹浮动面板
    * @param {jQuery} anchorEl - 锚点元素（文件夹图标按钮）
-   * @param {string} type - 'chars' | 'presets' | 'worldinfo'
+   * @param {string} type - 'chars' | 'presets' | 'worldinfo' | 'themes'
    */
   function showNativeFolderPanel(anchorEl, type) {
     // 移除已有面板
@@ -11252,7 +11265,9 @@ jQuery(async () => {
         ? nativeFilterChar
         : type === "presets"
           ? nativeFilterPreset
-          : nativeFilterWorldInfo;
+          : type === "themes"
+            ? nativeFilterTheme
+            : nativeFilterWorldInfo;
 
     // 展开状态集合（持久化到会话中）
     if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
@@ -11325,7 +11340,12 @@ jQuery(async () => {
       if (type === "chars") {
         allIds = getFolderTagIds();
       } else {
-        const resType = type === "presets" ? "presets" : "worldinfo";
+        const resType =
+          type === "presets"
+            ? "presets"
+            : type === "themes"
+              ? "themes"
+              : "worldinfo";
         allIds = getResFolderIds(resType);
       }
       allIds.forEach((id) => expandedSet.add(id));
@@ -11334,7 +11354,9 @@ jQuery(async () => {
           ? nativeFilterChar
           : type === "presets"
             ? nativeFilterPreset
-            : nativeFilterWorldInfo;
+            : type === "themes"
+              ? nativeFilterTheme
+              : nativeFilterWorldInfo;
       treeContainer.html(
         buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
       );
@@ -11349,7 +11371,9 @@ jQuery(async () => {
           ? nativeFilterChar
           : type === "presets"
             ? nativeFilterPreset
-            : nativeFilterWorldInfo;
+            : type === "themes"
+              ? nativeFilterTheme
+              : nativeFilterWorldInfo;
       treeContainer.html(
         buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
       );
@@ -11359,6 +11383,7 @@ jQuery(async () => {
     showAllBtn.on("click", function () {
       if (type === "chars") nativeFilterChar = null;
       else if (type === "presets") nativeFilterPreset = null;
+      else if (type === "themes") nativeFilterTheme = null;
       else nativeFilterWorldInfo = null;
       applyNativeFilter(type);
       panel.remove();
@@ -11373,6 +11398,7 @@ jQuery(async () => {
       console.log("[CFM-NF] 选中文件夹:", type, fid);
       if (type === "chars") nativeFilterChar = fid;
       else if (type === "presets") nativeFilterPreset = fid;
+      else if (type === "themes") nativeFilterTheme = fid;
       else nativeFilterWorldInfo = fid;
       applyNativeFilter(type);
       panel.remove();
@@ -11406,12 +11432,19 @@ jQuery(async () => {
           items.add(ch.avatar);
         }
       } else {
-        const resType = type === "presets" ? "presets" : "worldinfo";
+        const resType =
+          type === "presets"
+            ? "presets"
+            : type === "themes"
+              ? "themes"
+              : "worldinfo";
         const groups = getResourceGroups(resType);
         const tree = getResFolderTree(resType);
         let allNames;
         if (type === "presets") {
           allNames = getCurrentPresets().map((p) => p.name);
+        } else if (type === "themes") {
+          allNames = getThemeNames();
         } else {
           $("#world_editor_select option").each(function () {
             const v = $(this).val();
@@ -11443,7 +11476,12 @@ jQuery(async () => {
         }
       }
     } else {
-      const resType = type === "presets" ? "presets" : "worldinfo";
+      const resType =
+        type === "presets"
+          ? "presets"
+          : type === "themes"
+            ? "themes"
+            : "worldinfo";
       const groups = getResourceGroups(resType);
       for (const [name, fid] of Object.entries(groups)) {
         if (fid === folderId) items.add(name);
@@ -11465,6 +11503,8 @@ jQuery(async () => {
       applyCharFilter();
     } else if (type === "presets") {
       applyPresetFilter();
+    } else if (type === "themes") {
+      applyThemeFilter();
     } else {
       applyWorldInfoFilter();
     }
@@ -11501,6 +11541,7 @@ jQuery(async () => {
   // 缓存被 detach 的 option，用于恢复
   let _presetDetachedOptions = [];
   let _worldInfoDetachedOptions = [];
+  let _themeDetachedOptions = [];
 
   /**
    * 预设过滤：通过 detach/append option 实现过滤
@@ -11599,6 +11640,38 @@ jQuery(async () => {
   }
 
   /**
+   * 主题过滤：通过 detach/append option 实现过滤
+   */
+  function applyThemeFilter() {
+    const select = $("#themes");
+    if (!select.length) return;
+
+    // 先恢复之前 detach 的 option
+    if (_themeDetachedOptions.length > 0) {
+      for (const opt of _themeDetachedOptions) {
+        select.append(opt);
+      }
+      _themeDetachedOptions = [];
+      _sortSelectOptions(select);
+    }
+
+    if (!nativeFilterTheme) return;
+
+    const allowedNames = getAllItemsInFolderRecursive(
+      "themes",
+      nativeFilterTheme,
+    );
+    // detach 不匹配的 option
+    select.find("option").each(function () {
+      const val = $(this).val();
+      if (val === "") return; // 保留默认占位选项
+      if (!allowedNames.has(val)) {
+        _themeDetachedOptions.push($(this).detach());
+      }
+    });
+  }
+
+  /**
    * 辅助：按 option text 字母顺序排序 select 的 options
    */
   function _sortSelectOptions(selectEl) {
@@ -11630,7 +11703,9 @@ jQuery(async () => {
         ? nativeFilterChar
         : type === "presets"
           ? nativeFilterPreset
-          : nativeFilterWorldInfo;
+          : type === "themes"
+            ? nativeFilterTheme
+            : nativeFilterWorldInfo;
     const btn = $(`.cfm-nf-btn[data-nf-type="${type}"]`);
     if (filter) {
       btn.addClass("cfm-nf-btn-active");
@@ -11641,11 +11716,18 @@ jQuery(async () => {
             ? "未归类角色"
             : type === "presets"
               ? "未归类预设"
-              : "未归类世界书";
+              : type === "themes"
+                ? "未归类主题"
+                : "未归类世界书";
       } else if (type === "chars") {
         name = getTagName(filter);
       } else {
-        const resType = type === "presets" ? "presets" : "worldinfo";
+        const resType =
+          type === "presets"
+            ? "presets"
+            : type === "themes"
+              ? "themes"
+              : "worldinfo";
         name = getResFolderDisplayName(resType, filter);
       }
       btn.attr("title", `文件夹过滤: ${name}`);
@@ -11713,6 +11795,26 @@ jQuery(async () => {
           return;
         }
         showNativeFolderPanel($(this), "worldinfo");
+      });
+    }
+
+    // 4. 主题选择器 - 注入到 #themes 旁
+    if (
+      $("#themes").length &&
+      !$("#themes").parent().find(".cfm-nf-btn").length
+    ) {
+      const themeBtn = $(
+        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="themes" title="文件夹过滤"></div>`,
+      );
+      $("#themes").after(themeBtn);
+      themeBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="themes"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "themes");
       });
     }
   }
