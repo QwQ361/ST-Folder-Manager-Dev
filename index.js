@@ -17,6 +17,8 @@ jQuery(async () => {
       extension_settings[extensionName].worldInfoGroups = {};
     if (!extension_settings[extensionName].themeGroups)
       extension_settings[extensionName].themeGroups = {};
+    if (!extension_settings[extensionName].themeNotes)
+      extension_settings[extensionName].themeNotes = {};
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
@@ -3185,6 +3187,222 @@ jQuery(async () => {
     rerenderCurrentView();
   }
 
+  // ==================== 主题备注编辑模式 ====================
+  let cfmThemeNoteMode = false;
+  let cfmThemeNoteSelected = new Set();
+  let cfmThemeNoteRangeMode = false;
+  let cfmThemeNoteLastClicked = null;
+
+  function getThemeNote(name) {
+    return extension_settings[extensionName].themeNotes?.[name] || "";
+  }
+  function setThemeNote(name, note) {
+    if (!extension_settings[extensionName].themeNotes)
+      extension_settings[extensionName].themeNotes = {};
+    if (note) {
+      extension_settings[extensionName].themeNotes[name] = note;
+    } else {
+      delete extension_settings[extensionName].themeNotes[name];
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  function enterThemeNoteMode() {
+    cfmThemeNoteMode = true;
+    cfmThemeNoteSelected.clear();
+    cfmThemeNoteRangeMode = false;
+    cfmThemeNoteLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    $("#cfm-theme-note-btn").addClass("cfm-edit-active");
+    $("#cfm-theme-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-theme-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-theme-note-mode");
+    renderThemesView();
+  }
+
+  function exitThemeNoteMode() {
+    cfmThemeNoteMode = false;
+    cfmThemeNoteSelected.clear();
+    cfmThemeNoteRangeMode = false;
+    cfmThemeNoteLastClicked = null;
+    $("#cfm-theme-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-theme-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-theme-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-theme-note-mode");
+    renderThemesView();
+  }
+
+  function toggleThemeNoteItem(id, shiftKey) {
+    if ((shiftKey || cfmThemeNoteRangeMode) && cfmThemeNoteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmThemeNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmThemeNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmThemeNoteSelected.has(id)) cfmThemeNoteSelected.delete(id);
+      else cfmThemeNoteSelected.add(id);
+    }
+    cfmThemeNoteLastClicked = id;
+  }
+
+  function prependThemeNoteToolbar(listContainer, renderFn) {
+    if (!cfmThemeNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmThemeNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmThemeNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmThemeNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmThemeNoteSelected.size > 0 ? `已选 ${cfmThemeNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmThemeNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmThemeNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmThemeNoteRangeMode = !cfmThemeNoteRangeMode;
+      if (cfmThemeNoteRangeMode) cfmThemeNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitThemeNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showThemeNotePopup(themeNames) {
+    if (!themeNames || themeNames.length === 0) return;
+    let defaultNote = "";
+    if (themeNames.length === 1) {
+      defaultNote = getThemeNote(themeNames[0]);
+    }
+    const nameListHtml =
+      themeNames.length <= 5
+        ? themeNames
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : themeNames
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${themeNames.length} 个主题</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑主题备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-theme-note-input" value="${escapeHtml(defaultNote)}" placeholder="${themeNames.length > 1 ? "留空则不修改" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${themeNames.length === 1 && defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : ""}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-theme-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-theme-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executeThemeNoteEdit(names) {
+    const result = await showThemeNotePopup(names);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = names.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (clear) {
+        setThemeNote(name, "");
+        count++;
+      } else if (note) {
+        setThemeNote(name, note);
+        count++;
+      } else if (!isBatch) {
+        // 单个模式下空字符串 = 清除
+        setThemeNote(name, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个主题的备注`);
+      renderThemesView();
+    }
+  }
+
   // ==================== 角色卡快速编辑模式 ====================
   let cfmEditMode = false;
   let cfmEditSelected = new Set();
@@ -3695,6 +3913,7 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-theme-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-theme-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-theme-btn" title="导入主题"><i class="fa-solid fa-file-import"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-theme-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <input type="file" id="cfm-import-theme-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-theme-btn" title="导出主题"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-theme-btn" title="删除主题"><i class="fa-solid fa-trash-can"></i></button>
@@ -3729,6 +3948,7 @@ jQuery(async () => {
       // 切换标签时清空导出模式
       if (cfmExportMode) exitExportMode();
       if (cfmResDeleteMode) exitResDeleteMode();
+      if (cfmThemeNoteMode) exitThemeNoteMode();
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -4674,6 +4894,22 @@ jQuery(async () => {
       }
 
       e.target.value = null;
+    });
+
+    // 主题备注编辑按钮
+    popup.find("#cfm-theme-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmThemeNoteMode) {
+        if (cfmThemeNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的主题");
+          return;
+        }
+        const names = Array.from(cfmThemeNoteSelected);
+        executeThemeNoteEdit(names).then(() => exitThemeNoteMode());
+      } else {
+        enterThemeNoteMode();
+      }
     });
 
     // 主题导入按钮
@@ -5729,7 +5965,12 @@ jQuery(async () => {
         searchPool = themeNames.filter((n) => allFids.includes(groups[n]));
       }
     }
-    const matched = searchPool.filter((n) => n.toLowerCase().includes(q));
+    const matched = searchPool.filter((n) => {
+      if (n.toLowerCase().includes(q)) return true;
+      const note = getThemeNote(n);
+      if (note && note.toLowerCase().includes(q)) return true;
+      return false;
+    });
     rightList.empty();
     pathEl.text(`搜索主题: "${q}"`);
     countEl.text(`${matched.length} 个结果`);
@@ -5760,11 +6001,29 @@ jQuery(async () => {
             .join(" › ");
         return "未归类";
       })();
+      const themeNote = getThemeNote(name);
+      const noteHtml = themeNote
+        ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(themeNote)}">${escapeHtml(themeNote)}</span>`
+        : "";
+      const singleNoteBtn =
+        !cfmExportMode &&
+        !cfmResDeleteMode &&
+        !cfmThemeNoteMode &&
+        !cfmMultiSelectMode
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
+      const isNoteSel = cfmThemeNoteMode && cfmThemeNoteSelected.has(name);
+      const noteCheckHtml = cfmThemeNoteMode
+        ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+        : "";
+      // 如果在备注模式，替换 msCheckHtml
+      const finalCheckHtml = cfmThemeNoteMode ? noteCheckHtml : msCheckHtml;
       const row = $(`
-        <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
-          ${msCheckHtml}
+        <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
+          ${finalCheckHtml}
           <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
-          <div class="cfm-row-name">${escapeHtml(name)}<div class="cfm-row-folder-path">${escapeHtml(tFolderPath)}</div></div>
+          <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(tFolderPath)}</div></div>
+          ${singleNoteBtn}
           <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
         </div>
       `);
@@ -5780,8 +6039,14 @@ jQuery(async () => {
           .attr("class", `fa-${nowFav ? "solid" : "regular"} fa-star`);
         if (selectedThemeFolder === "__favorites__") executeThemeSearch();
       });
+      row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        executeThemeNoteEdit([name]);
+      });
       row.on("click", (e) => {
-        if ($(e.target).closest(".cfm-row-star").length) return;
+        if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          return;
         if (cfmResDeleteMode) {
           toggleResDeleteItem(name, e.shiftKey);
           executeThemeSearch();
@@ -5789,6 +6054,11 @@ jQuery(async () => {
         }
         if (cfmExportMode) {
           toggleExportItem(name, e.shiftKey);
+          executeThemeSearch();
+          return;
+        }
+        if (cfmThemeNoteMode) {
+          toggleThemeNoteItem(name, e.shiftKey);
           executeThemeSearch();
           return;
         }
@@ -5813,6 +6083,8 @@ jQuery(async () => {
     prependResDeleteToolbar(rightList, executeThemeSearch);
     // 导出工具栏
     prependExportToolbar(rightList, executeThemeSearch);
+    // 备注编辑工具栏
+    prependThemeNoteToolbar(rightList, executeThemeSearch);
     // 多选工具栏
     if (cfmMultiSelectMode) {
       const visible = getVisibleResourceIds();
@@ -9486,18 +9758,35 @@ jQuery(async () => {
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(name);
         const isExpSel = cfmExportMode && cfmExportSelected.has(name);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(name);
+        const isNoteSel = cfmThemeNoteMode && cfmThemeNoteSelected.has(name);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+            : cfmThemeNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmMultiSelectMode
+                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                : "";
+        // 备注信息
+        const themeNote = getThemeNote(name);
+        const noteHtml = themeNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(themeNote)}">${escapeHtml(themeNote)}</span>`
+          : "";
+        // 非模式状态下显示单个备注编辑按钮
+        const singleNoteBtn =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmThemeNoteMode &&
+          !cfmMultiSelectMode
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
-            <div class="cfm-row-name">${escapeHtml(name)}</div>
+            <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}</div>
+            ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -9522,8 +9811,15 @@ jQuery(async () => {
           }
           if (selectedThemeFolder === "__favorites__") renderThemesView();
         });
+        // 单个备注编辑按钮
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeThemeNoteEdit([name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star").length) return;
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(name, e.shiftKey);
             renderThemesView();
@@ -9531,6 +9827,11 @@ jQuery(async () => {
           }
           if (cfmExportMode) {
             toggleExportItem(name, e.shiftKey);
+            renderThemesView();
+            return;
+          }
+          if (cfmThemeNoteMode) {
+            toggleThemeNoteItem(name, e.shiftKey);
             renderThemesView();
             return;
           }
@@ -9563,6 +9864,8 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, renderThemesView);
       // 导出工具栏
       prependExportToolbar(rightList, renderThemesView);
+      // 备注编辑工具栏
+      prependThemeNoteToolbar(rightList, renderThemesView);
       // 多选工具栏
       if (cfmMultiSelectMode && selectedThemeFolder) {
         const visible = getVisibleResourceIds();
@@ -10752,6 +11055,9 @@ jQuery(async () => {
         folderTree: JSON.parse(JSON.stringify(getResFolderTree("themes"))),
         groups: JSON.parse(JSON.stringify(getResourceGroups("themes"))),
         favorites: [...getResFavorites("themes")],
+        notes: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].themeNotes || {}),
+        ),
       };
     }
 
@@ -11009,6 +11315,18 @@ jQuery(async () => {
           if (themeNameSet.has(name) && !isResFavorite("themes", name)) {
             toggleResFavorite("themes", name);
             report.favoritesRestored++;
+          }
+        }
+      }
+
+      // 恢复备注
+      const notes = jsonData.themes.notes;
+      if (notes && typeof notes === "object") {
+        const themeNameList = getThemeNames();
+        const themeNameSet = new Set(themeNameList);
+        for (const [name, note] of Object.entries(notes)) {
+          if (themeNameSet.has(name) && note) {
+            setThemeNote(name, note);
           }
         }
       }
