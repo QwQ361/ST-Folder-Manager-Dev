@@ -1503,13 +1503,19 @@
   #cfm-config-popup {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     max-width: 100vw;
     max-height: 100vh;
+    max-height: 100dvh;
     border-radius: 0;
   }
 
   #cfm-config-overlay {
     padding-top: 0;
+  }
+
+  #cfm-config-popup .cfm-config-body {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px);
   }
 
   /* 配置树项增大触摸区域 */
