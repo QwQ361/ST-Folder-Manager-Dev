@@ -455,9 +455,16 @@ jQuery(async () => {
     if (!Array.isArray(extension_settings[extensionName].excludedTagIds))
       extension_settings[extensionName].excludedTagIds = [];
     // 批量创建文件夹结构模板（按类型分开存储）
-    if (!extension_settings[extensionName].batchTemplates || Array.isArray(extension_settings[extensionName].batchTemplates)) {
+    if (
+      !extension_settings[extensionName].batchTemplates ||
+      Array.isArray(extension_settings[extensionName].batchTemplates)
+    ) {
       // 迁移旧的数组格式到新的对象格式
-      const oldArr = Array.isArray(extension_settings[extensionName].batchTemplates) ? extension_settings[extensionName].batchTemplates : [];
+      const oldArr = Array.isArray(
+        extension_settings[extensionName].batchTemplates,
+      )
+        ? extension_settings[extensionName].batchTemplates
+        : [];
       extension_settings[extensionName].batchTemplates = {
         characters: oldArr,
         presets: [],
@@ -537,23 +544,28 @@ jQuery(async () => {
       refreshFn();
     });
     // 加载模板
-    popup.find(".cfm-tpl-item .cfm-tpl-name").on("click touchend", function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const idx = parseInt($(this).parent().attr("data-tpl-idx"));
-      const templates = getBatchTemplates(type);
-      if (templates[idx]) {
-        popup.find(textareaSelector).val(templates[idx].content);
-        toastr.info(`已加载模板「${templates[idx].name}」`);
-      }
-    });
+    popup
+      .find(".cfm-tpl-item .cfm-tpl-name")
+      .on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = parseInt($(this).parent().attr("data-tpl-idx"));
+        const templates = getBatchTemplates(type);
+        if (templates[idx]) {
+          popup.find(textareaSelector).val(templates[idx].content);
+          toastr.info(`已加载模板「${templates[idx].name}」`);
+        }
+      });
     // 删除模板
     popup.find(".cfm-tpl-del").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
       const idx = parseInt($(this).attr("data-tpl-idx"));
       const templates = getBatchTemplates(type);
-      if (templates[idx] && confirm(`确定删除模板「${templates[idx].name}」？`)) {
+      if (
+        templates[idx] &&
+        confirm(`确定删除模板「${templates[idx].name}」？`)
+      ) {
         deleteBatchTemplate(type, idx);
         toastr.success("模板已删除");
         refreshFn();
@@ -1727,7 +1739,7 @@ jQuery(async () => {
   function createTopbarButton() {
     if ($("#cfm-topbar-button").length > 0) return;
     const btn = $(
-      `<div id="cfm-topbar-button" class="drawer"><div class="drawer-toggle drawer-header"><div class="drawer-icon fa-solid fa-folder fa-fw interactable" title="酒馆资源管理器" tabindex="0" role="button"></div></div></div>`,
+      `<div id="cfm-topbar-button" class="drawer"><div class="drawer-toggle drawer-header"><div class="drawer-icon closedIcon fa-solid fa-folder fa-fw interactable" title="酒馆资源管理器" tabindex="0" role="button"></div></div></div>`,
     );
     const rightNav = $("#rightNavHolder");
     if (rightNav.length > 0) rightNav.before(btn);
@@ -3027,6 +3039,9 @@ jQuery(async () => {
 
   function showMainPopup() {
     if ($("#cfm-overlay").length > 0) return;
+    $("#cfm-topbar-button .drawer-icon")
+      .removeClass("closedIcon")
+      .addClass("openIcon");
     // 每次打开主弹窗时检测新标签
     detectAndImportNewTags();
     config = loadConfig(); // 刷新配置
@@ -3853,23 +3868,34 @@ jQuery(async () => {
       }
 
       // 自动处理导入角色卡的内嵌世界书
-      const charBookSetting = extension_settings[extensionName].autoCharBookFolder;
+      const charBookSetting =
+        extension_settings[extensionName].autoCharBookFolder;
       if (charBookSetting) {
         let embImported = 0;
         const characters = getCharacters();
         for (const avatar of importedAvatars) {
-          const ch = characters.find(c => c.avatar === avatar);
+          const ch = characters.find((c) => c.avatar === avatar);
           if (!ch?.data?.character_book) continue;
           try {
-            const bookName = ch.data.character_book.name || `${ch.name}'s Lorebook`;
+            const bookName =
+              ch.data.character_book.name || `${ch.name}'s Lorebook`;
             const characterBook = ch.data.character_book;
             const formData = new FormData();
-            const blob = new Blob([JSON.stringify(characterBook)], { type: "application/json" });
-            formData.append("avatar", new File([blob], bookName + ".json", { type: "application/json" }));
+            const blob = new Blob([JSON.stringify(characterBook)], {
+              type: "application/json",
+            });
+            formData.append(
+              "avatar",
+              new File([blob], bookName + ".json", {
+                type: "application/json",
+              }),
+            );
             formData.append("convertedData", JSON.stringify(characterBook));
             const result = await fetch("/api/worldinfo/import", {
               method: "POST",
-              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              headers: getContext().getRequestHeaders({
+                omitContentType: true,
+              }),
               body: formData,
               cache: "no-cache",
             });
@@ -4918,18 +4944,27 @@ jQuery(async () => {
           rightCharSortMode = null;
           $("#cfm-overlay").remove();
           clearNewlyImportedHighlight();
+          $("#cfm-topbar-button .drawer-icon")
+            .removeClass("openIcon")
+            .addClass("closedIcon");
         },
         () => {
           // 用户选择"否，撤回排序" → 恢复快照并关闭
           revertSort();
           $("#cfm-overlay").remove();
           clearNewlyImportedHighlight();
+          $("#cfm-topbar-button .drawer-icon")
+            .removeClass("openIcon")
+            .addClass("closedIcon");
         },
       );
       return;
     }
     $("#cfm-overlay").remove();
     clearNewlyImportedHighlight();
+    $("#cfm-topbar-button .drawer-icon")
+      .removeClass("openIcon")
+      .addClass("closedIcon");
   }
 
   // ==================== 左侧树渲染 ====================
@@ -6555,7 +6590,12 @@ jQuery(async () => {
     function refreshResBatchTemplates() {
       const tplArea = popup.find("#cfm-res-batch-tpl-area");
       tplArea.html(buildBatchTemplateHtml(tplType));
-      bindBatchTemplateEvents(tplType, popup, "#cfm-res-batch-textarea", refreshResBatchTemplates);
+      bindBatchTemplateEvents(
+        tplType,
+        popup,
+        "#cfm-res-batch-textarea",
+        refreshResBatchTemplates,
+      );
     }
     refreshResBatchTemplates();
 
@@ -7066,7 +7106,12 @@ jQuery(async () => {
     function refreshBatchTemplates() {
       const tplArea = popup.find("#cfm-batch-tpl-area");
       tplArea.html(buildBatchTemplateHtml("characters"));
-      bindBatchTemplateEvents("characters", popup, "#cfm-batch-textarea", refreshBatchTemplates);
+      bindBatchTemplateEvents(
+        "characters",
+        popup,
+        "#cfm-batch-textarea",
+        refreshBatchTemplates,
+      );
     }
     refreshBatchTemplates();
     popup.find("#cfm-batch-close").on("click touchend", (e) => {
@@ -7927,10 +7972,17 @@ jQuery(async () => {
       const tree = getResFolderTree("worldinfo");
       const options = ['<option value="">— 不归类 —</option>'];
       function addOpts(parentId, depth) {
-        const children = sortResFolders("worldinfo", Object.keys(tree).filter(id => tree[id].parentId === (parentId || null)));
+        const children = sortResFolders(
+          "worldinfo",
+          Object.keys(tree).filter(
+            (id) => tree[id].parentId === (parentId || null),
+          ),
+        );
         for (const id of children) {
           const indent = "&nbsp;".repeat(depth * 4);
-          options.push(`<option value="${escapeHtml(id)}">${indent}${escapeHtml(getResFolderDisplayName("worldinfo", id))}</option>`);
+          options.push(
+            `<option value="${escapeHtml(id)}">${indent}${escapeHtml(getResFolderDisplayName("worldinfo", id))}</option>`,
+          );
           addOpts(id, depth + 1);
         }
       }
@@ -7939,8 +7991,14 @@ jQuery(async () => {
     }
 
     // 优先使用已保存的自动归类文件夹，其次使用当前选中的世界书文件夹
-    const savedAutoFolder = extension_settings[extensionName].autoCharBookFolder || "";
-    const currentFolder = selectedWorldInfoFolder && selectedWorldInfoFolder !== "__ungrouped__" && selectedWorldInfoFolder !== "__favorites__" ? selectedWorldInfoFolder : "";
+    const savedAutoFolder =
+      extension_settings[extensionName].autoCharBookFolder || "";
+    const currentFolder =
+      selectedWorldInfoFolder &&
+      selectedWorldInfoFolder !== "__ungrouped__" &&
+      selectedWorldInfoFolder !== "__favorites__"
+        ? selectedWorldInfoFolder
+        : "";
     const defaultFolder = savedAutoFolder || currentFolder;
 
     // 构建关联世界书列表HTML
@@ -7950,8 +8008,13 @@ jQuery(async () => {
     } else {
       for (const [wiName, charNames] of linked) {
         const currentFolder = wiGroups[wiName] || null;
-        const currentDisplay = currentFolder ? getResFolderDisplayName("worldinfo", currentFolder) : "未归类";
-        const charList = charNames.length <= 3 ? charNames.join("、") : charNames.slice(0, 3).join("、") + `...等${charNames.length}个`;
+        const currentDisplay = currentFolder
+          ? getResFolderDisplayName("worldinfo", currentFolder)
+          : "未归类";
+        const charList =
+          charNames.length <= 3
+            ? charNames.join("、")
+            : charNames.slice(0, 3).join("、") + `...等${charNames.length}个`;
         linkedHtml += `
           <div class="cfm-cb-row" data-wi-name="${escapeHtml(wiName)}">
             <label class="cfm-cb-check-label"><input type="checkbox" class="cfm-cb-check" checked>
@@ -7972,7 +8035,9 @@ jQuery(async () => {
     } else {
       for (const [avatar, info] of embEntries) {
         const statusText = info.alreadyImported ? "已导入" : "未导入";
-        const statusClass = info.alreadyImported ? "cfm-cb-imported" : "cfm-cb-not-imported";
+        const statusClass = info.alreadyImported
+          ? "cfm-cb-imported"
+          : "cfm-cb-not-imported";
         embeddedHtml += `
           <div class="cfm-cb-row cfm-cb-embed-row" data-avatar="${escapeHtml(avatar)}">
             <label class="cfm-cb-check-label"><input type="checkbox" class="cfm-cb-embed-check" ${info.alreadyImported ? "" : "checked"}>
@@ -8036,12 +8101,22 @@ jQuery(async () => {
       </div>
     `;
 
-    const overlay = $("<div id='cfm-charbook-classify-overlay'>").css({
-      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
-      background: "rgba(0,0,0,0.6)", zIndex: 99999,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "16px", boxSizing: "border-box",
-    }).html(dialogHtml);
+    const overlay = $("<div id='cfm-charbook-classify-overlay'>")
+      .css({
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0,0,0,0.6)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+      })
+      .html(dialogHtml);
 
     $("body").append(overlay);
 
@@ -8051,19 +8126,27 @@ jQuery(async () => {
     // 全选/全不选
     overlay.find(".cfm-cb-sel-all").on("click", function () {
       const target = $(this).data("target");
-      const selector = target === "linked" ? ".cfm-cb-linked-list .cfm-cb-check" : ".cfm-cb-embed-list .cfm-cb-embed-check";
+      const selector =
+        target === "linked"
+          ? ".cfm-cb-linked-list .cfm-cb-check"
+          : ".cfm-cb-embed-list .cfm-cb-embed-check";
       overlay.find(selector).prop("checked", true);
     });
     overlay.find(".cfm-cb-sel-none").on("click", function () {
       const target = $(this).data("target");
-      const selector = target === "linked" ? ".cfm-cb-linked-list .cfm-cb-check" : ".cfm-cb-embed-list .cfm-cb-embed-check";
+      const selector =
+        target === "linked"
+          ? ".cfm-cb-linked-list .cfm-cb-check"
+          : ".cfm-cb-embed-list .cfm-cb-embed-check";
       overlay.find(selector).prop("checked", false);
     });
 
     // 关闭
     const closePopup = () => overlay.remove();
     overlay.find(".cfm-cb-close, .cfm-cb-cancel").on("click", closePopup);
-    overlay.on("click", (e) => { if ($(e.target).is(overlay)) closePopup(); });
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) closePopup();
+    });
 
     // 确认归类
     overlay.find(".cfm-cb-confirm").on("click", async function () {
@@ -8071,7 +8154,9 @@ jQuery(async () => {
 
       // 保存自动提取设置
       const autoExtract = overlay.find("#cfm-cb-auto-extract").prop("checked");
-      extension_settings[extensionName].autoCharBookFolder = autoExtract ? (targetFolder || null) : null;
+      extension_settings[extensionName].autoCharBookFolder = autoExtract
+        ? targetFolder || null
+        : null;
       getContext().saveSettingsDebounced();
 
       let movedCount = 0;
@@ -8107,19 +8192,28 @@ jQuery(async () => {
         } else {
           // 未导入的需要先提取导入
           try {
-            const ch = getCharacters().find(c => c.avatar === avatar);
+            const ch = getCharacters().find((c) => c.avatar === avatar);
             if (!ch?.data?.character_book) continue;
             const bookName = info.bookName;
             // 使用酒馆的 convertCharacterBook 和 saveWorldInfo
             // 由于这些函数可能不在全局作用域，我们通过API方式导入
             const characterBook = ch.data.character_book;
             const formData = new FormData();
-            const blob = new Blob([JSON.stringify(characterBook)], { type: "application/json" });
-            formData.append("avatar", new File([blob], bookName + ".json", { type: "application/json" }));
+            const blob = new Blob([JSON.stringify(characterBook)], {
+              type: "application/json",
+            });
+            formData.append(
+              "avatar",
+              new File([blob], bookName + ".json", {
+                type: "application/json",
+              }),
+            );
             formData.append("convertedData", JSON.stringify(characterBook));
             const result = await fetch("/api/worldinfo/import", {
               method: "POST",
-              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              headers: getContext().getRequestHeaders({
+                omitContentType: true,
+              }),
               body: formData,
               cache: "no-cache",
             });
@@ -8148,17 +8242,22 @@ jQuery(async () => {
       // 汇报结果
       let msg = "";
       if (movedCount > 0) msg += `归类了 ${movedCount} 个世界书`;
-      if (importedCount > 0) msg += `${msg ? "，" : ""}提取并导入了 ${importedCount} 个内嵌世界书`;
+      if (importedCount > 0)
+        msg += `${msg ? "，" : ""}提取并导入了 ${importedCount} 个内嵌世界书`;
       if (failCount > 0) msg += `${msg ? "，" : ""}${failCount} 个失败`;
       if (!msg) msg = "未选择任何世界书";
       if (failCount > 0) toastr.warning(msg, "角色世界书归类");
-      else if (movedCount > 0 || importedCount > 0) toastr.success(msg, "角色世界书归类");
+      else if (movedCount > 0 || importedCount > 0)
+        toastr.success(msg, "角色世界书归类");
       else toastr.info(msg, "角色世界书归类");
     });
 
     // ESC关闭
     const escHandler = (evt) => {
-      if (evt.key === "Escape") { closePopup(); document.removeEventListener("keydown", escHandler); }
+      if (evt.key === "Escape") {
+        closePopup();
+        document.removeEventListener("keydown", escHandler);
+      }
     };
     document.addEventListener("keydown", escHandler);
   }
