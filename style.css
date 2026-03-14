@@ -2376,6 +2376,10 @@
   color: #89b4fa !important;
   background-color: rgba(137, 180, 250, 0.15);
 }
+.cfm-row-rename-btn:hover {
+  color: #f9e2af !important;
+  background-color: rgba(249, 226, 175, 0.15);
+}
 
 /* 编辑弹窗 */
 .cfm-edit-popup-overlay {

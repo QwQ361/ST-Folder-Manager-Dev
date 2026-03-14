@@ -7178,13 +7178,12 @@ jQuery(async () => {
         const noteHtml = presetNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
           : "";
-        const singleNoteBtn =
-          !cfmExportMode &&
-          !cfmResDeleteMode &&
-          !cfmPresetNoteMode &&
-          !cfmPresetRenameMode &&
-          !cfmMultiSelectMode
+        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmPresetNoteMode && !cfmPresetRenameMode && !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
             ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
+        const singleRenameBtn = noModeActive
+            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
         // 如果在备注或重命名模式，替换 msCheckHtml
         const finalCheckHtml = cfmPresetNoteMode
@@ -7199,6 +7198,7 @@ jQuery(async () => {
             ${finalCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
+            ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -7221,8 +7221,14 @@ jQuery(async () => {
           e.stopPropagation();
           executePresetNoteEdit([p.name]);
         });
+        // 单个重命名按钮
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executePresetRename([p.name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
@@ -7449,19 +7455,19 @@ jQuery(async () => {
           const noteHtml = wiNote
             ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
             : "";
-          const singleNoteBtn =
-            !cfmExportMode &&
-            !cfmResDeleteMode &&
-            !cfmWorldInfoNoteMode &&
-            !cfmWorldInfoRenameMode &&
-            !cfmMultiSelectMode
+          const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmWorldInfoNoteMode && !cfmWorldInfoRenameMode && !cfmMultiSelectMode;
+          const singleNoteBtn = noModeActive
               ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+              : "";
+          const singleRenameBtn = noModeActive
+              ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
               : "";
           const row = $(`
             <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
+              ${singleRenameBtn}
               ${singleNoteBtn}
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
@@ -7484,8 +7490,14 @@ jQuery(async () => {
             e.stopPropagation();
             executeWorldInfoNoteEdit([n]);
           });
+          // 单个重命名按钮
+          row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            executeWorldInfoRename([n]);
+          });
           row.on("click", (e) => {
-            if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
               return;
             if (cfmResDeleteMode) {
               toggleResDeleteItem(n, e.shiftKey);
@@ -10783,20 +10795,20 @@ jQuery(async () => {
         const noteHtml = presetNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
           : "";
-        // 非模式状态下显示单个备注编辑按钮
-        const singleNoteBtn =
-          !cfmExportMode &&
-          !cfmResDeleteMode &&
-          !cfmPresetNoteMode &&
-          !cfmPresetRenameMode &&
-          !cfmMultiSelectMode
+        // 非模式状态下显示单个备注编辑按钮和重命名按钮
+        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmPresetNoteMode && !cfmPresetRenameMode && !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
             ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
+        const singleRenameBtn = noModeActive
+            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}</div>
+            ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -10829,8 +10841,14 @@ jQuery(async () => {
           e.stopPropagation();
           executePresetNoteEdit([p.name]);
         });
+        // 单个重命名按钮
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executePresetRename([p.name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
@@ -12507,20 +12525,20 @@ jQuery(async () => {
         const noteHtml = wiNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
           : "";
-        // 非模式状态下显示单个备注编辑按钮
-        const singleNoteBtn =
-          !cfmExportMode &&
-          !cfmResDeleteMode &&
-          !cfmWorldInfoNoteMode &&
-          !cfmWorldInfoRenameMode &&
-          !cfmMultiSelectMode
+        // 非模式状态下显示单个备注编辑按钮和重命名按钮
+        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmWorldInfoNoteMode && !cfmWorldInfoRenameMode && !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
             ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
+        const singleRenameBtn = noModeActive
+            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
             <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
+            ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -12553,8 +12571,14 @@ jQuery(async () => {
           e.stopPropagation();
           executeWorldInfoNoteEdit([n]);
         });
+        // 单个重命名按钮
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeWorldInfoRename([n]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(n, e.shiftKey);
