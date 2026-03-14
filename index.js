@@ -19,6 +19,10 @@ jQuery(async () => {
       extension_settings[extensionName].themeGroups = {};
     if (!extension_settings[extensionName].themeNotes)
       extension_settings[extensionName].themeNotes = {};
+    if (!extension_settings[extensionName].presetNotes)
+      extension_settings[extensionName].presetNotes = {};
+    if (!extension_settings[extensionName].worldInfoNotes)
+      extension_settings[extensionName].worldInfoNotes = {};
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
@@ -2255,6 +2259,8 @@ jQuery(async () => {
     buttonHtml.on("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // 关闭魔术棒下拉菜单
+      $("#extensionsMenu").hide();
       showMainPopup();
     });
   }
@@ -2530,6 +2536,9 @@ jQuery(async () => {
     if (cfmResDeleteMode) exitResDeleteMode();
     // 如果编辑模式开着，先关闭
     if (cfmEditMode) exitEditMode();
+    // 如果重命名模式开着，先关闭
+    if (cfmPresetRenameMode) exitPresetRenameMode();
+    if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
     // 更新导出按钮外观
     $(".cfm-export-btn").addClass("cfm-export-active");
     $(".cfm-export-btn")
@@ -2939,6 +2948,9 @@ jQuery(async () => {
     if (cfmExportMode) exitExportMode();
     // 如果编辑模式开着，先关闭
     if (cfmEditMode) exitEditMode();
+    // 如果重命名模式开着，先关闭
+    if (cfmPresetRenameMode) exitPresetRenameMode();
+    if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
     // 更新删除按钮外观
     $(".cfm-res-delete-btn").addClass("cfm-res-delete-active");
     $(".cfm-res-delete-btn")
@@ -3328,11 +3340,11 @@ jQuery(async () => {
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
           <div class="cfm-edit-popup-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-theme-note-input" value="${escapeHtml(defaultNote)}" placeholder="${themeNames.length > 1 ? "留空则不修改" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-theme-note-input" value="${escapeHtml(defaultNote)}" placeholder="${themeNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${themeNames.length === 1 && defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : ""}
+            ${themeNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -3401,6 +3413,1457 @@ jQuery(async () => {
       toastr.success(`已更新 ${count} 个主题的备注`);
       renderThemesView();
     }
+  }
+
+  // ==================== 预设备注编辑模式 ====================
+  let cfmPresetNoteMode = false;
+  let cfmPresetNoteSelected = new Set();
+  let cfmPresetNoteRangeMode = false;
+  let cfmPresetNoteLastClicked = null;
+
+  function getPresetNote(name) {
+    return extension_settings[extensionName].presetNotes?.[name] || "";
+  }
+  function setPresetNote(name, note) {
+    if (!extension_settings[extensionName].presetNotes)
+      extension_settings[extensionName].presetNotes = {};
+    if (note) {
+      extension_settings[extensionName].presetNotes[name] = note;
+    } else {
+      delete extension_settings[extensionName].presetNotes[name];
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  function enterPresetNoteMode() {
+    cfmPresetNoteMode = true;
+    cfmPresetNoteSelected.clear();
+    cfmPresetNoteRangeMode = false;
+    cfmPresetNoteLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    if (cfmPresetRenameMode) exitPresetRenameMode();
+    $("#cfm-preset-note-btn").addClass("cfm-edit-active");
+    $("#cfm-preset-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-preset-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-preset-note-mode");
+    renderPresetsView();
+  }
+
+  function exitPresetNoteMode() {
+    cfmPresetNoteMode = false;
+    cfmPresetNoteSelected.clear();
+    cfmPresetNoteRangeMode = false;
+    cfmPresetNoteLastClicked = null;
+    $("#cfm-preset-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-preset-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-preset-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-preset-note-mode");
+    renderPresetsView();
+  }
+
+  function togglePresetNoteItem(id, shiftKey) {
+    if ((shiftKey || cfmPresetNoteRangeMode) && cfmPresetNoteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmPresetNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmPresetNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmPresetNoteSelected.has(id)) cfmPresetNoteSelected.delete(id);
+      else cfmPresetNoteSelected.add(id);
+    }
+    cfmPresetNoteLastClicked = id;
+  }
+
+  function prependPresetNoteToolbar(listContainer, renderFn) {
+    if (!cfmPresetNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 &&
+      visible.every((id) => cfmPresetNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmPresetNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmPresetNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmPresetNoteSelected.size > 0 ? `已选 ${cfmPresetNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmPresetNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmPresetNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmPresetNoteRangeMode = !cfmPresetNoteRangeMode;
+      if (cfmPresetNoteRangeMode) cfmPresetNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitPresetNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showPresetNotePopup(presetNames) {
+    if (!presetNames || presetNames.length === 0) return;
+    let defaultNote = "";
+    if (presetNames.length === 1) {
+      defaultNote = getPresetNote(presetNames[0]);
+    }
+    const nameListHtml =
+      presetNames.length <= 5
+        ? presetNames
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : presetNames
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${presetNames.length} 个预设</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑预设备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-preset-note-input" value="${escapeHtml(defaultNote)}" placeholder="${presetNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${presetNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-preset-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-preset-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executePresetNoteEdit(names) {
+    const result = await showPresetNotePopup(names);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = names.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (clear) {
+        setPresetNote(name, "");
+        count++;
+      } else if (note) {
+        setPresetNote(name, note);
+        count++;
+      } else if (!isBatch) {
+        setPresetNote(name, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个预设的备注`);
+      renderPresetsView();
+    }
+  }
+
+  // ==================== 世界书备注编辑模式 ====================
+  let cfmWorldInfoNoteMode = false;
+  let cfmWorldInfoNoteSelected = new Set();
+  let cfmWorldInfoNoteRangeMode = false;
+  let cfmWorldInfoNoteLastClicked = null;
+
+  function getWorldInfoNote(name) {
+    return extension_settings[extensionName].worldInfoNotes?.[name] || "";
+  }
+  function setWorldInfoNote(name, note) {
+    if (!extension_settings[extensionName].worldInfoNotes)
+      extension_settings[extensionName].worldInfoNotes = {};
+    if (note) {
+      extension_settings[extensionName].worldInfoNotes[name] = note;
+    } else {
+      delete extension_settings[extensionName].worldInfoNotes[name];
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  function enterWorldInfoNoteMode() {
+    cfmWorldInfoNoteMode = true;
+    cfmWorldInfoNoteSelected.clear();
+    cfmWorldInfoNoteRangeMode = false;
+    cfmWorldInfoNoteLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+    $("#cfm-worldinfo-note-btn").addClass("cfm-edit-active");
+    $("#cfm-worldinfo-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-worldinfo-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-worldinfo-note-mode");
+    renderWorldInfoView();
+  }
+
+  function exitWorldInfoNoteMode() {
+    cfmWorldInfoNoteMode = false;
+    cfmWorldInfoNoteSelected.clear();
+    cfmWorldInfoNoteRangeMode = false;
+    cfmWorldInfoNoteLastClicked = null;
+    $("#cfm-worldinfo-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-worldinfo-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-worldinfo-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-worldinfo-note-mode");
+    renderWorldInfoView();
+  }
+
+  function toggleWorldInfoNoteItem(id, shiftKey) {
+    if (
+      (shiftKey || cfmWorldInfoNoteRangeMode) &&
+      cfmWorldInfoNoteLastClicked
+    ) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmWorldInfoNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmWorldInfoNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmWorldInfoNoteSelected.has(id)) cfmWorldInfoNoteSelected.delete(id);
+      else cfmWorldInfoNoteSelected.add(id);
+    }
+    cfmWorldInfoNoteLastClicked = id;
+  }
+
+  function prependWorldInfoNoteToolbar(listContainer, renderFn) {
+    if (!cfmWorldInfoNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 &&
+      visible.every((id) => cfmWorldInfoNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmWorldInfoNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmWorldInfoNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmWorldInfoNoteSelected.size > 0 ? `已选 ${cfmWorldInfoNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmWorldInfoNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmWorldInfoNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmWorldInfoNoteRangeMode = !cfmWorldInfoNoteRangeMode;
+      if (cfmWorldInfoNoteRangeMode) cfmWorldInfoNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitWorldInfoNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showWorldInfoNotePopup(wiNames) {
+    if (!wiNames || wiNames.length === 0) return;
+    let defaultNote = "";
+    if (wiNames.length === 1) {
+      defaultNote = getWorldInfoNote(wiNames[0]);
+    }
+    const nameListHtml =
+      wiNames.length <= 5
+        ? wiNames
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : wiNames
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${wiNames.length} 个世界书</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑世界书备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-worldinfo-note-input" value="${escapeHtml(defaultNote)}" placeholder="${wiNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${wiNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-worldinfo-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-worldinfo-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executeWorldInfoNoteEdit(names) {
+    const result = await showWorldInfoNotePopup(names);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = names.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (clear) {
+        setWorldInfoNote(name, "");
+        count++;
+      } else if (note) {
+        setWorldInfoNote(name, note);
+        count++;
+      } else if (!isBatch) {
+        setWorldInfoNote(name, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个世界书的备注`);
+      renderWorldInfoView();
+    }
+  }
+
+  // ==================== 预设重命名模式 ====================
+  let cfmPresetRenameMode = false;
+  let cfmPresetRenameSelected = new Set();
+  let cfmPresetRenameRangeMode = false;
+  let cfmPresetRenameLastClicked = null;
+
+  function enterPresetRenameMode() {
+    cfmPresetRenameMode = true;
+    cfmPresetRenameSelected.clear();
+    cfmPresetRenameRangeMode = false;
+    cfmPresetRenameLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    if (cfmPresetNoteMode) exitPresetNoteMode();
+    $("#cfm-preset-rename-btn").addClass("cfm-edit-active");
+    $("#cfm-preset-rename-btn")
+      .find("i")
+      .removeClass("fa-i-cursor")
+      .addClass("fa-check");
+    $("#cfm-preset-rename-btn").attr("title", "确认重命名");
+    $(".cfm-popup").addClass("cfm-preset-rename-mode");
+    renderPresetsView();
+  }
+
+  function exitPresetRenameMode() {
+    cfmPresetRenameMode = false;
+    cfmPresetRenameSelected.clear();
+    cfmPresetRenameRangeMode = false;
+    cfmPresetRenameLastClicked = null;
+    $("#cfm-preset-rename-btn").removeClass("cfm-edit-active");
+    $("#cfm-preset-rename-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-i-cursor");
+    $("#cfm-preset-rename-btn").attr("title", "重命名预设");
+    $(".cfm-popup").removeClass("cfm-preset-rename-mode");
+    renderPresetsView();
+  }
+
+  function togglePresetRenameItem(id, shiftKey) {
+    if ((shiftKey || cfmPresetRenameRangeMode) && cfmPresetRenameLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmPresetRenameLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmPresetRenameSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmPresetRenameSelected.has(id)) cfmPresetRenameSelected.delete(id);
+      else cfmPresetRenameSelected.add(id);
+    }
+    cfmPresetRenameLastClicked = id;
+  }
+
+  function prependPresetRenameToolbar(listContainer, renderFn) {
+    if (!cfmPresetRenameMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 &&
+      visible.every((id) => cfmPresetRenameSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmPresetRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmPresetRenameRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmPresetRenameSelected.size > 0 ? `已选 ${cfmPresetRenameSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmPresetRenameSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmPresetRenameSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmPresetRenameRangeMode = !cfmPresetRenameRangeMode;
+      if (cfmPresetRenameRangeMode) cfmPresetRenameLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitPresetRenameMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 显示预设重命名弹窗
+  async function showPresetRenamePopup(names) {
+    if (!names || names.length === 0) return;
+    const isSingle = names.length === 1;
+    const nameListHtml =
+      names.length <= 5
+        ? names
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : names
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个预设</div>`;
+
+    if (isSingle) {
+      // 单选模式：直接编辑名称
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">重命名预设</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>新名称</label>
+              <input type="text" class="cfm-edit-input" id="cfm-rename-input" value="${escapeHtml(names[0])}" placeholder="输入新名称">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-rename-input").focus().select();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const newName = overlay.find("#cfm-rename-input").val().trim();
+          overlay.remove();
+          resolve({ mode: "single", newName });
+        });
+        overlay.find(".cfm-edit-input").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    } else {
+      // 多选模式：增加/删除前缀或后缀
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">批量重命名预设</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>操作类型</label>
+              <select class="cfm-edit-input" id="cfm-rename-action">
+                <option value="add-prefix">增加前缀</option>
+                <option value="add-suffix">增加后缀</option>
+                <option value="del-prefix">删除前缀</option>
+                <option value="del-suffix">删除后缀</option>
+              </select>
+            </div>
+            <div class="cfm-edit-popup-field">
+              <label id="cfm-rename-text-label">前缀内容</label>
+              <input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容">
+            </div>
+            <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
+              <label>自动检测到的公共前/后缀</label>
+              <div id="cfm-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+
+      // 根据操作类型切换标签和自动检测
+      function updateRenameUI() {
+        const action = overlay.find("#cfm-rename-action").val();
+        const textLabel = overlay.find("#cfm-rename-text-label");
+        const textInput = overlay.find("#cfm-rename-text");
+        const autoDetect = overlay.find(".cfm-rename-auto-detect");
+        const detected = overlay.find("#cfm-rename-detected");
+        if (action === "add-prefix") {
+          textLabel.text("前缀内容");
+          textInput.attr("placeholder", "输入要添加的前缀");
+          autoDetect.hide();
+        } else if (action === "add-suffix") {
+          textLabel.text("后缀内容");
+          textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "del-prefix") {
+          textLabel.text("要删除的前缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
+          // 自动检测公共前缀
+          const commonPrefix = findCommonPrefix(names);
+          if (commonPrefix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            );
+            autoDetect.show();
+          }
+        } else if (action === "del-suffix") {
+          textLabel.text("要删除的后缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
+          // 自动检测公共后缀
+          const commonSuffix = findCommonSuffix(names);
+          if (commonSuffix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+            );
+            autoDetect.show();
+          }
+        }
+      }
+      updateRenameUI();
+      overlay.find("#cfm-rename-action").on("change", updateRenameUI);
+      // 点击自动检测结果填入输入框
+      overlay.on("click", ".cfm-rename-detect-item", function () {
+        overlay.find("#cfm-rename-text").val($(this).data("value"));
+      });
+      overlay.find("#cfm-rename-text").focus();
+
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const action = overlay.find("#cfm-rename-action").val();
+          const text = overlay.find("#cfm-rename-text").val().trim();
+          overlay.remove();
+          resolve({ mode: "batch", action, text });
+        });
+        overlay.find("#cfm-rename-text").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    }
+  }
+
+  // 查找公共前缀
+  function findCommonPrefix(names) {
+    if (names.length === 0) return "";
+    // 按第一个名称与第二个进行比较来找最大公共前缀，然后和后续比较
+    let prefix = names[0];
+    for (let i = 1; i < names.length; i++) {
+      while (names[i].indexOf(prefix) !== 0) {
+        prefix = prefix.substring(0, prefix.length - 1);
+        if (!prefix) return "";
+      }
+    }
+    return prefix;
+  }
+
+  // 查找公共后缀
+  function findCommonSuffix(names) {
+    if (names.length === 0) return "";
+    const reversed = names.map((n) => n.split("").reverse().join(""));
+    let suffix = reversed[0];
+    for (let i = 1; i < reversed.length; i++) {
+      while (reversed[i].indexOf(suffix) !== 0) {
+        suffix = suffix.substring(0, suffix.length - 1);
+        if (!suffix) return "";
+      }
+    }
+    return suffix.split("").reverse().join("");
+  }
+
+  // 执行预设重命名
+  async function executePresetRename(names) {
+    const result = await showPresetRenamePopup(names);
+    if (!result) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("预设管理器不可用");
+      return;
+    }
+    const headers = getContext().getRequestHeaders();
+
+    if (result.mode === "single") {
+      // 单个重命名
+      const oldName = names[0];
+      const newName = result.newName;
+      if (!newName) {
+        toastr.warning("请输入新名称");
+        return;
+      }
+      if (newName === oldName) {
+        toastr.info("名称未变更");
+        return;
+      }
+      // 检查是否存在同名预设
+      const existingPresets = getCurrentPresets();
+      if (existingPresets.some((p) => p.name === newName)) {
+        toastr.error(`已存在名为「${newName}」的预设`);
+        return;
+      }
+      try {
+        // 获取预设数据
+        const presetData = getPresetDataForRename(pm, oldName);
+        if (!presetData) {
+          toastr.error(`找不到预设「${oldName}」的数据`);
+          return;
+        }
+        // 用新名字保存
+        await fetch("/api/presets/save", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({
+            preset: presetData,
+            name: newName,
+            apiId: pm.apiId,
+          }),
+        });
+        // 删除旧名字
+        await fetch("/api/presets/delete", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ name: oldName, apiId: pm.apiId }),
+        });
+        // 同步更新DOM中的option（防止渲染时清理逻辑误删新名称的分组）
+        syncPresetOptionInDOM(pm, oldName, newName);
+        // 更新插件设置中的引用
+        updateSettingsAfterRename("presets", oldName, newName);
+        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+      } catch (e) {
+        console.error("[CFM] 预设重命名失败", e);
+        toastr.error(`重命名失败: ${e.message}`);
+        return;
+      }
+    } else if (result.mode === "batch") {
+      // 批量重命名
+      const { action, text } = result;
+      if (!text) {
+        toastr.warning("请输入内容");
+        return;
+      }
+      const existingPresets = new Set(getCurrentPresets().map((p) => p.name));
+      let success = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      toastr.info(`正在批量重命名 ${names.length} 个预设...`);
+
+      for (const oldName of names) {
+        let newName;
+        if (action === "add-prefix") {
+          newName = text + oldName;
+        } else if (action === "add-suffix") {
+          newName = oldName + text;
+        } else if (action === "del-prefix") {
+          if (!oldName.startsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(text.length);
+        } else if (action === "del-suffix") {
+          if (!oldName.endsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(0, oldName.length - text.length);
+        }
+        if (!newName || newName === oldName) {
+          skipped++;
+          continue;
+        }
+        // 检查新名称是否冲突
+        if (existingPresets.has(newName)) {
+          skipped++;
+          continue;
+        }
+        try {
+          const presetData = getPresetDataForRename(pm, oldName);
+          if (!presetData) {
+            failed++;
+            continue;
+          }
+          await fetch("/api/presets/save", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              preset: presetData,
+              name: newName,
+              apiId: pm.apiId,
+            }),
+          });
+          await fetch("/api/presets/delete", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName, apiId: pm.apiId }),
+          });
+          // 同步更新DOM中的option
+          syncPresetOptionInDOM(pm, oldName, newName);
+          updateSettingsAfterRename("presets", oldName, newName);
+          // 更新已存在集合
+          existingPresets.delete(oldName);
+          existingPresets.add(newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名预设 ${oldName} 失败`, e);
+          failed++;
+        }
+      }
+      let msg = `已重命名 ${success} 个预设`;
+      if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      if (success > 0) toastr.success(msg);
+      else toastr.warning(msg);
+    }
+
+    // 刷新预设管理器的下拉列表
+    await refreshPresetManagerList(pm);
+    renderPresetsView();
+  }
+
+  // 获取预设数据用于重命名
+  function getPresetDataForRename(pm, name) {
+    if (typeof pm.getCompletionPresetByName === "function") {
+      const preset = pm.getCompletionPresetByName(name);
+      if (preset) return structuredClone(preset);
+    }
+    if (typeof pm.getPresetList === "function") {
+      const { presets, preset_names } = pm.getPresetList();
+      let found;
+      if (Array.isArray(preset_names)) {
+        const idx = preset_names.indexOf(name);
+        if (idx >= 0) found = presets[idx];
+      } else if (preset_names && typeof preset_names === "object") {
+        if (preset_names[name] !== undefined)
+          found = presets[preset_names[name]];
+      }
+      if (found) return structuredClone(found);
+    }
+    return null;
+  }
+
+  // 同步更新预设管理器DOM中的option（重命名后立即同步，防止渲染清理逻辑误删分组）
+  function syncPresetOptionInDOM(pm, oldName, newName) {
+    if (!pm || !pm.select) return;
+    const $select = $(pm.select);
+    const $option = $select.find(`option`).filter(function () {
+      return $(this).text() === oldName;
+    });
+    if ($option.length > 0) {
+      // 更新option的文本和值
+      const oldVal = $option.val();
+      $option.text(newName);
+      // 如果value就是名称本身，也更新value
+      if (oldVal === oldName) {
+        $option.val(newName);
+      }
+      // 如果当前选中的就是被重命名的预设，保持选中状态
+      if ($select.val() === oldVal) {
+        $select.val($option.val());
+      }
+    } else {
+      // 找不到旧option，添加新的
+      $select.append($(`<option></option>`).val(newName).text(newName));
+    }
+  }
+
+  // 同步更新世界书DOM中的option（重命名后立即同步）
+  function syncWorldInfoOptionInDOM(oldName, newName) {
+    const $select = $("#world_editor_select");
+    const $option = $select.find(`option`).filter(function () {
+      return $(this).text() === oldName;
+    });
+    if ($option.length > 0) {
+      const oldVal = $option.val();
+      $option.text(newName);
+      if (oldVal === oldName) {
+        $option.val(newName);
+      }
+    } else {
+      $select.append($(`<option></option>`).val(newName).text(newName));
+    }
+    // 同时清除世界书名称缓存，确保下次渲染获取最新数据
+    _worldInfoNamesCache = null;
+  }
+
+  // 刷新预设管理器的下拉列表
+  async function refreshPresetManagerList(pm) {
+    try {
+      // 触发设置重新加载以同步预设列表
+      if (pm && pm.select) {
+        // 记住当前选中的值
+        const currentVal = $(pm.select).val();
+        // 触发 SillyTavern 重新加载设置
+        const resp = await fetch("/api/settings/get", {
+          method: "POST",
+          headers: getContext().getRequestHeaders(),
+          body: JSON.stringify({}),
+        });
+        if (resp.ok) {
+          // 简单方式：通过触发change事件让ST更新
+          $(pm.select).trigger("change");
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 刷新预设列表失败", e);
+    }
+  }
+
+  // 重命名后更新插件设置中的引用（文件夹分配、备注、收藏等）
+  function updateSettingsAfterRename(resType, oldName, newName) {
+    // 更新文件夹分配（presetGroups / worldInfoGroups 是 { itemName: folderId } 映射）
+    const groups = getResourceGroups(resType);
+    if (groups && groups[oldName]) {
+      groups[newName] = groups[oldName];
+      delete groups[oldName];
+    }
+    // 更新收藏（presetFavorites / worldInfoFavorites 是数组）
+    const favs = getResFavorites(resType);
+    if (favs) {
+      const idx = favs.indexOf(oldName);
+      if (idx !== -1) favs[idx] = newName;
+    }
+    // 更新备注
+    if (resType === "presets") {
+      const notes = extension_settings[extensionName].presetNotes;
+      if (notes && notes[oldName]) {
+        notes[newName] = notes[oldName];
+        delete notes[oldName];
+      }
+    } else if (resType === "worldinfo") {
+      const notes = extension_settings[extensionName].worldInfoNotes;
+      if (notes && notes[oldName]) {
+        notes[newName] = notes[oldName];
+        delete notes[oldName];
+      }
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  // ==================== 世界书重命名模式 ====================
+  let cfmWorldInfoRenameMode = false;
+  let cfmWorldInfoRenameSelected = new Set();
+  let cfmWorldInfoRenameRangeMode = false;
+  let cfmWorldInfoRenameLastClicked = null;
+
+  function enterWorldInfoRenameMode() {
+    cfmWorldInfoRenameMode = true;
+    cfmWorldInfoRenameSelected.clear();
+    cfmWorldInfoRenameRangeMode = false;
+    cfmWorldInfoRenameLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+    $("#cfm-worldinfo-rename-btn").addClass("cfm-edit-active");
+    $("#cfm-worldinfo-rename-btn")
+      .find("i")
+      .removeClass("fa-i-cursor")
+      .addClass("fa-check");
+    $("#cfm-worldinfo-rename-btn").attr("title", "确认重命名");
+    $(".cfm-popup").addClass("cfm-worldinfo-rename-mode");
+    renderWorldInfoView();
+  }
+
+  function exitWorldInfoRenameMode() {
+    cfmWorldInfoRenameMode = false;
+    cfmWorldInfoRenameSelected.clear();
+    cfmWorldInfoRenameRangeMode = false;
+    cfmWorldInfoRenameLastClicked = null;
+    $("#cfm-worldinfo-rename-btn").removeClass("cfm-edit-active");
+    $("#cfm-worldinfo-rename-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-i-cursor");
+    $("#cfm-worldinfo-rename-btn").attr("title", "重命名世界书");
+    $(".cfm-popup").removeClass("cfm-worldinfo-rename-mode");
+    renderWorldInfoView();
+  }
+
+  function toggleWorldInfoRenameItem(id, shiftKey) {
+    if (
+      (shiftKey || cfmWorldInfoRenameRangeMode) &&
+      cfmWorldInfoRenameLastClicked
+    ) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmWorldInfoRenameLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmWorldInfoRenameSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmWorldInfoRenameSelected.has(id))
+        cfmWorldInfoRenameSelected.delete(id);
+      else cfmWorldInfoRenameSelected.add(id);
+    }
+    cfmWorldInfoRenameLastClicked = id;
+  }
+
+  function prependWorldInfoRenameToolbar(listContainer, renderFn) {
+    if (!cfmWorldInfoRenameMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 &&
+      visible.every((id) => cfmWorldInfoRenameSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmWorldInfoRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmWorldInfoRenameRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmWorldInfoRenameSelected.size > 0 ? `已选 ${cfmWorldInfoRenameSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmWorldInfoRenameSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmWorldInfoRenameSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmWorldInfoRenameRangeMode = !cfmWorldInfoRenameRangeMode;
+      if (cfmWorldInfoRenameRangeMode) cfmWorldInfoRenameLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitWorldInfoRenameMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 显示世界书重命名弹窗
+  async function showWorldInfoRenamePopup(names) {
+    if (!names || names.length === 0) return;
+    const isSingle = names.length === 1;
+    const nameListHtml =
+      names.length <= 5
+        ? names
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : names
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个世界书</div>`;
+
+    if (isSingle) {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">重命名世界书</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>新名称</label>
+              <input type="text" class="cfm-edit-input" id="cfm-rename-input" value="${escapeHtml(names[0])}" placeholder="输入新名称">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-rename-input").focus().select();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const newName = overlay.find("#cfm-rename-input").val().trim();
+          overlay.remove();
+          resolve({ mode: "single", newName });
+        });
+        overlay.find(".cfm-edit-input").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    } else {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">批量重命名世界书</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>操作类型</label>
+              <select class="cfm-edit-input" id="cfm-rename-action">
+                <option value="add-prefix">增加前缀</option>
+                <option value="add-suffix">增加后缀</option>
+                <option value="del-prefix">删除前缀</option>
+                <option value="del-suffix">删除后缀</option>
+              </select>
+            </div>
+            <div class="cfm-edit-popup-field">
+              <label id="cfm-rename-text-label">前缀内容</label>
+              <input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容">
+            </div>
+            <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
+              <label>自动检测到的公共前/后缀</label>
+              <div id="cfm-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+
+      function updateRenameUI() {
+        const action = overlay.find("#cfm-rename-action").val();
+        const textLabel = overlay.find("#cfm-rename-text-label");
+        const textInput = overlay.find("#cfm-rename-text");
+        const autoDetect = overlay.find(".cfm-rename-auto-detect");
+        const detected = overlay.find("#cfm-rename-detected");
+        if (action === "add-prefix") {
+          textLabel.text("前缀内容");
+          textInput.attr("placeholder", "输入要添加的前缀");
+          autoDetect.hide();
+        } else if (action === "add-suffix") {
+          textLabel.text("后缀内容");
+          textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "del-prefix") {
+          textLabel.text("要删除的前缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
+          const commonPrefix = findCommonPrefix(names);
+          if (commonPrefix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            );
+            autoDetect.show();
+          }
+        } else if (action === "del-suffix") {
+          textLabel.text("要删除的后缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
+          const commonSuffix = findCommonSuffix(names);
+          if (commonSuffix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+            );
+            autoDetect.show();
+          }
+        }
+      }
+      updateRenameUI();
+      overlay.find("#cfm-rename-action").on("change", updateRenameUI);
+      overlay.on("click", ".cfm-rename-detect-item", function () {
+        overlay.find("#cfm-rename-text").val($(this).data("value"));
+      });
+      overlay.find("#cfm-rename-text").focus();
+
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const action = overlay.find("#cfm-rename-action").val();
+          const text = overlay.find("#cfm-rename-text").val().trim();
+          overlay.remove();
+          resolve({ mode: "batch", action, text });
+        });
+        overlay.find("#cfm-rename-text").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    }
+  }
+
+  // 执行世界书重命名
+  async function executeWorldInfoRename(names) {
+    const result = await showWorldInfoRenamePopup(names);
+    if (!result) return;
+
+    const headers = getContext().getRequestHeaders();
+
+    if (result.mode === "single") {
+      const oldName = names[0];
+      const newName = result.newName;
+      if (!newName) {
+        toastr.warning("请输入新名称");
+        return;
+      }
+      if (newName === oldName) {
+        toastr.info("名称未变更");
+        return;
+      }
+      try {
+        // 获取世界书数据
+        const resp = await fetch("/api/worldinfo/get", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ name: oldName }),
+        });
+        if (!resp.ok) throw new Error("获取世界书数据失败");
+        const wiData = await resp.json();
+        // 用新名字编辑保存（这会创建新文件）
+        const saveResp = await fetch("/api/worldinfo/edit", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ name: newName, data: wiData }),
+        });
+        if (!saveResp.ok) throw new Error("保存世界书失败");
+        // 删除旧文件
+        await fetch("/api/worldinfo/delete", {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ name: oldName }),
+        });
+        // 同步更新DOM中的option（防止渲染时清理逻辑误删新名称的分组）
+        syncWorldInfoOptionInDOM(oldName, newName);
+        updateSettingsAfterRename("worldinfo", oldName, newName);
+        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+      } catch (e) {
+        console.error("[CFM] 世界书重命名失败", e);
+        toastr.error(`重命名失败: ${e.message}`);
+        return;
+      }
+    } else if (result.mode === "batch") {
+      const { action, text } = result;
+      if (!text) {
+        toastr.warning("请输入内容");
+        return;
+      }
+      let success = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      toastr.info(`正在批量重命名 ${names.length} 个世界书...`);
+
+      for (const oldName of names) {
+        let newName;
+        if (action === "add-prefix") {
+          newName = text + oldName;
+        } else if (action === "add-suffix") {
+          newName = oldName + text;
+        } else if (action === "del-prefix") {
+          if (!oldName.startsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(text.length);
+        } else if (action === "del-suffix") {
+          if (!oldName.endsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(0, oldName.length - text.length);
+        }
+        if (!newName || newName === oldName) {
+          skipped++;
+          continue;
+        }
+        try {
+          const resp = await fetch("/api/worldinfo/get", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          if (!resp.ok) {
+            failed++;
+            continue;
+          }
+          const wiData = await resp.json();
+          const saveResp = await fetch("/api/worldinfo/edit", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: newName, data: wiData }),
+          });
+          if (!saveResp.ok) {
+            failed++;
+            continue;
+          }
+          await fetch("/api/worldinfo/delete", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          // 同步更新DOM中的option
+          syncWorldInfoOptionInDOM(oldName, newName);
+          updateSettingsAfterRename("worldinfo", oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名世界书 ${oldName} 失败`, e);
+          failed++;
+        }
+      }
+      let msg = `已重命名 ${success} 个世界书`;
+      if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      if (success > 0) toastr.success(msg);
+      else toastr.warning(msg);
+    }
+
+    renderWorldInfoView();
   }
 
   // ==================== 角色卡快速编辑模式 ====================
@@ -3848,6 +5311,8 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-preset-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-preset-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-preset-btn" title="导入预设"><i class="fa-solid fa-file-import"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-preset-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-preset-rename-btn" title="重命名预设"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-preset-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-preset-btn" title="导出预设"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-preset-btn" title="删除预设"><i class="fa-solid fa-trash-can"></i></button>
@@ -3881,6 +5346,8 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-worldinfo-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-worldinfo-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-worldinfo-btn" title="导入世界书"><i class="fa-solid fa-file-import"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-worldinfo-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-worldinfo-rename-btn" title="重命名世界书"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-worldinfo-file" multiple accept=".json,.png" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-worldinfo-btn" title="导出世界书"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-worldinfo-btn" title="删除世界书"><i class="fa-solid fa-trash-can"></i></button>
@@ -3949,6 +5416,10 @@ jQuery(async () => {
       if (cfmExportMode) exitExportMode();
       if (cfmResDeleteMode) exitResDeleteMode();
       if (cfmThemeNoteMode) exitThemeNoteMode();
+      if (cfmPresetNoteMode) exitPresetNoteMode();
+      if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+      if (cfmPresetRenameMode) exitPresetRenameMode();
+      if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -4566,8 +6037,14 @@ jQuery(async () => {
     popup.find(".cfm-multisel-toggle").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      // 导出/删除模式下不允许切换多选
-      if (cfmExportMode || cfmResDeleteMode) return;
+      // 导出/删除/重命名模式下不允许切换多选
+      if (
+        cfmExportMode ||
+        cfmResDeleteMode ||
+        cfmPresetRenameMode ||
+        cfmWorldInfoRenameMode
+      )
+        return;
       cfmMultiSelectMode = !cfmMultiSelectMode;
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
@@ -4909,6 +6386,70 @@ jQuery(async () => {
         executeThemeNoteEdit(names).then(() => exitThemeNoteMode());
       } else {
         enterThemeNoteMode();
+      }
+    });
+
+    // 预设备注编辑按钮
+    popup.find("#cfm-preset-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmPresetNoteMode) {
+        if (cfmPresetNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的预设");
+          return;
+        }
+        const names = Array.from(cfmPresetNoteSelected);
+        executePresetNoteEdit(names).then(() => exitPresetNoteMode());
+      } else {
+        enterPresetNoteMode();
+      }
+    });
+
+    // 世界书备注编辑按钮
+    popup.find("#cfm-worldinfo-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmWorldInfoNoteMode) {
+        if (cfmWorldInfoNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的世界书");
+          return;
+        }
+        const names = Array.from(cfmWorldInfoNoteSelected);
+        executeWorldInfoNoteEdit(names).then(() => exitWorldInfoNoteMode());
+      } else {
+        enterWorldInfoNoteMode();
+      }
+    });
+
+    // 预设重命名按钮
+    popup.find("#cfm-preset-rename-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmPresetRenameMode) {
+        if (cfmPresetRenameSelected.size === 0) {
+          toastr.warning("请先选择要重命名的预设");
+          return;
+        }
+        const names = Array.from(cfmPresetRenameSelected);
+        executePresetRename(names).then(() => exitPresetRenameMode());
+      } else {
+        enterPresetRenameMode();
+      }
+    });
+
+    // 世界书重命名按钮
+    popup.find("#cfm-worldinfo-rename-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmWorldInfoRenameMode) {
+        if (cfmWorldInfoRenameSelected.size === 0) {
+          toastr.warning("请先选择要重命名的世界书");
+          return;
+        }
+        const names = Array.from(cfmWorldInfoRenameSelected);
+        executeWorldInfoRename(names).then(() => exitWorldInfoRenameMode());
+      } else {
+        enterWorldInfoRenameMode();
       }
     });
 
@@ -5589,9 +7130,12 @@ jQuery(async () => {
           searchPool = presets.filter((p) => allFids.includes(groups[p.name]));
         }
       }
-      const matched = searchPool.filter((p) =>
-        p.name.toLowerCase().includes(q),
-      );
+      const matched = searchPool.filter((p) => {
+        if (p.name.toLowerCase().includes(q)) return true;
+        const note = getPresetNote(p.name);
+        if (note && note.toLowerCase().includes(q)) return true;
+        return false;
+      });
       rightList.empty();
       pathEl.text(`搜索预设: "${q}"`);
       countEl.text(`${matched.length} 个结果`);
@@ -5607,13 +7151,21 @@ jQuery(async () => {
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(p.name);
+        const isNoteSel =
+          cfmPresetNoteMode && cfmPresetNoteSelected.has(p.name);
+        const isRenameSel =
+          cfmPresetRenameMode && cfmPresetRenameSelected.has(p.name);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+            : cfmPresetNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmPresetRenameMode
+                ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                : cfmMultiSelectMode
+                  ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                  : "";
         const pFolderPath = (() => {
           const grp = groups[p.name];
           if (grp && getResFolderTree("presets")[grp])
@@ -5622,11 +7174,32 @@ jQuery(async () => {
               .join(" › ");
           return null;
         })();
+        const presetNote = getPresetNote(p.name);
+        const noteHtml = presetNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
+          : "";
+        const singleNoteBtn =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmPresetNoteMode &&
+          !cfmPresetRenameMode &&
+          !cfmMultiSelectMode
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
+        // 如果在备注或重命名模式，替换 msCheckHtml
+        const finalCheckHtml = cfmPresetNoteMode
+          ? msCheckHtml ||
+            `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+          : cfmPresetRenameMode
+            ? msCheckHtml ||
+              `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+            : msCheckHtml;
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
-            ${msCheckHtml}
+          <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
+            ${finalCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
-            <div class="cfm-row-name">${escapeHtml(p.name)}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
+            <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
+            ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -5642,8 +7215,15 @@ jQuery(async () => {
             `fa-${nowFav ? "solid" : "regular"} fa-star`,
           );
         });
+        // 单个备注编辑按钮
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executePresetNoteEdit([p.name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star").length) return;
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
             executePresetSearch();
@@ -5651,6 +7231,16 @@ jQuery(async () => {
           }
           if (cfmExportMode) {
             toggleExportItem(p.name, e.shiftKey);
+            executePresetSearch();
+            return;
+          }
+          if (cfmPresetNoteMode) {
+            togglePresetNoteItem(p.name, e.shiftKey);
+            executePresetSearch();
+            return;
+          }
+          if (cfmPresetRenameMode) {
+            togglePresetRenameItem(p.name, e.shiftKey);
             executePresetSearch();
             return;
           }
@@ -5685,6 +7275,10 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, executePresetSearch);
       // 导出工具栏（搜索预设）
       prependExportToolbar(rightList, executePresetSearch);
+      // 备注编辑工具栏（搜索预设）
+      prependPresetNoteToolbar(rightList, executePresetSearch);
+      // 重命名工具栏（搜索预设）
+      prependPresetRenameToolbar(rightList, executePresetSearch);
       // 多选工具栏（搜索模式下也可用）
       if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
@@ -5808,7 +7402,12 @@ jQuery(async () => {
             searchPool = names.filter((n) => allFids.includes(groups[n]));
           }
         }
-        const matched = searchPool.filter((n) => n.toLowerCase().includes(q));
+        const matched = searchPool.filter((n) => {
+          if (n.toLowerCase().includes(q)) return true;
+          const note = getWorldInfoNote(n);
+          if (note && note.toLowerCase().includes(q)) return true;
+          return false;
+        });
         rightList.empty();
         pathEl.text(`搜索世界书: "${q}"`);
         countEl.text(`${matched.length} 个结果`);
@@ -5823,13 +7422,21 @@ jQuery(async () => {
           const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
           const isExpSel = cfmExportMode && cfmExportSelected.has(n);
           const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+          const isNoteSel =
+            cfmWorldInfoNoteMode && cfmWorldInfoNoteSelected.has(n);
+          const isRenameSel =
+            cfmWorldInfoRenameMode && cfmWorldInfoRenameSelected.has(n);
           const msCheckHtml = cfmResDeleteMode
             ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
             : cfmExportMode
               ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-              : cfmMultiSelectMode
-                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-                : "";
+              : cfmWorldInfoNoteMode
+                ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+                : cfmWorldInfoRenameMode
+                  ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                  : cfmMultiSelectMode
+                    ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                    : "";
           const wFolderPath = (() => {
             const grp = groups[n];
             if (grp && getResFolderTree("worldinfo")[grp])
@@ -5838,11 +7445,24 @@ jQuery(async () => {
                 .join(" › ");
             return null;
           })();
+          const wiNote = getWorldInfoNote(n);
+          const noteHtml = wiNote
+            ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
+            : "";
+          const singleNoteBtn =
+            !cfmExportMode &&
+            !cfmResDeleteMode &&
+            !cfmWorldInfoNoteMode &&
+            !cfmWorldInfoRenameMode &&
+            !cfmMultiSelectMode
+              ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+              : "";
           const row = $(`
-            <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
+            <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
-              <div class="cfm-row-name">${escapeHtml(n)}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
+              <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
+              ${singleNoteBtn}
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
           `);
@@ -5858,8 +7478,15 @@ jQuery(async () => {
               `fa-${nowFav ? "solid" : "regular"} fa-star`,
             );
           });
+          // 单个备注编辑按钮
+          row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            executeWorldInfoNoteEdit([n]);
+          });
           row.on("click", (e) => {
-            if ($(e.target).closest(".cfm-row-star").length) return;
+            if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+              return;
             if (cfmResDeleteMode) {
               toggleResDeleteItem(n, e.shiftKey);
               executeWorldInfoSearch();
@@ -5867,6 +7494,16 @@ jQuery(async () => {
             }
             if (cfmExportMode) {
               toggleExportItem(n, e.shiftKey);
+              executeWorldInfoSearch();
+              return;
+            }
+            if (cfmWorldInfoNoteMode) {
+              toggleWorldInfoNoteItem(n, e.shiftKey);
+              executeWorldInfoSearch();
+              return;
+            }
+            if (cfmWorldInfoRenameMode) {
+              toggleWorldInfoRenameItem(n, e.shiftKey);
               executeWorldInfoSearch();
               return;
             }
@@ -5896,6 +7533,10 @@ jQuery(async () => {
         prependResDeleteToolbar(rightList, executeWorldInfoSearch);
         // 导出工具栏（搜索世界书）
         prependExportToolbar(rightList, executeWorldInfoSearch);
+        // 备注编辑工具栏（搜索世界书）
+        prependWorldInfoNoteToolbar(rightList, executeWorldInfoSearch);
+        // 重命名工具栏（搜索世界书）
+        prependWorldInfoRenameToolbar(rightList, executeWorldInfoSearch);
         // 多选工具栏（搜索模式下也可用）
         if (cfmMultiSelectMode) {
           const visible = getVisibleResourceIds();
@@ -9115,25 +10756,48 @@ jQuery(async () => {
         }));
         rightList.append(row);
       }
-      // 预设行（带星标 + 多选支持）
+      // 预设行（带星标 + 多选支持 + 备注）
       for (const p of displayItems) {
         const isActive = p.value === currentVal;
         const fav = isResFavorite("presets", p.name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.name);
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.name);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(p.name);
+        const isNoteSel =
+          cfmPresetNoteMode && cfmPresetNoteSelected.has(p.name);
+        const isRenameSel =
+          cfmPresetRenameMode && cfmPresetRenameSelected.has(p.name);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+            : cfmPresetNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmPresetRenameMode
+                ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                : cfmMultiSelectMode
+                  ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                  : "";
+        // 备注信息
+        const presetNote = getPresetNote(p.name);
+        const noteHtml = presetNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
+          : "";
+        // 非模式状态下显示单个备注编辑按钮
+        const singleNoteBtn =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmPresetNoteMode &&
+          !cfmPresetRenameMode &&
+          !cfmMultiSelectMode
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
-            <div class="cfm-row-name">${escapeHtml(p.name)}</div>
+            <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}</div>
+            ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -9159,8 +10823,15 @@ jQuery(async () => {
           }
           if (selectedPresetFolder === "__favorites__") renderPresetsView();
         });
+        // 单个备注编辑按钮
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executePresetNoteEdit([p.name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star").length) return;
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
             renderPresetsView();
@@ -9168,6 +10839,16 @@ jQuery(async () => {
           }
           if (cfmExportMode) {
             toggleExportItem(p.name, e.shiftKey);
+            renderPresetsView();
+            return;
+          }
+          if (cfmPresetNoteMode) {
+            togglePresetNoteItem(p.name, e.shiftKey);
+            renderPresetsView();
+            return;
+          }
+          if (cfmPresetRenameMode) {
+            togglePresetRenameItem(p.name, e.shiftKey);
             renderPresetsView();
             return;
           }
@@ -9200,6 +10881,10 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, renderPresetsView);
       // 导出工具栏（预设文件夹视图）
       prependExportToolbar(rightList, renderPresetsView);
+      // 备注编辑工具栏（预设）
+      prependPresetNoteToolbar(rightList, renderPresetsView);
+      // 重命名工具栏（预设）
+      prependPresetRenameToolbar(rightList, renderPresetsView);
       // 多选工具栏（预设）
       if (cfmMultiSelectMode && selectedPresetFolder) {
         const visible = getVisibleResourceIds();
@@ -10796,24 +12481,47 @@ jQuery(async () => {
         }));
         rightList.append(row);
       }
-      // 世界书行（带星标 + 多选支持）
+      // 世界书行（带星标 + 多选支持 + 备注）
       for (const n of displayItems) {
         const fav = isResFavorite("worldinfo", n);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
         const isExpSel = cfmExportMode && cfmExportSelected.has(n);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+        const isNoteSel =
+          cfmWorldInfoNoteMode && cfmWorldInfoNoteSelected.has(n);
+        const isRenameSel =
+          cfmWorldInfoRenameMode && cfmWorldInfoRenameSelected.has(n);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+            : cfmWorldInfoNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmWorldInfoRenameMode
+                ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                : cfmMultiSelectMode
+                  ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                  : "";
+        // 备注信息
+        const wiNote = getWorldInfoNote(n);
+        const noteHtml = wiNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
+          : "";
+        // 非模式状态下显示单个备注编辑按钮
+        const singleNoteBtn =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmWorldInfoNoteMode &&
+          !cfmWorldInfoRenameMode &&
+          !cfmMultiSelectMode
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
-            <div class="cfm-row-name">${escapeHtml(n)}</div>
+            <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
+            ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -10839,8 +12547,15 @@ jQuery(async () => {
           if (selectedWorldInfoFolder === "__favorites__")
             renderWorldInfoView();
         });
+        // 单个备注编辑按钮
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeWorldInfoNoteEdit([n]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star").length) return;
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(n, e.shiftKey);
             renderWorldInfoView();
@@ -10848,6 +12563,16 @@ jQuery(async () => {
           }
           if (cfmExportMode) {
             toggleExportItem(n, e.shiftKey);
+            renderWorldInfoView();
+            return;
+          }
+          if (cfmWorldInfoNoteMode) {
+            toggleWorldInfoNoteItem(n, e.shiftKey);
+            renderWorldInfoView();
+            return;
+          }
+          if (cfmWorldInfoRenameMode) {
+            toggleWorldInfoRenameItem(n, e.shiftKey);
             renderWorldInfoView();
             return;
           }
@@ -10875,6 +12600,10 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, renderWorldInfoView);
       // 导出工具栏（世界书文件夹视图）
       prependExportToolbar(rightList, renderWorldInfoView);
+      // 备注编辑工具栏（世界书）
+      prependWorldInfoNoteToolbar(rightList, renderWorldInfoView);
+      // 重命名工具栏（世界书）
+      prependWorldInfoRenameToolbar(rightList, renderWorldInfoView);
       // 多选工具栏（世界书）
       if (cfmMultiSelectMode && selectedWorldInfoFolder) {
         const visible = getVisibleResourceIds();
@@ -11037,6 +12766,9 @@ jQuery(async () => {
         folderTree: JSON.parse(JSON.stringify(getResFolderTree("presets"))),
         groups: JSON.parse(JSON.stringify(getResourceGroups("presets"))),
         favorites: [...getResFavorites("presets")],
+        notes: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].presetNotes || {}),
+        ),
       };
     }
 
@@ -11046,6 +12778,11 @@ jQuery(async () => {
         folderTree: JSON.parse(JSON.stringify(getResFolderTree("worldinfo"))),
         groups: JSON.parse(JSON.stringify(getResourceGroups("worldinfo"))),
         favorites: [...getResFavorites("worldinfo")],
+        notes: JSON.parse(
+          JSON.stringify(
+            extension_settings[extensionName].worldInfoNotes || {},
+          ),
+        ),
       };
     }
 
@@ -11231,6 +12968,18 @@ jQuery(async () => {
           }
         }
       }
+
+      // 恢复预设备注
+      const presetNotes = jsonData.presets.notes;
+      if (presetNotes && typeof presetNotes === "object") {
+        const currentPresetsList = getCurrentPresets();
+        const presetNameSet = new Set(currentPresetsList.map((p) => p.name));
+        for (const [name, note] of Object.entries(presetNotes)) {
+          if (presetNameSet.has(name) && note) {
+            setPresetNote(name, note);
+          }
+        }
+      }
     }
 
     if (jsonData.worldinfo) {
@@ -11270,6 +13019,18 @@ jQuery(async () => {
           if (wiNameSet.has(name) && !isResFavorite("worldinfo", name)) {
             toggleResFavorite("worldinfo", name);
             report.favoritesRestored++;
+          }
+        }
+      }
+
+      // 恢复世界书备注
+      const wiNotes = jsonData.worldinfo.notes;
+      if (wiNotes && typeof wiNotes === "object") {
+        const wiNames = await getWorldInfoNames();
+        const wiNameSet = new Set(wiNames);
+        for (const [name, note] of Object.entries(wiNotes)) {
+          if (wiNameSet.has(name) && note) {
+            setWorldInfoNote(name, note);
           }
         }
       }

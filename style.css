@@ -2489,6 +2489,38 @@
   background: rgba(243, 139, 168, 0.1);
 }
 
+/* 重命名弹窗 - 自动检测区域 */
+.cfm-rename-auto-detect {
+  margin-top: 4px;
+}
+.cfm-rename-detected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.cfm-rename-detect-item {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(137, 180, 250, 0.15);
+  border: 1px solid rgba(137, 180, 250, 0.3);
+  border-radius: 4px;
+  color: #89b4fa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  word-break: break-all;
+}
+.cfm-rename-detect-item:hover {
+  background: rgba(137, 180, 250, 0.3);
+  border-color: rgba(137, 180, 250, 0.5);
+}
+.cfm-rename-detect-none {
+  font-size: 12px;
+  color: #6c7086;
+  font-style: italic;
+}
+
 /* 多选切换按钮 */
 .cfm-multisel-toggle {
   background: none !important;
