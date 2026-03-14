@@ -16528,15 +16528,15 @@ jQuery(async () => {
       });
     }
 
-    // 5. 背景面板 - 注入到 #bg_menu_content 的搜索栏旁
+    // 5. 背景面板 - 注入到 #bg_tabs .heading-controls 的加减号旁边
     if (
-      $("#bg_menu_content").length &&
-      !$("#bg_menu_content").parent().find(".cfm-nf-btn").length
+      $("#bg_thumb_zoom_out").length &&
+      !$("#bg_tabs .heading-controls .cfm-nf-btn").length
     ) {
       const bgBtn = $(
-        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="backgrounds" title="文件夹过滤" style="position:absolute;right:8px;top:8px;z-index:10;"></div>`,
+        `<div class="cfm-nf-btn menu_button menu_button_icon fa-solid fa-folder-tree" data-nf-type="backgrounds" title="文件夹过滤"></div>`,
       );
-      $("#bg_menu_content").parent().css("position", "relative").prepend(bgBtn);
+      bgBtn.insertBefore($("#bg_thumb_zoom_out"));
       bgBtn.on("click touchend", function (e) {
         e.preventDefault();
         e.stopPropagation();
