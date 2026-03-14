@@ -7245,26 +7245,41 @@ jQuery(async () => {
         }
       }
 
-      // 刷新酒馆原生背景列表
+      // 刷新酒馆原生背景列表（等待 DOM 完全更新后再渲染分类视图）
       try {
-        const bgResp = await fetch("/api/backgrounds/all", {
-          method: "POST",
-          headers: getContext().getRequestHeaders(),
-          body: JSON.stringify({}),
-        });
-        if (bgResp.ok) {
-          // 触发酒馆原生背景列表刷新
-          const bgContainer = $("#bg_menu_content");
-          if (bgContainer.length) {
-            // 简单方式：重新加载背景页面
-            $("#manageBackgrounds").trigger("click");
-          }
+        const bgModule = await import("../../../backgrounds.js");
+        if (typeof bgModule.getBackgrounds === "function") {
+          await bgModule.getBackgrounds();
         }
       } catch (err) {
-        console.warn("[CFM] 刷新背景列表失败", err);
+        console.warn("[CFM] 刷新背景列表失败，尝试备用方案", err);
+        // 备用方案：手动获取并重建 DOM
+        try {
+          const bgResp = await fetch("/api/backgrounds/all", {
+            method: "POST",
+            headers: getContext().getRequestHeaders(),
+            body: JSON.stringify({}),
+          });
+          if (bgResp.ok) {
+            const { images } = await bgResp.json();
+            const container = $("#bg_menu_content");
+            container.empty();
+            const template = $("#background_template .bg_example");
+            if (template.length && images) {
+              images.forEach((bg) => {
+                const thumb = template.clone();
+                thumb.attr("bgfile", bg);
+                thumb.attr("title", bg);
+                container.append(thumb);
+              });
+            }
+          }
+        } catch (err2) {
+          console.warn("[CFM] 备用刷新也失败", err2);
+        }
       }
 
-      // 刷新视图
+      // 原生 DOM 已更新，安全刷新分类视图
       renderBackgroundsView();
 
       const folderHint = targetFolder ? `到「${targetFolder}」` : "（未归类）";
@@ -12981,23 +12996,32 @@ jQuery(async () => {
           currentBgFile.includes(name);
         const fav = isResFavorite("backgrounds", name);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(name);
+        const isExpSel = cfmExportMode && cfmExportSelected.has(name);
+        const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(name);
         const isNoteSel = cfmBgNoteMode && cfmBgNoteSelected.has(name);
-        const msCheckHtml = cfmBgNoteMode
-          ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
-          : cfmMultiSelectMode
-            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-            : "";
+        const msCheckHtml = cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmBgNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmMultiSelectMode
+                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                : "";
         const bgNote = getBgNote(name);
         const noteHtml = bgNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
           : "";
         const singleNoteBtn =
-          !cfmBgNoteMode && !cfmMultiSelectMode
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmBgNoteMode &&
+          !cfmMultiSelectMode
             ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
             : "";
         const thumbUrl = getBackgroundThumbnailUrl(name);
         const row = $(
-          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
         );
         row.find(".cfm-row-star").on("click touchend", (e) => {
           e.preventDefault();
@@ -13029,6 +13053,16 @@ jQuery(async () => {
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
             return;
+          if (cfmResDeleteMode) {
+            toggleResDeleteItem(name, e.shiftKey);
+            renderBackgroundsView();
+            return;
+          }
+          if (cfmExportMode) {
+            toggleExportItem(name, e.shiftKey);
+            renderBackgroundsView();
+            return;
+          }
           if (cfmBgNoteMode) {
             toggleBgNoteItem(name, e.shiftKey);
             renderBackgroundsView();
@@ -13055,6 +13089,11 @@ jQuery(async () => {
         );
         rightList.append(row);
       }
+      // 删除工具栏
+      prependResDeleteToolbar(rightList, renderBackgroundsView);
+      // 导出工具栏
+      prependExportToolbar(rightList, renderBackgroundsView);
+      // 备注编辑工具栏
       prependBgNoteToolbar(rightList, renderBackgroundsView);
       if (cfmMultiSelectMode && selectedBgFolder) {
         const visible = getVisibleResourceIds();
