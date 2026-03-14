@@ -2582,23 +2582,98 @@ jQuery(async () => {
   let cfmExportMode = false;
   let cfmExportSelected = new Set(); // 导出模式下选中的资源标识符
 
-  function enterExportMode() {
-    cfmExportMode = true;
-    cfmExportSelected.clear();
-    // 如果多选模式开着，先关闭
+  // 统一清理所有互斥模式的状态和 DOM（不触发渲染）
+  function clearAllExclusiveModes() {
+    // 多选模式
     if (cfmMultiSelectMode) {
       cfmMultiSelectMode = false;
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
     }
-    // 如果删除模式开着，先关闭
-    if (cfmResDeleteMode) exitResDeleteMode();
-    // 如果编辑模式开着，先关闭
+    // 导出模式
+    if (cfmExportMode) {
+      cfmExportMode = false;
+      cfmExportSelected.clear();
+      cfmExportRangeMode = false;
+      cfmExportLastClicked = null;
+      $(".cfm-export-btn").removeClass("cfm-export-active");
+      $(".cfm-export-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-file-export");
+      $(".cfm-export-btn").attr("title", function () {
+        if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
+        if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
+        if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
+        if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
+        return "导出世界书";
+      });
+      $(".cfm-popup").removeClass("cfm-export-mode");
+    }
+    // 删除模式
+    if (cfmResDeleteMode) {
+      cfmResDeleteMode = false;
+      cfmResDeleteSelected.clear();
+      cfmResDeleteRangeMode = false;
+      cfmResDeleteLastClicked = null;
+      $(".cfm-res-delete-btn").removeClass("cfm-res-delete-active");
+      $(".cfm-res-delete-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-trash-can");
+      $(".cfm-res-delete-btn").attr("title", function () {
+        if ($(this).attr("id") === "cfm-res-delete-char-btn")
+          return "删除角色卡";
+        if ($(this).attr("id") === "cfm-res-delete-preset-btn")
+          return "删除预设";
+        if ($(this).attr("id") === "cfm-res-delete-theme-btn")
+          return "删除主题";
+        if ($(this).attr("id") === "cfm-res-delete-bg-btn") return "删除背景";
+        return "删除世界书";
+      });
+      $(".cfm-popup").removeClass("cfm-res-delete-mode");
+    }
+    // 编辑模式
     if (cfmEditMode) exitEditMode();
-    // 如果重命名模式开着，先关闭
+    // 重命名模式
     if (cfmPresetRenameMode) exitPresetRenameMode();
     if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+    // 主题备注模式
+    if (cfmThemeNoteMode) {
+      cfmThemeNoteMode = false;
+      cfmThemeNoteSelected.clear();
+      cfmThemeNoteRangeMode = false;
+      cfmThemeNoteLastClicked = null;
+      $("#cfm-theme-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-theme-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-theme-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-theme-note-mode");
+    }
+    // 背景备注模式
+    if (cfmBgNoteMode) {
+      cfmBgNoteMode = false;
+      cfmBgNoteSelected.clear();
+      cfmBgNoteRangeMode = false;
+      cfmBgNoteLastClicked = null;
+      $("#cfm-bg-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-bg-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-bg-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-bg-note-mode");
+    }
+  }
+
+  function enterExportMode() {
+    clearAllExclusiveModes();
+    // 设置导出模式状态
+    cfmExportMode = true;
+    cfmExportSelected.clear();
     // 更新导出按钮外观
     $(".cfm-export-btn").addClass("cfm-export-active");
     $(".cfm-export-btn")
@@ -2661,6 +2736,8 @@ jQuery(async () => {
   // 生成导出工具栏并插入到列表容器
   function prependExportToolbar(listContainer, renderFn) {
     if (!cfmExportMode) return;
+    // 互斥：移除可能残留的删除工具栏
+    listContainer.find(".cfm-res-delete-toolbar").remove();
     const visible = getVisibleResourceIds();
     const allSel =
       visible.length > 0 && visible.every((id) => cfmExportSelected.has(id));
@@ -3048,24 +3125,12 @@ jQuery(async () => {
   let cfmResDeleteLastClicked = null;
 
   function enterResDeleteMode() {
+    clearAllExclusiveModes();
+    // 设置删除模式状态
     cfmResDeleteMode = true;
     cfmResDeleteSelected.clear();
     cfmResDeleteRangeMode = false;
     cfmResDeleteLastClicked = null;
-    // 如果多选模式开着，先关闭
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    // 如果导出模式开着，先关闭
-    if (cfmExportMode) exitExportMode();
-    // 如果编辑模式开着，先关闭
-    if (cfmEditMode) exitEditMode();
-    // 如果重命名模式开着，先关闭
-    if (cfmPresetRenameMode) exitPresetRenameMode();
-    if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
     // 更新删除按钮外观
     $(".cfm-res-delete-btn").addClass("cfm-res-delete-active");
     $(".cfm-res-delete-btn")
@@ -3117,6 +3182,8 @@ jQuery(async () => {
 
   function prependResDeleteToolbar(listContainer, renderFn) {
     if (!cfmResDeleteMode) return;
+    // 互斥：移除可能残留的导出工具栏
+    listContainer.find(".cfm-export-toolbar").remove();
     const visible = getVisibleResourceIds();
     const allSel =
       visible.length > 0 && visible.every((id) => cfmResDeleteSelected.has(id));
@@ -3368,18 +3435,11 @@ jQuery(async () => {
   }
 
   function enterThemeNoteMode() {
+    clearAllExclusiveModes();
     cfmThemeNoteMode = true;
     cfmThemeNoteSelected.clear();
     cfmThemeNoteRangeMode = false;
     cfmThemeNoteLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
     $("#cfm-theme-note-btn").addClass("cfm-edit-active");
     $("#cfm-theme-note-btn")
       .find("i")
@@ -3584,18 +3644,11 @@ jQuery(async () => {
   }
 
   function enterBgNoteMode() {
+    clearAllExclusiveModes();
     cfmBgNoteMode = true;
     cfmBgNoteSelected.clear();
     cfmBgNoteRangeMode = false;
     cfmBgNoteLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
     $("#cfm-bg-note-btn").addClass("cfm-edit-active");
     $("#cfm-bg-note-btn")
       .find("i")
