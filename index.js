@@ -6,7 +6,7 @@ jQuery(async () => {
   const STORAGE_KEY = "cfm-folder-config"; // legacy
 
   // ==================== 资源类型管理 ====================
-  let currentResourceType = "chars"; // 'chars' | 'presets' | 'worldinfo' | 'themes'
+  let currentResourceType = "chars"; // 'chars' | 'presets' | 'worldinfo' | 'themes' | 'backgrounds'
 
   // 预设/世界书的简单分组存储
   // 结构: { [itemName]: folderName | null }
@@ -17,18 +17,23 @@ jQuery(async () => {
       extension_settings[extensionName].worldInfoGroups = {};
     if (!extension_settings[extensionName].themeGroups)
       extension_settings[extensionName].themeGroups = {};
+    if (!extension_settings[extensionName].bgGroups)
+      extension_settings[extensionName].bgGroups = {};
     if (!extension_settings[extensionName].themeNotes)
       extension_settings[extensionName].themeNotes = {};
     if (!extension_settings[extensionName].presetNotes)
       extension_settings[extensionName].presetNotes = {};
     if (!extension_settings[extensionName].worldInfoNotes)
       extension_settings[extensionName].worldInfoNotes = {};
+    if (!extension_settings[extensionName].bgNotes)
+      extension_settings[extensionName].bgNotes = {};
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
         presets: {},
         worldinfo: {},
         themes: {},
+        backgrounds: {},
       };
       // 迁移旧数据
       const oldFolders = extension_settings[extensionName].resourceFolders;
@@ -52,6 +57,8 @@ jQuery(async () => {
       extension_settings[extensionName].resourceFolderTree.worldinfo = {};
     if (!extension_settings[extensionName].resourceFolderTree.themes)
       extension_settings[extensionName].resourceFolderTree.themes = {};
+    if (!extension_settings[extensionName].resourceFolderTree.backgrounds)
+      extension_settings[extensionName].resourceFolderTree.backgrounds = {};
   }
 
   // ==================== 资源文件夹树模型 ====================
@@ -200,7 +207,9 @@ jQuery(async () => {
       ? extension_settings[extensionName].presetGroups
       : type === "themes"
         ? extension_settings[extensionName].themeGroups
-        : extension_settings[extensionName].worldInfoGroups;
+        : type === "backgrounds"
+          ? extension_settings[extensionName].bgGroups
+          : extension_settings[extensionName].worldInfoGroups;
   }
   function setItemGroup(type, itemName, folderName) {
     const groups = getResourceGroups(type);
@@ -315,6 +324,42 @@ jQuery(async () => {
     }
     themesSelect.value = themeName;
     themesSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // 获取背景列表（从DOM #bg_menu_content 中的 .bg_example 元素）
+  function getBackgroundNames() {
+    const names = [];
+    $("#bg_menu_content .bg_example").each(function () {
+      const bgfile = $(this).attr("bgfile");
+      if (bgfile) names.push(bgfile);
+    });
+    return names;
+  }
+
+  // 获取背景的友好显示名（去掉扩展名）
+  function getBackgroundDisplayName(bgfile) {
+    if (!bgfile) return "";
+    const name = bgfile.split("/").pop();
+    const dotIdx = name.lastIndexOf(".");
+    return dotIdx > 0 ? name.slice(0, dotIdx) : name;
+  }
+
+  // 应用背景（点击对应的 .bg_example 元素）
+  function applyBackground(bgfile) {
+    const bgEl = document.querySelector(
+      `#bg_menu_content .bg_example[bgfile="${CSS.escape(bgfile)}"]`,
+    );
+    if (bgEl) {
+      bgEl.click();
+    } else {
+      toastr.error(`背景「${getBackgroundDisplayName(bgfile)}」不存在`);
+    }
+  }
+
+  // 获取背景缩略图URL
+  function getBackgroundThumbnailUrl(bgfile) {
+    if (!bgfile) return "";
+    return `/backgrounds/${encodeURIComponent(bgfile)}`;
   }
 
   /**
@@ -2270,18 +2315,21 @@ jQuery(async () => {
   let expandedNodes = new Set(); // 左侧树展开状态
   let configExpandedNodes = new Set(); // 配置弹窗树展开状态
 
-  // 预设/世界书/主题双栏状态
+  // 预设/世界书/主题/背景双栏状态
   let selectedPresetFolder = null;
   let selectedWorldInfoFolder = null;
   let selectedThemeFolder = null;
+  let selectedBgFolder = null;
   let presetExpandedNodes = new Set();
   let worldInfoExpandedNodes = new Set();
   let themeExpandedNodes = new Set();
+  let bgExpandedNodes = new Set();
   let presetConfigExpandedNodes = new Set();
   let worldInfoConfigExpandedNodes = new Set();
   let themeConfigExpandedNodes = new Set();
+  let bgConfigExpandedNodes = new Set();
 
-  // 预设/世界书/主题的收藏管理
+  // 预设/世界书/主题/背景的收藏管理
   function ensureResFavorites() {
     if (!extension_settings[extensionName].presetFavorites)
       extension_settings[extensionName].presetFavorites = [];
@@ -2289,6 +2337,8 @@ jQuery(async () => {
       extension_settings[extensionName].worldInfoFavorites = [];
     if (!extension_settings[extensionName].themeFavorites)
       extension_settings[extensionName].themeFavorites = [];
+    if (!extension_settings[extensionName].bgFavorites)
+      extension_settings[extensionName].bgFavorites = [];
   }
   function getResFavorites(type) {
     ensureResFavorites();
@@ -2296,7 +2346,9 @@ jQuery(async () => {
       ? extension_settings[extensionName].presetFavorites
       : type === "themes"
         ? extension_settings[extensionName].themeFavorites
-        : extension_settings[extensionName].worldInfoFavorites;
+        : type === "backgrounds"
+          ? extension_settings[extensionName].bgFavorites
+          : extension_settings[extensionName].worldInfoFavorites;
   }
   function isResFavorite(type, name) {
     return getResFavorites(type).includes(name);
@@ -2313,25 +2365,30 @@ jQuery(async () => {
   // 预设/世界书的移动/复制模式
   let resCopyMode = false;
 
-  // 预设/世界书/主题排序状态
+  // 预设/世界书/主题/背景排序状态
   let presetLeftSortMode = null;
   let presetRightSortMode = null; // 右栏项目排序: null | 'az' | 'za'
   let worldInfoLeftSortMode = null;
   let worldInfoRightSortMode = null;
   let themeLeftSortMode = null;
   let themeRightSortMode = null;
+  let bgLeftSortMode = null;
+  let bgRightSortMode = null;
   let presetSortSnapshot = null;
   let worldInfoSortSnapshot = null;
   let themeSortSnapshot = null;
+  let bgSortSnapshot = null;
   let presetSortDirty = false;
   let worldInfoSortDirty = false;
   let themeSortDirty = false;
+  let bgSortDirty = false;
 
   // 资源排序辅助
   function takeResSortSnapshot(type) {
     if (type === "presets" && presetSortSnapshot) return;
     if (type === "worldinfo" && worldInfoSortSnapshot) return;
     if (type === "themes" && themeSortSnapshot) return;
+    if (type === "backgrounds" && bgSortSnapshot) return;
     const tree = getResFolderTree(type);
     const snap = {};
     for (const id of Object.keys(tree)) {
@@ -2339,6 +2396,7 @@ jQuery(async () => {
     }
     if (type === "presets") presetSortSnapshot = snap;
     else if (type === "themes") themeSortSnapshot = snap;
+    else if (type === "backgrounds") bgSortSnapshot = snap;
     else worldInfoSortSnapshot = snap;
   }
   function applyResSortToFolders(type, folderIds, mode) {
@@ -2458,7 +2516,9 @@ jQuery(async () => {
           ? "#cfm-preset-right-list"
           : currentResourceType === "themes"
             ? "#cfm-theme-right-list"
-            : "#cfm-worldinfo-right-list";
+            : currentResourceType === "backgrounds"
+              ? "#cfm-bg-right-list"
+              : "#cfm-worldinfo-right-list";
     $(container)
       .find(".cfm-row-char[data-res-id]")
       .each(function () {
@@ -2593,6 +2653,7 @@ jQuery(async () => {
     if (currentResourceType === "chars") renderRightPane();
     else if (currentResourceType === "presets") renderPresetsView();
     else if (currentResourceType === "themes") renderThemesView();
+    else if (currentResourceType === "backgrounds") renderBackgroundsView();
     else renderWorldInfoView();
   }
 
@@ -3412,6 +3473,223 @@ jQuery(async () => {
     if (count > 0) {
       toastr.success(`已更新 ${count} 个主题的备注`);
       renderThemesView();
+    }
+  }
+
+  // ==================== 背景备注编辑模式 ====================
+  let cfmBgNoteMode = false;
+  let cfmBgNoteSelected = new Set();
+  let cfmBgNoteRangeMode = false;
+  let cfmBgNoteLastClicked = null;
+
+  function getBgNote(name) {
+    return extension_settings[extensionName].bgNotes?.[name] || "";
+  }
+  function setBgNote(name, note) {
+    if (!extension_settings[extensionName].bgNotes)
+      extension_settings[extensionName].bgNotes = {};
+    if (note) {
+      extension_settings[extensionName].bgNotes[name] = note;
+    } else {
+      delete extension_settings[extensionName].bgNotes[name];
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  function enterBgNoteMode() {
+    cfmBgNoteMode = true;
+    cfmBgNoteSelected.clear();
+    cfmBgNoteRangeMode = false;
+    cfmBgNoteLastClicked = null;
+    if (cfmMultiSelectMode) {
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+    }
+    if (cfmExportMode) exitExportMode();
+    if (cfmResDeleteMode) exitResDeleteMode();
+    $("#cfm-bg-note-btn").addClass("cfm-edit-active");
+    $("#cfm-bg-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-bg-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-bg-note-mode");
+    renderBackgroundsView();
+  }
+
+  function exitBgNoteMode() {
+    cfmBgNoteMode = false;
+    cfmBgNoteSelected.clear();
+    cfmBgNoteRangeMode = false;
+    cfmBgNoteLastClicked = null;
+    $("#cfm-bg-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-bg-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-bg-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-bg-note-mode");
+    renderBackgroundsView();
+  }
+
+  function toggleBgNoteItem(id, shiftKey) {
+    if ((shiftKey || cfmBgNoteRangeMode) && cfmBgNoteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmBgNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmBgNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmBgNoteSelected.has(id)) cfmBgNoteSelected.delete(id);
+      else cfmBgNoteSelected.add(id);
+    }
+    cfmBgNoteLastClicked = id;
+  }
+
+  function prependBgNoteToolbar(listContainer, renderFn) {
+    if (!cfmBgNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmBgNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmBgNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmBgNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmBgNoteSelected.size > 0 ? `已选 ${cfmBgNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmBgNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmBgNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmBgNoteRangeMode = !cfmBgNoteRangeMode;
+      if (cfmBgNoteRangeMode) cfmBgNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitBgNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showBgNotePopup(bgNames) {
+    if (!bgNames || bgNames.length === 0) return;
+    let defaultNote = "";
+    if (bgNames.length === 1) {
+      defaultNote = getBgNote(bgNames[0]);
+    }
+    const nameListHtml =
+      bgNames.length <= 5
+        ? bgNames
+            .map(
+              (n) =>
+                `<div class="cfm-edit-name-item">${escapeHtml(getBackgroundDisplayName(n))}</div>`,
+            )
+            .join("")
+        : bgNames
+            .slice(0, 5)
+            .map(
+              (n) =>
+                `<div class="cfm-edit-name-item">${escapeHtml(getBackgroundDisplayName(n))}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${bgNames.length} 个背景</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑背景备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-bg-note-input" value="${escapeHtml(defaultNote)}" placeholder="${bgNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${bgNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-bg-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-bg-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executeBgNoteEdit(names) {
+    const result = await showBgNotePopup(names);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = names.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (clear) {
+        setBgNote(name, "");
+        count++;
+      } else if (note) {
+        setBgNote(name, note);
+        count++;
+      } else if (!isBatch) {
+        setBgNote(name, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个背景的备注`);
+      renderBackgroundsView();
     }
   }
 
@@ -5202,6 +5480,7 @@ jQuery(async () => {
                     <div class="cfm-tab" data-tab="worldinfo"><i class="fa-solid fa-book-atlas"></i> 世界书</div>
                     <div class="cfm-tab" data-tab="presets"><i class="fa-solid fa-sliders"></i> 预设</div>
                     <div class="cfm-tab" data-tab="themes"><i class="fa-solid fa-palette"></i> 美化</div>
+                    <div class="cfm-tab" data-tab="backgrounds"><i class="fa-solid fa-panorama"></i> 背景</div>
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
                     <div class="cfm-search-input-wrapper">
@@ -5256,6 +5535,20 @@ jQuery(async () => {
                     </select>
                     <select id="cfm-theme-search-type" class="cfm-search-select" title="搜索类型">
                         <option value="theme">主题</option>
+                        <option value="folder">文件夹</option>
+                    </select>
+                </div>
+                <div class="cfm-global-search-bar" id="cfm-bg-search-bar" style="display:none;">
+                    <div class="cfm-search-input-wrapper">
+                        <input type="text" class="cfm-global-search-input" id="cfm-bg-global-search" placeholder="搜索..." />
+                        <button class="cfm-search-clear-btn" id="cfm-bg-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <select id="cfm-bg-search-scope" class="cfm-search-select" title="搜索范围">
+                        <option value="current">当前文件夹</option>
+                        <option value="all">全部文件夹</option>
+                    </select>
+                    <select id="cfm-bg-search-type" class="cfm-search-select" title="搜索类型">
+                        <option value="bg">背景</option>
                         <option value="folder">文件夹</option>
                     </select>
                 </div>
@@ -5394,6 +5687,35 @@ jQuery(async () => {
                         </div>
                     </div>
                 </div>
+                <div class="cfm-dual-pane" id="cfm-backgrounds-view" style="display:none;">
+                    <div class="cfm-left-pane">
+                        <div class="cfm-left-header">
+                            <span>文件夹</span>
+                            <span class="cfm-left-header-actions">
+                                <div class="cfm-sort-wrapper" id="cfm-bg-left-sort-wrapper">
+                                    <button class="cfm-sort-trigger" id="cfm-bg-left-sort-btn" title="排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+                                </div>
+                                <button id="cfm-bg-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
+                                <button id="cfm-bg-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
+                            </span>
+                        </div>
+                        <div class="cfm-left-tree" id="cfm-bg-left-tree"></div>
+                    </div>
+                    <div class="cfm-right-pane">
+                        <div class="cfm-right-header">
+                            <span class="cfm-rh-path" id="cfm-bg-rh-path">选择左侧文件夹查看内容</span>
+                            <span class="cfm-rh-count" id="cfm-bg-rh-count"></span>
+                            <button class="cfm-edit-char-btn" id="cfm-bg-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <div class="cfm-sort-wrapper" id="cfm-bg-right-sort-wrapper">
+                                <button class="cfm-sort-trigger" id="cfm-bg-right-sort-btn" title="背景排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+                            </div>
+                            <button class="cfm-multisel-toggle cfm-multisel-toggle-bg" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
+                        </div>
+                        <div class="cfm-right-list" id="cfm-bg-right-list">
+                            <div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `);
     overlay.append(popup);
@@ -5416,6 +5738,7 @@ jQuery(async () => {
       if (cfmExportMode) exitExportMode();
       if (cfmResDeleteMode) exitResDeleteMode();
       if (cfmThemeNoteMode) exitThemeNoteMode();
+      if (cfmBgNoteMode) exitBgNoteMode();
       if (cfmPresetNoteMode) exitPresetNoteMode();
       if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
       if (cfmPresetRenameMode) exitPresetRenameMode();
@@ -5425,6 +5748,7 @@ jQuery(async () => {
       popup.find("#cfm-presets-view").toggle(tab === "presets");
       popup.find("#cfm-worldinfo-view").toggle(tab === "worldinfo");
       popup.find("#cfm-themes-view").toggle(tab === "themes");
+      popup.find("#cfm-backgrounds-view").toggle(tab === "backgrounds");
       // 切换header按钮可见性 - 移动模式对所有标签可见
       if (tab === "chars") {
         popup.find("#cfm-btn-copymode").show();
@@ -5446,9 +5770,11 @@ jQuery(async () => {
       popup.find("#cfm-preset-search-bar").toggle(tab === "presets");
       popup.find("#cfm-worldinfo-search-bar").toggle(tab === "worldinfo");
       popup.find("#cfm-theme-search-bar").toggle(tab === "themes");
+      popup.find("#cfm-bg-search-bar").toggle(tab === "backgrounds");
       if (tab === "presets") renderPresetsView();
       else if (tab === "worldinfo") renderWorldInfoView();
       else if (tab === "themes") renderThemesView();
+      else if (tab === "backgrounds") renderBackgroundsView();
     });
 
     popup.find("#cfm-btn-close-main").on("click touchend", (e) => {
@@ -5691,6 +6017,18 @@ jQuery(async () => {
       e.preventDefault();
       themeExpandedNodes.clear();
       renderThemesView();
+    });
+
+    // 背景展开全部/收起全部
+    popup.find("#cfm-bg-expand-all").on("click touchend", (e) => {
+      e.preventDefault();
+      for (const id of getResFolderIds("backgrounds")) bgExpandedNodes.add(id);
+      renderBackgroundsView();
+    });
+    popup.find("#cfm-bg-collapse-all").on("click touchend", (e) => {
+      e.preventDefault();
+      bgExpandedNodes.clear();
+      renderBackgroundsView();
     });
 
     // 预设左栏排序
@@ -6022,6 +6360,112 @@ jQuery(async () => {
           toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderThemesView();
+        dropdown.remove();
+      });
+      wrapper.append(dropdown);
+      setTimeout(() => {
+        $(document).one("click.cfmSortDropdown", (ev) => {
+          if (!$(ev.target).closest(".cfm-sort-dropdown").length)
+            dropdown.remove();
+        });
+      }, 0);
+    });
+
+    // 背景左栏排序
+    popup.find("#cfm-bg-left-sort-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = $("#cfm-bg-left-sort-wrapper");
+      const topFolders = getResTopLevelFolders("backgrounds");
+      $(".cfm-sort-dropdown").remove();
+      const dropdown = createResSortDropdown(
+        "backgrounds",
+        bgLeftSortMode,
+        bgSortSnapshot,
+        (mode) => {
+          if (mode === "revert") {
+            revertResSort("backgrounds");
+            bgLeftSortMode = null;
+          } else {
+            applyResSortToFolders("backgrounds", topFolders, mode);
+            bgLeftSortMode = mode;
+          }
+          renderBackgroundsView();
+          dropdown.remove();
+        },
+      );
+      wrapper.append(dropdown);
+      setTimeout(() => {
+        $(document).one("click.cfmSortDropdown", (ev) => {
+          if (!$(ev.target).closest(".cfm-sort-dropdown").length)
+            dropdown.remove();
+        });
+      }, 0);
+    });
+    // 背景右栏排序
+    popup.find("#cfm-bg-right-sort-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = $("#cfm-bg-right-sort-wrapper");
+      const currentFolder = selectedBgFolder;
+      const childFolders =
+        currentFolder &&
+        currentFolder !== "__ungrouped__" &&
+        currentFolder !== "__favorites__"
+          ? getResChildFolders("backgrounds", currentFolder)
+          : [];
+      $(".cfm-sort-dropdown").remove();
+      const dropdown = $(`<div class="cfm-sort-dropdown cfm-sort-open">
+        <div class="cfm-sort-dropdown-item ${bgRightSortMode === "az" ? "cfm-sort-item-active" : ""}" data-sort="item-az"><i class="fa-solid fa-arrow-down-a-z"></i> 背景 A → Z</div>
+        <div class="cfm-sort-dropdown-item ${bgRightSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="item-za"><i class="fa-solid fa-arrow-up-z-a"></i> 背景 Z → A</div>
+        ${childFolders.length > 0 ? `<div class="cfm-sort-dropdown-sep"></div><div class="cfm-sort-dropdown-item" data-sort="folder-az"><i class="fa-solid fa-folder"></i> 子文件夹 A → Z</div><div class="cfm-sort-dropdown-item" data-sort="folder-za"><i class="fa-solid fa-folder"></i> 子文件夹 Z → A</div>` : ""}
+        <div class="cfm-sort-dropdown-sep"></div>
+        <div class="cfm-sort-dropdown-item ${bgRightSortMode === null && !bgSortSnapshot ? "cfm-sort-item-disabled" : ""}" data-sort="revert"><i class="fa-solid fa-rotate-left"></i> 恢复默认</div>
+      </div>`);
+      dropdown.find('[data-sort="item-az"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        bgRightSortMode = "az";
+        renderBackgroundsView();
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="item-za"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        bgRightSortMode = "za";
+        renderBackgroundsView();
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="folder-az"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (childFolders.length > 0) {
+          applyResSortToFolders("backgrounds", childFolders, "az");
+          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          renderBackgroundsView();
+        }
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="folder-za"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (childFolders.length > 0) {
+          applyResSortToFolders("backgrounds", childFolders, "za");
+          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          renderBackgroundsView();
+        }
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="revert"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (bgRightSortMode === null && !bgSortSnapshot) return;
+        bgRightSortMode = null;
+        if (bgSortSnapshot) {
+          revertResSort("backgrounds");
+          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+        }
+        renderBackgroundsView();
         dropdown.remove();
       });
       wrapper.append(dropdown);
@@ -6386,6 +6830,22 @@ jQuery(async () => {
         executeThemeNoteEdit(names).then(() => exitThemeNoteMode());
       } else {
         enterThemeNoteMode();
+      }
+    });
+
+    // 背景备注编辑按钮
+    popup.find("#cfm-bg-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmBgNoteMode) {
+        if (cfmBgNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的背景");
+          return;
+        }
+        const names = Array.from(cfmBgNoteSelected);
+        executeBgNoteEdit(names).then(() => exitBgNoteMode());
+      } else {
+        enterBgNoteMode();
       }
     });
 
@@ -6876,6 +7336,21 @@ jQuery(async () => {
       $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
       renderThemesView();
     });
+    // 背景搜索框事件绑定
+    popup.find("#cfm-bg-global-search").on("input", function () {
+      const hasText = $(this).val().trim().length > 0;
+      $(this)
+        .closest(".cfm-search-input-wrapper")
+        .toggleClass("cfm-has-text", hasText);
+      executeBgSearch();
+    });
+    popup.find("#cfm-bg-search-clear").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-bg-global-search").val("").focus();
+      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
+      renderBackgroundsView();
+    });
   }
 
   // ==================== 全局搜索功能 ====================
@@ -7178,13 +7653,18 @@ jQuery(async () => {
         const noteHtml = presetNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
           : "";
-        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmPresetNoteMode && !cfmPresetRenameMode && !cfmMultiSelectMode;
+        const noModeActive =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmPresetNoteMode &&
+          !cfmPresetRenameMode &&
+          !cfmMultiSelectMode;
         const singleNoteBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
         const singleRenameBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
         // 如果在备注或重命名模式，替换 msCheckHtml
         const finalCheckHtml = cfmPresetNoteMode
           ? msCheckHtml ||
@@ -7228,7 +7708,11 @@ jQuery(async () => {
           executePresetRename([p.name]);
         });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ).length
+          )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
@@ -7455,13 +7939,18 @@ jQuery(async () => {
           const noteHtml = wiNote
             ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
             : "";
-          const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmWorldInfoNoteMode && !cfmWorldInfoRenameMode && !cfmMultiSelectMode;
+          const noModeActive =
+            !cfmExportMode &&
+            !cfmResDeleteMode &&
+            !cfmWorldInfoNoteMode &&
+            !cfmWorldInfoRenameMode &&
+            !cfmMultiSelectMode;
           const singleNoteBtn = noModeActive
-              ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-              : "";
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
           const singleRenameBtn = noModeActive
-              ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
-              : "";
+            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+            : "";
           const row = $(`
             <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
@@ -7497,7 +7986,11 @@ jQuery(async () => {
             executeWorldInfoRename([n]);
           });
           row.on("click", (e) => {
-            if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
+            if (
+              $(e.target).closest(
+                ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+              ).length
+            )
               return;
             if (cfmResDeleteMode) {
               toggleResDeleteItem(n, e.shiftKey);
@@ -7762,6 +8255,157 @@ jQuery(async () => {
         cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
         if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
         executeThemeSearch();
+      });
+      rightList.prepend(toolbar);
+    }
+  }
+
+  // ==================== 背景全局搜索 ====================
+  function executeBgSearch() {
+    const q = $("#cfm-bg-global-search").val().toLowerCase().trim();
+    if (!q) {
+      renderBackgroundsView();
+      return;
+    }
+    const rightList = $("#cfm-bg-right-list");
+    const pathEl = $("#cfm-bg-rh-path");
+    const countEl = $("#cfm-bg-rh-count");
+    const bgNames = getBackgroundNames();
+    const groups = getResourceGroups("backgrounds");
+    const folders = getResourceFolders("backgrounds");
+    let searchPool = bgNames;
+    if (selectedBgFolder) {
+      if (selectedBgFolder === "__ungrouped__") {
+        searchPool = bgNames.filter(
+          (n) => !groups[n] || !folders.includes(groups[n]),
+        );
+      } else if (selectedBgFolder === "__favorites__") {
+        const favs = getResFavorites("backgrounds");
+        searchPool = bgNames.filter((n) => favs.includes(n));
+      } else if (folders.includes(selectedBgFolder)) {
+        const collectFolderIds = (pid) => {
+          let r = [pid];
+          for (const c of getResChildFolders("backgrounds", pid))
+            r = r.concat(collectFolderIds(c));
+          return r;
+        };
+        const allFids = collectFolderIds(selectedBgFolder);
+        searchPool = bgNames.filter((n) => allFids.includes(groups[n]));
+      }
+    }
+    const matched = searchPool.filter((n) => {
+      if (getBackgroundDisplayName(n).toLowerCase().includes(q)) return true;
+      const note = getBgNote(n);
+      if (note && note.toLowerCase().includes(q)) return true;
+      return false;
+    });
+    rightList.empty();
+    pathEl.text(`搜索背景: "${q}"`);
+    countEl.text(`${matched.length} 个结果`);
+    if (matched.length === 0) {
+      rightList.html('<div class="cfm-right-empty">未找到匹配的背景</div>');
+      return;
+    }
+    const currentBg = document.getElementById("bg1");
+    const currentBgFile = currentBg
+      ? currentBg.getAttribute("style") || ""
+      : "";
+    for (const name of matched) {
+      const isActive =
+        currentBgFile.includes(encodeURIComponent(name)) ||
+        currentBgFile.includes(name);
+      const fav = isResFavorite("backgrounds", name);
+      const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(name);
+      const isNoteSel = cfmBgNoteMode && cfmBgNoteSelected.has(name);
+      const msCheckHtml = cfmBgNoteMode
+        ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+        : cfmMultiSelectMode
+          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+          : "";
+      const bFolderPath = (() => {
+        const grp = groups[name];
+        if (grp && getResFolderTree("backgrounds")[grp])
+          return getResFolderPath("backgrounds", grp)
+            .map((id) => getResFolderDisplayName("backgrounds", id))
+            .join(" › ");
+        return "未归类";
+      })();
+      const bgNote = getBgNote(name);
+      const noteHtml = bgNote
+        ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
+        : "";
+      const singleNoteBtn =
+        !cfmBgNoteMode && !cfmMultiSelectMode
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
+      const thumbUrl = getBackgroundThumbnailUrl(name);
+      const row = $(
+        `<div class="cfm-row cfm-row-char cfm-row-bg cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(bFolderPath)}</div></div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+      );
+      row.find(".cfm-row-star").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const nowFav = toggleResFavorite("backgrounds", name);
+        const starEl = row.find(".cfm-row-star");
+        starEl.toggleClass("cfm-star-active", nowFav);
+        starEl.attr("title", nowFav ? "取消收藏" : "添加收藏");
+        starEl
+          .find("i")
+          .attr("class", `fa-${nowFav ? "solid" : "regular"} fa-star`);
+        if (selectedBgFolder === "__favorites__") executeBgSearch();
+      });
+      row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        executeBgNoteEdit([name]);
+      });
+      row.on("click", (e) => {
+        if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          return;
+        if (cfmBgNoteMode) {
+          toggleBgNoteItem(name, e.shiftKey);
+          executeBgSearch();
+          return;
+        }
+        if (cfmMultiSelectMode) {
+          toggleMultiSelectItem(name, e.shiftKey);
+          executeBgSearch();
+          return;
+        }
+        applyBackground(name);
+        rightList.find(".cfm-rv-item-active").removeClass("cfm-rv-item-active");
+        row.addClass("cfm-rv-item-active");
+        toastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
+      });
+      row.on("dragstart", (e) => {
+        pcDragStart(e, getMultiDragData({ type: "background", name }));
+      });
+      row.on("dragend", () => pcDragEnd());
+      touchDragMgr.bind(row, () =>
+        getMultiDragData({ type: "background", name }),
+      );
+      rightList.append(row);
+    }
+    prependBgNoteToolbar(rightList, executeBgSearch);
+    if (cfmMultiSelectMode) {
+      const visible = getVisibleResourceIds();
+      const allSel =
+        visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
+      const toolbar = $(
+        `<div class="cfm-multisel-toolbar"><button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button><span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span></div>`,
+      );
+      toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectAllVisible();
+        executeBgSearch();
+      });
+      toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+        if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+        executeBgSearch();
       });
       rightList.prepend(toolbar);
     }
@@ -8682,6 +9326,7 @@ jQuery(async () => {
       if (currentResourceType === "presets") renderPresetsView();
       else if (currentResourceType === "worldinfo") renderWorldInfoView();
       else if (currentResourceType === "themes") renderThemesView();
+      else if (currentResourceType === "backgrounds") renderBackgroundsView();
     }
   }
 
@@ -8693,7 +9338,8 @@ jQuery(async () => {
     if (
       currentResourceType === "presets" ||
       currentResourceType === "worldinfo" ||
-      currentResourceType === "themes"
+      currentResourceType === "themes" ||
+      currentResourceType === "backgrounds"
     ) {
       renderResourceConfigBody(body, currentResourceType);
       return;
@@ -10796,13 +11442,18 @@ jQuery(async () => {
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(presetNote)}">${escapeHtml(presetNote)}</span>`
           : "";
         // 非模式状态下显示单个备注编辑按钮和重命名按钮
-        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmPresetNoteMode && !cfmPresetRenameMode && !cfmMultiSelectMode;
+        const noModeActive =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmPresetNoteMode &&
+          !cfmPresetRenameMode &&
+          !cfmMultiSelectMode;
         const singleNoteBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
         const singleRenameBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
@@ -10848,7 +11499,11 @@ jQuery(async () => {
           executePresetRename([p.name]);
         });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ).length
+          )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.name, e.shiftKey);
@@ -11648,6 +12303,593 @@ jQuery(async () => {
               : `已将「${data.name}」移入「${currentFolder}」`,
           );
           renderThemesView();
+        }
+      });
+    }
+  }
+
+  // ==================== 背景视图渲染（双栏 + 树形嵌套） ====================
+  function renderBackgroundsView() {
+    const leftTree = $("#cfm-bg-left-tree");
+    const rightList = $("#cfm-bg-right-list");
+    const pathEl = $("#cfm-bg-rh-path");
+    const countEl = $("#cfm-bg-rh-count");
+    leftTree.empty();
+    const tree = getResFolderTree("backgrounds");
+    const bgNames = getBackgroundNames();
+    if (bgNames.length === 0) {
+      rightList.html(
+        '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 背景列表加载中...</div>',
+      );
+      if (!renderBackgroundsView._retryCount)
+        renderBackgroundsView._retryCount = 0;
+      if (renderBackgroundsView._retryCount < 10) {
+        renderBackgroundsView._retryCount++;
+        setTimeout(() => {
+          if (currentResourceType === "backgrounds") renderBackgroundsView();
+        }, 500);
+      }
+      return;
+    }
+    renderBackgroundsView._retryCount = 0;
+    const groups = getResourceGroups("backgrounds");
+    const existingBgNames = new Set(bgNames);
+    let bgGroupsCleaned = false;
+    for (const key of Object.keys(groups)) {
+      if (!existingBgNames.has(key)) {
+        delete groups[key];
+        bgGroupsCleaned = true;
+      }
+    }
+    if (bgGroupsCleaned) {
+      console.log("[CFM] 已清理不存在的背景分组映射");
+      getContext().saveSettingsDebounced();
+    }
+    const folderItems = {};
+    const ungrouped = [];
+    for (const name of bgNames) {
+      const grp = groups[name];
+      if (grp && tree[grp]) {
+        if (!folderItems[grp]) folderItems[grp] = [];
+        folderItems[grp].push(name);
+      } else ungrouped.push(name);
+    }
+    const bgFavs = getResFavorites("backgrounds");
+    const bgFavCount = bgNames.filter((n) => bgFavs.includes(n)).length;
+    const bgFavNode = $(
+      `<div class="cfm-tnode cfm-tnode-favorites ${selectedBgFolder === "__favorites__" ? "cfm-tnode-selected" : ""}" data-id="__favorites__" style="padding-left:10px;"><span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-star" style="color:#f9e2af;"></i></span><span class="cfm-tnode-label">收藏</span><span class="cfm-tnode-count">${bgFavCount}</span></div>`,
+    );
+    bgFavNode.on("click", (e) => {
+      e.preventDefault();
+      selectedBgFolder = "__favorites__";
+      renderBackgroundsView();
+    });
+    leftTree.append(bgFavNode);
+    function renderBgTreeNode(container, folderId, depth) {
+      const children = sortResFolders(
+        "backgrounds",
+        getResChildFolders("backgrounds", folderId),
+      );
+      const hasChildren = children.length > 0;
+      const isExpanded = bgExpandedNodes.has(folderId);
+      const isSelected = selectedBgFolder === folderId;
+      const count = countResItemsRecursive("backgrounds", folderId);
+      const indent = 10 + depth * 16;
+      const node = $(
+        `<div class="cfm-tnode ${isSelected ? "cfm-tnode-selected" : ""}" data-id="${escapeHtml(folderId)}" style="padding-left:${indent}px;" draggable="true"><span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span><span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("backgrounds", folderId))}</span><span class="cfm-tnode-count">${count}</span></div>`,
+      );
+      node.find(".cfm-tnode-arrow").on("click", (e) => {
+        e.stopPropagation();
+        if (!hasChildren) return;
+        if (bgExpandedNodes.has(folderId)) bgExpandedNodes.delete(folderId);
+        else bgExpandedNodes.add(folderId);
+        renderBackgroundsView();
+      });
+      node.on("click", (e) => {
+        e.preventDefault();
+        selectedBgFolder = folderId;
+        renderBackgroundsView();
+      });
+      node.on("dragstart", (e) => {
+        pcDragStart(e, {
+          type: "res-folder",
+          resType: "backgrounds",
+          id: folderId,
+        });
+        node.addClass("cfm-dragging");
+      });
+      node.on("dragend", () => {
+        node.removeClass("cfm-dragging");
+        pcDragEnd();
+        $(".cfm-tnode").removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+      });
+      node.on("dragover", (e) => {
+        e.preventDefault();
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+        const rect = node[0].getBoundingClientRect();
+        const relY = (e.originalEvent.clientY - rect.top) / rect.height;
+        let zone = relY < 0.25 ? "before" : relY > 0.75 ? "after" : "into";
+        node.data("dropZone", zone);
+        const data = _pcDragData || {};
+        if (data.type === "res-folder" && data.resType === "backgrounds") {
+          if (data.id === folderId) {
+            node.addClass("cfm-drop-forbidden");
+            return;
+          }
+          if (
+            zone === "into" &&
+            wouldCreateResCycle("backgrounds", data.id, folderId)
+          ) {
+            node.addClass("cfm-drop-forbidden");
+            return;
+          }
+        }
+        if (zone === "before") node.addClass("cfm-drop-before");
+        else if (zone === "after") node.addClass("cfm-drop-after");
+        else node.addClass("cfm-drop-target");
+      });
+      node.on("dragleave", () =>
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        ),
+      );
+      node.on("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const zone = node.data("dropZone") || "into";
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+        const data = pcGetDropData(e);
+        if (!data) return;
+        if (
+          data.type === "res-folder" &&
+          data.resType === "backgrounds" &&
+          data.id !== folderId
+        ) {
+          if (zone === "into") {
+            if (wouldCreateResCycle("backgrounds", data.id, folderId)) {
+              toastr.error("循环嵌套，已阻止");
+              return;
+            }
+            reorderResFolder("backgrounds", data.id, folderId, null);
+            toastr.success(`「${data.id}」已移入「${folderId}」`);
+          } else {
+            const pId = tree[folderId]?.parentId || null;
+            if (wouldCreateResCycle("backgrounds", data.id, pId)) {
+              toastr.error("循环嵌套，已阻止");
+              return;
+            }
+            if (zone === "before") {
+              reorderResFolder("backgrounds", data.id, pId, folderId);
+            } else {
+              const sibs = sortResFolders(
+                "backgrounds",
+                getResChildFolders("backgrounds", pId),
+              );
+              const ci = sibs.indexOf(folderId);
+              reorderResFolder(
+                "backgrounds",
+                data.id,
+                pId,
+                ci < sibs.length - 1 ? sibs[ci + 1] : null,
+              );
+            }
+            toastr.success(`「${data.id}」已排序`);
+          }
+          renderBackgroundsView();
+        } else if (data.type === "background") {
+          const names =
+            data.multiSelect && data.selectedIds
+              ? data.selectedIds
+              : [data.name];
+          names.forEach((n) => setItemGroup("backgrounds", n, folderId));
+          if (data.multiSelect) clearMultiSelect();
+          renderBackgroundsView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个背景移入「${folderId}」`
+              : `已将「${getBackgroundDisplayName(data.name)}」移入「${folderId}」`,
+          );
+        }
+      });
+      touchDragMgr.bind(node, () => ({
+        type: "res-folder",
+        resType: "backgrounds",
+        id: folderId,
+        name: folderId,
+      }));
+      container.append(node);
+      if (hasChildren) {
+        const childContainer = $(
+          `<div class="cfm-tnode-children ${isExpanded ? "cfm-children-expanded" : ""}"></div>`,
+        );
+        for (const childId of children)
+          renderBgTreeNode(childContainer, childId, depth + 1);
+        container.append(childContainer);
+      }
+    }
+    const topFolders = sortResFolders(
+      "backgrounds",
+      getResTopLevelFolders("backgrounds"),
+    );
+    for (const fid of topFolders) renderBgTreeNode(leftTree, fid, 0);
+    const uncatNode = $(
+      `<div class="cfm-tnode cfm-tnode-uncategorized ${selectedBgFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;"><span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span><span class="cfm-tnode-label">未归类背景</span><span class="cfm-tnode-count">${ungrouped.length}</span></div>`,
+    );
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
+      selectedBgFolder = "__ungrouped__";
+      renderBackgroundsView();
+    });
+    uncatNode.on("dragover", (e) => {
+      e.preventDefault();
+      uncatNode.addClass("cfm-drop-target");
+    });
+    uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
+    uncatNode.on("drop", (e) => {
+      e.preventDefault();
+      uncatNode.removeClass("cfm-drop-target");
+      const d = pcGetDropData(e);
+      if (d && d.type === "background") {
+        const names = d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
+        names.forEach((n) => setItemGroup("backgrounds", n, null));
+        if (d.multiSelect) clearMultiSelect();
+        renderBackgroundsView();
+        toastr.success(
+          names.length > 1
+            ? `已将 ${names.length} 个背景移出文件夹`
+            : `已将「${getBackgroundDisplayName(d.name)}」移出文件夹`,
+        );
+      }
+    });
+    leftTree.append(uncatNode);
+    if (topFolders.length === 0) {
+      uncatNode.before(
+        '<div class="cfm-right-empty" style="padding:20px;font-size:12px;">还没有配置文件夹<br>点击右上角 ⚙ 进行配置</div>',
+      );
+    }
+    const bgSearchQuery = $("#cfm-bg-global-search").val();
+    if (bgSearchQuery && bgSearchQuery.trim()) {
+      executeBgSearch();
+      return;
+    }
+    rightList.empty();
+    const currentBg = document.getElementById("bg1");
+    const currentBgFile = currentBg
+      ? currentBg.getAttribute("style") || ""
+      : "";
+    let displayItems = [];
+    let displayTitle = "选择左侧文件夹查看内容";
+    let childFolders = [];
+    if (selectedBgFolder === "__favorites__") {
+      const favs = getResFavorites("backgrounds");
+      displayItems = bgNames.filter((n) => favs.includes(n));
+      displayTitle = "⭐ 收藏";
+    } else if (selectedBgFolder === "__ungrouped__") {
+      displayItems = ungrouped;
+      displayTitle = "未归类背景";
+    } else if (selectedBgFolder && tree[selectedBgFolder]) {
+      displayItems = folderItems[selectedBgFolder] || [];
+      childFolders = sortResFolders(
+        "backgrounds",
+        getResChildFolders("backgrounds", selectedBgFolder),
+      );
+      displayTitle = getResFolderPath("backgrounds", selectedBgFolder)
+        .map((id) => getResFolderDisplayName("backgrounds", id))
+        .join(" › ");
+    }
+    if (bgRightSortMode && displayItems.length > 0) {
+      displayItems = sortResItems(displayItems, bgRightSortMode, (n) => n);
+    }
+    pathEl.text(displayTitle);
+    const totalItems = childFolders.length + displayItems.length;
+    if (
+      selectedBgFolder === "__favorites__" ||
+      selectedBgFolder === "__ungrouped__"
+    ) {
+      countEl.text(`${displayItems.length} 个背景`);
+    } else {
+      countEl.text(selectedBgFolder ? `${totalItems} 项` : "");
+    }
+    if (!selectedBgFolder) {
+      rightList.html(
+        '<div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>',
+      );
+    } else if (selectedBgFolder === "__favorites__" && totalItems === 0) {
+      rightList.html(
+        '<div class="cfm-right-empty">还没有收藏任何背景<br><span style="font-size:12px;opacity:0.5;">点击背景行右侧的 ☆ 按钮添加收藏</span></div>',
+      );
+    } else if (selectedBgFolder === "__ungrouped__" && totalItems === 0) {
+      rightList.html('<div class="cfm-right-empty">没有未归类的背景</div>');
+    } else if (totalItems === 0) {
+      rightList.html('<div class="cfm-right-empty">此文件夹为空</div>');
+    } else {
+      for (const childId of childFolders) {
+        const childCount = countResItemsRecursive("backgrounds", childId);
+        const row = $(
+          `<div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true"><div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div><div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("backgrounds", childId))}</div><div class="cfm-row-meta">${childCount} 个背景</div></div>`,
+        );
+        row.on("click", (e) => {
+          e.preventDefault();
+          const path = getResFolderPath("backgrounds", childId);
+          for (const pid of path) bgExpandedNodes.add(pid);
+          selectedBgFolder = childId;
+          renderBackgroundsView();
+        });
+        row.on("dragstart", (e) => {
+          pcDragStart(e, {
+            type: "res-folder",
+            resType: "backgrounds",
+            id: childId,
+          });
+          row.addClass("cfm-dragging");
+        });
+        row.on("dragend", () => {
+          row.removeClass("cfm-dragging");
+          pcDragEnd();
+          $(".cfm-row").removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+        });
+        row.on("dragover", (e) => {
+          e.preventDefault();
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+          const rect = row[0].getBoundingClientRect();
+          const relY = (e.originalEvent.clientY - rect.top) / rect.height;
+          let zone = relY < 0.25 ? "before" : relY > 0.75 ? "after" : "into";
+          row.data("dropZone", zone);
+          const data = _pcDragData || {};
+          if (data.type === "res-folder" && data.resType === "backgrounds") {
+            if (data.id === childId) {
+              row.addClass("cfm-drop-forbidden");
+              return;
+            }
+            if (
+              zone === "into" &&
+              wouldCreateResCycle("backgrounds", data.id, childId)
+            ) {
+              row.addClass("cfm-drop-forbidden");
+              return;
+            }
+          }
+          if (zone === "before") row.addClass("cfm-drop-before");
+          else if (zone === "after") row.addClass("cfm-drop-after");
+          else row.addClass("cfm-drop-target");
+          e.originalEvent.dataTransfer.dropEffect = "move";
+        });
+        row.on("dragleave", () => {
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+        });
+        row.on("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const zone = row.data("dropZone") || "into";
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+          const data = pcGetDropData(e);
+          if (!data) return;
+          if (
+            data.type === "res-folder" &&
+            data.resType === "backgrounds" &&
+            data.id !== childId
+          ) {
+            if (zone === "into") {
+              if (wouldCreateResCycle("backgrounds", data.id, childId)) {
+                toastr.error("循环嵌套，已阻止");
+                return;
+              }
+              reorderResFolder("backgrounds", data.id, childId, null);
+              toastr.success(`「${data.id}」已移入「${childId}」`);
+            } else {
+              const pId = tree[childId]?.parentId || null;
+              if (wouldCreateResCycle("backgrounds", data.id, pId)) {
+                toastr.error("循环嵌套，已阻止");
+                return;
+              }
+              if (zone === "before") {
+                reorderResFolder("backgrounds", data.id, pId, childId);
+              } else {
+                const sibs = sortResFolders(
+                  "backgrounds",
+                  getResChildFolders("backgrounds", pId),
+                );
+                const ci = sibs.indexOf(childId);
+                reorderResFolder(
+                  "backgrounds",
+                  data.id,
+                  pId,
+                  ci < sibs.length - 1 ? sibs[ci + 1] : null,
+                );
+              }
+              toastr.success(`「${data.id}」已排序`);
+            }
+            renderBackgroundsView();
+          } else if (data.type === "background") {
+            const names =
+              data.multiSelect && data.selectedIds
+                ? data.selectedIds
+                : [data.name];
+            names.forEach((n) => setItemGroup("backgrounds", n, childId));
+            if (data.multiSelect) clearMultiSelect();
+            toastr.success(
+              names.length > 1
+                ? `已将 ${names.length} 个背景移入「${childId}」`
+                : `已将「${getBackgroundDisplayName(data.name)}」移入「${childId}」`,
+            );
+            renderBackgroundsView();
+          }
+        });
+        touchDragMgr.bind(row, () => ({
+          type: "res-folder",
+          resType: "backgrounds",
+          id: childId,
+          name: getResFolderDisplayName("backgrounds", childId),
+        }));
+        rightList.append(row);
+      }
+      for (const name of displayItems) {
+        const isActive =
+          currentBgFile.includes(encodeURIComponent(name)) ||
+          currentBgFile.includes(name);
+        const fav = isResFavorite("backgrounds", name);
+        const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(name);
+        const isNoteSel = cfmBgNoteMode && cfmBgNoteSelected.has(name);
+        const msCheckHtml = cfmBgNoteMode
+          ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
+        const bgNote = getBgNote(name);
+        const noteHtml = bgNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
+          : "";
+        const singleNoteBtn =
+          !cfmBgNoteMode && !cfmMultiSelectMode
+            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+            : "";
+        const thumbUrl = getBackgroundThumbnailUrl(name);
+        const row = $(
+          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+        );
+        row.find(".cfm-row-star").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const nowFav = toggleResFavorite("backgrounds", name);
+          const starEl = row.find(".cfm-row-star");
+          starEl.toggleClass("cfm-star-active", nowFav);
+          starEl.attr("title", nowFav ? "取消收藏" : "添加收藏");
+          starEl
+            .find("i")
+            .attr("class", `fa-${nowFav ? "solid" : "regular"} fa-star`);
+          const favCountEl = $(
+            "#cfm-bg-left-tree .cfm-tnode-favorites .cfm-tnode-count",
+          );
+          if (favCountEl.length) {
+            favCountEl.text(
+              bgNames.filter((nn) =>
+                getResFavorites("backgrounds").includes(nn),
+              ).length,
+            );
+          }
+          if (selectedBgFolder === "__favorites__") renderBackgroundsView();
+        });
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeBgNoteEdit([name]);
+        });
+        row.on("click", (e) => {
+          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+            return;
+          if (cfmBgNoteMode) {
+            toggleBgNoteItem(name, e.shiftKey);
+            renderBackgroundsView();
+            return;
+          }
+          if (cfmMultiSelectMode) {
+            toggleMultiSelectItem(name, e.shiftKey);
+            renderBackgroundsView();
+            return;
+          }
+          applyBackground(name);
+          rightList
+            .find(".cfm-rv-item-active")
+            .removeClass("cfm-rv-item-active");
+          row.addClass("cfm-rv-item-active");
+          toastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
+        });
+        row.on("dragstart", (e) => {
+          pcDragStart(e, getMultiDragData({ type: "background", name }));
+        });
+        row.on("dragend", () => pcDragEnd());
+        touchDragMgr.bind(row, () =>
+          getMultiDragData({ type: "background", name }),
+        );
+        rightList.append(row);
+      }
+      prependBgNoteToolbar(rightList, renderBackgroundsView);
+      if (cfmMultiSelectMode && selectedBgFolder) {
+        const visible = getVisibleResourceIds();
+        const allSel =
+          visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
+        const toolbar = $(
+          `<div class="cfm-multisel-toolbar"><button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button><span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span></div>`,
+        );
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectAllVisible();
+          renderBackgroundsView();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          renderBackgroundsView();
+        });
+        rightList.prepend(toolbar);
+      }
+    }
+    if (
+      selectedBgFolder &&
+      selectedBgFolder !== "__ungrouped__" &&
+      selectedBgFolder !== "__favorites__" &&
+      tree[selectedBgFolder]
+    ) {
+      const currentFolder = selectedBgFolder;
+      rightList.on("dragover", (e) => {
+        if ($(e.target).closest(".cfm-row").length > 0) return;
+        e.preventDefault();
+        rightList.addClass("cfm-right-list-drop-target");
+        e.originalEvent.dataTransfer.dropEffect = "move";
+      });
+      rightList.on("dragleave", (e) => {
+        if ($(e.relatedTarget).closest("#cfm-bg-right-list").length === 0)
+          rightList.removeClass("cfm-right-list-drop-target");
+      });
+      rightList.on("drop", (e) => {
+        if ($(e.target).closest(".cfm-row").length > 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        rightList.removeClass("cfm-right-list-drop-target");
+        const data = pcGetDropData(e);
+        if (!data) return;
+        if (
+          data.type === "res-folder" &&
+          data.resType === "backgrounds" &&
+          data.id !== currentFolder
+        ) {
+          if (wouldCreateResCycle("backgrounds", data.id, currentFolder)) {
+            toastr.error("循环嵌套，已阻止");
+            return;
+          }
+          reorderResFolder("backgrounds", data.id, currentFolder, null);
+          toastr.success(`「${data.id}」已移入「${currentFolder}」`);
+          renderBackgroundsView();
+        } else if (data.type === "background") {
+          const names =
+            data.multiSelect && data.selectedIds
+              ? data.selectedIds
+              : [data.name];
+          names.forEach((n) => setItemGroup("backgrounds", n, currentFolder));
+          if (data.multiSelect) clearMultiSelect();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个背景移入「${currentFolder}」`
+              : `已将「${getBackgroundDisplayName(data.name)}」移入「${currentFolder}」`,
+          );
+          renderBackgroundsView();
         }
       });
     }
@@ -12526,13 +13768,18 @@ jQuery(async () => {
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(wiNote)}">${escapeHtml(wiNote)}</span>`
           : "";
         // 非模式状态下显示单个备注编辑按钮和重命名按钮
-        const noModeActive = !cfmExportMode && !cfmResDeleteMode && !cfmWorldInfoNoteMode && !cfmWorldInfoRenameMode && !cfmMultiSelectMode;
+        const noModeActive =
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmWorldInfoNoteMode &&
+          !cfmWorldInfoRenameMode &&
+          !cfmMultiSelectMode;
         const singleNoteBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
         const singleRenameBtn = noModeActive
-            ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
-            : "";
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
@@ -12578,7 +13825,11 @@ jQuery(async () => {
           executeWorldInfoRename([n]);
         });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ).length
+          )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(n, e.shiftKey);
@@ -12822,6 +14073,18 @@ jQuery(async () => {
       };
     }
 
+    if (scope === "all" || scope === "backgrounds") {
+      ensureResourceSettings();
+      data.backgrounds = {
+        folderTree: JSON.parse(JSON.stringify(getResFolderTree("backgrounds"))),
+        groups: JSON.parse(JSON.stringify(getResourceGroups("backgrounds"))),
+        favorites: [...getResFavorites("backgrounds")],
+        notes: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].bgNotes || {}),
+        ),
+      };
+    }
+
     return data;
   }
 
@@ -12856,6 +14119,7 @@ jQuery(async () => {
       presets: { matched: 0, skipped: 0 },
       worldinfo: { matched: 0, skipped: 0 },
       themes: { matched: 0, skipped: 0 },
+      backgrounds: { matched: 0, skipped: 0 },
       foldersCreated: 0,
       favoritesRestored: 0,
     };
@@ -13117,6 +14381,59 @@ jQuery(async () => {
       }
     }
 
+    if (jsonData.backgrounds) {
+      const { folderTree, groups, favorites } = jsonData.backgrounds;
+      ensureResourceSettings();
+
+      if (folderTree) {
+        const existingTree = getResFolderTree("backgrounds");
+        for (const [folderId, folderData] of Object.entries(folderTree)) {
+          if (!existingTree[folderId]) {
+            existingTree[folderId] = { ...folderData };
+            report.foldersCreated++;
+          }
+        }
+        saveResTree("backgrounds");
+      }
+
+      if (groups) {
+        const bgNameList = getBackgroundNames();
+        const bgNameSet = new Set(bgNameList);
+        const existingFolderIds = new Set(getResFolderIds("backgrounds"));
+
+        for (const [bgName, folderName] of Object.entries(groups)) {
+          if (bgNameSet.has(bgName) && existingFolderIds.has(folderName)) {
+            setItemGroup("backgrounds", bgName, folderName);
+            report.backgrounds.matched++;
+          } else {
+            report.backgrounds.skipped++;
+          }
+        }
+      }
+
+      if (favorites) {
+        const bgNameList = getBackgroundNames();
+        const bgNameSet = new Set(bgNameList);
+        for (const name of favorites) {
+          if (bgNameSet.has(name) && !isResFavorite("backgrounds", name)) {
+            toggleResFavorite("backgrounds", name);
+            report.favoritesRestored++;
+          }
+        }
+      }
+
+      const bgNotes = jsonData.backgrounds.notes;
+      if (bgNotes && typeof bgNotes === "object") {
+        const bgNameList = getBackgroundNames();
+        const bgNameSet = new Set(bgNameList);
+        for (const [name, note] of Object.entries(bgNotes)) {
+          if (bgNameSet.has(name) && note) {
+            setBgNote(name, note);
+          }
+        }
+      }
+    }
+
     return report;
   }
 
@@ -13132,7 +14449,9 @@ jQuery(async () => {
           ? "预设"
           : currentResourceType === "themes"
             ? "美化"
-            : "世界书";
+            : currentResourceType === "backgrounds"
+              ? "背景"
+              : "世界书";
     const popup = $(`
       <div class="cfm-batch-popup" style="max-width:480px;">
         <div class="cfm-config-header">
@@ -13210,6 +14529,8 @@ jQuery(async () => {
             html += `世界书：匹配 ${report.worldinfo.matched} 个，跳过 ${report.worldinfo.skipped} 个<br>`;
           if (jsonData.themes)
             html += `美化：匹配 ${report.themes.matched} 个，跳过 ${report.themes.skipped} 个<br>`;
+          if (jsonData.backgrounds)
+            html += `背景：匹配 ${report.backgrounds.matched} 个，跳过 ${report.backgrounds.skipped} 个<br>`;
           if (report.favoritesRestored > 0)
             html += `恢复了 ${report.favoritesRestored} 个收藏<br>`;
           html += `</div>`;
@@ -13220,6 +14541,8 @@ jQuery(async () => {
           if (currentResourceType === "presets") renderPresetsView();
           else if (currentResourceType === "worldinfo") renderWorldInfoView();
           else if (currentResourceType === "themes") renderThemesView();
+          else if (currentResourceType === "backgrounds")
+            renderBackgroundsView();
         } catch (err) {
           toastr.error("导入失败：" + err.message);
           console.error("[CFM] Import error:", err);
@@ -13235,10 +14558,11 @@ jQuery(async () => {
   let nativeFilterPreset = null; // 预设当前过滤的文件夹id
   let nativeFilterWorldInfo = null; // 世界书当前过滤的文件夹id
   let nativeFilterTheme = null; // 主题当前过滤的文件夹id
+  let nativeFilterBg = null; // 背景当前过滤的文件夹id
 
   /**
    * 构建文件夹树HTML（递归），用于原生界面浮动面板
-   * @param {string} type - 'chars' | 'presets' | 'worldinfo' | 'themes'
+   * @param {string} type - 'chars' | 'presets' | 'worldinfo' | 'themes' | 'backgrounds'
    * @param {string|null} parentId - 父文件夹ID
    * @param {number} depth - 缩进深度
    * @param {Set} expandedSet - 已展开的文件夹ID集合
@@ -13266,7 +14590,9 @@ jQuery(async () => {
           ? "presets"
           : type === "themes"
             ? "themes"
-            : "worldinfo";
+            : type === "backgrounds"
+              ? "backgrounds"
+              : "worldinfo";
       folderIds = parentId
         ? sortResFolders(resType, getResChildFolders(resType, parentId))
         : sortResFolders(resType, getResTopLevelFolders(resType));
@@ -13330,6 +14656,8 @@ jQuery(async () => {
           allItems = getCurrentPresets().map((p) => p.name);
         } else if (type === "themes") {
           allItems = getThemeNames();
+        } else if (type === "backgrounds") {
+          allItems = getBackgroundNames();
         } else {
           allItems = [];
           $("#world_editor_select option").each(function () {
@@ -13347,7 +14675,7 @@ jQuery(async () => {
       html += `<div class="cfm-nf-item cfm-nf-uncat${isUncatActive ? " cfm-nf-active" : ""}" data-folder-id="__ungrouped__" data-type="${type}" style="padding-left:12px;">`;
       html += `<span class="cfm-nf-arrow-placeholder"></span>`;
       html += `<i class="fa-solid fa-box-open cfm-nf-icon"></i>`;
-      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : type === "themes" ? "未归类主题" : "未归类世界书"}</span>`;
+      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : type === "themes" ? "未归类主题" : type === "backgrounds" ? "未归类背景" : "未归类世界书"}</span>`;
       html += `<span class="cfm-nf-count">${uncatCount}</span>`;
       html += `</div>`;
     }
@@ -13370,7 +14698,9 @@ jQuery(async () => {
           ? nativeFilterPreset
           : type === "themes"
             ? nativeFilterTheme
-            : nativeFilterWorldInfo;
+            : type === "backgrounds"
+              ? nativeFilterBg
+              : nativeFilterWorldInfo;
 
     // 展开状态集合（持久化到会话中）
     if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
@@ -13448,7 +14778,9 @@ jQuery(async () => {
             ? "presets"
             : type === "themes"
               ? "themes"
-              : "worldinfo";
+              : type === "backgrounds"
+                ? "backgrounds"
+                : "worldinfo";
         allIds = getResFolderIds(resType);
       }
       allIds.forEach((id) => expandedSet.add(id));
@@ -13459,7 +14791,9 @@ jQuery(async () => {
             ? nativeFilterPreset
             : type === "themes"
               ? nativeFilterTheme
-              : nativeFilterWorldInfo;
+              : type === "backgrounds"
+                ? nativeFilterBg
+                : nativeFilterWorldInfo;
       treeContainer.html(
         buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
       );
@@ -13476,7 +14810,9 @@ jQuery(async () => {
             ? nativeFilterPreset
             : type === "themes"
               ? nativeFilterTheme
-              : nativeFilterWorldInfo;
+              : type === "backgrounds"
+                ? nativeFilterBg
+                : nativeFilterWorldInfo;
       treeContainer.html(
         buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
       );
@@ -13487,6 +14823,7 @@ jQuery(async () => {
       if (type === "chars") nativeFilterChar = null;
       else if (type === "presets") nativeFilterPreset = null;
       else if (type === "themes") nativeFilterTheme = null;
+      else if (type === "backgrounds") nativeFilterBg = null;
       else nativeFilterWorldInfo = null;
       applyNativeFilter(type);
       panel.remove();
@@ -13502,6 +14839,7 @@ jQuery(async () => {
       if (type === "chars") nativeFilterChar = fid;
       else if (type === "presets") nativeFilterPreset = fid;
       else if (type === "themes") nativeFilterTheme = fid;
+      else if (type === "backgrounds") nativeFilterBg = fid;
       else nativeFilterWorldInfo = fid;
       applyNativeFilter(type);
       panel.remove();
@@ -13540,7 +14878,9 @@ jQuery(async () => {
             ? "presets"
             : type === "themes"
               ? "themes"
-              : "worldinfo";
+              : type === "backgrounds"
+                ? "backgrounds"
+                : "worldinfo";
         const groups = getResourceGroups(resType);
         const tree = getResFolderTree(resType);
         let allNames;
@@ -13548,6 +14888,8 @@ jQuery(async () => {
           allNames = getCurrentPresets().map((p) => p.name);
         } else if (type === "themes") {
           allNames = getThemeNames();
+        } else if (type === "backgrounds") {
+          allNames = getBackgroundNames();
         } else {
           $("#world_editor_select option").each(function () {
             const v = $(this).val();
@@ -13584,7 +14926,9 @@ jQuery(async () => {
           ? "presets"
           : type === "themes"
             ? "themes"
-            : "worldinfo";
+            : type === "backgrounds"
+              ? "backgrounds"
+              : "worldinfo";
       const groups = getResourceGroups(resType);
       for (const [name, fid] of Object.entries(groups)) {
         if (fid === folderId) items.add(name);
@@ -13608,6 +14952,8 @@ jQuery(async () => {
       applyPresetFilter();
     } else if (type === "themes") {
       applyThemeFilter();
+    } else if (type === "backgrounds") {
+      applyBgFilter();
     } else {
       applyWorldInfoFilter();
     }
@@ -13645,6 +14991,7 @@ jQuery(async () => {
   let _presetDetachedOptions = [];
   let _worldInfoDetachedOptions = [];
   let _themeDetachedOptions = [];
+  let _bgDetachedElements = [];
 
   /**
    * 预设过滤：通过 detach/append option 实现过滤
@@ -13775,6 +15122,37 @@ jQuery(async () => {
   }
 
   /**
+   * 背景过滤：通过 hide/show .bg_example 元素实现过滤
+   */
+  function applyBgFilter() {
+    const container = $("#bg_menu_content");
+    if (!container.length) return;
+
+    // 先恢复之前隐藏的
+    if (_bgDetachedElements.length > 0) {
+      for (const el of _bgDetachedElements) {
+        $(el).show();
+      }
+      _bgDetachedElements = [];
+    }
+
+    if (!nativeFilterBg) return;
+
+    const allowedNames = getAllItemsInFolderRecursive(
+      "backgrounds",
+      nativeFilterBg,
+    );
+    container.find(".bg_example").each(function () {
+      const bgFile = $(this).attr("bgfile");
+      if (!bgFile) return;
+      if (!allowedNames.has(bgFile)) {
+        $(this).hide();
+        _bgDetachedElements.push(this);
+      }
+    });
+  }
+
+  /**
    * 辅助：按 option text 字母顺序排序 select 的 options
    */
   function _sortSelectOptions(selectEl) {
@@ -13808,7 +15186,9 @@ jQuery(async () => {
           ? nativeFilterPreset
           : type === "themes"
             ? nativeFilterTheme
-            : nativeFilterWorldInfo;
+            : type === "backgrounds"
+              ? nativeFilterBg
+              : nativeFilterWorldInfo;
     const btn = $(`.cfm-nf-btn[data-nf-type="${type}"]`);
     if (filter) {
       btn.addClass("cfm-nf-btn-active");
@@ -13821,7 +15201,9 @@ jQuery(async () => {
               ? "未归类预设"
               : type === "themes"
                 ? "未归类主题"
-                : "未归类世界书";
+                : type === "backgrounds"
+                  ? "未归类背景"
+                  : "未归类世界书";
       } else if (type === "chars") {
         name = getTagName(filter);
       } else {
@@ -13830,7 +15212,9 @@ jQuery(async () => {
             ? "presets"
             : type === "themes"
               ? "themes"
-              : "worldinfo";
+              : type === "backgrounds"
+                ? "backgrounds"
+                : "worldinfo";
         name = getResFolderDisplayName(resType, filter);
       }
       btn.attr("title", `文件夹过滤: ${name}`);
@@ -13918,6 +15302,26 @@ jQuery(async () => {
           return;
         }
         showNativeFolderPanel($(this), "themes");
+      });
+    }
+
+    // 5. 背景面板 - 注入到 #bg_menu_content 的搜索栏旁
+    if (
+      $("#bg_menu_content").length &&
+      !$("#bg_menu_content").parent().find(".cfm-nf-btn").length
+    ) {
+      const bgBtn = $(
+        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="backgrounds" title="文件夹过滤" style="position:absolute;right:8px;top:8px;z-index:10;"></div>`,
+      );
+      $("#bg_menu_content").parent().css("position", "relative").prepend(bgBtn);
+      bgBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="backgrounds"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "backgrounds");
       });
     }
   }
