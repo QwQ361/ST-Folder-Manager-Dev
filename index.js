@@ -2667,6 +2667,34 @@ jQuery(async () => {
       $("#cfm-bg-note-btn").attr("title", "编辑备注");
       $(".cfm-popup").removeClass("cfm-bg-note-mode");
     }
+    // 主题重命名模式
+    if (cfmThemeRenameMode) {
+      cfmThemeRenameMode = false;
+      cfmThemeRenameSelected.clear();
+      cfmThemeRenameRangeMode = false;
+      cfmThemeRenameLastClicked = null;
+      $("#cfm-theme-rename-btn").removeClass("cfm-edit-active");
+      $("#cfm-theme-rename-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-i-cursor");
+      $("#cfm-theme-rename-btn").attr("title", "重命名主题");
+      $(".cfm-popup").removeClass("cfm-theme-rename-mode");
+    }
+    // 背景重命名模式
+    if (cfmBgRenameMode) {
+      cfmBgRenameMode = false;
+      cfmBgRenameSelected.clear();
+      cfmBgRenameRangeMode = false;
+      cfmBgRenameLastClicked = null;
+      $("#cfm-bg-rename-btn").removeClass("cfm-edit-active");
+      $("#cfm-bg-rename-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-i-cursor");
+      $("#cfm-bg-rename-btn").attr("title", "重命名背景");
+      $(".cfm-popup").removeClass("cfm-bg-rename-mode");
+    }
   }
 
   function enterExportMode() {
@@ -3833,6 +3861,718 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 主题重命名模式 ====================
+  let cfmThemeRenameMode = false;
+  let cfmThemeRenameSelected = new Set();
+  let cfmThemeRenameRangeMode = false;
+  let cfmThemeRenameLastClicked = null;
+
+  function enterThemeRenameMode() {
+    clearAllExclusiveModes();
+    cfmThemeRenameMode = true;
+    cfmThemeRenameSelected.clear();
+    cfmThemeRenameRangeMode = false;
+    cfmThemeRenameLastClicked = null;
+    $("#cfm-theme-rename-btn").addClass("cfm-edit-active");
+    $("#cfm-theme-rename-btn")
+      .find("i")
+      .removeClass("fa-i-cursor")
+      .addClass("fa-check");
+    $("#cfm-theme-rename-btn").attr("title", "确认重命名");
+    $(".cfm-popup").addClass("cfm-theme-rename-mode");
+    renderThemesView();
+  }
+
+  function exitThemeRenameMode() {
+    cfmThemeRenameMode = false;
+    cfmThemeRenameSelected.clear();
+    cfmThemeRenameRangeMode = false;
+    cfmThemeRenameLastClicked = null;
+    $("#cfm-theme-rename-btn").removeClass("cfm-edit-active");
+    $("#cfm-theme-rename-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-i-cursor");
+    $("#cfm-theme-rename-btn").attr("title", "重命名主题");
+    $(".cfm-popup").removeClass("cfm-theme-rename-mode");
+    renderThemesView();
+  }
+
+  function toggleThemeRenameItem(id, shiftKey) {
+    if ((shiftKey || cfmThemeRenameRangeMode) && cfmThemeRenameLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmThemeRenameLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmThemeRenameSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmThemeRenameSelected.has(id)) cfmThemeRenameSelected.delete(id);
+      else cfmThemeRenameSelected.add(id);
+    }
+    cfmThemeRenameLastClicked = id;
+  }
+
+  function prependThemeRenameToolbar(listContainer, renderFn) {
+    if (!cfmThemeRenameMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 &&
+      visible.every((id) => cfmThemeRenameSelected.has(id));
+    const toolbar = $(
+      `<div class="cfm-edit-toolbar"><button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmThemeRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmThemeRenameRangeMode ? "(开)" : ""}</button><span class="cfm-edit-count">${cfmThemeRenameSelected.size > 0 ? `已选 ${cfmThemeRenameSelected.size} 项` : ""}</span><button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button></div>`,
+    );
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) visible.forEach((id) => cfmThemeRenameSelected.delete(id));
+      else visible.forEach((id) => cfmThemeRenameSelected.add(id));
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmThemeRenameRangeMode = !cfmThemeRenameRangeMode;
+      if (cfmThemeRenameRangeMode) cfmThemeRenameLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitThemeRenameMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showThemeRenamePopup(names) {
+    if (!names || names.length === 0) return;
+    const isSingle = names.length === 1;
+    const nameListHtml =
+      names.length <= 5
+        ? names
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : names
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个主题</div>`;
+    if (isSingle) {
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">重命名主题</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>新名称</label><input type="text" class="cfm-edit-input" id="cfm-rename-input" value="${escapeHtml(names[0])}" placeholder="输入新名称"></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-rename-input").focus().select();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const newName = overlay.find("#cfm-rename-input").val().trim();
+          overlay.remove();
+          resolve({ mode: "single", newName });
+        });
+        overlay.find(".cfm-edit-input").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape")
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        });
+      });
+    } else {
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名主题</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀</option></select></div><div class="cfm-edit-popup-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      function updateRenameUI() {
+        const action = overlay.find("#cfm-rename-action").val();
+        const textLabel = overlay.find("#cfm-rename-text-label");
+        const textInput = overlay.find("#cfm-rename-text");
+        const autoDetect = overlay.find(".cfm-rename-auto-detect");
+        const detected = overlay.find("#cfm-rename-detected");
+        if (action === "add-prefix") {
+          textLabel.text("前缀内容");
+          textInput.attr("placeholder", "输入要添加的前缀");
+          autoDetect.hide();
+        } else if (action === "add-suffix") {
+          textLabel.text("后缀内容");
+          textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "del-prefix") {
+          textLabel.text("要删除的前缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
+          const cp = findCommonPrefix(names);
+          detected.html(
+            cp
+              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cp)}">${escapeHtml(cp)}</span>`
+              : '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+          );
+          autoDetect.show();
+        } else if (action === "del-suffix") {
+          textLabel.text("要删除的后缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
+          const cs = findCommonSuffix(names);
+          detected.html(
+            cs
+              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cs)}">${escapeHtml(cs)}</span>`
+              : '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+          );
+          autoDetect.show();
+        }
+      }
+      updateRenameUI();
+      overlay.find("#cfm-rename-action").on("change", updateRenameUI);
+      overlay.on("click", ".cfm-rename-detect-item", function () {
+        overlay.find("#cfm-rename-text").val($(this).data("value"));
+      });
+      overlay.find("#cfm-rename-text").focus();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const action = overlay.find("#cfm-rename-action").val();
+          const text = overlay.find("#cfm-rename-text").val().trim();
+          overlay.remove();
+          resolve({ mode: "batch", action, text });
+        });
+        overlay.find("#cfm-rename-text").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape")
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        });
+      });
+    }
+  }
+
+  async function executeThemeRename(names) {
+    const result = await showThemeRenamePopup(names);
+    if (!result) return;
+    const headers = getContext().getRequestHeaders();
+    let allThemes = [];
+    try {
+      const resp = await fetch("/api/themes/all", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({}),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        allThemes = data.themes || [];
+      }
+    } catch (e) {
+      console.warn("[CFM] 获取主题数据失败", e);
+    }
+    function getThemeData(name) {
+      const t = allThemes.find(
+        (th) => (typeof th === "object" ? th.name : th) === name,
+      );
+      return t && typeof t === "object" ? structuredClone(t) : null;
+    }
+    if (result.mode === "single") {
+      const oldName = names[0],
+        newName = result.newName;
+      if (!newName) {
+        toastr.warning("请输入新名称");
+        return;
+      }
+      if (newName === oldName) {
+        toastr.info("名称未变更");
+        return;
+      }
+      if (new Set(getThemeNames()).has(newName)) {
+        toastr.error(`已存在名为「${newName}」的主题`);
+        return;
+      }
+      try {
+        const themeData = getThemeData(oldName);
+        if (!themeData) {
+          toastr.error(`找不到主题「${oldName}」的数据`);
+          return;
+        }
+        themeData.name = newName;
+        await fetch("/api/themes/save", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(themeData),
+        });
+        await fetch("/api/themes/delete", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: oldName }),
+        });
+        $("#themes option")
+          .filter(function () {
+            return $(this).val() === oldName;
+          })
+          .val(newName)
+          .text(newName);
+        if (typeof themes !== "undefined" && Array.isArray(themes)) {
+          const idx = themes.findIndex(
+            (t) => (typeof t === "object" ? t.name : t) === oldName,
+          );
+          if (idx !== -1 && typeof themes[idx] === "object")
+            themes[idx].name = newName;
+        }
+        updateSettingsAfterRename("themes", oldName, newName);
+        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+      } catch (e) {
+        console.error("[CFM] 主题重命名失败", e);
+        toastr.error(`重命名失败: ${e.message}`);
+        return;
+      }
+    } else if (result.mode === "batch") {
+      const { action, text } = result;
+      if (!text) {
+        toastr.warning("请输入内容");
+        return;
+      }
+      const existingThemes = new Set(getThemeNames());
+      let success = 0,
+        skipped = 0,
+        failed = 0;
+      toastr.info(`正在批量重命名 ${names.length} 个主题...`);
+      for (const oldName of names) {
+        let newName;
+        if (action === "add-prefix") newName = text + oldName;
+        else if (action === "add-suffix") newName = oldName + text;
+        else if (action === "del-prefix") {
+          if (!oldName.startsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(text.length);
+        } else if (action === "del-suffix") {
+          if (!oldName.endsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(0, oldName.length - text.length);
+        }
+        if (!newName || newName === oldName) {
+          skipped++;
+          continue;
+        }
+        if (existingThemes.has(newName)) {
+          skipped++;
+          continue;
+        }
+        try {
+          const themeData = getThemeData(oldName);
+          if (!themeData) {
+            failed++;
+            continue;
+          }
+          themeData.name = newName;
+          await fetch("/api/themes/save", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(themeData),
+          });
+          await fetch("/api/themes/delete", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          $("#themes option")
+            .filter(function () {
+              return $(this).val() === oldName;
+            })
+            .val(newName)
+            .text(newName);
+          if (typeof themes !== "undefined" && Array.isArray(themes)) {
+            const idx = themes.findIndex(
+              (t) => (typeof t === "object" ? t.name : t) === oldName,
+            );
+            if (idx !== -1 && typeof themes[idx] === "object")
+              themes[idx].name = newName;
+          }
+          updateSettingsAfterRename("themes", oldName, newName);
+          existingThemes.delete(oldName);
+          existingThemes.add(newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名主题 ${oldName} 失败`, e);
+          failed++;
+        }
+      }
+      let msg = `已重命名 ${success} 个主题`;
+      if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      if (success > 0) toastr.success(msg);
+      else toastr.warning(msg);
+    }
+    renderThemesView();
+  }
+
+  // ==================== 背景重命名模式 ====================
+  let cfmBgRenameMode = false;
+  let cfmBgRenameSelected = new Set();
+  let cfmBgRenameRangeMode = false;
+  let cfmBgRenameLastClicked = null;
+
+  function enterBgRenameMode() {
+    clearAllExclusiveModes();
+    cfmBgRenameMode = true;
+    cfmBgRenameSelected.clear();
+    cfmBgRenameRangeMode = false;
+    cfmBgRenameLastClicked = null;
+    $("#cfm-bg-rename-btn").addClass("cfm-edit-active");
+    $("#cfm-bg-rename-btn")
+      .find("i")
+      .removeClass("fa-i-cursor")
+      .addClass("fa-check");
+    $("#cfm-bg-rename-btn").attr("title", "确认重命名");
+    $(".cfm-popup").addClass("cfm-bg-rename-mode");
+    renderBackgroundsView();
+  }
+
+  function exitBgRenameMode() {
+    cfmBgRenameMode = false;
+    cfmBgRenameSelected.clear();
+    cfmBgRenameRangeMode = false;
+    cfmBgRenameLastClicked = null;
+    $("#cfm-bg-rename-btn").removeClass("cfm-edit-active");
+    $("#cfm-bg-rename-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-i-cursor");
+    $("#cfm-bg-rename-btn").attr("title", "重命名背景");
+    $(".cfm-popup").removeClass("cfm-bg-rename-mode");
+    renderBackgroundsView();
+  }
+
+  function toggleBgRenameItem(id, shiftKey) {
+    if ((shiftKey || cfmBgRenameRangeMode) && cfmBgRenameLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmBgRenameLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmBgRenameSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmBgRenameSelected.has(id)) cfmBgRenameSelected.delete(id);
+      else cfmBgRenameSelected.add(id);
+    }
+    cfmBgRenameLastClicked = id;
+  }
+
+  function prependBgRenameToolbar(listContainer, renderFn) {
+    if (!cfmBgRenameMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmBgRenameSelected.has(id));
+    const toolbar = $(
+      `<div class="cfm-edit-toolbar"><button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmBgRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmBgRenameRangeMode ? "(开)" : ""}</button><span class="cfm-edit-count">${cfmBgRenameSelected.size > 0 ? `已选 ${cfmBgRenameSelected.size} 项` : ""}</span><button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button></div>`,
+    );
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) visible.forEach((id) => cfmBgRenameSelected.delete(id));
+      else visible.forEach((id) => cfmBgRenameSelected.add(id));
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmBgRenameRangeMode = !cfmBgRenameRangeMode;
+      if (cfmBgRenameRangeMode) cfmBgRenameLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitBgRenameMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showBgRenamePopup(names) {
+    if (!names || names.length === 0) return;
+    const isSingle = names.length === 1;
+    const nameListHtml =
+      names.length <= 5
+        ? names
+            .map(
+              (n) =>
+                `<div class="cfm-edit-name-item">${escapeHtml(getBackgroundDisplayName(n))}</div>`,
+            )
+            .join("")
+        : names
+            .slice(0, 5)
+            .map(
+              (n) =>
+                `<div class="cfm-edit-name-item">${escapeHtml(getBackgroundDisplayName(n))}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个背景</div>`;
+    if (isSingle) {
+      const fullName = names[0];
+      const dotIdx = fullName.lastIndexOf(".");
+      const baseName = dotIdx > 0 ? fullName.substring(0, dotIdx) : fullName;
+      const ext = dotIdx > 0 ? fullName.substring(dotIdx) : "";
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>新名称${ext ? ` (扩展名 ${ext} 将自动保留)` : ""}</label><input type="text" class="cfm-edit-input" id="cfm-rename-input" value="${escapeHtml(baseName)}" placeholder="输入新名称"></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-rename-input").focus().select();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const newBase = overlay.find("#cfm-rename-input").val().trim();
+          overlay.remove();
+          resolve({ mode: "single", newName: newBase + ext });
+        });
+        overlay.find(".cfm-edit-input").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape")
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        });
+      });
+    } else {
+      const baseNames = names.map((n) => {
+        const d = n.lastIndexOf(".");
+        return d > 0 ? n.substring(0, d) : n;
+      });
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option></select></div><div class="cfm-edit-popup-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      function updateRenameUI() {
+        const action = overlay.find("#cfm-rename-action").val();
+        const textLabel = overlay.find("#cfm-rename-text-label");
+        const textInput = overlay.find("#cfm-rename-text");
+        const autoDetect = overlay.find(".cfm-rename-auto-detect");
+        const detected = overlay.find("#cfm-rename-detected");
+        if (action === "add-prefix") {
+          textLabel.text("前缀内容");
+          textInput.attr("placeholder", "输入要添加的前缀");
+          autoDetect.hide();
+        } else if (action === "add-suffix") {
+          textLabel.text("后缀内容(扩展名前)");
+          textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "del-prefix") {
+          textLabel.text("要删除的前缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
+          const cp = findCommonPrefix(baseNames);
+          detected.html(
+            cp
+              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cp)}">${escapeHtml(cp)}</span>`
+              : '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+          );
+          autoDetect.show();
+        } else if (action === "del-suffix") {
+          textLabel.text("要删除的后缀(扩展名前)");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
+          const cs = findCommonSuffix(baseNames);
+          detected.html(
+            cs
+              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cs)}">${escapeHtml(cs)}</span>`
+              : '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+          );
+          autoDetect.show();
+        }
+      }
+      updateRenameUI();
+      overlay.find("#cfm-rename-action").on("change", updateRenameUI);
+      overlay.on("click", ".cfm-rename-detect-item", function () {
+        overlay.find("#cfm-rename-text").val($(this).data("value"));
+      });
+      overlay.find("#cfm-rename-text").focus();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const action = overlay.find("#cfm-rename-action").val();
+          const text = overlay.find("#cfm-rename-text").val().trim();
+          overlay.remove();
+          resolve({ mode: "batch", action, text });
+        });
+        overlay.find("#cfm-rename-text").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape")
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        });
+      });
+    }
+  }
+
+  async function executeBgRename(names) {
+    const result = await showBgRenamePopup(names);
+    if (!result) return;
+    const headers = getContext().getRequestHeaders();
+    if (result.mode === "single") {
+      const oldName = names[0],
+        newName = result.newName;
+      if (!newName) {
+        toastr.warning("请输入新名称");
+        return;
+      }
+      if (newName === oldName) {
+        toastr.info("名称未变更");
+        return;
+      }
+      try {
+        const resp = await fetch("/api/backgrounds/rename", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ old_bg: oldName, new_bg: newName }),
+        });
+        if (!resp.ok) {
+          toastr.error("重命名背景失败");
+          return;
+        }
+        // 更新原生 DOM
+        $("#bg_menu_content .bg_example")
+          .filter(function () {
+            return $(this).attr("bgfile") === oldName;
+          })
+          .attr("bgfile", newName)
+          .attr("title", newName);
+        updateSettingsAfterRename("backgrounds", oldName, newName);
+        toastr.success(
+          `已将「${getBackgroundDisplayName(oldName)}」重命名为「${getBackgroundDisplayName(newName)}」`,
+        );
+      } catch (e) {
+        console.error("[CFM] 背景重命名失败", e);
+        toastr.error(`重命名失败: ${e.message}`);
+        return;
+      }
+    } else if (result.mode === "batch") {
+      const { action, text } = result;
+      if (!text) {
+        toastr.warning("请输入内容");
+        return;
+      }
+      let success = 0,
+        skipped = 0,
+        failed = 0;
+      toastr.info(`正在批量重命名 ${names.length} 个背景...`);
+      for (const oldName of names) {
+        const dotIdx = oldName.lastIndexOf(".");
+        const baseName = dotIdx > 0 ? oldName.substring(0, dotIdx) : oldName;
+        const ext = dotIdx > 0 ? oldName.substring(dotIdx) : "";
+        let newBase;
+        if (action === "add-prefix") newBase = text + baseName;
+        else if (action === "add-suffix") newBase = baseName + text;
+        else if (action === "del-prefix") {
+          if (!baseName.startsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newBase = baseName.substring(text.length);
+        } else if (action === "del-suffix") {
+          if (!baseName.endsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newBase = baseName.substring(0, baseName.length - text.length);
+        }
+        const newName = newBase + ext;
+        if (!newBase || newName === oldName) {
+          skipped++;
+          continue;
+        }
+        try {
+          const resp = await fetch("/api/backgrounds/rename", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ old_bg: oldName, new_bg: newName }),
+          });
+          if (!resp.ok) {
+            failed++;
+            continue;
+          }
+          $("#bg_menu_content .bg_example")
+            .filter(function () {
+              return $(this).attr("bgfile") === oldName;
+            })
+            .attr("bgfile", newName)
+            .attr("title", newName);
+          updateSettingsAfterRename("backgrounds", oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名背景 ${oldName} 失败`, e);
+          failed++;
+        }
+      }
+      let msg = `已重命名 ${success} 个背景`;
+      if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      if (success > 0) toastr.success(msg);
+      else toastr.warning(msg);
+    }
+    // 刷新原生背景列表
+    try {
+      const bgModule = await import("../../../backgrounds.js");
+      if (typeof bgModule.getBackgrounds === "function")
+        await bgModule.getBackgrounds();
+    } catch (e) {
+      console.warn("[CFM] 刷新背景列表失败", e);
+    }
+    renderBackgroundsView();
+  }
+
   // ==================== 预设备注编辑模式 ====================
   let cfmPresetNoteMode = false;
   let cfmPresetNoteSelected = new Set();
@@ -4859,6 +5599,18 @@ jQuery(async () => {
         notes[newName] = notes[oldName];
         delete notes[oldName];
       }
+    } else if (resType === "themes") {
+      const notes = extension_settings[extensionName].themeNotes;
+      if (notes && notes[oldName]) {
+        notes[newName] = notes[oldName];
+        delete notes[oldName];
+      }
+    } else if (resType === "backgrounds") {
+      const notes = extension_settings[extensionName].bgNotes;
+      if (notes && notes[oldName]) {
+        notes[newName] = notes[oldName];
+        delete notes[oldName];
+      }
     }
     getContext().saveSettingsDebounced();
   }
@@ -5814,6 +6566,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-theme-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-theme-btn" title="导入主题"><i class="fa-solid fa-file-import"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-theme-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-theme-rename-btn" title="重命名主题"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-theme-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-theme-btn" title="导出主题"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-theme-btn" title="删除主题"><i class="fa-solid fa-trash-can"></i></button>
@@ -5847,6 +6600,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-bg-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-bg-btn" title="导入背景"><i class="fa-solid fa-file-import"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-bg-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-bg-rename-btn" title="重命名背景"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-bg-file" multiple accept="image/*" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-bg-btn" title="导出背景"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-bg-btn" title="删除背景"><i class="fa-solid fa-trash-can"></i></button>
@@ -7054,6 +7808,38 @@ jQuery(async () => {
         executeWorldInfoRename(names).then(() => exitWorldInfoRenameMode());
       } else {
         enterWorldInfoRenameMode();
+      }
+    });
+
+    // 主题重命名按钮
+    popup.find("#cfm-theme-rename-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmThemeRenameMode) {
+        if (cfmThemeRenameSelected.size === 0) {
+          toastr.warning("请先选择要重命名的主题");
+          return;
+        }
+        const names = Array.from(cfmThemeRenameSelected);
+        executeThemeRename(names).then(() => exitThemeRenameMode());
+      } else {
+        enterThemeRenameMode();
+      }
+    });
+
+    // 背景重命名按钮
+    popup.find("#cfm-bg-rename-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmBgRenameMode) {
+        if (cfmBgRenameSelected.size === 0) {
+          toastr.warning("请先选择要重命名的背景");
+          return;
+        }
+        const names = Array.from(cfmBgRenameSelected);
+        executeBgRename(names).then(() => exitBgRenameMode());
+      } else {
+        enterBgRenameMode();
       }
     });
 
@@ -8457,24 +9243,39 @@ jQuery(async () => {
       const noteHtml = themeNote
         ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(themeNote)}">${escapeHtml(themeNote)}</span>`
         : "";
-      const singleNoteBtn =
+      const noModeActive =
         !cfmExportMode &&
         !cfmResDeleteMode &&
         !cfmThemeNoteMode &&
-        !cfmMultiSelectMode
-          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-          : "";
+        !cfmThemeRenameMode &&
+        !cfmMultiSelectMode;
+      const singleNoteBtn = noModeActive
+        ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+        : "";
+      const singleRenameBtn = noModeActive
+        ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+        : "";
       const isNoteSel = cfmThemeNoteMode && cfmThemeNoteSelected.has(name);
+      const isRenameSel =
+        cfmThemeRenameMode && cfmThemeRenameSelected.has(name);
       const noteCheckHtml = cfmThemeNoteMode
         ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
         : "";
-      // 如果在备注模式，替换 msCheckHtml
-      const finalCheckHtml = cfmThemeNoteMode ? noteCheckHtml : msCheckHtml;
+      const renameCheckHtml = cfmThemeRenameMode
+        ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+        : "";
+      // 如果在备注/重命名模式，替换 msCheckHtml
+      const finalCheckHtml = cfmThemeNoteMode
+        ? noteCheckHtml
+        : cfmThemeRenameMode
+          ? renameCheckHtml
+          : msCheckHtml;
       const row = $(`
-        <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
+        <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
           ${finalCheckHtml}
           <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
           <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(tFolderPath)}</div></div>
+          ${singleRenameBtn}
           ${singleNoteBtn}
           <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
         </div>
@@ -8496,8 +9297,18 @@ jQuery(async () => {
         e.stopPropagation();
         executeThemeNoteEdit([name]);
       });
+      // 单个重命名按钮
+      row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        executeThemeRename([name]);
+      });
       row.on("click", (e) => {
-        if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+        if (
+          $(e.target).closest(
+            ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+          ).length
+        )
           return;
         if (cfmResDeleteMode) {
           toggleResDeleteItem(name, e.shiftKey);
@@ -8511,6 +9322,11 @@ jQuery(async () => {
         }
         if (cfmThemeNoteMode) {
           toggleThemeNoteItem(name, e.shiftKey);
+          executeThemeSearch();
+          return;
+        }
+        if (cfmThemeRenameMode) {
+          toggleThemeRenameItem(name, e.shiftKey);
           executeThemeSearch();
           return;
         }
@@ -8537,6 +9353,8 @@ jQuery(async () => {
     prependExportToolbar(rightList, executeThemeSearch);
     // 备注编辑工具栏
     prependThemeNoteToolbar(rightList, executeThemeSearch);
+    // 重命名工具栏
+    prependThemeRenameToolbar(rightList, executeThemeSearch);
     // 多选工具栏
     if (cfmMultiSelectMode) {
       const visible = getVisibleResourceIds();
@@ -8623,11 +9441,14 @@ jQuery(async () => {
       const fav = isResFavorite("backgrounds", name);
       const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(name);
       const isNoteSel = cfmBgNoteMode && cfmBgNoteSelected.has(name);
+      const isRenameSel = cfmBgRenameMode && cfmBgRenameSelected.has(name);
       const msCheckHtml = cfmBgNoteMode
         ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
-        : cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-          : "";
+        : cfmBgRenameMode
+          ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+          : cfmMultiSelectMode
+            ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+            : "";
       const bFolderPath = (() => {
         const grp = groups[name];
         if (grp && getResFolderTree("backgrounds")[grp])
@@ -8640,13 +9461,17 @@ jQuery(async () => {
       const noteHtml = bgNote
         ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
         : "";
-      const singleNoteBtn =
-        !cfmBgNoteMode && !cfmMultiSelectMode
-          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-          : "";
+      const noModeActive =
+        !cfmBgNoteMode && !cfmBgRenameMode && !cfmMultiSelectMode;
+      const singleNoteBtn = noModeActive
+        ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+        : "";
+      const singleRenameBtn = noModeActive
+        ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+        : "";
       const thumbUrl = getBackgroundThumbnailUrl(name);
       const row = $(
-        `<div class="cfm-row cfm-row-char cfm-row-bg cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(bFolderPath)}</div></div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+        `<div class="cfm-row cfm-row-char cfm-row-bg cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(bFolderPath)}</div></div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
       );
       row.find(".cfm-row-star").on("click touchend", (e) => {
         e.preventDefault();
@@ -8665,11 +9490,26 @@ jQuery(async () => {
         e.stopPropagation();
         executeBgNoteEdit([name]);
       });
+      // 单个重命名按钮
+      row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        executeBgRename([name]);
+      });
       row.on("click", (e) => {
-        if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+        if (
+          $(e.target).closest(
+            ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+          ).length
+        )
           return;
         if (cfmBgNoteMode) {
           toggleBgNoteItem(name, e.shiftKey);
+          executeBgSearch();
+          return;
+        }
+        if (cfmBgRenameMode) {
+          toggleBgRenameItem(name, e.shiftKey);
           executeBgSearch();
           return;
         }
@@ -8693,6 +9533,7 @@ jQuery(async () => {
       rightList.append(row);
     }
     prependBgNoteToolbar(rightList, executeBgSearch);
+    prependBgRenameToolbar(rightList, executeBgSearch);
     if (cfmMultiSelectMode) {
       const visible = getVisibleResourceIds();
       const allSel =
@@ -12423,33 +13264,43 @@ jQuery(async () => {
         const isExpSel = cfmExportMode && cfmExportSelected.has(name);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(name);
         const isNoteSel = cfmThemeNoteMode && cfmThemeNoteSelected.has(name);
+        const isRenameSel =
+          cfmThemeRenameMode && cfmThemeRenameSelected.has(name);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
             : cfmThemeNoteMode
               ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
-              : cfmMultiSelectMode
-                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-                : "";
+              : cfmThemeRenameMode
+                ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                : cfmMultiSelectMode
+                  ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                  : "";
         // 备注信息
         const themeNote = getThemeNote(name);
         const noteHtml = themeNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(themeNote)}">${escapeHtml(themeNote)}</span>`
           : "";
-        // 非模式状态下显示单个备注编辑按钮
-        const singleNoteBtn =
+        // 非模式状态下显示单个编辑按钮
+        const noModeActive =
           !cfmExportMode &&
           !cfmResDeleteMode &&
           !cfmThemeNoteMode &&
-          !cfmMultiSelectMode
-            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-            : "";
+          !cfmThemeRenameMode &&
+          !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
+        const singleRenameBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
             <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}</div>
+            ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -12481,8 +13332,18 @@ jQuery(async () => {
           e.stopPropagation();
           executeThemeNoteEdit([name]);
         });
+        // 单个重命名按钮
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeThemeRename([name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ).length
+          )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(name, e.shiftKey);
@@ -12496,6 +13357,11 @@ jQuery(async () => {
           }
           if (cfmThemeNoteMode) {
             toggleThemeNoteItem(name, e.shiftKey);
+            renderThemesView();
+            return;
+          }
+          if (cfmThemeRenameMode) {
+            toggleThemeRenameItem(name, e.shiftKey);
             renderThemesView();
             return;
           }
@@ -12530,6 +13396,8 @@ jQuery(async () => {
       prependExportToolbar(rightList, renderThemesView);
       // 备注编辑工具栏
       prependThemeNoteToolbar(rightList, renderThemesView);
+      // 重命名工具栏
+      prependThemeRenameToolbar(rightList, renderThemesView);
       // 多选工具栏
       if (cfmMultiSelectMode && selectedThemeFolder) {
         const visible = getVisibleResourceIds();
@@ -13052,29 +13920,37 @@ jQuery(async () => {
         const isExpSel = cfmExportMode && cfmExportSelected.has(name);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(name);
         const isNoteSel = cfmBgNoteMode && cfmBgNoteSelected.has(name);
+        const isRenameSel = cfmBgRenameMode && cfmBgRenameSelected.has(name);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
             : cfmBgNoteMode
               ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
-              : cfmMultiSelectMode
-                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-                : "";
+              : cfmBgRenameMode
+                ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                : cfmMultiSelectMode
+                  ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                  : "";
         const bgNote = getBgNote(name);
         const noteHtml = bgNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
           : "";
-        const singleNoteBtn =
+        const noModeActive =
           !cfmExportMode &&
           !cfmResDeleteMode &&
           !cfmBgNoteMode &&
-          !cfmMultiSelectMode
-            ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
-            : "";
+          !cfmBgRenameMode &&
+          !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
+        const singleRenameBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
         const thumbUrl = getBackgroundThumbnailUrl(name);
         const row = $(
-          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
         );
         row.find(".cfm-row-star").on("click touchend", (e) => {
           e.preventDefault();
@@ -13103,8 +13979,18 @@ jQuery(async () => {
           e.stopPropagation();
           executeBgNoteEdit([name]);
         });
+        // 单个重命名按钮
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeBgRename([name]);
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ).length
+          )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(name, e.shiftKey);
@@ -13118,6 +14004,11 @@ jQuery(async () => {
           }
           if (cfmBgNoteMode) {
             toggleBgNoteItem(name, e.shiftKey);
+            renderBackgroundsView();
+            return;
+          }
+          if (cfmBgRenameMode) {
+            toggleBgRenameItem(name, e.shiftKey);
             renderBackgroundsView();
             return;
           }
@@ -13148,6 +14039,8 @@ jQuery(async () => {
       prependExportToolbar(rightList, renderBackgroundsView);
       // 备注编辑工具栏
       prependBgNoteToolbar(rightList, renderBackgroundsView);
+      // 重命名工具栏
+      prependBgRenameToolbar(rightList, renderBackgroundsView);
       if (cfmMultiSelectMode && selectedBgFolder) {
         const visible = getVisibleResourceIds();
         const allSel =
