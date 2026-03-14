@@ -2626,6 +2626,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
       if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
       if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
+      if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
       return "导出世界书";
     });
     $(".cfm-popup").removeClass("cfm-export-mode");
@@ -2713,6 +2714,8 @@ jQuery(async () => {
         await exportPresets(selected, headers);
       } else if (currentResourceType === "themes") {
         await exportThemes(selected, headers);
+      } else if (currentResourceType === "backgrounds") {
+        await exportBackgrounds(selected, headers);
       } else {
         await exportWorldInfos(selected, headers);
       }
@@ -2987,6 +2990,57 @@ jQuery(async () => {
     }
   }
 
+  // 背景导出
+  async function exportBackgrounds(bgNames, headers) {
+    if (bgNames.length === 1) {
+      const url = `/backgrounds/${encodeURIComponent(bgNames[0])}`;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = bgNames[0];
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        toastr.success("背景已导出");
+      } catch (e) {
+        throw new Error(`导出背景失败: ${e.message}`);
+      }
+    } else {
+      if (!window.JSZip) {
+        await import("../../../../lib/jszip.min.js");
+      }
+      const zip = new JSZip();
+      let success = 0;
+      toastr.info(`正在导出 ${bgNames.length} 个背景...`);
+      for (const name of bgNames) {
+        try {
+          const resp = await fetch(`/backgrounds/${encodeURIComponent(name)}`);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            zip.file(name, blob);
+            success++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 导出背景 ${name} 失败`, e);
+        }
+      }
+      if (success === 0) throw new Error("没有成功导出任何背景");
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "背景.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success(`已导出 ${success} 个背景`);
+    }
+  }
+
   // ==================== 资源删除模式状态 ====================
   let cfmResDeleteMode = false;
   let cfmResDeleteSelected = new Set();
@@ -3037,6 +3091,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-res-delete-char-btn") return "删除角色卡";
       if ($(this).attr("id") === "cfm-res-delete-preset-btn") return "删除预设";
       if ($(this).attr("id") === "cfm-res-delete-theme-btn") return "删除主题";
+      if ($(this).attr("id") === "cfm-res-delete-bg-btn") return "删除背景";
       return "删除世界书";
     });
     $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -3113,7 +3168,9 @@ jQuery(async () => {
           ? "预设"
           : currentResourceType === "themes"
             ? "主题"
-            : "世界书";
+            : currentResourceType === "backgrounds"
+              ? "背景"
+              : "世界书";
 
     // 确认弹窗
     const confirmed = confirm(
@@ -3207,6 +3264,36 @@ jQuery(async () => {
             }
           } catch (e) {
             console.warn(`[CFM] 删除主题 ${name} 失败`, e);
+            fail++;
+          }
+        }
+      } else if (currentResourceType === "backgrounds") {
+        for (const name of selected) {
+          try {
+            const resp = await fetch("/api/backgrounds/delete", {
+              method: "POST",
+              headers: headers,
+              body: JSON.stringify({ bg: name }),
+            });
+            if (resp.ok) {
+              // 清理文件夹分配
+              const groups = extension_settings[extensionName].bgGroups;
+              if (groups && groups[name]) delete groups[name];
+              // 清理备注
+              const notes = extension_settings[extensionName].bgNotes;
+              if (notes && notes[name]) delete notes[name];
+              // 从酒馆原生DOM中移除对应背景元素
+              $("#bg_menu_content .bg_example")
+                .filter(function () {
+                  return $(this).attr("bgfile") === name;
+                })
+                .remove();
+              success++;
+            } else {
+              fail++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 删除背景 ${name} 失败`, e);
             fail++;
           }
         }
@@ -5705,7 +5792,11 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-bg-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-bg-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-bg-btn" title="导入背景"><i class="fa-solid fa-file-import"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-bg-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <input type="file" id="cfm-import-bg-file" multiple accept="image/*" style="display:none;">
+                            <button class="cfm-export-btn" id="cfm-export-bg-btn" title="导出背景"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-bg-btn" title="删除背景"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-bg-right-sort-wrapper">
                                 <button class="cfm-sort-trigger" id="cfm-bg-right-sort-btn" title="背景排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
@@ -7033,6 +7124,153 @@ jQuery(async () => {
       const parts = [];
       if (successCount > 0)
         parts.push(`成功导入 ${successCount} 个主题${folderHint}`);
+      if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
+      if (failCount > 0) parts.push(`${failCount} 个失败`);
+      if (successCount > 0) {
+        toastr.success(parts.join("，"));
+      } else if (skipCount > 0 && failCount === 0) {
+        toastr.info(parts.join("，"));
+      } else if (failCount > 0) {
+        toastr.error(parts.join("，"));
+      }
+
+      e.target.value = null;
+    });
+
+    // 背景导入按钮
+    popup.find("#cfm-import-bg-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-import-bg-file").val("").trigger("click");
+    });
+
+    popup.find("#cfm-import-bg-file").on("change", async function (e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const targetFolder =
+        selectedBgFolder &&
+        selectedBgFolder !== "__ungrouped__" &&
+        selectedBgFolder !== "__favorites__"
+          ? selectedBgFolder
+          : null;
+
+      const headers = getContext().getRequestHeaders();
+      delete headers["Content-Type"];
+
+      // 获取现有背景名称集合
+      const existingBgs = new Set(getBackgroundNames());
+
+      // 过滤有效图片文件
+      const imageFiles = [];
+      for (const file of files) {
+        if (file.type.startsWith("image/")) {
+          imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length === 0) {
+        toastr.warning("没有可导入的有效图片文件");
+        e.target.value = null;
+        return;
+      }
+
+      // 检测重名
+      const duplicateNames = imageFiles
+        .filter((f) => existingBgs.has(f.name))
+        .map((f) => f.name);
+      let dupAction = null;
+      if (duplicateNames.length > 0) {
+        dupAction = await showDuplicateImportDialog(
+          duplicateNames,
+          imageFiles.length,
+          "背景",
+        );
+        if (dupAction === "cancel") {
+          toastr.info("已取消导入");
+          e.target.value = null;
+          return;
+        }
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      let skipCount = 0;
+
+      for (const file of imageFiles) {
+        try {
+          const isDuplicate = existingBgs.has(file.name);
+          let finalName = file.name;
+
+          if (isDuplicate) {
+            if (dupAction === "skip") {
+              skipCount++;
+              continue;
+            } else if (dupAction === "rename") {
+              const ext =
+                file.name.lastIndexOf(".") !== -1
+                  ? file.name.slice(file.name.lastIndexOf("."))
+                  : "";
+              const base = ext ? file.name.slice(0, -ext.length) : file.name;
+              finalName = getUniqueImportName(base, existingBgs) + ext;
+            }
+            // 'overwrite' 时直接用原名覆盖
+          }
+
+          const formData = new FormData();
+          if (finalName !== file.name) {
+            const renamedFile = new File([file], finalName, {
+              type: file.type,
+            });
+            formData.append("avatar", renamedFile);
+          } else {
+            formData.append("avatar", file);
+          }
+
+          const resp = await fetch("/api/backgrounds/upload", {
+            method: "POST",
+            headers,
+            body: formData,
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+          existingBgs.add(finalName);
+
+          if (targetFolder) {
+            setItemGroup("backgrounds", finalName, targetFolder);
+          }
+          successCount++;
+        } catch (error) {
+          console.error(`导入背景失败: ${file.name}`, error);
+          failCount++;
+        }
+      }
+
+      // 刷新酒馆原生背景列表
+      try {
+        const bgResp = await fetch("/api/backgrounds/all", {
+          method: "POST",
+          headers: getContext().getRequestHeaders(),
+          body: JSON.stringify({}),
+        });
+        if (bgResp.ok) {
+          // 触发酒馆原生背景列表刷新
+          const bgContainer = $("#bg_menu_content");
+          if (bgContainer.length) {
+            // 简单方式：重新加载背景页面
+            $("#manageBackgrounds").trigger("click");
+          }
+        }
+      } catch (err) {
+        console.warn("[CFM] 刷新背景列表失败", err);
+      }
+
+      // 刷新视图
+      renderBackgroundsView();
+
+      const folderHint = targetFolder ? `到「${targetFolder}」` : "（未归类）";
+      const parts = [];
+      if (successCount > 0)
+        parts.push(`成功导入 ${successCount} 个背景${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
