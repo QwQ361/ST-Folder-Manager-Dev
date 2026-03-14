@@ -2230,6 +2230,8 @@ jQuery(async () => {
           clearTimeout(longPressTimer);
           longPressTimer = null;
         }
+        // 无论什么情况，都确保移除长按视觉反馈
+        btn.removeClass("cfm-long-press-ready");
         if (!isDragging && !longPressTriggered) {
           e.preventDefault();
           showMainPopup();
@@ -2237,7 +2239,6 @@ jQuery(async () => {
         }
         if (isDragging) {
           isDragging = false;
-          btn.removeClass("cfm-long-press-ready");
           if (hasMoved)
             localStorage.setItem(
               STORAGE_KEY_BTN_POS,
@@ -2255,12 +2256,24 @@ jQuery(async () => {
         clearTimeout(longPressTimer);
         longPressTimer = null;
       }
-      if (isDragging) {
-        isDragging = false;
-        btn.removeClass("cfm-long-press-ready");
-      }
+      isDragging = false;
+      btn.removeClass("cfm-long-press-ready");
       hasMoved = false;
       longPressTriggered = false;
+    });
+
+    // 兜底：页面失焦或切换标签时清除长按状态，防止某些移动浏览器不触发 touchend/touchcancel
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        isDragging = false;
+        btn.removeClass("cfm-long-press-ready");
+        hasMoved = false;
+        longPressTriggered = false;
+      }
     });
 
     let resizeTimer;
@@ -6333,6 +6346,8 @@ jQuery(async () => {
 
   function showMainPopup() {
     if ($("#cfm-overlay").length > 0) return;
+    // 兜底：打开弹窗时确保清除长按视觉反馈
+    $("#cfm-folder-button").removeClass("cfm-long-press-ready");
     $("#cfm-topbar-button .drawer-icon")
       .removeClass("closedIcon")
       .addClass("openIcon");
