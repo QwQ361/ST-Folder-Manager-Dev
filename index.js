@@ -5531,7 +5531,8 @@ jQuery(async () => {
   }
 
   // 同步更新世界书DOM中的option（重命名后立即同步）
-  function syncWorldInfoOptionInDOM(oldName, newName) {
+  async function syncWorldInfoOptionInDOM(oldName, newName) {
+    // 更新编辑器下拉列表
     const $select = $("#world_editor_select");
     const $option = $select.find(`option`).filter(function () {
       return $(this).text() === oldName;
@@ -5544,6 +5545,29 @@ jQuery(async () => {
       }
     } else {
       $select.append($(`<option></option>`).val(newName).text(newName));
+    }
+    // 更新全局世界书选择器
+    const $globalSelect = $("#world_info");
+    const $globalOption = $globalSelect.find(`option`).filter(function () {
+      return $(this).text() === oldName;
+    });
+    if ($globalOption.length > 0) {
+      $globalOption.text(newName);
+    }
+    // 同步更新 world_names 数组（内存中的世界书名称列表）
+    try {
+      const wiModule = await import("../../../world-info.js");
+      const wNames = wiModule.world_names;
+      if (Array.isArray(wNames)) {
+        const oldIdx = wNames.indexOf(oldName);
+        if (oldIdx !== -1) {
+          wNames[oldIdx] = newName;
+        } else if (!wNames.includes(newName)) {
+          wNames.push(newName);
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 同步 world_names 失败", e);
     }
     // 同时清除世界书名称缓存，确保下次渲染获取最新数据
     _worldInfoNamesCache = null;
@@ -5908,6 +5932,67 @@ jQuery(async () => {
     }
   }
 
+  // 世界书重命名后，更新所有角色卡的主绑定和辅助世界书引用
+  async function updateCharWorldBindings(oldName, newName) {
+    const characters = getContext().characters;
+    const headers = getContext().getRequestHeaders();
+    let updatedPrimary = 0;
+    let updatedAux = 0;
+
+    // 1. 更新角色卡主绑定世界书 (character.data.extensions.world)
+    for (const char of characters) {
+      if (char?.data?.extensions?.world === oldName) {
+        try {
+          const resp = await fetch("/api/characters/merge-attributes", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              avatar: char.avatar,
+              data: { extensions: { world: newName } },
+            }),
+          });
+          if (resp.ok) {
+            // 更新本地缓存
+            char.data.extensions.world = newName;
+            updatedPrimary++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 更新角色 ${char.avatar} 的主绑定世界书失败`, e);
+        }
+      }
+    }
+
+    // 2. 更新辅助世界书 (world_info.charLore[].extraBooks)
+    try {
+      const wiModule = await import("../../../world-info.js");
+      const worldInfoObj = wiModule.world_info;
+      if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
+        let changed = false;
+        for (const entry of worldInfoObj.charLore) {
+          if (entry.extraBooks && Array.isArray(entry.extraBooks)) {
+            const idx = entry.extraBooks.indexOf(oldName);
+            if (idx !== -1) {
+              entry.extraBooks[idx] = newName;
+              changed = true;
+              updatedAux++;
+            }
+          }
+        }
+        if (changed) {
+          getContext().saveSettingsDebounced();
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 更新辅助世界书绑定失败", e);
+    }
+
+    if (updatedPrimary > 0 || updatedAux > 0) {
+      console.log(
+        `[CFM] 世界书「${oldName}」→「${newName}」：更新了 ${updatedPrimary} 个主绑定、${updatedAux} 个辅助绑定`,
+      );
+    }
+  }
+
   // 执行世界书重命名
   async function executeWorldInfoRename(names) {
     const result = await showWorldInfoRenamePopup(names);
@@ -5949,8 +6034,10 @@ jQuery(async () => {
           body: JSON.stringify({ name: oldName }),
         });
         // 同步更新DOM中的option（防止渲染时清理逻辑误删新名称的分组）
-        syncWorldInfoOptionInDOM(oldName, newName);
+        await syncWorldInfoOptionInDOM(oldName, newName);
         updateSettingsAfterRename("worldinfo", oldName, newName);
+        // 更新角色卡的世界书绑定
+        await updateCharWorldBindings(oldName, newName);
         toastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 世界书重命名失败", e);
@@ -6018,8 +6105,10 @@ jQuery(async () => {
             body: JSON.stringify({ name: oldName }),
           });
           // 同步更新DOM中的option
-          syncWorldInfoOptionInDOM(oldName, newName);
+          await syncWorldInfoOptionInDOM(oldName, newName);
           updateSettingsAfterRename("worldinfo", oldName, newName);
+          // 更新角色卡的世界书绑定
+          await updateCharWorldBindings(oldName, newName);
           success++;
         } catch (e) {
           console.warn(`[CFM] 重命名世界书 ${oldName} 失败`, e);
@@ -14135,10 +14224,13 @@ jQuery(async () => {
       }
       if (ch.data?.character_book) {
         const bookName = ch.data.character_book.name || `${ch.name}'s Lorebook`;
+        // 判断是否已导入：内嵌世界书名称在列表中，或者角色已绑定了一个存在的世界书
+        const worldName = ch.data?.extensions?.world;
+        const imported = wiNames.has(bookName) || (worldName && wiNames.has(worldName));
         embedded.set(ch.avatar, {
           name: ch.name || ch.avatar,
           bookName,
-          alreadyImported: wiNames.has(bookName),
+          alreadyImported: imported,
         });
       }
     }
@@ -14424,6 +14516,49 @@ jQuery(async () => {
 
       // 刷新缓存和视图
       _worldInfoNamesCache = null;
+      if (importedCount > 0) {
+        // 有新导入的世界书时，需要先同步DOM和world_names
+        // 通过API获取最新的世界书列表并更新DOM
+        try {
+          const resp = await fetch("/api/settings/get", {
+            method: "POST",
+            headers: getContext().getRequestHeaders(),
+            body: JSON.stringify({}),
+          });
+          if (resp.ok) {
+            const settingsData = await resp.json();
+            const latestNames = settingsData.world_names || [];
+            // 更新DOM中的world_editor_select
+            const $editorSelect = $("#world_editor_select");
+            const existingOptions = new Set();
+            $editorSelect.find("option").each(function () {
+              existingOptions.add($(this).text());
+            });
+            for (const wn of latestNames) {
+              if (!existingOptions.has(wn)) {
+                $editorSelect.append(
+                  $(`<option></option>`).val(wn).text(wn),
+                );
+              }
+            }
+            // 同步更新内存中的world_names
+            try {
+              const wiModule = await import("../../../world-info.js");
+              const wNames = wiModule.world_names;
+              if (Array.isArray(wNames)) {
+                for (const wn of latestNames) {
+                  if (!wNames.includes(wn)) wNames.push(wn);
+                }
+              }
+            } catch (e) {
+              console.warn("[CFM] 同步 world_names 失败", e);
+            }
+            _worldInfoNamesCache = latestNames;
+          }
+        } catch (e) {
+          console.warn("[CFM] 刷新世界书列表失败", e);
+        }
+      }
       renderWorldInfoView();
 
       // 汇报结果
