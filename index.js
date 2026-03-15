@@ -2695,6 +2695,34 @@ jQuery(async () => {
       $("#cfm-bg-rename-btn").attr("title", "重命名背景");
       $(".cfm-popup").removeClass("cfm-bg-rename-mode");
     }
+    // 世界书备注模式
+    if (cfmWorldInfoNoteMode) {
+      cfmWorldInfoNoteMode = false;
+      cfmWorldInfoNoteSelected.clear();
+      cfmWorldInfoNoteRangeMode = false;
+      cfmWorldInfoNoteLastClicked = null;
+      $("#cfm-worldinfo-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-worldinfo-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-worldinfo-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-worldinfo-note-mode");
+    }
+    // 预设备注模式
+    if (cfmPresetNoteMode) {
+      cfmPresetNoteMode = false;
+      cfmPresetNoteSelected.clear();
+      cfmPresetNoteRangeMode = false;
+      cfmPresetNoteLastClicked = null;
+      $("#cfm-preset-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-preset-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-preset-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-preset-note-mode");
+    }
   }
 
   function enterExportMode() {
@@ -4594,19 +4622,11 @@ jQuery(async () => {
   }
 
   function enterPresetNoteMode() {
+    clearAllExclusiveModes();
     cfmPresetNoteMode = true;
     cfmPresetNoteSelected.clear();
     cfmPresetNoteRangeMode = false;
     cfmPresetNoteLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
-    if (cfmPresetRenameMode) exitPresetRenameMode();
     $("#cfm-preset-note-btn").addClass("cfm-edit-active");
     $("#cfm-preset-note-btn")
       .find("i")
@@ -4812,19 +4832,11 @@ jQuery(async () => {
   }
 
   function enterWorldInfoNoteMode() {
+    clearAllExclusiveModes();
     cfmWorldInfoNoteMode = true;
     cfmWorldInfoNoteSelected.clear();
     cfmWorldInfoNoteRangeMode = false;
     cfmWorldInfoNoteLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
-    if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
     $("#cfm-worldinfo-note-btn").addClass("cfm-edit-active");
     $("#cfm-worldinfo-note-btn")
       .find("i")
@@ -5019,19 +5031,11 @@ jQuery(async () => {
   let cfmPresetRenameLastClicked = null;
 
   function enterPresetRenameMode() {
+    clearAllExclusiveModes();
     cfmPresetRenameMode = true;
     cfmPresetRenameSelected.clear();
     cfmPresetRenameRangeMode = false;
     cfmPresetRenameLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
-    if (cfmPresetNoteMode) exitPresetNoteMode();
     $("#cfm-preset-rename-btn").addClass("cfm-edit-active");
     $("#cfm-preset-rename-btn")
       .find("i")
@@ -5646,19 +5650,11 @@ jQuery(async () => {
   let cfmWorldInfoRenameLastClicked = null;
 
   function enterWorldInfoRenameMode() {
+    clearAllExclusiveModes();
     cfmWorldInfoRenameMode = true;
     cfmWorldInfoRenameSelected.clear();
     cfmWorldInfoRenameRangeMode = false;
     cfmWorldInfoRenameLastClicked = null;
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
-    if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
     $("#cfm-worldinfo-rename-btn").addClass("cfm-edit-active");
     $("#cfm-worldinfo-rename-btn")
       .find("i")
@@ -6132,19 +6128,11 @@ jQuery(async () => {
   let cfmEditLastClicked = null;
 
   function enterEditMode() {
+    clearAllExclusiveModes();
     cfmEditMode = true;
     cfmEditSelected.clear();
     cfmEditRangeMode = false;
     cfmEditLastClicked = null;
-    // 关闭其他模式
-    if (cfmMultiSelectMode) {
-      cfmMultiSelectMode = false;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
-      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
-    }
-    if (cfmExportMode) exitExportMode();
-    if (cfmResDeleteMode) exitResDeleteMode();
     // 更新按钮外观
     $("#cfm-edit-char-btn").addClass("cfm-edit-active");
     $("#cfm-edit-char-btn")
@@ -14226,7 +14214,8 @@ jQuery(async () => {
         const bookName = ch.data.character_book.name || `${ch.name}'s Lorebook`;
         // 判断是否已导入：内嵌世界书名称在列表中，或者角色已绑定了一个存在的世界书
         const worldName = ch.data?.extensions?.world;
-        const imported = wiNames.has(bookName) || (worldName && wiNames.has(worldName));
+        const imported =
+          wiNames.has(bookName) || (worldName && wiNames.has(worldName));
         embedded.set(ch.avatar, {
           name: ch.name || ch.avatar,
           bookName,
@@ -14536,9 +14525,7 @@ jQuery(async () => {
             });
             for (const wn of latestNames) {
               if (!existingOptions.has(wn)) {
-                $editorSelect.append(
-                  $(`<option></option>`).val(wn).text(wn),
-                );
+                $editorSelect.append($(`<option></option>`).val(wn).text(wn));
               }
             }
             // 同步更新内存中的world_names
