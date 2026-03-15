@@ -3309,8 +3309,15 @@ jQuery(async () => {
       toastr.info(`正在删除 ${count} 个${typeLabel}...`);
 
       if (currentResourceType === "chars") {
+        const ctx = getContext();
+        const evtSource = ctx.eventSource;
+        const evtTypes = ctx.eventTypes;
+        const allChars = ctx.characters;
         for (const avatar of selected) {
           try {
+            // 在删除前获取角色信息，用于触发事件
+            const character = allChars.find((c) => c.avatar === avatar);
+            const chid = character ? allChars.indexOf(character) : -1;
             const resp = await fetch("/api/characters/delete", {
               method: "POST",
               headers: headers,
@@ -3327,6 +3334,14 @@ jQuery(async () => {
               else if (Array.isArray(favSet)) {
                 const idx = favSet.indexOf(avatar);
                 if (idx !== -1) favSet.splice(idx, 1);
+              }
+              // 触发 CHARACTER_DELETED 事件，让其他插件（如自动删除绑定世界书）能够响应
+              if (evtSource && evtTypes && character) {
+                try {
+                  await evtSource.emit(evtTypes.CHARACTER_DELETED, { id: chid, character: character });
+                } catch (evtErr) {
+                  console.warn(`[CFM] 触发 CHARACTER_DELETED 事件失败`, evtErr);
+                }
               }
               success++;
             } else {
@@ -7649,6 +7664,34 @@ jQuery(async () => {
         }
         if (embImported > 0) {
           _worldInfoNamesCache = null;
+          // 强制从 API 刷新世界书名称列表，并同步到 DOM 和 world_names
+          try {
+            const freshNames = await getWorldInfoNames(true);
+            const wiModule = await import("../../../world-info.js");
+            const wNames = wiModule.world_names;
+            const editorSelect = $("#world_editor_select");
+            const globalSelect = $("#world_info");
+            for (const fn of freshNames) {
+              // 同步到 #world_editor_select
+              if (!editorSelect.find(`option[value="${CSS.escape(fn)}"]`).length) {
+                editorSelect.append(
+                  $('<option>').val(fn).text(fn)
+                );
+              }
+              // 同步到 #world_info
+              if (!globalSelect.find(`option[value="${CSS.escape(fn)}"]`).length) {
+                globalSelect.append(
+                  $('<option>').val(fn).text(fn)
+                );
+              }
+              // 同步到 world_names 数组
+              if (Array.isArray(wNames) && !wNames.includes(fn)) {
+                wNames.push(fn);
+              }
+            }
+          } catch (syncErr) {
+            console.warn("[CFM] 同步世界书名称到DOM失败", syncErr);
+          }
           toastr.info(`自动提取了 ${embImported} 个内嵌世界书`, "角色世界书");
         }
       }
