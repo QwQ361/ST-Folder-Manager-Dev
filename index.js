@@ -1359,8 +1359,7 @@ jQuery(async () => {
           renderRightPane();
         } else if (targetId) {
           avatars.forEach((av) => {
-            const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(av, targetId, ch?.name || av, count > 1);
+            handleCharDropToFolder(av, targetId);
           });
           toastr.success(
             count > 1
@@ -1378,13 +1377,7 @@ jQuery(async () => {
           selectedTreeNode !== "__favorites__"
         ) {
           avatars.forEach((av) => {
-            const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(
-              av,
-              selectedTreeNode,
-              ch?.name || av,
-              count > 1,
-            );
+            handleCharDropToFolder(av, selectedTreeNode);
           });
           toastr.success(
             count > 1
@@ -1740,16 +1733,12 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
   // 处理角色拖放到文件夹（根据复制模式决定行为）
-  // silent: 批量操作时为true，抑制单条toastr消息
-  function handleCharDropToFolder(avatar, folderId, charName, silent) {
+  // toastr消息由外层调用者统一处理
+  function handleCharDropToFolder(avatar, folderId) {
     if (cfmCopyMode) {
       copyCharToFolder(avatar, folderId);
-      if (!silent)
-        toastr.success(`已将「${charName}」复制到「${getTagName(folderId)}」`);
     } else {
       moveCharToFolder(avatar, folderId);
-      if (!silent)
-        toastr.success(`已将「${charName}」移动到「${getTagName(folderId)}」`);
     }
   }
   // 自动清理多余的路径标签（只保留最深层的叶子标签）
@@ -10081,8 +10070,7 @@ jQuery(async () => {
             : [data.avatar];
         const count = avatars.length;
         avatars.forEach((av) => {
-          const ch = getCharacters().find((c) => c.avatar === av);
-          handleCharDropToFolder(av, folderId, ch?.name || av, count > 1);
+          handleCharDropToFolder(av, folderId);
         });
         toastr.success(
           count > 1
@@ -10401,8 +10389,7 @@ jQuery(async () => {
               : [data.avatar];
           const count = avatars.length;
           avatars.forEach((av) => {
-            const ch = getCharacters().find((c) => c.avatar === av);
-            handleCharDropToFolder(av, childId, ch?.name || av, count > 1);
+            handleCharDropToFolder(av, childId);
           });
           toastr.success(
             count > 1
@@ -10495,8 +10482,7 @@ jQuery(async () => {
             : [data.avatar];
         const count = avatars.length;
         avatars.forEach((av) => {
-          const ch = getCharacters().find((c) => c.avatar === av);
-          handleCharDropToFolder(av, folderId, ch?.name || av, count > 1);
+          handleCharDropToFolder(av, folderId);
         });
         toastr.success(
           count > 1
