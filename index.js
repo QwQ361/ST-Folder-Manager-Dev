@@ -7708,6 +7708,7 @@ jQuery(async () => {
       if (currentResourceType === "chars") renderRightPane();
       else if (currentResourceType === "presets") renderPresetsView();
       else if (currentResourceType === "themes") renderThemesView();
+      else if (currentResourceType === "backgrounds") renderBackgroundsView();
       else renderWorldInfoView();
     });
 
