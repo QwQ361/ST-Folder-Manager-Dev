@@ -629,6 +629,16 @@ jQuery(async () => {
     // 自定义顶栏图标URL（空字符串=使用默认FA图标，"auto"=自动检测，其他=指定URL）
     if (extension_settings[extensionName].customTopbarIcon === undefined)
       extension_settings[extensionName].customTopbarIcon = "";
+    // 默认打开页面："chars"|"worldinfo"|"presets"|"themes"|"backgrounds"|"last"（记住上次）
+    if (extension_settings[extensionName].defaultOpenPage === undefined)
+      extension_settings[extensionName].defaultOpenPage = "chars";
+    // 上次关闭时的状态（仅当 defaultOpenPage === "last" 时使用）
+    if (extension_settings[extensionName].lastOpenState === undefined)
+      extension_settings[extensionName].lastOpenState = {
+        resourceType: "chars",
+        selectedFolder: null,
+        expandedNodes: [],
+      };
   }
   ensureSettings();
 
@@ -2732,6 +2742,61 @@ jQuery(async () => {
   let cfmMultiSelected = new Set(); // 当前选中的资源标识符集合（avatar/name）
   let cfmMultiSelectLastClicked = null; // 框选：上次点击的标识符
   let cfmMultiSelectRangeMode = false; // 框选模式开关
+
+  // 双击移入文件夹检测状态（解决非角色卡资源类型 click 导致 DOM 重建后 dblclick 无法触发的问题）
+  let _dblClickFolderId = null;
+  let _dblClickTime = 0;
+  const DBL_CLICK_THRESHOLD = 500; // ms
+
+  /**
+   * 检测文件夹双击并在多选模式下执行移入操作。
+   * 在 click 事件中调用，返回 true 表示检测到双击并已处理（调用方应 return 跳过后续逻辑）。
+   * @param {string} folderId - 被点击的文件夹 ID
+   * @param {Function} moveAction - 执行移入的回调 (selectedItems: string[]) => void
+   * @param {Function} renderAction - 移入后的渲染回调
+   * @param {Function} toastAction - 移入后的 toast 回调 (count: number, firstName: string) => void
+   * @param {Event} e - 原始事件对象，用于排除三角箭头
+   * @returns {boolean} 是否检测到双击并已处理
+   */
+  function handleFolderDblClickMove(
+    folderId,
+    moveAction,
+    renderAction,
+    toastAction,
+    e,
+  ) {
+    if (!cfmMultiSelectMode || cfmMultiSelected.size === 0) {
+      _dblClickFolderId = null;
+      _dblClickTime = 0;
+      return false;
+    }
+    // 排除三角箭头区域
+    if (e && $(e.target).closest(".cfm-tnode-arrow").length) {
+      _dblClickFolderId = null;
+      _dblClickTime = 0;
+      return false;
+    }
+    const now = Date.now();
+    if (
+      _dblClickFolderId === folderId &&
+      now - _dblClickTime < DBL_CLICK_THRESHOLD
+    ) {
+      // 检测到双击
+      _dblClickFolderId = null;
+      _dblClickTime = 0;
+      const items = Array.from(cfmMultiSelected);
+      const count = items.length;
+      moveAction(items);
+      clearMultiSelect();
+      renderAction();
+      toastAction(count, items[0]);
+      return true;
+    }
+    // 记录第一次点击
+    _dblClickFolderId = folderId;
+    _dblClickTime = now;
+    return false;
+  }
 
   // PC端拖拽数据备份（解决HTML5 dataTransfer可靠性问题）
   let _pcDragData = null;
@@ -6685,16 +6750,48 @@ jQuery(async () => {
     // 每次打开主弹窗时检测新标签
     detectAndImportNewTags();
     config = loadConfig(); // 刷新配置
-    // 重置资源类型为角色卡，确保与HTML模板中默认active标签一致
-    currentResourceType = "chars";
+    // 根据默认打开页面配置决定初始资源类型
+    const defaultPage =
+      extension_settings[extensionName].defaultOpenPage || "chars";
+    const lastState = extension_settings[extensionName].lastOpenState || {};
+    let initialTab = "chars";
+    if (defaultPage === "last" && lastState.resourceType) {
+      initialTab = lastState.resourceType;
+    } else if (defaultPage !== "last") {
+      initialTab = defaultPage;
+    }
+    currentResourceType = initialTab;
     selectedTreeNode = null;
     expandedNodes.clear();
     selectedPresetFolder = null;
     selectedWorldInfoFolder = null;
     selectedThemeFolder = null;
+    selectedBgFolder = null;
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
     themeExpandedNodes.clear();
+    bgExpandedNodes.clear();
+    // 如果是"记住上次页面"模式，恢复文件夹选中和展开状态
+    if (defaultPage === "last" && lastState.resourceType) {
+      const folder = lastState.selectedFolder;
+      const expanded = lastState.expandedNodes || [];
+      if (initialTab === "chars") {
+        selectedTreeNode = folder || null;
+        expanded.forEach((id) => expandedNodes.add(id));
+      } else if (initialTab === "presets") {
+        selectedPresetFolder = folder || null;
+        expanded.forEach((id) => presetExpandedNodes.add(id));
+      } else if (initialTab === "worldinfo") {
+        selectedWorldInfoFolder = folder || null;
+        expanded.forEach((id) => worldInfoExpandedNodes.add(id));
+      } else if (initialTab === "themes") {
+        selectedThemeFolder = folder || null;
+        expanded.forEach((id) => themeExpandedNodes.add(id));
+      } else if (initialTab === "backgrounds") {
+        selectedBgFolder = folder || null;
+        expanded.forEach((id) => bgExpandedNodes.add(id));
+      }
+    }
 
     // 清除世界书缓存，确保每次打开弹窗都获取最新数据（与酒馆原生界面同步）
     _worldInfoNamesCache = null;
@@ -6964,6 +7061,34 @@ jQuery(async () => {
         `);
     overlay.append(popup);
     $("body").append(overlay);
+
+    // 如果初始tab不是chars，动态切换tab/视图/搜索栏的显示状态
+    if (initialTab !== "chars") {
+      popup.find(".cfm-tab").removeClass("cfm-tab-active");
+      popup
+        .find(`.cfm-tab[data-tab="${initialTab}"]`)
+        .addClass("cfm-tab-active");
+      // 切换视图
+      popup.find("#cfm-chars-view").hide();
+      popup.find("#cfm-presets-view").toggle(initialTab === "presets");
+      popup.find("#cfm-worldinfo-view").toggle(initialTab === "worldinfo");
+      popup.find("#cfm-themes-view").toggle(initialTab === "themes");
+      popup.find("#cfm-backgrounds-view").toggle(initialTab === "backgrounds");
+      // 切换搜索栏
+      popup.find("#cfm-global-search-bar").hide();
+      popup.find("#cfm-preset-search-bar").toggle(initialTab === "presets");
+      popup
+        .find("#cfm-worldinfo-search-bar")
+        .toggle(initialTab === "worldinfo");
+      popup.find("#cfm-theme-search-bar").toggle(initialTab === "themes");
+      popup.find("#cfm-bg-search-bar").toggle(initialTab === "backgrounds");
+      // 切换header按钮
+      const btn = popup.find("#cfm-btn-copymode");
+      btn.toggleClass("cfm-copymode-active", resCopyMode);
+      btn.html(
+        `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
+      );
+    }
 
     // 资源类型标签切换
     popup.find(".cfm-tab").on("click touchend", function (e) {
@@ -8699,6 +8824,11 @@ jQuery(async () => {
     cfmResDeleteLastClicked = null;
 
     renderLeftTree();
+    // 如果初始tab不是chars，触发对应视图的渲染
+    if (initialTab === "presets") renderPresetsView();
+    else if (initialTab === "worldinfo") renderWorldInfoView();
+    else if (initialTab === "themes") renderThemesView();
+    else if (initialTab === "backgrounds") renderBackgroundsView();
 
     // 预加载世界书名称缓存（后台静默加载，切换标签时无需等待）
     getWorldInfoNames();
@@ -9944,7 +10074,37 @@ jQuery(async () => {
     );
   }
 
+  // 保存当前页面状态到 settings（用于"记住上次页面"功能）
+  function _saveLastOpenState() {
+    let folder = null;
+    let expanded = [];
+    if (currentResourceType === "chars") {
+      folder = selectedTreeNode;
+      expanded = Array.from(expandedNodes);
+    } else if (currentResourceType === "presets") {
+      folder = selectedPresetFolder;
+      expanded = Array.from(presetExpandedNodes);
+    } else if (currentResourceType === "worldinfo") {
+      folder = selectedWorldInfoFolder;
+      expanded = Array.from(worldInfoExpandedNodes);
+    } else if (currentResourceType === "themes") {
+      folder = selectedThemeFolder;
+      expanded = Array.from(themeExpandedNodes);
+    } else if (currentResourceType === "backgrounds") {
+      folder = selectedBgFolder;
+      expanded = Array.from(bgExpandedNodes);
+    }
+    extension_settings[extensionName].lastOpenState = {
+      resourceType: currentResourceType,
+      selectedFolder: folder,
+      expandedNodes: expanded,
+    };
+    getContext().saveSettingsDebounced();
+  }
+
   function closeMainPopup() {
+    // 保存当前页面状态（用于"记住上次页面"功能）
+    _saveLastOpenState();
     if (sortDirty) {
       // 排序已更改，弹出确认框
       showSortConfirmDialog(
@@ -10019,6 +10179,18 @@ jQuery(async () => {
         `);
     uncatNode.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        "__uncategorized_char__",
+        (items) => items.forEach((av) => removeCharFromAllFolders(av)),
+        () => { renderLeftTree(); renderRightPane(); },
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个角色移出所有文件夹`
+            : `已将「${first}」移出所有文件夹`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedTreeNode = "__uncategorized__";
       refreshSelection();
       renderRightPane();
@@ -10103,6 +10275,18 @@ jQuery(async () => {
     // 点击节点本身：选中并在右侧显示内容
     node.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        folderId,
+        (items) => items.forEach((av) => handleCharDropToFolder(av, folderId)),
+        () => { renderLeftTree(); renderRightPane(); },
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
+            : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedTreeNode = folderId;
       refreshSelection();
       // 如果搜索栏有内容，保持搜索模式
@@ -10450,6 +10634,18 @@ jQuery(async () => {
       // 点击子文件夹：左侧树展开并选中
       row.on("click", (e) => {
         e.preventDefault();
+        const dblHandled = handleFolderDblClickMove(
+          childId,
+          (items) => items.forEach((av) => handleCharDropToFolder(av, childId)),
+          () => { renderLeftTree(); renderRightPane(); },
+          (count, first) => toastr.success(
+            count > 1
+              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
+              : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
+          ),
+          e,
+        );
+        if (dblHandled) return;
         // 展开路径上所有节点
         const fullPath = getFolderPath(childId);
         for (const pid of fullPath) expandedNodes.add(pid);
@@ -11018,6 +11214,57 @@ jQuery(async () => {
     body.append(iconSection);
   }
 
+  // ==================== 共享：默认打开页面配置区域 ====================
+  function renderDefaultPageConfigSection(body) {
+    const saved = extension_settings[extensionName].defaultOpenPage || "chars";
+    const options = [
+      { value: "chars", label: "角色卡", icon: "fa-users" },
+      { value: "worldinfo", label: "世界书", icon: "fa-book-atlas" },
+      { value: "presets", label: "预设", icon: "fa-sliders" },
+      { value: "themes", label: "美化", icon: "fa-palette" },
+      { value: "backgrounds", label: "背景", icon: "fa-panorama" },
+      { value: "last", label: "记住上次页面", icon: "fa-clock-rotate-left" },
+    ];
+
+    let optionsHtml = options
+      .map(
+        (o) =>
+          `<div class="cfm-default-page-option ${saved === o.value ? "cfm-default-page-active" : ""}" data-value="${o.value}" title="${o.value === "last" ? "每次打开时恢复到上次关闭时的页面和文件夹" : "每次打开时显示" + o.label + "页面"}"><i class="fa-solid ${o.icon}"></i><span>${o.label}</span></div>`,
+      )
+      .join("");
+
+    const section = $(`
+      <div class="cfm-config-section cfm-default-page-section">
+        <label>默认打开页面</label>
+        <div class="cfm-default-page-options">
+          ${optionsHtml}
+        </div>
+        <div class="cfm-icon-config-hint">${saved === "last" ? "每次打开插件时，将恢复到上次关闭时的页面和文件夹位置" : "每次打开插件时，默认显示" + options.find((o) => o.value === saved).label + "页面"}</div>
+      </div>
+    `);
+
+    section.find(".cfm-default-page-option").on("click touchend", function (e) {
+      e.preventDefault();
+      const value = $(this).data("value");
+      extension_settings[extensionName].defaultOpenPage = value;
+      getContext().saveSettingsDebounced();
+      section
+        .find(".cfm-default-page-option")
+        .removeClass("cfm-default-page-active");
+      $(this).addClass("cfm-default-page-active");
+      const label = options.find((o) => o.value === value).label;
+      section
+        .find(".cfm-icon-config-hint")
+        .text(
+          value === "last"
+            ? "每次打开插件时，将恢复到上次关闭时的页面和文件夹位置"
+            : "每次打开插件时，默认显示" + label + "页面",
+        );
+    });
+
+    body.append(section);
+  }
+
   function renderConfigBody() {
     const body = $("#cfm-config-body");
     body.empty();
@@ -11065,6 +11312,8 @@ jQuery(async () => {
 
     // 0.5 自定义顶栏图标（共享函数）
     renderTopbarIconConfigSection(body);
+    // 0.6 默认打开页面（共享函数）
+    renderDefaultPageConfigSection(body);
 
     // 1. 标签导入区域（一键导入 + 单个添加）
     const existingFolderIds = getFolderTagIds();
@@ -11307,7 +11556,13 @@ jQuery(async () => {
   // ==================== 预设/世界书/主题配置面板渲染 ====================
   function renderResourceConfigBody(body, type) {
     const typeLabel =
-      type === "presets" ? "预设" : type === "themes" ? "主题" : type === "backgrounds" ? "背景" : "世界书";
+      type === "presets"
+        ? "预设"
+        : type === "themes"
+          ? "主题"
+          : type === "backgrounds"
+            ? "背景"
+            : "世界书";
     const tree = getResFolderTree(type);
     const allFolderIds = getResFolderIds(type);
     const expandedSet =
@@ -11349,6 +11604,8 @@ jQuery(async () => {
 
     // 0.5 自定义顶栏图标（共享函数）
     renderTopbarIconConfigSection(body);
+    // 0.6 默认打开页面（共享函数）
+    renderDefaultPageConfigSection(body);
 
     // 1. 创建新文件夹（支持空格分隔批量创建）
     const resSelectedHintText = resConfigSelectedFolderId
@@ -12568,9 +12825,22 @@ jQuery(async () => {
         renderPresetsView();
       });
 
-      // 点击选中
+      // 点击选中（含双击移入检测）
       node.on("click", (e) => {
         e.preventDefault();
+        const dblHandled = handleFolderDblClickMove(
+          folderId,
+          (items) => items.forEach((n) => setItemGroup("presets", n, folderId)),
+          () => renderPresetsView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个预设移入「${folderId}」`
+                : `已将「${first}」移入「${folderId}」`,
+            ),
+          e,
+        );
+        if (dblHandled) return;
         selectedPresetFolder = folderId;
         renderPresetsView();
       });
@@ -12729,6 +12999,18 @@ jQuery(async () => {
     `);
     uncatNode.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        "__ungrouped_preset__",
+        (items) => items.forEach((n) => setItemGroup("presets", n, null)),
+        () => renderPresetsView(),
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个预设移出文件夹`
+            : `已将「${first}」移出文件夹`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedPresetFolder = "__ungrouped__";
       renderPresetsView();
     });
@@ -12849,6 +13131,18 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           e.preventDefault();
+          const dblHandled = handleFolderDblClickMove(
+            childId,
+            (items) => items.forEach((n) => setItemGroup("presets", n, childId)),
+            () => renderPresetsView(),
+            (count, first) => toastr.success(
+              count > 1
+                ? `已将 ${count} 个预设移入「${childId}」`
+                : `已将「${first}」移入「${childId}」`,
+            ),
+            e,
+          );
+          if (dblHandled) return;
           const path = getResFolderPath("presets", childId);
           for (const pid of path) presetExpandedNodes.add(pid);
           selectedPresetFolder = childId;
@@ -13305,6 +13599,19 @@ jQuery(async () => {
       });
       node.on("click", (e) => {
         e.preventDefault();
+        const dblHandled = handleFolderDblClickMove(
+          folderId,
+          (items) => items.forEach((n) => setItemGroup("themes", n, folderId)),
+          () => renderThemesView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个主题移入「${folderId}」`
+                : `已将「${first}」移入「${folderId}」`,
+            ),
+          e,
+        );
+        if (dblHandled) return;
         selectedThemeFolder = folderId;
         renderThemesView();
       });
@@ -13445,6 +13752,18 @@ jQuery(async () => {
     `);
     uncatNode.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        "__ungrouped_theme__",
+        (items) => items.forEach((n) => setItemGroup("themes", n, null)),
+        () => renderThemesView(),
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个主题移出文件夹`
+            : `已将「${first}」移出文件夹`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedThemeFolder = "__ungrouped__";
       renderThemesView();
     });
@@ -13556,6 +13875,18 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           e.preventDefault();
+          const dblHandled = handleFolderDblClickMove(
+            childId,
+            (items) => items.forEach((n) => setItemGroup("themes", n, childId)),
+            () => renderThemesView(),
+            (count, first) => toastr.success(
+              count > 1
+                ? `已将 ${count} 个主题移入「${childId}」`
+                : `已将「${first}」移入「${childId}」`,
+            ),
+            e,
+          );
+          if (dblHandled) return;
           const path = getResFolderPath("themes", childId);
           for (const pid of path) themeExpandedNodes.add(pid);
           selectedThemeFolder = childId;
@@ -13988,6 +14319,20 @@ jQuery(async () => {
       });
       node.on("click", (e) => {
         e.preventDefault();
+        const dblHandled = handleFolderDblClickMove(
+          folderId,
+          (items) =>
+            items.forEach((n) => setItemGroup("backgrounds", n, folderId)),
+          () => renderBackgroundsView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个背景移入「${folderId}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${folderId}」`,
+            ),
+          e,
+        );
+        if (dblHandled) return;
         selectedBgFolder = folderId;
         renderBackgroundsView();
       });
@@ -14124,6 +14469,18 @@ jQuery(async () => {
     );
     uncatNode.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        "__ungrouped_bg__",
+        (items) => items.forEach((n) => setItemGroup("backgrounds", n, null)),
+        () => renderBackgroundsView(),
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个背景移出文件夹`
+            : `已将「${getBackgroundDisplayName(first)}」移出文件夹`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedBgFolder = "__ungrouped__";
       renderBackgroundsView();
     });
@@ -14223,6 +14580,18 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           e.preventDefault();
+          const dblHandled = handleFolderDblClickMove(
+            childId,
+            (items) => items.forEach((n) => setItemGroup("backgrounds", n, childId)),
+            () => renderBackgroundsView(),
+            (count, first) => toastr.success(
+              count > 1
+                ? `已将 ${count} 个背景移入「${childId}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${childId}」`,
+            ),
+            e,
+          );
+          if (dblHandled) return;
           const path = getResFolderPath("backgrounds", childId);
           for (const pid of path) bgExpandedNodes.add(pid);
           selectedBgFolder = childId;
@@ -15041,6 +15410,18 @@ jQuery(async () => {
 
       node.on("click", (e) => {
         e.preventDefault();
+        const dblHandled = handleFolderDblClickMove(
+          folderId,
+          (items) => items.forEach((n) => setItemGroup("worldinfo", n, folderId)),
+          () => renderWorldInfoView(),
+          (count, first) => toastr.success(
+            count > 1
+              ? `已将 ${count} 个世界书移入「${folderId}」`
+              : `已将「${first}」移入「${folderId}」`,
+          ),
+          e,
+        );
+        if (dblHandled) return;
         selectedWorldInfoFolder = folderId;
         renderWorldInfoView();
       });
@@ -15215,6 +15596,18 @@ jQuery(async () => {
     `);
     uncatNode.on("click", (e) => {
       e.preventDefault();
+      const dblHandled = handleFolderDblClickMove(
+        "__ungrouped_wi__",
+        (items) => items.forEach((n) => setItemGroup("worldinfo", n, null)),
+        () => renderWorldInfoView(),
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个世界书移出文件夹`
+            : `已将「${first}」移出文件夹`,
+        ),
+        e,
+      );
+      if (dblHandled) return;
       selectedWorldInfoFolder = "__ungrouped__";
       renderWorldInfoView();
     });
@@ -15338,6 +15731,18 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           e.preventDefault();
+          const dblHandled = handleFolderDblClickMove(
+            childId,
+            (items) => items.forEach((n) => setItemGroup("worldinfo", n, childId)),
+            () => renderWorldInfoView(),
+            (count, first) => toastr.success(
+              count > 1
+                ? `已将 ${count} 个世界书移入「${childId}」`
+                : `已将「${first}」移入「${childId}」`,
+            ),
+            e,
+          );
+          if (dblHandled) return;
           const path = getResFolderPath("worldinfo", childId);
           for (const pid of path) worldInfoExpandedNodes.add(pid);
           selectedWorldInfoFolder = childId;
