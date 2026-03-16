@@ -2006,6 +2006,16 @@ jQuery(async () => {
         `#persona-management-button ${cls}`,
       );
       if (!neighborIcon) continue;
+      // 跳过处于打开状态的邻居按钮图标
+      // 打开面板时 drawer-icon 会从 closedIcon 变为 openIcon，
+      // 美化主题可能对两种状态设置了不同的 background-image，
+      // 此时读取到的是 openIcon 的图标，不应用于 CFM 按钮
+      if (
+        cls === ".drawer-icon" &&
+        neighborIcon.classList.contains("openIcon")
+      ) {
+        continue;
+      }
       const computed = window.getComputedStyle(neighborIcon);
       const bgImage = computed.backgroundImage;
       if (bgImage && bgImage !== "none" && bgImage !== "") {
@@ -2085,6 +2095,10 @@ jQuery(async () => {
       for (const cls of [".drawer-icon", ".drawer-toggle"]) {
         const iconEl = document.querySelector(`#${btnId} ${cls}`);
         if (!iconEl) continue;
+        // 跳过处于打开状态的图标，避免读取到 openIcon 的不同样式
+        if (cls === ".drawer-icon" && iconEl.classList.contains("openIcon")) {
+          continue;
+        }
         const computed = window.getComputedStyle(iconEl);
         const bgImage = computed.backgroundImage;
         if (bgImage && bgImage !== "none" && bgImage !== "") {
@@ -2257,6 +2271,14 @@ jQuery(async () => {
     const initResult = detectNeighborIcon();
     _lastNeighborBg = initResult ? initResult.cssUrl : null;
     _themeCheckTimer = setInterval(() => {
+      // 如果邻居按钮处于打开状态（openIcon），跳过本次检测
+      // 避免因读取到打开状态的不同图标或读取不到图标而误触发更新
+      const neighborDrawerIcon = document.querySelector(
+        "#persona-management-button .drawer-icon",
+      );
+      if (neighborDrawerIcon && neighborDrawerIcon.classList.contains("openIcon")) {
+        return; // 邻居面板打开中，不做任何检测和更新
+      }
       const result = detectNeighborIcon();
       const currentBg = result ? result.cssUrl : null;
       if (currentBg !== _lastNeighborBg) {
@@ -2274,6 +2296,14 @@ jQuery(async () => {
     const saved = extension_settings[extensionName].customTopbarIcon || "";
     if (saved) {
       // 用户手动指定了URL，不自动覆盖
+      return;
+    }
+    // 如果邻居按钮处于打开状态（openIcon），跳过本次更新
+    // 避免因打开状态的不同图标样式而覆盖CFM图标
+    const neighborDrawerIcon = document.querySelector(
+      "#persona-management-button .drawer-icon",
+    );
+    if (neighborDrawerIcon && neighborDrawerIcon.classList.contains("openIcon")) {
       return;
     }
     // 自动模式：重新检测邻居图标
