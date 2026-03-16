@@ -1128,7 +1128,11 @@ jQuery(async () => {
                     ? "📄 "
                     : data.type === "worldinfo"
                       ? "📖 "
-                      : "👤 ") + (data.name || "");
+                      : data.type === "theme"
+                        ? "🎨 "
+                        : data.type === "background"
+                          ? "🖼️ "
+                          : "👤 ") + (data.name || "");
             }
             g.style.left = sx + "px";
             g.style.top = sy - 50 + "px";
@@ -1424,12 +1428,20 @@ jQuery(async () => {
             toastr.success(`「${d.name}」已排序`);
           }
           if (resType === "presets") renderPresetsView();
-          else renderWorldInfoView();
+          else if (resType === "worldinfo") renderWorldInfoView();
+          else if (resType === "themes") renderThemesView();
+          else if (resType === "backgrounds") renderBackgroundsView();
         } else if (!target && rightList) {
           const selFolder =
             resType === "presets"
               ? selectedPresetFolder
-              : selectedWorldInfoFolder;
+              : resType === "worldinfo"
+                ? selectedWorldInfoFolder
+                : resType === "themes"
+                  ? selectedThemeFolder
+                  : resType === "backgrounds"
+                    ? selectedBgFolder
+                    : null;
           if (
             selFolder &&
             selFolder !== "__ungrouped__" &&
@@ -1440,7 +1452,9 @@ jQuery(async () => {
               reorderResFolder(resType, d.id, selFolder, null);
               toastr.success(`「${d.name}」已移入「${selFolder}」`);
               if (resType === "presets") renderPresetsView();
-              else renderWorldInfoView();
+              else if (resType === "worldinfo") renderWorldInfoView();
+              else if (resType === "themes") renderThemesView();
+              else if (resType === "backgrounds") renderBackgroundsView();
             }
           }
         }
@@ -1523,6 +1537,82 @@ jQuery(async () => {
           );
           if (d.multiSelect) clearMultiSelect();
           renderWorldInfoView();
+        }
+      } else if (d.type === "theme") {
+        const names = d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
+        if (uncatNode) {
+          names.forEach((n) => setItemGroup("themes", n, null));
+          if (d.multiSelect) clearMultiSelect();
+          renderThemesView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个主题移出文件夹`
+              : `已将「${d.name}」移出文件夹`,
+          );
+        } else if (targetId) {
+          names.forEach((n) => setItemGroup("themes", n, targetId));
+          if (d.multiSelect) clearMultiSelect();
+          renderThemesView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个主题移入「${targetId}」`
+              : `已将「${d.name}」移入「${targetId}」`,
+          );
+        } else if (
+          !target &&
+          rightList &&
+          selectedThemeFolder &&
+          selectedThemeFolder !== "__ungrouped__" &&
+          selectedThemeFolder !== "__favorites__"
+        ) {
+          names.forEach((n) =>
+            setItemGroup("themes", n, selectedThemeFolder),
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderThemesView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个主题移入「${selectedThemeFolder}」`
+              : `已将「${d.name}」移入「${selectedThemeFolder}」`,
+          );
+        }
+      } else if (d.type === "background") {
+        const names = d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
+        if (uncatNode) {
+          names.forEach((n) => setItemGroup("backgrounds", n, null));
+          if (d.multiSelect) clearMultiSelect();
+          renderBackgroundsView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个背景移出文件夹`
+              : `已将「${getBackgroundDisplayName(d.name)}」移出文件夹`,
+          );
+        } else if (targetId) {
+          names.forEach((n) => setItemGroup("backgrounds", n, targetId));
+          if (d.multiSelect) clearMultiSelect();
+          renderBackgroundsView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个背景移入「${targetId}」`
+              : `已将「${getBackgroundDisplayName(d.name)}」移入「${targetId}」`,
+          );
+        } else if (
+          !target &&
+          rightList &&
+          selectedBgFolder &&
+          selectedBgFolder !== "__ungrouped__" &&
+          selectedBgFolder !== "__favorites__"
+        ) {
+          names.forEach((n) =>
+            setItemGroup("backgrounds", n, selectedBgFolder),
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderBackgroundsView();
+          toastr.success(
+            names.length > 1
+              ? `已将 ${names.length} 个背景移入「${selectedBgFolder}」`
+              : `已将「${getBackgroundDisplayName(d.name)}」移入「${selectedBgFolder}」`,
+          );
         }
       }
     },
