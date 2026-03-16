@@ -1588,9 +1588,7 @@ jQuery(async () => {
           selectedThemeFolder !== "__ungrouped__" &&
           selectedThemeFolder !== "__favorites__"
         ) {
-          names.forEach((n) =>
-            setItemGroup("themes", n, selectedThemeFolder),
-          );
+          names.forEach((n) => setItemGroup("themes", n, selectedThemeFolder));
           if (d.multiSelect) clearMultiSelect();
           renderThemesView();
           toastr.success(
@@ -2276,7 +2274,10 @@ jQuery(async () => {
       const neighborDrawerIcon = document.querySelector(
         "#persona-management-button .drawer-icon",
       );
-      if (neighborDrawerIcon && neighborDrawerIcon.classList.contains("openIcon")) {
+      if (
+        neighborDrawerIcon &&
+        neighborDrawerIcon.classList.contains("openIcon")
+      ) {
         return; // 邻居面板打开中，不做任何检测和更新
       }
       const result = detectNeighborIcon();
@@ -2303,7 +2304,10 @@ jQuery(async () => {
     const neighborDrawerIcon = document.querySelector(
       "#persona-management-button .drawer-icon",
     );
-    if (neighborDrawerIcon && neighborDrawerIcon.classList.contains("openIcon")) {
+    if (
+      neighborDrawerIcon &&
+      neighborDrawerIcon.classList.contains("openIcon")
+    ) {
       return;
     }
     // 自动模式：重新检测邻居图标
@@ -3695,7 +3699,10 @@ jQuery(async () => {
                 })
                 .remove();
               // 也从被 detach 的 option 中移除（原生过滤可能已将其 detach）
-              if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+              if (
+                _worldInfoDetachedOptions &&
+                _worldInfoDetachedOptions.length > 0
+              ) {
                 _worldInfoDetachedOptions = _worldInfoDetachedOptions.filter(
                   (opt) => $(opt).text() !== name,
                 );
@@ -10861,6 +10868,156 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 共享：自定义顶栏图标配置区域 ====================
+  function renderTopbarIconConfigSection(body) {
+    const currentMode = getButtonMode();
+    if (currentMode !== "topbar") return;
+
+    const { icons: themeIcons, uniqueUrls } = detectThemeIcons();
+    const hasTheme = uniqueUrls.length > 0;
+    const savedIconUrl =
+      extension_settings[extensionName].customTopbarIcon || "";
+    const isAutoMode = !savedIconUrl && hasTheme;
+    const autoUrl = hasTheme
+      ? extractUrlFromCss(
+          themeIcons["persona-management-button"] ||
+            Object.values(themeIcons)[0],
+        )
+      : "";
+    const displayUrl = savedIconUrl || (isAutoMode ? autoUrl : "");
+
+    // 构建下拉项：每个唯一URL + 使用该URL的按钮名称映射
+    const parentIdNameMap = {
+      "ai-config-button": "AI配置",
+      "sys-settings-button": "API连接",
+      "advanced-formatting-button": "格式化",
+      "WI-SP-button": "世界书",
+      "user-settings-button": "用户设置",
+      logo_block: "Logo",
+      "extensions-settings-button": "扩展",
+      table_database_settings_drawer: "事件表",
+      "persona-management-button": "用户设定",
+      rightNavHolder: "角色管理",
+      "backgrounds-button": "背景",
+    };
+    let dropdownItemsHtml = "";
+    for (const url of uniqueUrls) {
+      const pureUrl = extractUrlFromCss(url);
+      const users = Object.entries(themeIcons)
+        .filter(([, v]) => v === url)
+        .map(([k]) => parentIdNameMap[k] || k)
+        .join("、");
+      const isSelected = pureUrl === displayUrl;
+      dropdownItemsHtml += `<div class="cfm-icon-dropdown-item ${isSelected ? "cfm-icon-selected" : ""}" data-url="${escapeHtml(pureUrl)}">
+        <div class="cfm-icon-preview" style="background-image:url('${escapeHtml(pureUrl)}')"></div>
+        <span class="cfm-icon-dropdown-label" title="${escapeHtml(pureUrl)}">${escapeHtml(pureUrl.split("/").pop())}</span>
+        <span class="cfm-icon-dropdown-users">${escapeHtml(users)}</span>
+      </div>`;
+    }
+
+    const iconSection = $(`
+      <div class="cfm-config-section cfm-icon-config-section">
+        <label>自定义顶栏图标</label>
+        <div class="cfm-icon-input-row">
+          <input type="text" id="cfm-icon-url-input" placeholder="${hasTheme ? "已自动检测美化主题图标" : "输入图标URL（留空使用默认图标）"}" value="${escapeHtml(savedIconUrl)}" />
+          ${
+            hasTheme
+              ? `<div class="cfm-icon-dropdown-wrapper">
+            <button class="cfm-icon-dropdown-btn" id="cfm-icon-dropdown-toggle" title="从美化主题中选择图标"><i class="fa-solid fa-caret-down"></i></button>
+            <div class="cfm-icon-dropdown-menu" id="cfm-icon-dropdown-menu">
+              ${dropdownItemsHtml}
+            </div>
+          </div>`
+              : ""
+          }
+          <button class="cfm-icon-clear-btn" id="cfm-icon-clear" title="清除自定义图标"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="cfm-icon-status" id="cfm-icon-status">
+          <span class="cfm-icon-status-dot ${displayUrl ? "cfm-status-active" : "cfm-status-inactive"}"></span>
+          ${displayUrl ? (isAutoMode ? "自动使用美化主题图标（用户设定管理）" : "使用自定义图标") : hasTheme ? "已检测到美化主题但未应用" : "使用默认图标"}
+        </div>
+        <div class="cfm-icon-config-hint">${hasTheme ? `检测到 ${uniqueUrls.length} 个美化主题图标，可从下拉菜单选择或手动输入URL` : "未检测到美化主题图标替换。启用美化主题后会自动检测并适配"}</div>
+      </div>
+    `);
+
+    // 下拉菜单切换
+    iconSection.find("#cfm-icon-dropdown-toggle").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-icon-dropdown-menu").toggleClass("cfm-dropdown-open");
+    });
+    // 点击其他地方关闭下拉
+    $(document).on("click.cfmIconDropdown", () => {
+      $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
+    });
+
+    // 选择下拉项
+    iconSection
+      .find(".cfm-icon-dropdown-item")
+      .on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const url = $(this).data("url");
+        $("#cfm-icon-url-input").val(url);
+        $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
+        // 立即应用并保存
+        extension_settings[extensionName].customTopbarIcon = url;
+        getContext().saveSettingsDebounced();
+        applyCustomIcon(toCssUrl(url));
+        // 更新选中状态
+        iconSection
+          .find(".cfm-icon-dropdown-item")
+          .removeClass("cfm-icon-selected");
+        $(this).addClass("cfm-icon-selected");
+        // 更新状态提示
+        $("#cfm-icon-status").html(
+          `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
+        );
+      });
+
+    // 手动输入URL后回车应用
+    iconSection.find("#cfm-icon-url-input").on("change", function () {
+      const url = $(this).val().trim();
+      extension_settings[extensionName].customTopbarIcon = url;
+      getContext().saveSettingsDebounced();
+      if (url) {
+        applyCustomIcon(toCssUrl(url));
+        $("#cfm-icon-status").html(
+          `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
+        );
+      } else {
+        // 清空输入 → 回到自动检测模式
+        applyTopbarIconFromConfig();
+        const autoActive = hasTheme;
+        $("#cfm-icon-status").html(
+          `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
+        );
+      }
+      // 更新下拉菜单选中状态
+      iconSection.find(".cfm-icon-dropdown-item").each(function () {
+        $(this).toggleClass("cfm-icon-selected", $(this).data("url") === url);
+      });
+    });
+
+    // 清除按钮
+    iconSection.find("#cfm-icon-clear").on("click touchend", (e) => {
+      e.preventDefault();
+      $("#cfm-icon-url-input").val("");
+      extension_settings[extensionName].customTopbarIcon = "";
+      getContext().saveSettingsDebounced();
+      applyTopbarIconFromConfig();
+      iconSection
+        .find(".cfm-icon-dropdown-item")
+        .removeClass("cfm-icon-selected");
+      const autoActive = hasTheme;
+      $("#cfm-icon-status").html(
+        `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
+      );
+    });
+
+    body.append(iconSection);
+  }
+
   function renderConfigBody() {
     const body = $("#cfm-config-body");
     body.empty();
@@ -10906,154 +11063,8 @@ jQuery(async () => {
     });
     body.append(modeSection);
 
-    // 0.5 自定义顶栏图标（仅顶栏模式时显示）
-    if (currentMode === "topbar") {
-      const { icons: themeIcons, uniqueUrls } = detectThemeIcons();
-      const hasTheme = uniqueUrls.length > 0;
-      const savedIconUrl =
-        extension_settings[extensionName].customTopbarIcon || "";
-      const isAutoMode = !savedIconUrl && hasTheme;
-      const autoUrl = hasTheme
-        ? extractUrlFromCss(
-            themeIcons["persona-management-button"] ||
-              Object.values(themeIcons)[0],
-          )
-        : "";
-      const displayUrl = savedIconUrl || (isAutoMode ? autoUrl : "");
-
-      // 构建下拉项：每个唯一URL + 使用该URL的按钮名称映射
-      const parentIdNameMap = {
-        "ai-config-button": "AI配置",
-        "sys-settings-button": "API连接",
-        "advanced-formatting-button": "格式化",
-        "WI-SP-button": "世界书",
-        "user-settings-button": "用户设置",
-        logo_block: "Logo",
-        "extensions-settings-button": "扩展",
-        table_database_settings_drawer: "事件表",
-        "persona-management-button": "用户设定",
-        rightNavHolder: "角色管理",
-        "backgrounds-button": "背景",
-      };
-      let dropdownItemsHtml = "";
-      for (const url of uniqueUrls) {
-        const pureUrl = extractUrlFromCss(url);
-        const users = Object.entries(themeIcons)
-          .filter(([, v]) => v === url)
-          .map(([k]) => parentIdNameMap[k] || k)
-          .join("、");
-        const isSelected = pureUrl === displayUrl;
-        dropdownItemsHtml += `<div class="cfm-icon-dropdown-item ${isSelected ? "cfm-icon-selected" : ""}" data-url="${escapeHtml(pureUrl)}">
-          <div class="cfm-icon-preview" style="background-image:url('${escapeHtml(pureUrl)}')"></div>
-          <span class="cfm-icon-dropdown-label" title="${escapeHtml(pureUrl)}">${escapeHtml(pureUrl.split("/").pop())}</span>
-          <span class="cfm-icon-dropdown-users">${escapeHtml(users)}</span>
-        </div>`;
-      }
-
-      const iconSection = $(`
-        <div class="cfm-config-section cfm-icon-config-section">
-          <label>自定义顶栏图标</label>
-          <div class="cfm-icon-input-row">
-            <input type="text" id="cfm-icon-url-input" placeholder="${hasTheme ? "已自动检测美化主题图标" : "输入图标URL（留空使用默认图标）"}" value="${escapeHtml(savedIconUrl)}" />
-            ${
-              hasTheme
-                ? `<div class="cfm-icon-dropdown-wrapper">
-              <button class="cfm-icon-dropdown-btn" id="cfm-icon-dropdown-toggle" title="从美化主题中选择图标"><i class="fa-solid fa-caret-down"></i></button>
-              <div class="cfm-icon-dropdown-menu" id="cfm-icon-dropdown-menu">
-                ${dropdownItemsHtml}
-              </div>
-            </div>`
-                : ""
-            }
-            <button class="cfm-icon-clear-btn" id="cfm-icon-clear" title="清除自定义图标"><i class="fa-solid fa-xmark"></i></button>
-          </div>
-          <div class="cfm-icon-status" id="cfm-icon-status">
-            <span class="cfm-icon-status-dot ${displayUrl ? "cfm-status-active" : "cfm-status-inactive"}"></span>
-            ${displayUrl ? (isAutoMode ? "自动使用美化主题图标（用户设定管理）" : "使用自定义图标") : hasTheme ? "已检测到美化主题但未应用" : "使用默认图标"}
-          </div>
-          <div class="cfm-icon-config-hint">${hasTheme ? `检测到 ${uniqueUrls.length} 个美化主题图标，可从下拉菜单选择或手动输入URL` : "未检测到美化主题图标替换。启用美化主题后会自动检测并适配"}</div>
-        </div>
-      `);
-
-      // 下拉菜单切换
-      iconSection
-        .find("#cfm-icon-dropdown-toggle")
-        .on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          $("#cfm-icon-dropdown-menu").toggleClass("cfm-dropdown-open");
-        });
-      // 点击其他地方关闭下拉
-      $(document).on("click.cfmIconDropdown", () => {
-        $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
-      });
-
-      // 选择下拉项
-      iconSection
-        .find(".cfm-icon-dropdown-item")
-        .on("click touchend", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const url = $(this).data("url");
-          $("#cfm-icon-url-input").val(url);
-          $("#cfm-icon-dropdown-menu").removeClass("cfm-dropdown-open");
-          // 立即应用并保存
-          extension_settings[extensionName].customTopbarIcon = url;
-          getContext().saveSettingsDebounced();
-          applyCustomIcon(toCssUrl(url));
-          // 更新选中状态
-          iconSection
-            .find(".cfm-icon-dropdown-item")
-            .removeClass("cfm-icon-selected");
-          $(this).addClass("cfm-icon-selected");
-          // 更新状态提示
-          $("#cfm-icon-status").html(
-            `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
-          );
-        });
-
-      // 手动输入URL后回车应用
-      iconSection.find("#cfm-icon-url-input").on("change", function () {
-        const url = $(this).val().trim();
-        extension_settings[extensionName].customTopbarIcon = url;
-        getContext().saveSettingsDebounced();
-        if (url) {
-          applyCustomIcon(toCssUrl(url));
-          $("#cfm-icon-status").html(
-            `<span class="cfm-icon-status-dot cfm-status-active"></span> 使用自定义图标`,
-          );
-        } else {
-          // 清空输入 → 回到自动检测模式
-          applyTopbarIconFromConfig();
-          const autoActive = hasTheme;
-          $("#cfm-icon-status").html(
-            `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
-          );
-        }
-        // 更新下拉菜单选中状态
-        iconSection.find(".cfm-icon-dropdown-item").each(function () {
-          $(this).toggleClass("cfm-icon-selected", $(this).data("url") === url);
-        });
-      });
-
-      // 清除按钮
-      iconSection.find("#cfm-icon-clear").on("click touchend", (e) => {
-        e.preventDefault();
-        $("#cfm-icon-url-input").val("");
-        extension_settings[extensionName].customTopbarIcon = "";
-        getContext().saveSettingsDebounced();
-        applyTopbarIconFromConfig();
-        iconSection
-          .find(".cfm-icon-dropdown-item")
-          .removeClass("cfm-icon-selected");
-        const autoActive = hasTheme;
-        $("#cfm-icon-status").html(
-          `<span class="cfm-icon-status-dot ${autoActive ? "cfm-status-active" : "cfm-status-inactive"}"></span> ${autoActive ? "自动使用美化主题图标（用户设定管理）" : "使用默认图标"}`,
-        );
-      });
-
-      body.append(iconSection);
-    }
+    // 0.5 自定义顶栏图标（共享函数）
+    renderTopbarIconConfigSection(body);
 
     // 1. 标签导入区域（一键导入 + 单个添加）
     const existingFolderIds = getFolderTagIds();
@@ -11296,7 +11307,7 @@ jQuery(async () => {
   // ==================== 预设/世界书/主题配置面板渲染 ====================
   function renderResourceConfigBody(body, type) {
     const typeLabel =
-      type === "presets" ? "预设" : type === "themes" ? "主题" : "世界书";
+      type === "presets" ? "预设" : type === "themes" ? "主题" : type === "backgrounds" ? "背景" : "世界书";
     const tree = getResFolderTree(type);
     const allFolderIds = getResFolderIds(type);
     const expandedSet =
@@ -11304,7 +11315,9 @@ jQuery(async () => {
         ? presetConfigExpandedNodes
         : type === "themes"
           ? themeConfigExpandedNodes
-          : worldInfoConfigExpandedNodes;
+          : type === "backgrounds"
+            ? bgConfigExpandedNodes
+            : worldInfoConfigExpandedNodes;
 
     // 0. 按钮位置设置（共享）
     const currentMode = getButtonMode();
@@ -11333,6 +11346,9 @@ jQuery(async () => {
       $(this).addClass("cfm-mode-active");
     });
     body.append(modeSection);
+
+    // 0.5 自定义顶栏图标（共享函数）
+    renderTopbarIconConfigSection(body);
 
     // 1. 创建新文件夹（支持空格分隔批量创建）
     const resSelectedHintText = resConfigSelectedFolderId
@@ -13959,7 +13975,9 @@ jQuery(async () => {
       );
       node.find(".cfm-tnode-rename").on("click", (e) => {
         e.stopPropagation();
-        promptRenameFolder("backgrounds", folderId, () => renderBackgroundsView());
+        promptRenameFolder("backgrounds", folderId, () =>
+          renderBackgroundsView(),
+        );
       });
       node.find(".cfm-tnode-arrow").on("click", (e) => {
         e.stopPropagation();
@@ -14199,7 +14217,9 @@ jQuery(async () => {
         );
         row.find(".cfm-row-rename-btn").on("click", (e) => {
           e.stopPropagation();
-          promptRenameFolder("backgrounds", childId, () => renderBackgroundsView());
+          promptRenameFolder("backgrounds", childId, () =>
+            renderBackgroundsView(),
+          );
         });
         row.on("click", (e) => {
           e.preventDefault();
@@ -16366,7 +16386,10 @@ jQuery(async () => {
             if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
           });
           // 如果原生过滤激活，被 detach 的 option 也要加入
-          if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+          if (
+            _worldInfoDetachedOptions &&
+            _worldInfoDetachedOptions.length > 0
+          ) {
             for (const opt of _worldInfoDetachedOptions) {
               const v = $(opt).val();
               const t = $(opt).text();
@@ -16605,7 +16628,10 @@ jQuery(async () => {
             if (v !== "" && t !== "--- 选择以编辑 ---") items.add(t);
           });
           // 如果原生过滤激活，被 detach 的 option 也要加入
-          if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+          if (
+            _worldInfoDetachedOptions &&
+            _worldInfoDetachedOptions.length > 0
+          ) {
             for (const opt of _worldInfoDetachedOptions) {
               const v = $(opt).val();
               const t = $(opt).text();
