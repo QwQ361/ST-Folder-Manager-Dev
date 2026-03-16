@@ -258,6 +258,14 @@ jQuery(async () => {
       const t = $(this).text();
       if (v !== "" && v !== undefined) presets.push({ value: v, name: t });
     });
+    // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
+    if (_presetDetachedOptions && _presetDetachedOptions.length > 0) {
+      for (const opt of _presetDetachedOptions) {
+        const v = $(opt).val();
+        const t = $(opt).text();
+        if (v !== "" && v !== undefined) presets.push({ value: v, name: t });
+      }
+    }
     return presets;
   }
   function getCurrentPresetApiId() {
@@ -300,6 +308,14 @@ jQuery(async () => {
       const t = $(this).text();
       if (v !== "" && t !== "--- 选择以编辑 ---") names.push(t);
     });
+    // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
+    if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+      for (const opt of _worldInfoDetachedOptions) {
+        const v = $(opt).val();
+        const t = $(opt).text();
+        if (v !== "" && t !== "--- 选择以编辑 ---") names.push(t);
+      }
+    }
     if (names.length > 0) {
       _worldInfoNamesCache = names;
       return names;
@@ -335,6 +351,13 @@ jQuery(async () => {
       const v = $(this).val();
       if (v !== "" && v !== undefined) names.push(String(v));
     });
+    // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
+    if (_themeDetachedOptions && _themeDetachedOptions.length > 0) {
+      for (const opt of _themeDetachedOptions) {
+        const v = $(opt).val();
+        if (v !== "" && v !== undefined) names.push(String(v));
+      }
+    }
     return names;
   }
 
@@ -3540,6 +3563,12 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].presetGroups;
               if (groups && groups[name]) delete groups[name];
+              // 也从被 detach 的 option 中移除（原生过滤可能已将其 detach）
+              if (_presetDetachedOptions && _presetDetachedOptions.length > 0) {
+                _presetDetachedOptions = _presetDetachedOptions.filter(
+                  (opt) => $(opt).text() !== name,
+                );
+              }
               success++;
             } else fail++;
           } catch (e) {
@@ -3565,6 +3594,12 @@ jQuery(async () => {
                   return $(this).val() === name;
                 })
                 .remove();
+              // 也从被 detach 的 option 中移除（原生过滤可能已将其 detach）
+              if (_themeDetachedOptions && _themeDetachedOptions.length > 0) {
+                _themeDetachedOptions = _themeDetachedOptions.filter(
+                  (opt) => $(opt).val() !== name,
+                );
+              }
               // 更新全局 themes 缓存
               if (typeof themes !== "undefined" && Array.isArray(themes)) {
                 const idx = themes.findIndex(
@@ -3629,6 +3664,12 @@ jQuery(async () => {
                   return $(this).text() === name;
                 })
                 .remove();
+              // 也从被 detach 的 option 中移除（原生过滤可能已将其 detach）
+              if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+                _worldInfoDetachedOptions = _worldInfoDetachedOptions.filter(
+                  (opt) => $(opt).text() !== name,
+                );
+              }
               success++;
             } else {
               fail++;
@@ -14852,6 +14893,14 @@ jQuery(async () => {
       const t = $(this).text();
       if (v !== "" && t !== "--- 选择以编辑 ---") domNames.push(t);
     });
+    // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
+    if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+      for (const opt of _worldInfoDetachedOptions) {
+        const v = $(opt).val();
+        const t = $(opt).text();
+        if (v !== "" && t !== "--- 选择以编辑 ---") domNames.push(t);
+      }
+    }
     if (domNames.length > 0) {
       names = domNames;
       _worldInfoNamesCache = domNames;
@@ -16285,6 +16334,14 @@ jQuery(async () => {
             const t = $(this).text();
             if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
           });
+          // 如果原生过滤激活，被 detach 的 option 也要加入
+          if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+            for (const opt of _worldInfoDetachedOptions) {
+              const v = $(opt).val();
+              const t = $(opt).text();
+              if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
+            }
+          }
         }
         uncatCount = allItems.filter((name) => {
           const grp = groups[name];
@@ -16516,6 +16573,14 @@ jQuery(async () => {
             const t = $(this).text();
             if (v !== "" && t !== "--- 选择以编辑 ---") items.add(t);
           });
+          // 如果原生过滤激活，被 detach 的 option 也要加入
+          if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+            for (const opt of _worldInfoDetachedOptions) {
+              const v = $(opt).val();
+              const t = $(opt).text();
+              if (v !== "" && t !== "--- 选择以编辑 ---") items.add(t);
+            }
+          }
           // 过滤掉已分组的
           for (const [name, fid] of Object.entries(groups)) {
             if (fid && tree[fid]) items.delete(name);
