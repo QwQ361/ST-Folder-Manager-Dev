@@ -3950,49 +3950,54 @@ jQuery(async () => {
     const currentBg = getCurrentBackgroundFile();
     if (existingBinding) {
       // 已有绑定，弹出选择：更新绑定 / 解除绑定 / 取消
+      $("#cfm-bglink-overlay").remove();
       const bgDisplayName = getBackgroundDisplayName(existingBinding);
       const currentBgDisplay = currentBg
         ? getBackgroundDisplayName(currentBg)
         : "无";
-      const popupHtml = `
-        <div style="text-align:center;padding:10px;">
-          <p>当前绑定背景：<b style="color:var(--SmartThemeQuoteColor,#f5c542);">${escapeHtml(bgDisplayName)}</b></p>
-          <p>当前使用背景：<b style="color:var(--SmartThemeQuoteColor,#5dade2);">${escapeHtml(currentBgDisplay)}</b></p>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;">
-            <button class="menu_button" id="cfm-bglink-update" ${!currentBg || currentBg === existingBinding ? 'disabled style="opacity:0.5;"' : ""}>更新为当前背景</button>
-            <button class="menu_button" id="cfm-bglink-unbind" style="color:#e74c3c;">解除绑定</button>
-            <button class="menu_button" id="cfm-bglink-cancel">取消</button>
+      const updateDisabled = !currentBg || currentBg === existingBinding;
+      const overlay = $('<div id="cfm-bglink-overlay" class="cfm-batch-overlay"></div>');
+      const dialog = $(`
+        <div class="cfm-batch-popup" style="max-width:420px;">
+          <div class="cfm-config-header"><h3>🔗 主题背景绑定</h3><button class="cfm-btn-close" id="cfm-bglink-close">&times;</button></div>
+          <div style="padding:16px;text-align:center;">
+            <p style="margin-bottom:8px;font-size:13px;">当前绑定背景：<b style="color:#f5c542;">${escapeHtml(bgDisplayName)}</b></p>
+            <p style="margin-bottom:12px;font-size:13px;">当前使用背景：<b style="color:#5dade2;">${escapeHtml(currentBgDisplay)}</b></p>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+              <button class="cfm-btn" id="cfm-bglink-update" ${updateDisabled ? 'disabled style="opacity:0.4;pointer-events:none;"' : 'style="background:rgba(166,227,161,0.15);border-color:rgba(166,227,161,0.4);"'}>更新为当前背景</button>
+              <button class="cfm-btn" id="cfm-bglink-unbind" style="background:rgba(237,66,69,0.15);border-color:rgba(237,66,69,0.4);color:#e74c3c;">解除绑定</button>
+              <button class="cfm-btn" id="cfm-bglink-cancel" style="opacity:0.7;">取消</button>
+            </div>
           </div>
-        </div>`;
-      callPopup(popupHtml, "text", "", {
-        okButton: "none",
-        cancelButton: "none",
-      }).catch(() => {});
-      setTimeout(() => {
-        $("#cfm-bglink-update").on("click", () => {
-          setThemeBgBinding(themeName, currentBg);
-          toastr.success(
-            `已更新「${themeName}」绑定背景为「${getBackgroundDisplayName(currentBg)}」`,
-          );
-          $(
-            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-          ).trigger("click");
-          if (currentResourceType === "themes") renderThemesView();
-        });
-        $("#cfm-bglink-unbind").on("click", () => {
-          removeThemeBgBinding(themeName);
-          toastr.info(`已解除「${themeName}」的背景绑定`);
-          $(
-            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-          ).trigger("click");
-          if (currentResourceType === "themes") renderThemesView();
-        });
-        $("#cfm-bglink-cancel").on("click", () => {
-          $(
-            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-          ).trigger("click");
-        });
-      }, 100);
+        </div>
+      `);
+      overlay.append(dialog);
+      $("body").append(overlay);
+      const closeOverlay = () => overlay.remove();
+      dialog.find("#cfm-bglink-close, #cfm-bglink-cancel").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeOverlay();
+      });
+      dialog.find("#cfm-bglink-update").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setThemeBgBinding(themeName, currentBg);
+        toastr.success(`已更新「${themeName}」绑定背景为「${getBackgroundDisplayName(currentBg)}」`);
+        closeOverlay();
+        if (currentResourceType === "themes") renderThemesView();
+      });
+      dialog.find("#cfm-bglink-unbind").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeThemeBgBinding(themeName);
+        toastr.info(`已解除「${themeName}」的背景绑定`);
+        closeOverlay();
+        if (currentResourceType === "themes") renderThemesView();
+      });
+      overlay.on("click", (e) => {
+        if ($(e.target).is(overlay)) closeOverlay();
+      });
     } else {
       // 没有绑定，直接绑定当前背景
       if (!currentBg) {
