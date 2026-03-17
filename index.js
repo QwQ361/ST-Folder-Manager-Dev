@@ -31,6 +31,9 @@ jQuery(async () => {
       extension_settings[extensionName].bgOrientations = {};
     if (!extension_settings[extensionName].themeBackgroundBindings)
       extension_settings[extensionName].themeBackgroundBindings = {};
+    // 默认背景图（切换到没有绑定背景的主题时使用，空字符串=不设置）
+    if (extension_settings[extensionName].defaultBackground === undefined)
+      extension_settings[extensionName].defaultBackground = "";
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
@@ -2354,6 +2357,7 @@ jQuery(async () => {
       _lastThemeForBgBinding = newTheme;
       // 检查是否有绑定的背景
       const boundBg = getThemeBgBinding(newTheme);
+      const defaultBg = extension_settings[extensionName].defaultBackground || "";
       if (boundBg) {
         // 延迟一点执行，等主题样式应用完成
         setTimeout(() => {
@@ -2361,6 +2365,15 @@ jQuery(async () => {
           if (currentBg !== boundBg) {
             applyBackground(boundBg);
             toastr.info(`已自动切换背景为「${getBackgroundDisplayName(boundBg)}」`, "主题绑定背景", { timeOut: 2000 });
+          }
+        }, 500);
+      } else if (defaultBg) {
+        // 没有绑定背景但设置了默认背景，应用默认背景
+        setTimeout(() => {
+          const currentBg = getCurrentBackgroundFile();
+          if (currentBg !== defaultBg) {
+            applyBackground(defaultBg);
+            toastr.info(`已自动切换为默认背景「${getBackgroundDisplayName(defaultBg)}」`, "默认背景", { timeOut: 2000 });
           }
         }, 500);
       }
@@ -3775,6 +3788,10 @@ jQuery(async () => {
                   if (bg === name) delete bindings[theme];
                 }
               }
+              // 如果删除的是默认背景，清除默认背景设置
+              if (extension_settings[extensionName].defaultBackground === name) {
+                extension_settings[extensionName].defaultBackground = "";
+              }
               // 从酒馆原生DOM中移除对应背景元素
               $("#bg_menu_content .bg_example")
                 .filter(function () {
@@ -3901,7 +3918,7 @@ jQuery(async () => {
     if (!bg1) return "";
     const style = bg1.getAttribute("style") || "";
     // 从 style 中提取 url(...) 中的文件名
-    const match = style.match(/url\(["']?\/backgrounds\/([^"')]+)["']?\)/);
+    const match = style.match(/url\(["']?\/?backgrounds\/([^"')]+)["']?\)/);
     if (match && match[1]) {
       try {
         return decodeURIComponent(match[1]);
@@ -3915,9 +3932,15 @@ jQuery(async () => {
    * 点击锁链按钮的处理逻辑
    */
   function handleThemeBgLink(themeName) {
-    const currentThemeName =
+    // 检查该主题是否是当前应用的主题
+    // 同时检查多个来源，因为 power_user.theme 和 #themes 下拉框的更新可能有延迟
+    const themesSelect = document.getElementById("themes");
+    const selectValue = themesSelect ? themesSelect.value : null;
+    const powerUserTheme =
       typeof power_user !== "undefined" ? power_user.theme : null;
-    if (themeName !== currentThemeName) {
+    const isCurrentTheme =
+      themeName === selectValue || themeName === powerUserTheme;
+    if (!isCurrentTheme) {
       toastr.warning("请先应用该美化主题，再点击锁链绑定背景", "提示", {
         timeOut: 3000,
       });
@@ -3981,6 +4004,82 @@ jQuery(async () => {
         `已将「${themeName}」绑定背景「${getBackgroundDisplayName(currentBg)}」`,
       );
       if (currentResourceType === "themes") renderThemesView();
+    }
+  }
+
+  /**
+   * 设置/清除默认背景图
+   */
+  function handleDefaultBgSetting() {
+    const currentDefault =
+      extension_settings[extensionName].defaultBackground || "";
+    const currentBg = getCurrentBackgroundFile();
+    const currentDefaultDisplay = currentDefault
+      ? getBackgroundDisplayName(currentDefault)
+      : "未设置";
+    const currentBgDisplay = currentBg
+      ? getBackgroundDisplayName(currentBg)
+      : "无";
+    const popupHtml = `
+      <div style="text-align:center;padding:10px;">
+        <p style="margin-bottom:8px;">当前默认背景：<b style="color:var(--SmartThemeQuoteColor,#f5c542);">${escapeHtml(currentDefaultDisplay)}</b></p>
+        <p style="margin-bottom:12px;">当前使用背景：<b style="color:var(--SmartThemeQuoteColor,#5dade2);">${escapeHtml(currentBgDisplay)}</b></p>
+        <p style="font-size:12px;opacity:0.7;margin-bottom:12px;">切换到没有绑定背景的美化主题时，将自动应用默认背景</p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button class="menu_button" id="cfm-defbg-set" ${!currentBg || currentBg === currentDefault ? 'disabled style="opacity:0.5;"' : ""}>设为当前背景</button>
+          <button class="menu_button" id="cfm-defbg-clear" ${!currentDefault ? 'disabled style="opacity:0.5;"' : ""} style="${currentDefault ? 'color:#e74c3c;' : 'color:#e74c3c;opacity:0.5;'}">清除默认背景</button>
+          <button class="menu_button" id="cfm-defbg-cancel">取消</button>
+        </div>
+      </div>`;
+    callPopup(popupHtml, "text", "", {
+      okButton: "none",
+      cancelButton: "none",
+    }).catch(() => {});
+    setTimeout(() => {
+      $("#cfm-defbg-set").on("click", () => {
+        extension_settings[extensionName].defaultBackground = currentBg;
+        getContext().saveSettingsDebounced();
+        toastr.success(
+          `已将默认背景设为「${getBackgroundDisplayName(currentBg)}」`,
+        );
+        $(
+          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+        ).trigger("click");
+        updateDefaultBgBtnState();
+      });
+      $("#cfm-defbg-clear").on("click", () => {
+        extension_settings[extensionName].defaultBackground = "";
+        getContext().saveSettingsDebounced();
+        toastr.info("已清除默认背景");
+        $(
+          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+        ).trigger("click");
+        updateDefaultBgBtnState();
+      });
+      $("#cfm-defbg-cancel").on("click", () => {
+        $(
+          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+        ).trigger("click");
+      });
+    }, 100);
+  }
+
+  /**
+   * 更新默认背景按钮的视觉状态
+   */
+  function updateDefaultBgBtnState() {
+    const btn = $("#cfm-bg-default-btn");
+    if (!btn.length) return;
+    const hasDefault = !!extension_settings[extensionName].defaultBackground;
+    if (hasDefault) {
+      btn.addClass("cfm-edit-active");
+      btn.attr(
+        "title",
+        `默认背景: ${getBackgroundDisplayName(extension_settings[extensionName].defaultBackground)} (点击管理)`,
+      );
+    } else {
+      btn.removeClass("cfm-edit-active");
+      btn.attr("title", "设置默认背景");
     }
   }
 
@@ -6283,6 +6382,10 @@ jQuery(async () => {
           }
         }
       }
+      // 同步默认背景设置
+      if (extension_settings[extensionName].defaultBackground === oldName) {
+        extension_settings[extensionName].defaultBackground = newName;
+      }
     }
     getContext().saveSettingsDebounced();
   }
@@ -7358,6 +7461,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-bg-btn" title="导入背景"><i class="fa-solid fa-file-import"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-bg-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-bg-rename-btn" title="重命名背景"><i class="fa-solid fa-i-cursor"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-bg-default-btn" title="设置默认背景"><i class="fa-solid fa-image"></i></button>
                             <input type="file" id="cfm-import-bg-file" multiple accept="image/*" style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-bg-btn" title="导出背景"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-bg-btn" title="删除背景"><i class="fa-solid fa-trash-can"></i></button>
@@ -8630,6 +8734,13 @@ jQuery(async () => {
       } else {
         enterBgRenameMode();
       }
+    });
+
+    // 默认背景设置按钮
+    popup.find("#cfm-bg-default-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleDefaultBgSetting();
     });
 
     // 主题导入按钮
@@ -15500,6 +15611,8 @@ jQuery(async () => {
         }
       });
     }
+    // 更新默认背景按钮状态
+    updateDefaultBgBtnState();
   }
 
   // ==================== 角色世界书归类 ====================
@@ -16775,6 +16888,7 @@ jQuery(async () => {
         bgBindings: JSON.parse(
           JSON.stringify(extension_settings[extensionName].themeBackgroundBindings || {}),
         ),
+        defaultBackground: extension_settings[extensionName].defaultBackground || "",
       };
     }
 
@@ -17100,6 +17214,13 @@ jQuery(async () => {
             setThemeBgBinding(name, bgfile);
           }
         }
+      }
+
+      // 恢复默认背景
+      if (jsonData.themes.defaultBackground) {
+        extension_settings[extensionName].defaultBackground =
+          jsonData.themes.defaultBackground;
+        getContext().saveSettingsDebounced();
       }
     }
 

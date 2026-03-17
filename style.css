@@ -2459,6 +2459,11 @@
   background-color: rgba(137, 180, 250, 0.15) !important;
   border: 1px solid rgba(137, 180, 250, 0.4) !important;
 }
+#cfm-bg-default-btn.cfm-edit-active {
+  color: #a6e3a1 !important;
+  background-color: rgba(166, 227, 161, 0.15) !important;
+  border: 1px solid rgba(166, 227, 161, 0.4) !important;
+}
 
 /* 编辑模式遮罩 */
 .cfm-popup.cfm-edit-mode .cfm-left-pane {
