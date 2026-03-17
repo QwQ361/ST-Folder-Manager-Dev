@@ -2743,59 +2743,20 @@ jQuery(async () => {
   let cfmMultiSelectLastClicked = null; // 框选：上次点击的标识符
   let cfmMultiSelectRangeMode = false; // 框选模式开关
 
-  // 双击移入文件夹检测状态（解决非角色卡资源类型 click 导致 DOM 重建后 dblclick 无法触发的问题）
-  let _dblClickFolderId = null;
-  let _dblClickTime = 0;
-  const DBL_CLICK_THRESHOLD = 500; // ms
-
   /**
-   * 检测文件夹双击并在多选模式下执行移入操作。
-   * 在 click 事件中调用，返回 true 表示检测到双击并已处理（调用方应 return 跳过后续逻辑）。
-   * @param {string} folderId - 被点击的文件夹 ID
+   * 靶子按钮点击：在多选模式下将选中的资源移入目标文件夹。
    * @param {Function} moveAction - 执行移入的回调 (selectedItems: string[]) => void
    * @param {Function} renderAction - 移入后的渲染回调
    * @param {Function} toastAction - 移入后的 toast 回调 (count: number, firstName: string) => void
-   * @param {Event} e - 原始事件对象，用于排除三角箭头
-   * @returns {boolean} 是否检测到双击并已处理
    */
-  function handleFolderDblClickMove(
-    folderId,
-    moveAction,
-    renderAction,
-    toastAction,
-    e,
-  ) {
-    if (!cfmMultiSelectMode || cfmMultiSelected.size === 0) {
-      _dblClickFolderId = null;
-      _dblClickTime = 0;
-      return false;
-    }
-    // 排除三角箭头区域
-    if (e && $(e.target).closest(".cfm-tnode-arrow").length) {
-      _dblClickFolderId = null;
-      _dblClickTime = 0;
-      return false;
-    }
-    const now = Date.now();
-    if (
-      _dblClickFolderId === folderId &&
-      now - _dblClickTime < DBL_CLICK_THRESHOLD
-    ) {
-      // 检测到双击
-      _dblClickFolderId = null;
-      _dblClickTime = 0;
-      const items = Array.from(cfmMultiSelected);
-      const count = items.length;
-      moveAction(items);
-      clearMultiSelect();
-      renderAction();
-      toastAction(count, items[0]);
-      return true;
-    }
-    // 记录第一次点击
-    _dblClickFolderId = folderId;
-    _dblClickTime = now;
-    return false;
+  function handleFolderTargetMove(moveAction, renderAction, toastAction) {
+    if (!cfmMultiSelectMode || cfmMultiSelected.size === 0) return;
+    const items = Array.from(cfmMultiSelected);
+    const count = items.length;
+    moveAction(items);
+    clearMultiSelect();
+    renderAction();
+    toastAction(count, items[0]);
   }
 
   // PC端拖拽数据备份（解决HTML5 dataTransfer可靠性问题）
@@ -2902,6 +2863,7 @@ jQuery(async () => {
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+      $("#cfm-popup").removeClass("cfm-multisel-on");
     }
     // 导出模式
     if (cfmExportMode) {
@@ -7901,6 +7863,8 @@ jQuery(async () => {
         "cfm-multisel-active",
         cfmMultiSelectMode,
       );
+      // 在 popup 容器上标记多选模式，用于 CSS 控制靶子图标显隐
+      $("#cfm-popup").toggleClass("cfm-multisel-on", cfmMultiSelectMode);
       // 重新渲染当前视图
       if (currentResourceType === "chars") renderRightPane();
       else if (currentResourceType === "presets") renderPresetsView();
@@ -10243,13 +10207,13 @@ jQuery(async () => {
                 <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
                 <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
                 <span class="cfm-tnode-label">未归类角色</span>
+                <span class="cfm-tnode-target" title="移入此处"><i class="fa-solid fa-crosshairs"></i></span>
                 <span class="cfm-tnode-count">${uncatCount}</span>
             </div>
         `);
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        "__uncategorized_char__",
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
         (items) => items.forEach((av) => removeCharFromAllFolders(av)),
         () => { renderLeftTree(); renderRightPane(); },
         (count, first) => toastr.success(
@@ -10257,9 +10221,10 @@ jQuery(async () => {
             ? `已将 ${count} 个角色移出所有文件夹`
             : `已将「${first}」移出所有文件夹`,
         ),
-        e,
       );
-      if (dblHandled) return;
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
       selectedTreeNode = "__uncategorized__";
       refreshSelection();
       renderRightPane();
@@ -10317,6 +10282,7 @@ jQuery(async () => {
                 <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
                 <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
                 <span class="cfm-tnode-label">${escapeHtml(getTagName(folderId))}${isNew ? ' <span class="cfm-new-badge">新</span>' : ""}</span>
+                <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
                 <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
                 <span class="cfm-tnode-count">${count}</span>
             </div>
@@ -10329,6 +10295,20 @@ jQuery(async () => {
         renderLeftTree();
         renderRightPane();
       });
+    });
+
+    // 点击靶子按钮：移入此文件夹
+    node.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
+        (items) => items.forEach((av) => handleCharDropToFolder(av, folderId)),
+        () => { renderLeftTree(); renderRightPane(); },
+        (count, first) => toastr.success(
+          count > 1
+            ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
+            : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
+        ),
+      );
     });
 
     // 点击箭头：展开/收起
@@ -10344,18 +10324,6 @@ jQuery(async () => {
     // 点击节点本身：选中并在右侧显示内容
     node.on("click", (e) => {
       e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        folderId,
-        (items) => items.forEach((av) => handleCharDropToFolder(av, folderId)),
-        () => { renderLeftTree(); renderRightPane(); },
-        (count, first) => toastr.success(
-          count > 1
-            ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
-            : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
-        ),
-        e,
-      );
-      if (dblHandled) return;
       selectedTreeNode = folderId;
       refreshSelection();
       // 如果搜索栏有内容，保持搜索模式
@@ -10688,10 +10656,24 @@ jQuery(async () => {
                 <div class="cfm-row cfm-row-folder" data-folder-id="${childId}" draggable="true">
                     <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
                     <div class="cfm-row-name">${escapeHtml(getTagName(childId))}</div>
+                    <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
                     <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
                     <div class="cfm-row-meta">${childCount} 个角色</div>
                 </div>
             `);
+      // 点击靶子按钮：移入此文件夹
+      row.find(".cfm-row-target-btn").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) => items.forEach((av) => handleCharDropToFolder(av, childId)),
+          () => { renderLeftTree(); renderRightPane(); },
+          (count, first) => toastr.success(
+            count > 1
+              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
+              : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
+          ),
+        );
+      });
       // 点击重命名按钮
       row.find(".cfm-row-rename-btn").on("click", (e) => {
         e.stopPropagation();
@@ -10703,18 +10685,6 @@ jQuery(async () => {
       // 点击子文件夹：左侧树展开并选中
       row.on("click", (e) => {
         e.preventDefault();
-        const dblHandled = handleFolderDblClickMove(
-          childId,
-          (items) => items.forEach((av) => handleCharDropToFolder(av, childId)),
-          () => { renderLeftTree(); renderRightPane(); },
-          (count, first) => toastr.success(
-            count > 1
-              ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
-              : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
-          ),
-          e,
-        );
-        if (dblHandled) return;
         // 展开路径上所有节点
         const fullPath = getFolderPath(childId);
         for (const pid of fullPath) expandedNodes.add(pid);
@@ -12875,11 +12845,25 @@ jQuery(async () => {
           <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
           <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
           <span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("presets", folderId))}</span>
+          <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
           <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
           <span class="cfm-tnode-count">${count}</span>
         </div>
       `);
 
+      node.find(".cfm-tnode-target").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) => items.forEach((n) => setItemGroup("presets", n, folderId)),
+          () => renderPresetsView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("presets", folderId)}」`,
+            ),
+        );
+      });
       node.find(".cfm-tnode-rename").on("click", (e) => {
         e.stopPropagation();
         promptRenameFolder("presets", folderId, () => renderPresetsView());
@@ -12895,22 +12879,9 @@ jQuery(async () => {
         renderPresetsView();
       });
 
-      // 点击选中（含双击移入检测）
+      // 点击选中
       node.on("click", (e) => {
         e.preventDefault();
-        const dblHandled = handleFolderDblClickMove(
-          folderId,
-          (items) => items.forEach((n) => setItemGroup("presets", n, folderId)),
-          () => renderPresetsView(),
-          (count, first) =>
-            toastr.success(
-              count > 1
-                ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
-                : `已将「${first}」移入「${getResFolderDisplayName("presets", folderId)}」`,
-            ),
-          e,
-        );
-        if (dblHandled) return;
         selectedPresetFolder = folderId;
         renderPresetsView();
       });
@@ -13064,13 +13035,13 @@ jQuery(async () => {
         <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
         <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
         <span class="cfm-tnode-label">未归类预设</span>
+        <span class="cfm-tnode-target" title="移入此处"><i class="fa-solid fa-crosshairs"></i></span>
         <span class="cfm-tnode-count">${ungrouped.length}</span>
       </div>
     `);
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        "__ungrouped_preset__",
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
         (items) => items.forEach((n) => setItemGroup("presets", n, null)),
         () => renderPresetsView(),
         (count, first) => toastr.success(
@@ -13078,9 +13049,10 @@ jQuery(async () => {
             ? `已将 ${count} 个预设移出文件夹`
             : `已将「${first}」移出文件夹`,
         ),
-        e,
       );
-      if (dblHandled) return;
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
       selectedPresetFolder = "__ungrouped__";
       renderPresetsView();
     });
@@ -13191,18 +13163,14 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true">
             <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
             <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("presets", childId))}</div>
+            <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
             <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
             <div class="cfm-row-meta">${childCount} 个预设</div>
           </div>
         `);
-        row.find(".cfm-row-rename-btn").on("click", (e) => {
+        row.find(".cfm-row-target-btn").on("click", (e) => {
           e.stopPropagation();
-          promptRenameFolder("presets", childId, () => renderPresetsView());
-        });
-        row.on("click", (e) => {
-          e.preventDefault();
-          const dblHandled = handleFolderDblClickMove(
-            childId,
+          handleFolderTargetMove(
             (items) => items.forEach((n) => setItemGroup("presets", n, childId)),
             () => renderPresetsView(),
             (count, first) => toastr.success(
@@ -13210,9 +13178,14 @@ jQuery(async () => {
                 ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", childId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("presets", childId)}」`,
             ),
-            e,
           );
-          if (dblHandled) return;
+        });
+        row.find(".cfm-row-rename-btn").on("click", (e) => {
+          e.stopPropagation();
+          promptRenameFolder("presets", childId, () => renderPresetsView());
+        });
+        row.on("click", (e) => {
+          e.preventDefault();
           const path = getResFolderPath("presets", childId);
           for (const pid of path) presetExpandedNodes.add(pid);
           selectedPresetFolder = childId;
@@ -13652,10 +13625,24 @@ jQuery(async () => {
           <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
           <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
           <span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("themes", folderId))}</span>
+          <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
           <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
           <span class="cfm-tnode-count">${count}</span>
         </div>
       `);
+      node.find(".cfm-tnode-target").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) => items.forEach((n) => setItemGroup("themes", n, folderId)),
+          () => renderThemesView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("themes", folderId)}」`,
+            ),
+        );
+      });
       node.find(".cfm-tnode-rename").on("click", (e) => {
         e.stopPropagation();
         promptRenameFolder("themes", folderId, () => renderThemesView());
@@ -13670,19 +13657,6 @@ jQuery(async () => {
       });
       node.on("click", (e) => {
         e.preventDefault();
-        const dblHandled = handleFolderDblClickMove(
-          folderId,
-          (items) => items.forEach((n) => setItemGroup("themes", n, folderId)),
-          () => renderThemesView(),
-          (count, first) =>
-            toastr.success(
-              count > 1
-                ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
-                : `已将「${first}」移入「${getResFolderDisplayName("themes", folderId)}」`,
-            ),
-          e,
-        );
-        if (dblHandled) return;
         selectedThemeFolder = folderId;
         renderThemesView();
       });
@@ -13818,13 +13792,13 @@ jQuery(async () => {
         <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
         <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
         <span class="cfm-tnode-label">未归类主题</span>
+        <span class="cfm-tnode-target" title="移入此处"><i class="fa-solid fa-crosshairs"></i></span>
         <span class="cfm-tnode-count">${ungrouped.length}</span>
       </div>
     `);
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        "__ungrouped_theme__",
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
         (items) => items.forEach((n) => setItemGroup("themes", n, null)),
         () => renderThemesView(),
         (count, first) => toastr.success(
@@ -13832,9 +13806,10 @@ jQuery(async () => {
             ? `已将 ${count} 个主题移出文件夹`
             : `已将「${first}」移出文件夹`,
         ),
-        e,
       );
-      if (dblHandled) return;
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
       selectedThemeFolder = "__ungrouped__";
       renderThemesView();
     });
@@ -13936,18 +13911,14 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true">
             <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
             <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("themes", childId))}</div>
+            <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
             <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
             <div class="cfm-row-meta">${childCount} 个主题</div>
           </div>
         `);
-        row.find(".cfm-row-rename-btn").on("click", (e) => {
+        row.find(".cfm-row-target-btn").on("click", (e) => {
           e.stopPropagation();
-          promptRenameFolder("themes", childId, () => renderThemesView());
-        });
-        row.on("click", (e) => {
-          e.preventDefault();
-          const dblHandled = handleFolderDblClickMove(
-            childId,
+          handleFolderTargetMove(
             (items) => items.forEach((n) => setItemGroup("themes", n, childId)),
             () => renderThemesView(),
             (count, first) => toastr.success(
@@ -13955,9 +13926,14 @@ jQuery(async () => {
                 ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", childId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("themes", childId)}」`,
             ),
-            e,
           );
-          if (dblHandled) return;
+        });
+        row.find(".cfm-row-rename-btn").on("click", (e) => {
+          e.stopPropagation();
+          promptRenameFolder("themes", childId, () => renderThemesView());
+        });
+        row.on("click", (e) => {
+          e.preventDefault();
           const path = getResFolderPath("themes", childId);
           for (const pid of path) themeExpandedNodes.add(pid);
           selectedThemeFolder = childId;
@@ -14374,8 +14350,22 @@ jQuery(async () => {
       const count = countResItemsRecursive("backgrounds", folderId);
       const indent = 10 + depth * 16;
       const node = $(
-        `<div class="cfm-tnode ${isSelected ? "cfm-tnode-selected" : ""}" data-id="${escapeHtml(folderId)}" style="padding-left:${indent}px;" draggable="true"><span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span><span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("backgrounds", folderId))}</span><span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span><span class="cfm-tnode-count">${count}</span></div>`,
+        `<div class="cfm-tnode ${isSelected ? "cfm-tnode-selected" : ""}" data-id="${escapeHtml(folderId)}" style="padding-left:${indent}px;" draggable="true"><span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span><span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("backgrounds", folderId))}</span><span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span><span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span><span class="cfm-tnode-count">${count}</span></div>`,
       );
+      node.find(".cfm-tnode-target").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) =>
+            items.forEach((n) => setItemGroup("backgrounds", n, folderId)),
+          () => renderBackgroundsView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
+            ),
+        );
+      });
       node.find(".cfm-tnode-rename").on("click", (e) => {
         e.stopPropagation();
         promptRenameFolder("backgrounds", folderId, () =>
@@ -14391,20 +14381,6 @@ jQuery(async () => {
       });
       node.on("click", (e) => {
         e.preventDefault();
-        const dblHandled = handleFolderDblClickMove(
-          folderId,
-          (items) =>
-            items.forEach((n) => setItemGroup("backgrounds", n, folderId)),
-          () => renderBackgroundsView(),
-          (count, first) =>
-            toastr.success(
-              count > 1
-                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
-                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
-            ),
-          e,
-        );
-        if (dblHandled) return;
         selectedBgFolder = folderId;
         renderBackgroundsView();
       });
@@ -14537,12 +14513,11 @@ jQuery(async () => {
     );
     for (const fid of topFolders) renderBgTreeNode(leftTree, fid, 0);
     const uncatNode = $(
-      `<div class="cfm-tnode cfm-tnode-uncategorized ${selectedBgFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;"><span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span><span class="cfm-tnode-label">未归类背景</span><span class="cfm-tnode-count">${ungrouped.length}</span></div>`,
+      `<div class="cfm-tnode cfm-tnode-uncategorized ${selectedBgFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;"><span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span><span class="cfm-tnode-label">未归类背景</span><span class="cfm-tnode-target" title="移入此处"><i class="fa-solid fa-crosshairs"></i></span><span class="cfm-tnode-count">${ungrouped.length}</span></div>`,
     );
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        "__ungrouped_bg__",
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
         (items) => items.forEach((n) => setItemGroup("backgrounds", n, null)),
         () => renderBackgroundsView(),
         (count, first) => toastr.success(
@@ -14550,9 +14525,10 @@ jQuery(async () => {
             ? `已将 ${count} 个背景移出文件夹`
             : `已将「${getBackgroundDisplayName(first)}」移出文件夹`,
         ),
-        e,
       );
-      if (dblHandled) return;
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
       selectedBgFolder = "__ungrouped__";
       renderBackgroundsView();
     });
@@ -14642,8 +14618,20 @@ jQuery(async () => {
       for (const childId of childFolders) {
         const childCount = countResItemsRecursive("backgrounds", childId);
         const row = $(
-          `<div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true"><div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div><div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("backgrounds", childId))}</div><div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div><div class="cfm-row-meta">${childCount} 个背景</div></div>`,
+          `<div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true"><div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div><div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("backgrounds", childId))}</div><div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div><div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div><div class="cfm-row-meta">${childCount} 个背景</div></div>`,
         );
+        row.find(".cfm-row-target-btn").on("click", (e) => {
+          e.stopPropagation();
+          handleFolderTargetMove(
+            (items) => items.forEach((n) => setItemGroup("backgrounds", n, childId)),
+            () => renderBackgroundsView(),
+            (count, first) => toastr.success(
+              count > 1
+                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
+            ),
+          );
+        });
         row.find(".cfm-row-rename-btn").on("click", (e) => {
           e.stopPropagation();
           promptRenameFolder("backgrounds", childId, () =>
@@ -14652,18 +14640,6 @@ jQuery(async () => {
         });
         row.on("click", (e) => {
           e.preventDefault();
-          const dblHandled = handleFolderDblClickMove(
-            childId,
-            (items) => items.forEach((n) => setItemGroup("backgrounds", n, childId)),
-            () => renderBackgroundsView(),
-            (count, first) => toastr.success(
-              count > 1
-                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
-                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
-            ),
-            e,
-          );
-          if (dblHandled) return;
           const path = getResFolderPath("backgrounds", childId);
           for (const pid of path) bgExpandedNodes.add(pid);
           selectedBgFolder = childId;
@@ -15406,10 +15382,24 @@ jQuery(async () => {
           <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
           <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
           <span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("worldinfo", folderId))}</span>
+          <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
           <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
           <span class="cfm-tnode-count">${count}</span>
         </div>
       `);
+
+      node.find(".cfm-tnode-target").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) => items.forEach((n) => setItemGroup("worldinfo", n, folderId)),
+          () => renderWorldInfoView(),
+          (count, first) => toastr.success(
+            count > 1
+              ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
+              : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
+          ),
+        );
+      });
 
       node.find(".cfm-tnode-rename").on("click", (e) => {
         e.stopPropagation();
@@ -15427,18 +15417,6 @@ jQuery(async () => {
 
       node.on("click", (e) => {
         e.preventDefault();
-        const dblHandled = handleFolderDblClickMove(
-          folderId,
-          (items) => items.forEach((n) => setItemGroup("worldinfo", n, folderId)),
-          () => renderWorldInfoView(),
-          (count, first) => toastr.success(
-            count > 1
-              ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
-              : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
-          ),
-          e,
-        );
-        if (dblHandled) return;
         selectedWorldInfoFolder = folderId;
         renderWorldInfoView();
       });
@@ -15608,13 +15586,13 @@ jQuery(async () => {
         <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
         <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
         <span class="cfm-tnode-label">未归类世界书</span>
+        <span class="cfm-tnode-target" title="移出所有文件夹"><i class="fa-solid fa-crosshairs"></i></span>
         <span class="cfm-tnode-count">${ungrouped.length}</span>
       </div>
     `);
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      const dblHandled = handleFolderDblClickMove(
-        "__ungrouped_wi__",
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
         (items) => items.forEach((n) => setItemGroup("worldinfo", n, null)),
         () => renderWorldInfoView(),
         (count, first) => toastr.success(
@@ -15622,9 +15600,10 @@ jQuery(async () => {
             ? `已将 ${count} 个世界书移出文件夹`
             : `已将「${first}」移出文件夹`,
         ),
-        e,
       );
-      if (dblHandled) return;
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
       selectedWorldInfoFolder = "__ungrouped__";
       renderWorldInfoView();
     });
@@ -15738,18 +15717,14 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true">
             <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
             <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("worldinfo", childId))}</div>
+            <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
             <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
             <div class="cfm-row-meta">${childCount} 个世界书</div>
           </div>
         `);
-        row.find(".cfm-row-rename-btn").on("click", (e) => {
+        row.find(".cfm-row-target-btn").on("click", (e) => {
           e.stopPropagation();
-          promptRenameFolder("worldinfo", childId, () => renderWorldInfoView());
-        });
-        row.on("click", (e) => {
-          e.preventDefault();
-          const dblHandled = handleFolderDblClickMove(
-            childId,
+          handleFolderTargetMove(
             (items) => items.forEach((n) => setItemGroup("worldinfo", n, childId)),
             () => renderWorldInfoView(),
             (count, first) => toastr.success(
@@ -15757,9 +15732,14 @@ jQuery(async () => {
                 ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", childId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", childId)}」`,
             ),
-            e,
           );
-          if (dblHandled) return;
+        });
+        row.find(".cfm-row-rename-btn").on("click", (e) => {
+          e.stopPropagation();
+          promptRenameFolder("worldinfo", childId, () => renderWorldInfoView());
+        });
+        row.on("click", (e) => {
+          e.preventDefault();
           const path = getResFolderPath("worldinfo", childId);
           for (const pid of path) worldInfoExpandedNodes.add(pid);
           selectedWorldInfoFolder = childId;

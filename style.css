@@ -2651,6 +2651,32 @@
   background-color: rgba(166, 227, 161, 0.15) !important;
 }
 
+/* 靶子图标（多选模式下的文件夹快速分类按钮） */
+.cfm-tnode-target,
+.cfm-row-target-btn {
+  display: none !important;
+}
+#cfm-popup.cfm-multisel-on .cfm-tnode-target,
+#cfm-popup.cfm-multisel-on .cfm-row-target-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #a6e3a1;
+  opacity: 0.7;
+  font-size: 13px;
+  margin-left: 2px;
+  transition: opacity 0.15s, color 0.15s;
+}
+#cfm-popup.cfm-multisel-on .cfm-tnode-target:hover,
+#cfm-popup.cfm-multisel-on .cfm-row-target-btn:hover {
+  opacity: 1;
+  color: #57f287;
+}
+.cfm-row-target-btn {
+  padding: 2px 4px;
+}
+
 /* 多选工具栏 */
 .cfm-multisel-toolbar {
   display: flex;
