@@ -1140,7 +1140,7 @@ jQuery(async () => {
         "touchstart",
         (e) => {
           if (mgr.active) return;
-          if (e.target.closest(".cfm-row-star, .cfm-tnode-arrow")) return;
+          if (e.target.closest(".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn")) return;
           const t = e.touches[0];
           sx = t.clientX;
           sy = t.clientY;
