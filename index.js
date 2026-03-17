@@ -8942,6 +8942,68 @@ jQuery(async () => {
     });
   }
 
+  // ==================== 模糊搜索辅助 ====================
+  /**
+   * 模糊匹配：将查询按空格拆分为多个关键词，每个关键词必须在 textPool 中至少一项里出现
+   * @param {string} query - 用户输入的搜索词（已 toLowerCase）
+   * @param {string[]} textPool - 待匹配的文本池（每项已 toLowerCase）
+   * @returns {boolean}
+   */
+  function fuzzyMatch(query, textPool) {
+    const tokens = query.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return false;
+    const poolStr = textPool.join("\n");
+    return tokens.every((token) => poolStr.includes(token));
+  }
+
+  /**
+   * 获取角色卡所在文件夹的路径显示名数组（从根到叶）
+   */
+  function getCharFolderPathNames(char) {
+    const tagMap = getTagMap();
+    const charTags = tagMap[char.avatar] || [];
+    const folderTagIds = getFolderTagIds();
+    const names = [];
+    for (const fid of charTags) {
+      if (folderTagIds.includes(fid)) {
+        const path = getFolderPath(fid);
+        for (const pid of path) {
+          const n = getTagName(pid);
+          if (n && !names.includes(n)) names.push(n);
+        }
+      }
+    }
+    return names;
+  }
+
+  /**
+   * 获取资源所在文件夹的路径显示名数组（从根到叶）
+   * @param {string} type - 'presets' | 'themes' | 'backgrounds' | 'worldinfo'
+   * @param {string} itemName - 资源名称
+   */
+  function getResFolderPathNames(type, itemName) {
+    const groups = getResourceGroups(type);
+    const folderId = groups[itemName];
+    if (!folderId) return [];
+    const path = getResFolderPath(type, folderId);
+    return path.map((pid) => getResFolderDisplayName(type, pid)).filter(Boolean);
+  }
+
+  /**
+   * 获取文件夹自身路径的显示名数组（用于文件夹搜索）
+   * @param {string} mode - 'chars' | 'presets' | 'themes' | 'backgrounds' | 'worldinfo'
+   * @param {string} folderId
+   */
+  function getFolderSelfPathNames(mode, folderId) {
+    if (mode === "chars") {
+      const path = getFolderPath(folderId);
+      return path.map((pid) => getTagName(pid)).filter(Boolean);
+    } else {
+      const path = getResFolderPath(mode, folderId);
+      return path.map((pid) => getResFolderDisplayName(mode, pid)).filter(Boolean);
+    }
+  }
+
   // ==================== 全局搜索功能 ====================
   function executeGlobalSearch() {
     const q = $("#cfm-global-search").val().toLowerCase().trim();
@@ -8979,11 +9041,11 @@ jQuery(async () => {
         };
         const descendants = collectDescendants(selectedTreeNode);
         matchedIds = descendants.filter((id) =>
-          getTagName(id).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("chars", id).map((s) => s.toLowerCase())),
         );
       } else {
         matchedIds = allFolderIds.filter((id) =>
-          getTagName(id).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("chars", id).map((s) => s.toLowerCase())),
         );
       }
 
@@ -9043,9 +9105,15 @@ jQuery(async () => {
         chars = getCharacters();
       }
 
-      const matched = chars.filter((c) =>
-        (c.name || "").toLowerCase().includes(q),
-      );
+      const matched = chars.filter((c) => {
+        const pool = [
+          (c.name || "").toLowerCase(),
+          (c.data?.creator || "").toLowerCase(),
+          (c.data?.character_version || "").toLowerCase(),
+          ...getCharFolderPathNames(c).map((s) => s.toLowerCase()),
+        ];
+        return fuzzyMatch(q, pool);
+      });
 
       pathEl.text(`搜索角色: "${q}"`);
       countEl.text(`${matched.length} 个结果`);
@@ -9136,11 +9204,11 @@ jQuery(async () => {
         };
         const descendants = collectDesc(selectedPresetFolder);
         matchedIds = descendants.filter((f) =>
-          getResFolderDisplayName("presets", f).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("presets", f).map((s) => s.toLowerCase())),
         );
       } else {
         matchedIds = folders.filter((f) =>
-          getResFolderDisplayName("presets", f).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("presets", f).map((s) => s.toLowerCase())),
         );
       }
       rightList.empty();
@@ -9195,10 +9263,12 @@ jQuery(async () => {
         }
       }
       const matched = searchPool.filter((p) => {
-        if (p.name.toLowerCase().includes(q)) return true;
-        const note = getPresetNote(p.name);
-        if (note && note.toLowerCase().includes(q)) return true;
-        return false;
+        const pool = [
+          p.name.toLowerCase(),
+          (getPresetNote(p.name) || "").toLowerCase(),
+          ...getResFolderPathNames("presets", p.name).map((s) => s.toLowerCase()),
+        ];
+        return fuzzyMatch(q, pool);
       });
       rightList.empty();
       pathEl.text(`搜索预设: "${q}"`);
@@ -9423,11 +9493,11 @@ jQuery(async () => {
         };
         const descendants = collectDesc(selectedWorldInfoFolder);
         matchedIds = descendants.filter((f) =>
-          getResFolderDisplayName("worldinfo", f).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("worldinfo", f).map((s) => s.toLowerCase())),
         );
       } else {
         matchedIds = folders.filter((f) =>
-          getResFolderDisplayName("worldinfo", f).toLowerCase().includes(q),
+          fuzzyMatch(q, getFolderSelfPathNames("worldinfo", f).map((s) => s.toLowerCase())),
         );
       }
       rightList.empty();
@@ -9482,10 +9552,12 @@ jQuery(async () => {
           }
         }
         const matched = searchPool.filter((n) => {
-          if (n.toLowerCase().includes(q)) return true;
-          const note = getWorldInfoNote(n);
-          if (note && note.toLowerCase().includes(q)) return true;
-          return false;
+          const pool = [
+            n.toLowerCase(),
+            (getWorldInfoNote(n) || "").toLowerCase(),
+            ...getResFolderPathNames("worldinfo", n).map((s) => s.toLowerCase()),
+          ];
+          return fuzzyMatch(q, pool);
         });
         rightList.empty();
         pathEl.text(`搜索世界书: "${q}"`);
@@ -9701,10 +9773,12 @@ jQuery(async () => {
       }
     }
     const matched = searchPool.filter((n) => {
-      if (n.toLowerCase().includes(q)) return true;
-      const note = getThemeNote(n);
-      if (note && note.toLowerCase().includes(q)) return true;
-      return false;
+      const pool = [
+        n.toLowerCase(),
+        (getThemeNote(n) || "").toLowerCase(),
+        ...getResFolderPathNames("themes", n).map((s) => s.toLowerCase()),
+      ];
+      return fuzzyMatch(q, pool);
     });
     rightList.empty();
     pathEl.text(`搜索主题: "${q}"`);
@@ -9915,10 +9989,13 @@ jQuery(async () => {
       }
     }
     const matched = searchPool.filter((n) => {
-      if (getBackgroundDisplayName(n).toLowerCase().includes(q)) return true;
-      const note = getBgNote(n);
-      if (note && note.toLowerCase().includes(q)) return true;
-      return false;
+      const pool = [
+        getBackgroundDisplayName(n).toLowerCase(),
+        n.toLowerCase(),
+        (getBgNote(n) || "").toLowerCase(),
+        ...getResFolderPathNames("backgrounds", n).map((s) => s.toLowerCase()),
+      ];
+      return fuzzyMatch(q, pool);
     });
     rightList.empty();
     pathEl.text(`搜索背景: "${q}"`);
