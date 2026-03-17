@@ -7878,24 +7878,22 @@ jQuery(async () => {
     popup.find(".cfm-multisel-toggle").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      // 其他互斥模式下不允许切换多选
-      if (
-        cfmExportMode ||
-        cfmResDeleteMode ||
-        cfmEditMode ||
-        cfmPresetRenameMode ||
-        cfmWorldInfoRenameMode ||
-        cfmThemeRenameMode ||
-        cfmBgRenameMode ||
-        cfmPresetNoteMode ||
-        cfmWorldInfoNoteMode ||
-        cfmThemeNoteMode ||
-        cfmBgNoteMode
-      )
-        return;
-      cfmMultiSelectMode = !cfmMultiSelectMode;
-      clearMultiSelect();
-      cfmMultiSelectRangeMode = false;
+      // 检查是否有其他互斥模式激活
+      const hasExclusiveMode = cfmExportMode || cfmResDeleteMode || cfmEditMode ||
+        cfmPresetRenameMode || cfmWorldInfoRenameMode || cfmThemeRenameMode || cfmBgRenameMode ||
+        cfmPresetNoteMode || cfmWorldInfoNoteMode || cfmThemeNoteMode || cfmBgNoteMode;
+      if (hasExclusiveMode) {
+        // 收集选中并退出互斥模式，进入多选
+        const prev = collectCurrentSelection();
+        clearAllExclusiveModes();
+        cfmMultiSelectMode = true;
+        cfmMultiSelected = prev || new Set();
+        cfmMultiSelectRangeMode = false;
+      } else {
+        cfmMultiSelectMode = !cfmMultiSelectMode;
+        clearMultiSelect();
+        cfmMultiSelectRangeMode = false;
+      }
       // 更新所有多选按钮的视觉状态
       $(".cfm-multisel-toggle").toggleClass(
         "cfm-multisel-active",
