@@ -1436,7 +1436,7 @@ jQuery(async () => {
               return;
             }
             reorderResFolder(resType, d.id, targetId, null);
-            toastr.success(`「${d.name}」已移入「${targetId}」`);
+            toastr.success(`「${d.name}」已移入「${getResFolderDisplayName(resType, targetId)}」`);
           } else {
             const pId = resTree[targetId]?.parentId || null;
             if (wouldCreateResCycle(resType, d.id, pId)) {
@@ -1483,7 +1483,7 @@ jQuery(async () => {
           ) {
             if (!wouldCreateResCycle(resType, d.id, selFolder)) {
               reorderResFolder(resType, d.id, selFolder, null);
-              toastr.success(`「${d.name}」已移入「${selFolder}」`);
+              toastr.success(`「${d.name}」已移入「${getResFolderDisplayName(resType, selFolder)}」`);
               if (resType === "presets") renderPresetsView();
               else if (resType === "worldinfo") renderWorldInfoView();
               else if (resType === "themes") renderThemesView();
@@ -1508,8 +1508,8 @@ jQuery(async () => {
           presetNames.forEach((n) => setItemGroup("presets", n, targetId));
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个预设移入「${targetId}」`
-              : `已将「${d.name}」移入「${targetId}」`,
+              ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", targetId)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("presets", targetId)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderPresetsView();
@@ -1525,8 +1525,8 @@ jQuery(async () => {
           );
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个预设移入「${selectedPresetFolder}」`
-              : `已将「${d.name}」移入「${selectedPresetFolder}」`,
+              ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", selectedPresetFolder)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("presets", selectedPresetFolder)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderPresetsView();
@@ -1548,8 +1548,8 @@ jQuery(async () => {
           wiNames.forEach((n) => setItemGroup("worldinfo", n, targetId));
           toastr.success(
             wCount > 1
-              ? `已将 ${wCount} 个世界书移入「${targetId}」`
-              : `已将「${d.name}」移入「${targetId}」`,
+              ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", targetId)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("worldinfo", targetId)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderWorldInfoView();
@@ -1565,8 +1565,8 @@ jQuery(async () => {
           );
           toastr.success(
             wCount > 1
-              ? `已将 ${wCount} 个世界书移入「${selectedWorldInfoFolder}」`
-              : `已将「${d.name}」移入「${selectedWorldInfoFolder}」`,
+              ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", selectedWorldInfoFolder)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("worldinfo", selectedWorldInfoFolder)}」`,
           );
           if (d.multiSelect) clearMultiSelect();
           renderWorldInfoView();
@@ -1588,8 +1588,8 @@ jQuery(async () => {
           renderThemesView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个主题移入「${targetId}」`
-              : `已将「${d.name}」移入「${targetId}」`,
+              ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", targetId)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("themes", targetId)}」`,
           );
         } else if (
           !target &&
@@ -1603,8 +1603,8 @@ jQuery(async () => {
           renderThemesView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个主题移入「${selectedThemeFolder}」`
-              : `已将「${d.name}」移入「${selectedThemeFolder}」`,
+              ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", selectedThemeFolder)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("themes", selectedThemeFolder)}」`,
           );
         }
       } else if (d.type === "background") {
@@ -1624,8 +1624,8 @@ jQuery(async () => {
           renderBackgroundsView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个背景移入「${targetId}」`
-              : `已将「${getBackgroundDisplayName(d.name)}」移入「${targetId}」`,
+              ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", targetId)}」`
+              : `已将「${getBackgroundDisplayName(d.name)}」移入「${getResFolderDisplayName("backgrounds", targetId)}」`,
           );
         } else if (
           !target &&
@@ -1641,8 +1641,8 @@ jQuery(async () => {
           renderBackgroundsView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个背景移入「${selectedBgFolder}」`
-              : `已将「${getBackgroundDisplayName(d.name)}」移入「${selectedBgFolder}」`,
+              ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", selectedBgFolder)}」`
+              : `已将「${getBackgroundDisplayName(d.name)}」移入「${getResFolderDisplayName("backgrounds", selectedBgFolder)}」`,
           );
         }
       }
@@ -12825,8 +12825,8 @@ jQuery(async () => {
           (count, first) =>
             toastr.success(
               count > 1
-                ? `已将 ${count} 个预设移入「${folderId}」`
-                : `已将「${first}」移入「${folderId}」`,
+                ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("presets", folderId)}」`,
             ),
           e,
         );
@@ -12909,7 +12909,7 @@ jQuery(async () => {
               return;
             }
             reorderResFolder("presets", data.id, folderId, null);
-            toastr.success(`「${data.id}」已移入「${folderId}」`);
+            toastr.success(`「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", folderId)}」`);
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("presets", data.id, pId)) {
@@ -12945,8 +12945,8 @@ jQuery(async () => {
           renderPresetsView();
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个预设移入「${folderId}」`
-              : `已将「${data.name}」移入「${folderId}」`,
+              ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("presets", folderId)}」`,
           );
         }
       });
@@ -13127,8 +13127,8 @@ jQuery(async () => {
             () => renderPresetsView(),
             (count, first) => toastr.success(
               count > 1
-                ? `已将 ${count} 个预设移入「${childId}」`
-                : `已将「${first}」移入「${childId}」`,
+                ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", childId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("presets", childId)}」`,
             ),
             e,
           );
@@ -13207,7 +13207,7 @@ jQuery(async () => {
                 return;
               }
               reorderResFolder("presets", data.id, childId, null);
-              toastr.success(`「${data.id}」已移入「${childId}」`);
+              toastr.success(`「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", childId)}」`);
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("presets", data.id, pId)) {
@@ -13242,8 +13242,8 @@ jQuery(async () => {
             if (data.multiSelect) clearMultiSelect();
             toastr.success(
               pCount > 1
-                ? `已将 ${pCount} 个预设移入「${childId}」`
-                : `已将「${data.name}」移入「${childId}」`,
+                ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", childId)}」`
+                : `已将「${data.name}」移入「${getResFolderDisplayName("presets", childId)}」`,
             );
             renderPresetsView();
           }
@@ -13465,7 +13465,7 @@ jQuery(async () => {
             return;
           }
           reorderResFolder("presets", data.id, currentFolder, null);
-          toastr.success(`「${data.id}」已移入「${currentFolder}」`);
+          toastr.success(`「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", currentFolder)}」`);
           renderPresetsView();
         } else if (data.type === "preset") {
           const presetNames =
@@ -13477,8 +13477,8 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个预设移入「${currentFolder}」`
-              : `已将「${data.name}」移入「${currentFolder}」`,
+              ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", currentFolder)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("presets", currentFolder)}」`,
           );
           renderPresetsView();
         }
@@ -13596,8 +13596,8 @@ jQuery(async () => {
           (count, first) =>
             toastr.success(
               count > 1
-                ? `已将 ${count} 个主题移入「${folderId}」`
-                : `已将「${first}」移入「${folderId}」`,
+                ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("themes", folderId)}」`,
             ),
           e,
         );
@@ -13668,7 +13668,7 @@ jQuery(async () => {
               return;
             }
             reorderResFolder("themes", data.id, folderId, null);
-            toastr.success(`「${data.id}」已移入「${folderId}」`);
+            toastr.success(`「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", folderId)}」`);
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("themes", data.id, pId)) {
@@ -13703,8 +13703,8 @@ jQuery(async () => {
           renderThemesView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个主题移入「${folderId}」`
-              : `已将「${data.name}」移入「${folderId}」`,
+              ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("themes", folderId)}」`,
           );
         }
       });
@@ -13871,8 +13871,8 @@ jQuery(async () => {
             () => renderThemesView(),
             (count, first) => toastr.success(
               count > 1
-                ? `已将 ${count} 个主题移入「${childId}」`
-                : `已将「${first}」移入「${childId}」`,
+                ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", childId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("themes", childId)}」`,
             ),
             e,
           );
@@ -13950,7 +13950,7 @@ jQuery(async () => {
                 return;
               }
               reorderResFolder("themes", data.id, childId, null);
-              toastr.success(`「${data.id}」已移入「${childId}」`);
+              toastr.success(`「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", childId)}」`);
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("themes", data.id, pId)) {
@@ -13984,8 +13984,8 @@ jQuery(async () => {
             if (data.multiSelect) clearMultiSelect();
             toastr.success(
               names.length > 1
-                ? `已将 ${names.length} 个主题移入「${childId}」`
-                : `已将「${data.name}」移入「${childId}」`,
+                ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", childId)}」`
+                : `已将「${data.name}」移入「${getResFolderDisplayName("themes", childId)}」`,
             );
             renderThemesView();
           }
@@ -14204,7 +14204,7 @@ jQuery(async () => {
             return;
           }
           reorderResFolder("themes", data.id, currentFolder, null);
-          toastr.success(`「${data.id}」已移入「${currentFolder}」`);
+          toastr.success(`「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", currentFolder)}」`);
           renderThemesView();
         } else if (data.type === "theme") {
           const names =
@@ -14215,8 +14215,8 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个主题移入「${currentFolder}」`
-              : `已将「${data.name}」移入「${currentFolder}」`,
+              ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", currentFolder)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("themes", currentFolder)}」`,
           );
           renderThemesView();
         }
@@ -14317,8 +14317,8 @@ jQuery(async () => {
           (count, first) =>
             toastr.success(
               count > 1
-                ? `已将 ${count} 个背景移入「${folderId}」`
-                : `已将「${getBackgroundDisplayName(first)}」移入「${folderId}」`,
+                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
             ),
           e,
         );
@@ -14393,7 +14393,7 @@ jQuery(async () => {
               return;
             }
             reorderResFolder("backgrounds", data.id, folderId, null);
-            toastr.success(`「${data.id}」已移入「${folderId}」`);
+            toastr.success(`「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", folderId)}」`);
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("backgrounds", data.id, pId)) {
@@ -14428,8 +14428,8 @@ jQuery(async () => {
           renderBackgroundsView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个背景移入「${folderId}」`
-              : `已将「${getBackgroundDisplayName(data.name)}」移入「${folderId}」`,
+              ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
+              : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
           );
         }
       });
@@ -14576,8 +14576,8 @@ jQuery(async () => {
             () => renderBackgroundsView(),
             (count, first) => toastr.success(
               count > 1
-                ? `已将 ${count} 个背景移入「${childId}」`
-                : `已将「${getBackgroundDisplayName(first)}」移入「${childId}」`,
+                ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
+                : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
             ),
             e,
           );
@@ -14655,7 +14655,7 @@ jQuery(async () => {
                 return;
               }
               reorderResFolder("backgrounds", data.id, childId, null);
-              toastr.success(`「${data.id}」已移入「${childId}」`);
+              toastr.success(`「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", childId)}」`);
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("backgrounds", data.id, pId)) {
@@ -14689,8 +14689,8 @@ jQuery(async () => {
             if (data.multiSelect) clearMultiSelect();
             toastr.success(
               names.length > 1
-                ? `已将 ${names.length} 个背景移入「${childId}」`
-                : `已将「${getBackgroundDisplayName(data.name)}」移入「${childId}」`,
+                ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
+                : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
             );
             renderBackgroundsView();
           }
@@ -14890,7 +14890,7 @@ jQuery(async () => {
             return;
           }
           reorderResFolder("backgrounds", data.id, currentFolder, null);
-          toastr.success(`「${data.id}」已移入「${currentFolder}」`);
+          toastr.success(`「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`);
           renderBackgroundsView();
         } else if (data.type === "background") {
           const names =
@@ -14901,8 +14901,8 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个背景移入「${currentFolder}」`
-              : `已将「${getBackgroundDisplayName(data.name)}」移入「${currentFolder}」`,
+              ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`
+              : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`,
           );
           renderBackgroundsView();
         }
@@ -15350,8 +15350,8 @@ jQuery(async () => {
           () => renderWorldInfoView(),
           (count, first) => toastr.success(
             count > 1
-              ? `已将 ${count} 个世界书移入「${folderId}」`
-              : `已将「${first}」移入「${folderId}」`,
+              ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
+              : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
           ),
           e,
         );
@@ -15434,7 +15434,7 @@ jQuery(async () => {
               return;
             }
             reorderResFolder("worldinfo", data.id, folderId, null);
-            toastr.success(`「${data.id}」已移入「${folderId}」`);
+            toastr.success(`「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", folderId)}」`);
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("worldinfo", data.id, pId)) {
@@ -15470,8 +15470,8 @@ jQuery(async () => {
           renderWorldInfoView();
           toastr.success(
             wCount > 1
-              ? `已将 ${wCount} 个世界书移入「${folderId}」`
-              : `已将「${data.name}」移入「${folderId}」`,
+              ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
           );
         }
       });
@@ -15671,8 +15671,8 @@ jQuery(async () => {
             () => renderWorldInfoView(),
             (count, first) => toastr.success(
               count > 1
-                ? `已将 ${count} 个世界书移入「${childId}」`
-                : `已将「${first}」移入「${childId}」`,
+                ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", childId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", childId)}」`,
             ),
             e,
           );
@@ -15751,7 +15751,7 @@ jQuery(async () => {
                 return;
               }
               reorderResFolder("worldinfo", data.id, childId, null);
-              toastr.success(`「${data.id}」已移入「${childId}」`);
+              toastr.success(`「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", childId)}」`);
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("worldinfo", data.id, pId)) {
@@ -15786,8 +15786,8 @@ jQuery(async () => {
             if (data.multiSelect) clearMultiSelect();
             toastr.success(
               wCount > 1
-                ? `已将 ${wCount} 个世界书移入「${childId}」`
-                : `已将「${data.name}」移入「${childId}」`,
+                ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", childId)}」`
+                : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", childId)}」`,
             );
             renderWorldInfoView();
           }
@@ -16005,7 +16005,7 @@ jQuery(async () => {
             return;
           }
           reorderResFolder("worldinfo", data.id, currentFolder, null);
-          toastr.success(`「${data.id}」已移入「${currentFolder}」`);
+          toastr.success(`「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`);
           renderWorldInfoView();
         } else if (data.type === "worldinfo") {
           const wiNames =
@@ -16017,8 +16017,8 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           toastr.success(
             wCount > 1
-              ? `已将 ${wCount} 个世界书移入「${currentFolder}」`
-              : `已将「${data.name}」移入「${currentFolder}」`,
+              ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`,
           );
           renderWorldInfoView();
         }
