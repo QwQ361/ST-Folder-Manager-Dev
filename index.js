@@ -15347,6 +15347,9 @@ jQuery(async () => {
       let movedCount = 0;
       let importedCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
+      const alreadyProcessed = new Set(); // 去重：防止关联和内嵌重复归类同一个世界书
+      const wiGroups_ = getResourceGroups("worldinfo");
 
       // 1. 处理关联世界书归类
       overlay.find(".cfm-cb-linked-list .cfm-cb-row").each(function () {
@@ -15354,6 +15357,12 @@ jQuery(async () => {
         if (!checked) return;
         const wiName = $(this).data("wi-name");
         if (wiName) {
+          alreadyProcessed.add(wiName);
+          // 如果已经在目标文件夹中，跳过
+          if (wiGroups_[wiName] === targetFolder) {
+            skippedCount++;
+            return;
+          }
           setItemGroup("worldinfo", wiName, targetFolder);
           movedCount++;
         }
@@ -15369,9 +15378,26 @@ jQuery(async () => {
         if (!info) continue;
 
         if (info.alreadyImported) {
-          // 已导入的直接归类
+          // 已导入的直接归类（但需要去重，避免和关联世界书重复计数）
+          const bookWiName = info.bookName;
+          // 尝试用关联的 world 名称匹配
+          const ch = getCharacters().find((c) => c.avatar === avatar);
+          const linkedName = ch?.data?.extensions?.world;
+          if (linkedName && alreadyProcessed.has(linkedName)) {
+            skippedCount++;
+            continue; // 已在关联世界书中处理过
+          }
+          if (alreadyProcessed.has(bookWiName)) {
+            skippedCount++;
+            continue;
+          }
+          alreadyProcessed.add(bookWiName);
           if (targetFolder) {
-            setItemGroup("worldinfo", info.bookName, targetFolder);
+            if (wiGroups_[bookWiName] === targetFolder) {
+              skippedCount++;
+              continue;
+            }
+            setItemGroup("worldinfo", bookWiName, targetFolder);
             movedCount++;
           }
         } else {
@@ -15380,6 +15406,11 @@ jQuery(async () => {
             const ch = getCharacters().find((c) => c.avatar === avatar);
             if (!ch?.data?.character_book) continue;
             const bookName = info.bookName;
+            if (alreadyProcessed.has(bookName)) {
+              skippedCount++;
+              continue;
+            }
+            alreadyProcessed.add(bookName);
             // 使用酒馆原生的 convertCharacterBook 将 V2 格式转换为 ST 内部格式
             const ctx = getContext();
             const convertedBook = ctx.convertCharacterBook(
@@ -15416,6 +15447,8 @@ jQuery(async () => {
       if (movedCount > 0) msg += `归类了 ${movedCount} 个世界书`;
       if (importedCount > 0)
         msg += `${msg ? "，" : ""}提取并导入了 ${importedCount} 个内嵌世界书`;
+      if (skippedCount > 0)
+        msg += `${msg ? "，" : ""}${skippedCount} 个已在目标文件夹或重复`;
       if (failCount > 0) msg += `${msg ? "，" : ""}${failCount} 个失败`;
       if (!msg) msg = "未选择任何世界书";
       if (failCount > 0) toastr.warning(msg, "角色世界书归类");
