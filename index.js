@@ -27,6 +27,8 @@ jQuery(async () => {
       extension_settings[extensionName].worldInfoNotes = {};
     if (!extension_settings[extensionName].bgNotes)
       extension_settings[extensionName].bgNotes = {};
+    if (!extension_settings[extensionName].bgOrientations)
+      extension_settings[extensionName].bgOrientations = {};
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
@@ -3724,9 +3726,11 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].bgGroups;
               if (groups && groups[name]) delete groups[name];
-              // 清理备注
+              // 清理备注和方向
               const notes = extension_settings[extensionName].bgNotes;
               if (notes && notes[name]) delete notes[name];
+              const orients = extension_settings[extensionName].bgOrientations;
+              if (orients && orients[name]) delete orients[name];
               // 从酒馆原生DOM中移除对应背景元素
               $("#bg_menu_content .bg_example")
                 .filter(function () {
@@ -4011,6 +4015,80 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 背景方向识别 ====================
+  const BG_ORIENT_LANDSCAPE = "landscape";
+  const BG_ORIENT_PORTRAIT = "portrait";
+  const BG_ORIENT_OTHER = "other";
+  const BG_ORIENT_LABELS = {
+    [BG_ORIENT_LANDSCAPE]: "横屏",
+    [BG_ORIENT_PORTRAIT]: "竖屏",
+    [BG_ORIENT_OTHER]: "其它",
+  };
+  const BG_ORIENT_ICONS = {
+    [BG_ORIENT_LANDSCAPE]: "fa-display",
+    [BG_ORIENT_PORTRAIT]: "fa-mobile-screen",
+    [BG_ORIENT_OTHER]: "fa-expand",
+  };
+
+  function getBgOrientation(name) {
+    return extension_settings[extensionName].bgOrientations?.[name] || null;
+  }
+  function setBgOrientation(name, orient) {
+    if (!extension_settings[extensionName].bgOrientations)
+      extension_settings[extensionName].bgOrientations = {};
+    if (orient) {
+      extension_settings[extensionName].bgOrientations[name] = orient;
+    } else {
+      delete extension_settings[extensionName].bgOrientations[name];
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  /**
+   * 自动检测背景图片方向（通过加载图片获取宽高比）
+   * @param {string} name - 背景文件名
+   * @returns {Promise<string>} 'landscape' | 'portrait' | 'other'
+   */
+  function detectBgOrientation(name) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = img.naturalWidth / img.naturalHeight;
+        if (ratio > 1.15) resolve(BG_ORIENT_LANDSCAPE);
+        else if (ratio < 0.87) resolve(BG_ORIENT_PORTRAIT);
+        else resolve(BG_ORIENT_OTHER);
+      };
+      img.onerror = () => resolve(BG_ORIENT_OTHER);
+      img.src = getBackgroundThumbnailUrl(name);
+    });
+  }
+
+  /**
+   * 批量自动检测并保存背景方向（仅对未检测过的背景执行）
+   * @param {string[]} bgNames - 背景文件名列表
+   * @param {boolean} force - 是否强制重新检测
+   */
+  async function autoDetectBgOrientations(bgNames, force = false) {
+    const toDetect = force
+      ? bgNames
+      : bgNames.filter((n) => !getBgOrientation(n));
+    if (toDetect.length === 0) return;
+    // 并发检测，但限制并发数避免卡顿
+    const batchSize = 8;
+    for (let i = 0; i < toDetect.length; i += batchSize) {
+      const batch = toDetect.slice(i, i + batchSize);
+      const results = await Promise.all(
+        batch.map(async (name) => {
+          const orient = await detectBgOrientation(name);
+          return { name, orient };
+        }),
+      );
+      for (const { name, orient } of results) {
+        setBgOrientation(name, orient);
+      }
+    }
+  }
+
   // ==================== 背景备注编辑模式 ====================
   let cfmBgNoteMode = false;
   let cfmBgNoteSelected = new Set();
@@ -4121,8 +4199,10 @@ jQuery(async () => {
   async function showBgNotePopup(bgNames) {
     if (!bgNames || bgNames.length === 0) return;
     let defaultNote = "";
+    let defaultOrient = "";
     if (bgNames.length === 1) {
       defaultNote = getBgNote(bgNames[0]);
+      defaultOrient = getBgOrientation(bgNames[0]) || "";
     }
     const nameListHtml =
       bgNames.length <= 5
@@ -4141,11 +4221,28 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${bgNames.length} 个背景</div>`;
 
+    const orientOptions = [
+      { value: "", label: "不修改", icon: "fa-minus" },
+      { value: BG_ORIENT_LANDSCAPE, label: "横屏", icon: BG_ORIENT_ICONS[BG_ORIENT_LANDSCAPE] },
+      { value: BG_ORIENT_PORTRAIT, label: "竖屏", icon: BG_ORIENT_ICONS[BG_ORIENT_PORTRAIT] },
+      { value: BG_ORIENT_OTHER, label: "其它", icon: BG_ORIENT_ICONS[BG_ORIENT_OTHER] },
+    ];
+    const orientHtml = orientOptions
+      .map(
+        (o) =>
+          `<label class="cfm-orient-option ${defaultOrient === o.value ? "cfm-orient-active" : ""}"><input type="radio" name="cfm-bg-orient" value="${o.value}" ${defaultOrient === o.value ? "checked" : ""}><i class="fa-solid ${o.icon}"></i> ${o.label}</label>`,
+      )
+      .join("");
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑背景备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field cfm-orient-field">
+            <label>屏幕方向</label>
+            <div class="cfm-orient-group">${orientHtml}</div>
+          </div>
           <div class="cfm-edit-popup-field">
             <label>备注</label>
             <input type="text" class="cfm-edit-input" id="cfm-bg-note-input" value="${escapeHtml(defaultNote)}" placeholder="${bgNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
@@ -4160,6 +4257,13 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
+
+    // 方向选项点击高亮
+    overlay.find(".cfm-orient-option").on("click", function () {
+      overlay.find(".cfm-orient-option").removeClass("cfm-orient-active");
+      $(this).addClass("cfm-orient-active");
+    });
+
     overlay.find("#cfm-bg-note-input").focus();
 
     return new Promise((resolve) => {
@@ -4175,12 +4279,13 @@ jQuery(async () => {
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
         overlay.remove();
-        resolve({ note: "", clear: true });
+        resolve({ note: "", orient: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         const note = overlay.find("#cfm-bg-note-input").val().trim();
+        const orient = overlay.find('input[name="cfm-bg-orient"]:checked').val() || "";
         overlay.remove();
-        resolve({ note, clear: false });
+        resolve({ note, orient, clear: false });
       });
       overlay.find(".cfm-edit-input").on("keydown", (e) => {
         if (e.key === "Enter") {
@@ -4197,24 +4302,32 @@ jQuery(async () => {
   async function executeBgNoteEdit(names) {
     const result = await showBgNotePopup(names);
     if (!result) return;
-    const { note, clear } = result;
+    const { note, orient, clear } = result;
     const isBatch = names.length > 1;
-    if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+    if (isBatch && !note && !orient && !clear) {
+      toastr.warning("请输入备注内容或选择屏幕方向");
       return;
     }
     let count = 0;
     for (const name of names) {
+      let changed = false;
+      // 处理方向
+      if (orient) {
+        setBgOrientation(name, orient);
+        changed = true;
+      }
+      // 处理备注
       if (clear) {
         setBgNote(name, "");
-        count++;
+        changed = true;
       } else if (note) {
         setBgNote(name, note);
-        count++;
+        changed = true;
       } else if (!isBatch) {
         setBgNote(name, "");
-        count++;
+        changed = true;
       }
+      if (changed) count++;
     }
     if (count > 0) {
       toastr.success(`已更新 ${count} 个背景的备注`);
@@ -5976,6 +6089,12 @@ jQuery(async () => {
       if (notes && notes[oldName]) {
         notes[newName] = notes[oldName];
         delete notes[oldName];
+      }
+      // 同步方向数据
+      const orients = extension_settings[extensionName].bgOrientations;
+      if (orients && orients[oldName]) {
+        orients[newName] = orients[oldName];
+        delete orients[oldName];
       }
     }
     getContext().saveSettingsDebounced();
@@ -10006,10 +10125,12 @@ jQuery(async () => {
       }
     }
     const matched = searchPool.filter((n) => {
+      const orientLabel = BG_ORIENT_LABELS[getBgOrientation(n)] || "";
       const pool = [
         getBackgroundDisplayName(n).toLowerCase(),
         n.toLowerCase(),
         (getBgNote(n) || "").toLowerCase(),
+        orientLabel.toLowerCase(),
         ...getResFolderPathNames("backgrounds", n).map((s) => s.toLowerCase()),
       ];
       return fuzzyMatch(q, pool);
@@ -10049,6 +10170,10 @@ jQuery(async () => {
         return "未归类";
       })();
       const bgNote = getBgNote(name);
+      const bgOrient = getBgOrientation(name);
+      const orientHtml = bgOrient
+        ? `<span class="cfm-bg-orient cfm-bg-orient-${bgOrient}" title="${BG_ORIENT_LABELS[bgOrient] || bgOrient}"><i class="fa-solid ${BG_ORIENT_ICONS[bgOrient] || "fa-expand"}"></i>${BG_ORIENT_LABELS[bgOrient] || bgOrient}</span>`
+        : "";
       const noteHtml = bgNote
         ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
         : "";
@@ -10062,7 +10187,7 @@ jQuery(async () => {
         : "";
       const thumbUrl = getBackgroundThumbnailUrl(name);
       const row = $(
-        `<div class="cfm-row cfm-row-char cfm-row-bg cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(bFolderPath)}</div></div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+        `<div class="cfm-row cfm-row-char cfm-row-bg cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${orientHtml}${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(bFolderPath)}</div></div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
       );
       row.find(".cfm-row-star").on("click touchend", (e) => {
         e.preventDefault();
@@ -14440,6 +14565,13 @@ jQuery(async () => {
       return;
     }
     renderBackgroundsView._retryCount = 0;
+    // 自动检测背景方向（异步，不阻塞渲染，仅对未检测过的执行）
+    const undetected = bgNames.filter((n) => !getBgOrientation(n));
+    if (undetected.length > 0) {
+      autoDetectBgOrientations(undetected).then(() => {
+        if (currentResourceType === "backgrounds") renderBackgroundsView();
+      });
+    }
     const groups = getResourceGroups("backgrounds");
     const existingBgNames = new Set(bgNames);
     let bgGroupsCleaned = false;
@@ -14924,6 +15056,10 @@ jQuery(async () => {
                   ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
                   : "";
         const bgNote = getBgNote(name);
+        const bgOrient = getBgOrientation(name);
+        const orientHtml = bgOrient
+          ? `<span class="cfm-bg-orient cfm-bg-orient-${bgOrient}" title="${BG_ORIENT_LABELS[bgOrient] || bgOrient}"><i class="fa-solid ${BG_ORIENT_ICONS[bgOrient] || "fa-expand"}"></i>${BG_ORIENT_LABELS[bgOrient] || bgOrient}</span>`
+          : "";
         const noteHtml = bgNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(bgNote)}">${escapeHtml(bgNote)}</span>`
           : "";
@@ -14941,7 +15077,7 @@ jQuery(async () => {
           : "";
         const thumbUrl = getBackgroundThumbnailUrl(name);
         const row = $(
-          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${noteHtml}</div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
+          `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${orientHtml}${noteHtml}</div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
         );
         row.find(".cfm-row-star").on("click touchend", (e) => {
           e.preventDefault();
@@ -16394,6 +16530,9 @@ jQuery(async () => {
         notes: JSON.parse(
           JSON.stringify(extension_settings[extensionName].bgNotes || {}),
         ),
+        orientations: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].bgOrientations || {}),
+        ),
       };
     }
 
@@ -16741,6 +16880,17 @@ jQuery(async () => {
         for (const [name, note] of Object.entries(bgNotes)) {
           if (bgNameSet.has(name) && note) {
             setBgNote(name, note);
+          }
+        }
+      }
+      // 恢复方向数据
+      const bgOrients = jsonData.backgrounds.orientations;
+      if (bgOrients && typeof bgOrients === "object") {
+        const bgNameList = getBackgroundNames();
+        const bgNameSet = new Set(bgNameList);
+        for (const [name, orient] of Object.entries(bgOrients)) {
+          if (bgNameSet.has(name) && orient) {
+            setBgOrientation(name, orient);
           }
         }
       }
