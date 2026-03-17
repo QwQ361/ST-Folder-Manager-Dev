@@ -11467,8 +11467,8 @@ jQuery(async () => {
         const _ex = extension_settings[extensionName].excludedTagIds;
         const _exi = _ex.indexOf(tagId);
         if (_exi >= 0) _ex.splice(_exi, 1);
-        saveConfig(config);
       }
+      saveConfig(config);
       const parentHint = configSelectedFolderIds.size > 0
         ? `「${Array.from(configSelectedFolderIds).map(id => getTagName(id)).join("、")}」的子级`
         : "顶级文件夹";
@@ -11504,8 +11504,12 @@ jQuery(async () => {
         return;
       }
       const cParentIds = configSelectedFolderIds.size > 0 ? Array.from(configSelectedFolderIds) : [null];
+      let totalCreated = 0;
       for (const cPid of cParentIds) {
-        createTagsSiblings(input, cPid);
+        totalCreated += createTagsSiblings(input, cPid, cParentIds.length > 1);
+      }
+      if (cParentIds.length > 1 && totalCreated > 0) {
+        toastr.success(`已在 ${cParentIds.length} 个父级下创建共 ${totalCreated} 个文件夹`);
       }
       createSection.find("#cfm-create-tag-input").val("");
       renderConfigBody();
@@ -12639,11 +12643,11 @@ jQuery(async () => {
   }
 
   // ==================== 空格分隔批量创建同级标签 ====================
-  function createTagsSiblings(input, parentFolderId) {
+  function createTagsSiblings(input, parentFolderId, silent) {
     const names = input.split(/\s+/).filter((s) => s.length > 0);
     if (names.length === 0) {
-      toastr.warning("标签名称不能为空");
-      return;
+      if (!silent) toastr.warning("标签名称不能为空");
+      return 0;
     }
     const created = [];
     let prefixCount = 0;
@@ -12667,10 +12671,13 @@ jQuery(async () => {
     }
     saveConfig(config);
     getContext().saveSettingsDebounced();
-    const parentHint = parentFolderId
-      ? `「${getTagName(parentFolderId)}」下`
-      : "顶级";
-    toastr.success(`已创建 ${created.length} 个文件夹`);
+    if (!silent) {
+      const parentHint = parentFolderId
+        ? `「${getTagName(parentFolderId)}」下`
+        : "顶级";
+      toastr.success(`已创建 ${created.length} 个文件夹`);
+    }
+    return created.length;
   }
 
   // ==================== 批量创建弹窗（多行缩进格式） ====================
@@ -12742,8 +12749,12 @@ jQuery(async () => {
         return;
       }
       const batchParentIds = configSelectedFolderIds.size > 0 ? Array.from(configSelectedFolderIds) : [null];
+      let batchTotal = 0;
       for (const bpId of batchParentIds) {
-        executeBatchCreate(tree, bpId);
+        batchTotal += executeBatchCreate(tree, bpId, batchParentIds.length > 1);
+      }
+      if (batchParentIds.length > 1 && batchTotal > 0) {
+        toastr.success(`已在 ${batchParentIds.length} 个父级下创建共 ${batchTotal} 个文件夹`);
       }
       overlay.remove();
       renderConfigBody();
@@ -12829,7 +12840,7 @@ jQuery(async () => {
     }
   }
 
-  function executeBatchCreate(nodes, parentId) {
+  function executeBatchCreate(nodes, parentId, silent) {
     let count = 0;
     let prefixCount = 0;
     function processNode(node, parentTagId) {
@@ -12851,7 +12862,8 @@ jQuery(async () => {
     for (const node of nodes) processNode(node, parentId);
     saveConfig(config);
     getContext().saveSettingsDebounced();
-    toastr.success(`已创建 ${count} 个文件夹`);
+    if (!silent) toastr.success(`已创建 ${count} 个文件夹`);
+    return count;
   }
 
   // ==================== 预设视图渲染（双栏 + 树形嵌套） ====================
