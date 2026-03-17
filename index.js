@@ -4011,6 +4011,8 @@ jQuery(async () => {
    * 设置/清除默认背景图
    */
   function handleDefaultBgSetting() {
+    // 移除已有的弹窗
+    $("#cfm-defbg-overlay").remove();
     const currentDefault =
       extension_settings[extensionName].defaultBackground || "";
     const currentBg = getCurrentBackgroundFile();
@@ -4020,48 +4022,54 @@ jQuery(async () => {
     const currentBgDisplay = currentBg
       ? getBackgroundDisplayName(currentBg)
       : "无";
-    const popupHtml = `
-      <div style="text-align:center;padding:10px;">
-        <p style="margin-bottom:8px;">当前默认背景：<b style="color:var(--SmartThemeQuoteColor,#f5c542);">${escapeHtml(currentDefaultDisplay)}</b></p>
-        <p style="margin-bottom:12px;">当前使用背景：<b style="color:var(--SmartThemeQuoteColor,#5dade2);">${escapeHtml(currentBgDisplay)}</b></p>
-        <p style="font-size:12px;opacity:0.7;margin-bottom:12px;">切换到没有绑定背景的美化主题时，将自动应用默认背景</p>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-          <button class="menu_button" id="cfm-defbg-set" ${!currentBg || currentBg === currentDefault ? 'disabled style="opacity:0.5;"' : ""}>设为当前背景</button>
-          <button class="menu_button" id="cfm-defbg-clear" ${!currentDefault ? 'disabled style="opacity:0.5;"' : ""} style="${currentDefault ? 'color:#e74c3c;' : 'color:#e74c3c;opacity:0.5;'}">清除默认背景</button>
-          <button class="menu_button" id="cfm-defbg-cancel">取消</button>
+    const setDisabled = !currentBg || currentBg === currentDefault;
+    const clearDisabled = !currentDefault;
+    const overlay = $('<div id="cfm-defbg-overlay" class="cfm-batch-overlay"></div>');
+    const dialog = $(`
+      <div class="cfm-batch-popup" style="max-width:420px;">
+        <div class="cfm-config-header"><h3>🖼️ 默认背景设置</h3><button class="cfm-btn-close" id="cfm-defbg-close">&times;</button></div>
+        <div style="padding:16px;text-align:center;">
+          <p style="margin-bottom:8px;font-size:13px;">当前默认背景：<b style="color:#f5c542;">${escapeHtml(currentDefaultDisplay)}</b></p>
+          <p style="margin-bottom:12px;font-size:13px;">当前使用背景：<b style="color:#5dade2;">${escapeHtml(currentBgDisplay)}</b></p>
+          <p style="font-size:12px;opacity:0.7;margin-bottom:16px;">切换到没有绑定背景的美化主题时，将自动应用默认背景</p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button class="cfm-btn" id="cfm-defbg-set" ${setDisabled ? 'disabled style="opacity:0.4;pointer-events:none;"' : 'style="background:rgba(166,227,161,0.15);border-color:rgba(166,227,161,0.4);"'}>设为当前背景</button>
+            <button class="cfm-btn" id="cfm-defbg-clear" ${clearDisabled ? 'disabled style="opacity:0.4;pointer-events:none;"' : 'style="background:rgba(237,66,69,0.15);border-color:rgba(237,66,69,0.4);color:#e74c3c;"'}>清除默认背景</button>
+            <button class="cfm-btn" id="cfm-defbg-cancel" style="opacity:0.7;">取消</button>
+          </div>
         </div>
-      </div>`;
-    callPopup(popupHtml, "text", "", {
-      okButton: "none",
-      cancelButton: "none",
-    }).catch(() => {});
-    setTimeout(() => {
-      $("#cfm-defbg-set").on("click", () => {
-        extension_settings[extensionName].defaultBackground = currentBg;
-        getContext().saveSettingsDebounced();
-        toastr.success(
-          `已将默认背景设为「${getBackgroundDisplayName(currentBg)}」`,
-        );
-        $(
-          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-        ).trigger("click");
-        updateDefaultBgBtnState();
-      });
-      $("#cfm-defbg-clear").on("click", () => {
-        extension_settings[extensionName].defaultBackground = "";
-        getContext().saveSettingsDebounced();
-        toastr.info("已清除默认背景");
-        $(
-          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-        ).trigger("click");
-        updateDefaultBgBtnState();
-      });
-      $("#cfm-defbg-cancel").on("click", () => {
-        $(
-          ".popup:visible .popup-button-close, #dialogue_popup_cancel",
-        ).trigger("click");
-      });
-    }, 100);
+      </div>
+    `);
+    overlay.append(dialog);
+    $("body").append(overlay);
+    const closeOverlay = () => overlay.remove();
+    dialog.find("#cfm-defbg-close, #cfm-defbg-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeOverlay();
+    });
+    dialog.find("#cfm-defbg-set").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      extension_settings[extensionName].defaultBackground = currentBg;
+      getContext().saveSettingsDebounced();
+      toastr.success(`已将默认背景设为「${getBackgroundDisplayName(currentBg)}」`);
+      closeOverlay();
+      updateDefaultBgBtnState();
+    });
+    dialog.find("#cfm-defbg-clear").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      extension_settings[extensionName].defaultBackground = "";
+      getContext().saveSettingsDebounced();
+      toastr.info("已清除默认背景");
+      closeOverlay();
+      updateDefaultBgBtnState();
+    });
+    // 点击遮罩层关闭
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) closeOverlay();
+    });
   }
 
   /**
