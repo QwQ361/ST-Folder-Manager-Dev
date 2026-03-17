@@ -10798,6 +10798,7 @@ jQuery(async () => {
     }
 
     // 右侧列表本身也是拖放目标（拖到空白区域 = 放入当前文件夹）
+    list.off("dragover dragleave drop");
     list.on("dragover", (e) => {
       // 仅在拖到空白区域时触发（不在子行上）
       if ($(e.target).closest(".cfm-row").length > 0) return;
@@ -13437,6 +13438,7 @@ jQuery(async () => {
       tree[selectedPresetFolder]
     ) {
       const currentFolder = selectedPresetFolder;
+      rightList.off("dragover dragleave drop");
       rightList.on("dragover", (e) => {
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
@@ -14177,6 +14179,7 @@ jQuery(async () => {
       tree[selectedThemeFolder]
     ) {
       const currentFolder = selectedThemeFolder;
+      rightList.off("dragover dragleave drop");
       rightList.on("dragover", (e) => {
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
@@ -14863,6 +14866,7 @@ jQuery(async () => {
       tree[selectedBgFolder]
     ) {
       const currentFolder = selectedBgFolder;
+      rightList.off("dragover dragleave drop");
       rightList.on("dragover", (e) => {
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
@@ -15975,6 +15979,7 @@ jQuery(async () => {
       tree[selectedWorldInfoFolder]
     ) {
       const currentFolder = selectedWorldInfoFolder;
+      rightList.off("dragover dragleave drop");
       rightList.on("dragover", (e) => {
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
