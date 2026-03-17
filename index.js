@@ -8011,66 +8011,23 @@ jQuery(async () => {
           try {
             const bookName =
               ch.data.character_book.name || `${ch.name}'s Lorebook`;
-            const characterBook = ch.data.character_book;
-            const formData = new FormData();
-            const blob = new Blob([JSON.stringify(characterBook)], {
-              type: "application/json",
-            });
-            formData.append(
-              "avatar",
-              new File([blob], bookName + ".json", {
-                type: "application/json",
-              }),
-            );
-            formData.append("convertedData", JSON.stringify(characterBook));
-            const result = await fetch("/api/worldinfo/import", {
-              method: "POST",
-              headers: getContext().getRequestHeaders({
-                omitContentType: true,
-              }),
-              body: formData,
-              cache: "no-cache",
-            });
-            if (result.ok) {
-              const data = await result.json();
-              if (data.name) {
-                setItemGroup("worldinfo", data.name, charBookSetting);
-                embImported++;
-              }
-            }
+            // 使用酒馆原生的 convertCharacterBook 将 V2 格式转换为 ST 内部格式
+            const ctx = getContext();
+            const convertedBook = ctx.convertCharacterBook(ch.data.character_book);
+            await ctx.saveWorldInfo(bookName, convertedBook, true);
+            setItemGroup("worldinfo", bookName, charBookSetting);
+            embImported++;
           } catch (err) {
             console.error("[CFM] 自动提取内嵌世界书失败:", avatar, err);
           }
         }
         if (embImported > 0) {
           _worldInfoNamesCache = null;
-          // 强制从 API 刷新世界书名称列表，并同步到 DOM 和 world_names
+          // 使用酒馆原生的 updateWorldInfoList 刷新世界书列表和 DOM
           try {
-            const freshNames = await getWorldInfoNames(true);
-            const wiModule = await import("../../../world-info.js");
-            const wNames = wiModule.world_names;
-            const editorSelect = $("#world_editor_select");
-            const globalSelect = $("#world_info");
-            for (const fn of freshNames) {
-              // 同步到 #world_editor_select
-              if (
-                !editorSelect.find(`option[value="${CSS.escape(fn)}"]`).length
-              ) {
-                editorSelect.append($("<option>").val(fn).text(fn));
-              }
-              // 同步到 #world_info
-              if (
-                !globalSelect.find(`option[value="${CSS.escape(fn)}"]`).length
-              ) {
-                globalSelect.append($("<option>").val(fn).text(fn));
-              }
-              // 同步到 world_names 数组
-              if (Array.isArray(wNames) && !wNames.includes(fn)) {
-                wNames.push(fn);
-              }
-            }
+            await getContext().updateWorldInfoList();
           } catch (syncErr) {
-            console.warn("[CFM] 同步世界书名称到DOM失败", syncErr);
+            console.warn("[CFM] 刷新世界书列表失败", syncErr);
           }
           toastr.info(`自动提取了 ${embImported} 个内嵌世界书`, "角色世界书");
         }
@@ -15188,37 +15145,14 @@ jQuery(async () => {
             const ch = getCharacters().find((c) => c.avatar === avatar);
             if (!ch?.data?.character_book) continue;
             const bookName = info.bookName;
-            // 使用酒馆的 convertCharacterBook 和 saveWorldInfo
-            // 由于这些函数可能不在全局作用域，我们通过API方式导入
-            const characterBook = ch.data.character_book;
-            const formData = new FormData();
-            const blob = new Blob([JSON.stringify(characterBook)], {
-              type: "application/json",
-            });
-            formData.append(
-              "avatar",
-              new File([blob], bookName + ".json", {
-                type: "application/json",
-              }),
-            );
-            formData.append("convertedData", JSON.stringify(characterBook));
-            const result = await fetch("/api/worldinfo/import", {
-              method: "POST",
-              headers: getContext().getRequestHeaders({
-                omitContentType: true,
-              }),
-              body: formData,
-              cache: "no-cache",
-            });
-            if (result.ok) {
-              const data = await result.json();
-              if (data.name && targetFolder) {
-                setItemGroup("worldinfo", data.name, targetFolder);
-              }
-              importedCount++;
-            } else {
-              failCount++;
+            // 使用酒馆原生的 convertCharacterBook 将 V2 格式转换为 ST 内部格式
+            const ctx = getContext();
+            const convertedBook = ctx.convertCharacterBook(ch.data.character_book);
+            await ctx.saveWorldInfo(bookName, convertedBook, true);
+            if (targetFolder) {
+              setItemGroup("worldinfo", bookName, targetFolder);
             }
+            importedCount++;
           } catch (err) {
             console.error("[CFM] 提取内嵌世界书失败:", avatar, err);
             failCount++;
@@ -15231,42 +15165,9 @@ jQuery(async () => {
       // 刷新缓存和视图
       _worldInfoNamesCache = null;
       if (importedCount > 0) {
-        // 有新导入的世界书时，需要先同步DOM和world_names
-        // 通过API获取最新的世界书列表并更新DOM
+        // 使用酒馆原生的 updateWorldInfoList 刷新世界书列表和 DOM
         try {
-          const resp = await fetch("/api/settings/get", {
-            method: "POST",
-            headers: getContext().getRequestHeaders(),
-            body: JSON.stringify({}),
-          });
-          if (resp.ok) {
-            const settingsData = await resp.json();
-            const latestNames = settingsData.world_names || [];
-            // 更新DOM中的world_editor_select
-            const $editorSelect = $("#world_editor_select");
-            const existingOptions = new Set();
-            $editorSelect.find("option").each(function () {
-              existingOptions.add($(this).text());
-            });
-            for (const wn of latestNames) {
-              if (!existingOptions.has(wn)) {
-                $editorSelect.append($(`<option></option>`).val(wn).text(wn));
-              }
-            }
-            // 同步更新内存中的world_names
-            try {
-              const wiModule = await import("../../../world-info.js");
-              const wNames = wiModule.world_names;
-              if (Array.isArray(wNames)) {
-                for (const wn of latestNames) {
-                  if (!wNames.includes(wn)) wNames.push(wn);
-                }
-              }
-            } catch (e) {
-              console.warn("[CFM] 同步 world_names 失败", e);
-            }
-            _worldInfoNamesCache = latestNames;
-          }
+          await getContext().updateWorldInfoList();
         } catch (e) {
           console.warn("[CFM] 刷新世界书列表失败", e);
         }
