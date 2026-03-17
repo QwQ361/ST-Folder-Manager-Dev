@@ -1290,6 +1290,40 @@
   flex-shrink: 0;
 }
 
+/* ========== 美化主题绑定背景标签 ========== */
+.cfm-theme-bgbind-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 1;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-theme-bgbind-tag i {
+  font-size: 9px;
+  flex-shrink: 0;
+}
+/* 锁链按钮激活状态（已绑定） */
+.cfm-row-bglink-btn.cfm-bglink-active {
+  opacity: 0.8 !important;
+  color: #89b4fa !important;
+}
+.cfm-row-bglink-btn.cfm-bglink-active:hover {
+  opacity: 1 !important;
+  color: #f9e2af !important;
+  background-color: rgba(249, 226, 175, 0.15);
+}
+
 /* ========== 背景方向标签 ========== */
 .cfm-bg-orient {
   font-size: 10px;

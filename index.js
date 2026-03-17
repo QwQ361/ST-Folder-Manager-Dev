@@ -29,6 +29,8 @@ jQuery(async () => {
       extension_settings[extensionName].bgNotes = {};
     if (!extension_settings[extensionName].bgOrientations)
       extension_settings[extensionName].bgOrientations = {};
+    if (!extension_settings[extensionName].themeBackgroundBindings)
+      extension_settings[extensionName].themeBackgroundBindings = {};
     // 迁移旧的 flat resourceFolders 到 tree 结构
     if (!extension_settings[extensionName].resourceFolderTree) {
       extension_settings[extensionName].resourceFolderTree = {
@@ -2000,6 +2002,8 @@ jQuery(async () => {
       applyTopbarIconFromConfig();
       // 启动主题切换自动监听
       setupThemeChangeObserver();
+      // 监听主题切换，自动切换绑定的背景
+      setupThemeBgBindingListener();
     }, 500);
   }
 
@@ -2334,6 +2338,33 @@ jQuery(async () => {
     } else {
       clearCustomIcon();
     }
+  }
+
+  // ==================== 美化主题绑定背景 - 自动切换监听 ====================
+  let _lastThemeForBgBinding = null;
+  function setupThemeBgBindingListener() {
+    const themesSelect = document.getElementById("themes");
+    if (!themesSelect) return;
+    // 记录初始主题
+    _lastThemeForBgBinding = themesSelect.value || null;
+    // 监听 #themes 下拉框的 change 事件
+    $(themesSelect).on("change.cfmBgBinding", function () {
+      const newTheme = this.value;
+      if (!newTheme || newTheme === _lastThemeForBgBinding) return;
+      _lastThemeForBgBinding = newTheme;
+      // 检查是否有绑定的背景
+      const boundBg = getThemeBgBinding(newTheme);
+      if (boundBg) {
+        // 延迟一点执行，等主题样式应用完成
+        setTimeout(() => {
+          const currentBg = getCurrentBackgroundFile();
+          if (currentBg !== boundBg) {
+            applyBackground(boundBg);
+            toastr.info(`已自动切换背景为「${getBackgroundDisplayName(boundBg)}」`, "主题绑定背景", { timeOut: 2000 });
+          }
+        }, 500);
+      }
+    });
   }
 
   function createFloatingButton() {
@@ -3686,6 +3717,12 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].themeGroups;
               if (groups && groups[name]) delete groups[name];
+              // 清理备注
+              if (extension_settings[extensionName].themeNotes?.[name])
+                delete extension_settings[extensionName].themeNotes[name];
+              // 清理背景绑定
+              if (extension_settings[extensionName].themeBackgroundBindings?.[name])
+                delete extension_settings[extensionName].themeBackgroundBindings[name];
               // 从酒馆原生DOM中移除对应option
               $("#themes option")
                 .filter(function () {
@@ -3731,6 +3768,13 @@ jQuery(async () => {
               if (notes && notes[name]) delete notes[name];
               const orients = extension_settings[extensionName].bgOrientations;
               if (orients && orients[name]) delete orients[name];
+              // 清理所有主题中绑定该背景的记录
+              const bindings = extension_settings[extensionName].themeBackgroundBindings;
+              if (bindings) {
+                for (const [theme, bg] of Object.entries(bindings)) {
+                  if (bg === name) delete bindings[theme];
+                }
+              }
               // 从酒馆原生DOM中移除对应背景元素
               $("#bg_menu_content .bg_example")
                 .filter(function () {
@@ -3823,6 +3867,121 @@ jQuery(async () => {
       delete extension_settings[extensionName].themeNotes[name];
     }
     getContext().saveSettingsDebounced();
+  }
+
+  // ==================== 美化主题绑定背景 ====================
+  function getThemeBgBinding(themeName) {
+    return (
+      extension_settings[extensionName].themeBackgroundBindings?.[themeName] ||
+      ""
+    );
+  }
+  function setThemeBgBinding(themeName, bgfile) {
+    if (!extension_settings[extensionName].themeBackgroundBindings)
+      extension_settings[extensionName].themeBackgroundBindings = {};
+    if (bgfile) {
+      extension_settings[extensionName].themeBackgroundBindings[themeName] =
+        bgfile;
+    } else {
+      delete extension_settings[extensionName].themeBackgroundBindings[
+        themeName
+      ];
+    }
+    getContext().saveSettingsDebounced();
+  }
+  function removeThemeBgBinding(themeName) {
+    setThemeBgBinding(themeName, "");
+  }
+  /**
+   * 获取当前正在使用的背景文件名
+   * @returns {string} 当前背景文件名，如果无法获取则返回空字符串
+   */
+  function getCurrentBackgroundFile() {
+    const bg1 = document.getElementById("bg1");
+    if (!bg1) return "";
+    const style = bg1.getAttribute("style") || "";
+    // 从 style 中提取 url(...) 中的文件名
+    const match = style.match(/url\(["']?\/backgrounds\/([^"')]+)["']?\)/);
+    if (match && match[1]) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+    return "";
+  }
+  /**
+   * 点击锁链按钮的处理逻辑
+   */
+  function handleThemeBgLink(themeName) {
+    const currentThemeName =
+      typeof power_user !== "undefined" ? power_user.theme : null;
+    if (themeName !== currentThemeName) {
+      toastr.warning("请先应用该美化主题，再点击锁链绑定背景", "提示", {
+        timeOut: 3000,
+      });
+      return;
+    }
+    const existingBinding = getThemeBgBinding(themeName);
+    const currentBg = getCurrentBackgroundFile();
+    if (existingBinding) {
+      // 已有绑定，弹出选择：更新绑定 / 解除绑定 / 取消
+      const bgDisplayName = getBackgroundDisplayName(existingBinding);
+      const currentBgDisplay = currentBg
+        ? getBackgroundDisplayName(currentBg)
+        : "无";
+      const popupHtml = `
+        <div style="text-align:center;padding:10px;">
+          <p>当前绑定背景：<b style="color:var(--SmartThemeQuoteColor,#f5c542);">${escapeHtml(bgDisplayName)}</b></p>
+          <p>当前使用背景：<b style="color:var(--SmartThemeQuoteColor,#5dade2);">${escapeHtml(currentBgDisplay)}</b></p>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;">
+            <button class="menu_button" id="cfm-bglink-update" ${!currentBg || currentBg === existingBinding ? 'disabled style="opacity:0.5;"' : ""}>更新为当前背景</button>
+            <button class="menu_button" id="cfm-bglink-unbind" style="color:#e74c3c;">解除绑定</button>
+            <button class="menu_button" id="cfm-bglink-cancel">取消</button>
+          </div>
+        </div>`;
+      callPopup(popupHtml, "text", "", {
+        okButton: "none",
+        cancelButton: "none",
+      }).catch(() => {});
+      setTimeout(() => {
+        $("#cfm-bglink-update").on("click", () => {
+          setThemeBgBinding(themeName, currentBg);
+          toastr.success(
+            `已更新「${themeName}」绑定背景为「${getBackgroundDisplayName(currentBg)}」`,
+          );
+          $(
+            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+          ).trigger("click");
+          if (currentResourceType === "themes") renderThemesView();
+        });
+        $("#cfm-bglink-unbind").on("click", () => {
+          removeThemeBgBinding(themeName);
+          toastr.info(`已解除「${themeName}」的背景绑定`);
+          $(
+            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+          ).trigger("click");
+          if (currentResourceType === "themes") renderThemesView();
+        });
+        $("#cfm-bglink-cancel").on("click", () => {
+          $(
+            ".popup:visible .popup-button-close, #dialogue_popup_cancel",
+          ).trigger("click");
+        });
+      }, 100);
+    } else {
+      // 没有绑定，直接绑定当前背景
+      if (!currentBg) {
+        toastr.warning("当前没有使用任何背景，无法绑定", "提示");
+        return;
+      }
+      setThemeBgBinding(themeName, currentBg);
+      toastr.success(
+        `已将「${themeName}」绑定背景「${getBackgroundDisplayName(currentBg)}」`,
+      );
+      if (currentResourceType === "themes") renderThemesView();
+    }
   }
 
   function enterThemeNoteMode() {
@@ -4223,9 +4382,21 @@ jQuery(async () => {
 
     const orientOptions = [
       { value: "", label: "不修改", icon: "fa-minus" },
-      { value: BG_ORIENT_LANDSCAPE, label: "横屏", icon: BG_ORIENT_ICONS[BG_ORIENT_LANDSCAPE] },
-      { value: BG_ORIENT_PORTRAIT, label: "竖屏", icon: BG_ORIENT_ICONS[BG_ORIENT_PORTRAIT] },
-      { value: BG_ORIENT_OTHER, label: "其它", icon: BG_ORIENT_ICONS[BG_ORIENT_OTHER] },
+      {
+        value: BG_ORIENT_LANDSCAPE,
+        label: "横屏",
+        icon: BG_ORIENT_ICONS[BG_ORIENT_LANDSCAPE],
+      },
+      {
+        value: BG_ORIENT_PORTRAIT,
+        label: "竖屏",
+        icon: BG_ORIENT_ICONS[BG_ORIENT_PORTRAIT],
+      },
+      {
+        value: BG_ORIENT_OTHER,
+        label: "其它",
+        icon: BG_ORIENT_ICONS[BG_ORIENT_OTHER],
+      },
     ];
     const orientHtml = orientOptions
       .map(
@@ -4283,7 +4454,8 @@ jQuery(async () => {
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         const note = overlay.find("#cfm-bg-note-input").val().trim();
-        const orient = overlay.find('input[name="cfm-bg-orient"]:checked').val() || "";
+        const orient =
+          overlay.find('input[name="cfm-bg-orient"]:checked').val() || "";
         overlay.remove();
         resolve({ note, orient, clear: false });
       });
@@ -6084,6 +6256,12 @@ jQuery(async () => {
         notes[newName] = notes[oldName];
         delete notes[oldName];
       }
+      // 同步背景绑定数据
+      const bindings = extension_settings[extensionName].themeBackgroundBindings;
+      if (bindings && bindings[oldName]) {
+        bindings[newName] = bindings[oldName];
+        delete bindings[oldName];
+      }
     } else if (resType === "backgrounds") {
       const notes = extension_settings[extensionName].bgNotes;
       if (notes && notes[oldName]) {
@@ -6095,6 +6273,15 @@ jQuery(async () => {
       if (orients && orients[oldName]) {
         orients[newName] = orients[oldName];
         delete orients[oldName];
+      }
+      // 同步主题绑定背景数据（背景重命名时更新所有引用该背景的绑定）
+      const bindings = extension_settings[extensionName].themeBackgroundBindings;
+      if (bindings) {
+        for (const [theme, bg] of Object.entries(bindings)) {
+          if (bg === oldName) {
+            bindings[theme] = newName;
+          }
+        }
       }
     }
     getContext().saveSettingsDebounced();
@@ -9962,6 +10149,16 @@ jQuery(async () => {
       const singleRenameBtn = noModeActive
         ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
         : "";
+      // 绑定背景按钮
+      const bgBinding = getThemeBgBinding(name);
+      const bgLinkBtn = noModeActive
+        ? `<div class="cfm-row-edit-btn cfm-row-bglink-btn ${bgBinding ? "cfm-bglink-active" : ""}" title="${bgBinding ? "已绑定背景: " + escapeHtml(getBackgroundDisplayName(bgBinding)) : "绑定背景"}">
+            <i class="fa-solid fa-link"></i>
+          </div>`
+        : "";
+      const bgBindHtml = bgBinding
+        ? `<span class="cfm-theme-bgbind-tag" title="绑定背景: ${escapeHtml(getBackgroundDisplayName(bgBinding))}"><i class="fa-solid fa-image"></i>${escapeHtml(getBackgroundDisplayName(bgBinding))}</span>`
+        : "";
       const isNoteSel = cfmThemeNoteMode && cfmThemeNoteSelected.has(name);
       const isRenameSel =
         cfmThemeRenameMode && cfmThemeRenameSelected.has(name);
@@ -9981,9 +10178,10 @@ jQuery(async () => {
         <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
           ${finalCheckHtml}
           <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
-          <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}<div class="cfm-row-folder-path">${escapeHtml(tFolderPath)}</div></div>
+          <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}${bgBindHtml}<div class="cfm-row-folder-path">${escapeHtml(tFolderPath)}</div></div>
           ${singleRenameBtn}
           ${singleNoteBtn}
+          ${bgLinkBtn}
           <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
         </div>
       `);
@@ -10010,10 +10208,16 @@ jQuery(async () => {
         e.stopPropagation();
         executeThemeRename([name]);
       });
+      // 绑定背景按钮
+      row.find(".cfm-row-bglink-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleThemeBgLink(name);
+      });
       row.on("click", (e) => {
         if (
           $(e.target).closest(
-            ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+            ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-bglink-btn",
           ).length
         )
           return;
@@ -11583,7 +11787,10 @@ jQuery(async () => {
         toastr.warning("请先选择一个标签");
         return;
       }
-      const parentIds = configSelectedFolderIds.size > 0 ? Array.from(configSelectedFolderIds) : [null];
+      const parentIds =
+        configSelectedFolderIds.size > 0
+          ? Array.from(configSelectedFolderIds)
+          : [null];
       for (const parentId of parentIds) {
         config.folders[tagId] = {
           parentId: parentId,
@@ -11594,19 +11801,25 @@ jQuery(async () => {
         if (_exi >= 0) _ex.splice(_exi, 1);
       }
       saveConfig(config);
-      const parentHint = configSelectedFolderIds.size > 0
-        ? `「${Array.from(configSelectedFolderIds).map(id => getTagName(id)).join("、")}」的子级`
-        : "顶级文件夹";
+      const parentHint =
+        configSelectedFolderIds.size > 0
+          ? `「${Array.from(configSelectedFolderIds)
+              .map((id) => getTagName(id))
+              .join("、")}」的子级`
+          : "顶级文件夹";
       toastr.success(`已将「${getTagName(tagId)}」添加为${parentHint}`);
       renderConfigBody();
     });
     body.append(addSection);
 
-    const selectedHintText = configSelectedFolderIds.size > 0
-      ? "当前将添加到「" +
-        Array.from(configSelectedFolderIds).map(id => escapeHtml(getTagName(id))).join("、") +
-        "」下。"
-      : "当前将添加为顶级文件夹。";
+    const selectedHintText =
+      configSelectedFolderIds.size > 0
+        ? "当前将添加到「" +
+          Array.from(configSelectedFolderIds)
+            .map((id) => escapeHtml(getTagName(id)))
+            .join("、") +
+          "」下。"
+        : "当前将添加为顶级文件夹。";
     const createSection = $(`
             <div class="cfm-config-section">
                 <label>创建新标签并添加为文件夹</label>
@@ -11628,13 +11841,18 @@ jQuery(async () => {
         toastr.warning("请输入标签名称");
         return;
       }
-      const cParentIds = configSelectedFolderIds.size > 0 ? Array.from(configSelectedFolderIds) : [null];
+      const cParentIds =
+        configSelectedFolderIds.size > 0
+          ? Array.from(configSelectedFolderIds)
+          : [null];
       let totalCreated = 0;
       for (const cPid of cParentIds) {
         totalCreated += createTagsSiblings(input, cPid, cParentIds.length > 1);
       }
       if (cParentIds.length > 1 && totalCreated > 0) {
-        toastr.success(`已在 ${cParentIds.length} 个父级下创建共 ${totalCreated} 个文件夹`);
+        toastr.success(
+          `已在 ${cParentIds.length} 个父级下创建共 ${totalCreated} 个文件夹`,
+        );
       }
       createSection.find("#cfm-create-tag-input").val("");
       renderConfigBody();
@@ -11682,9 +11900,12 @@ jQuery(async () => {
       // 计算反选范围描述
       let invertScopeLabel = "全部文件夹";
       if (cfmInvertScope === "parent") {
-        invertScopeLabel = configSelectedFolderIds.size > 0
-          ? `「${Array.from(configSelectedFolderIds).map(id => getTagName(id)).join("、")}」的子级`
-          : "顶级文件夹";
+        invertScopeLabel =
+          configSelectedFolderIds.size > 0
+            ? `「${Array.from(configSelectedFolderIds)
+                .map((id) => getTagName(id))
+                .join("、")}」的子级`
+            : "顶级文件夹";
       }
 
       const deleteBar = $(`
@@ -11701,7 +11922,15 @@ jQuery(async () => {
                             <button class="cfm-btn cfm-btn-sm" id="cfm-invert-select" title="反选：将已选和未选状态互换"><i class="fa-solid fa-right-left"></i> 反选</button>
                             <select id="cfm-invert-scope" class="cfm-invert-scope-select" title="选择反选的范围">
                                 <option value="all" ${cfmInvertScope === "all" ? "selected" : ""}>全部文件夹</option>
-                                <option value="parent" ${cfmInvertScope === "parent" ? "selected" : ""}>${configSelectedFolderIds.size > 0 ? "「" + Array.from(configSelectedFolderIds).map(id => escapeHtml(getTagName(id))).join("、") + "」的子级" : "顶级文件夹"}</option>
+                                <option value="parent" ${cfmInvertScope === "parent" ? "selected" : ""}>${
+                                  configSelectedFolderIds.size > 0
+                                    ? "「" +
+                                      Array.from(configSelectedFolderIds)
+                                        .map((id) => escapeHtml(getTagName(id)))
+                                        .join("、") +
+                                      "」的子级"
+                                    : "顶级文件夹"
+                                }</option>
                             </select>
                         </div>
                         <span class="cfm-delete-bar-hint">${cfmDeleteRangeMode ? "🎯 框选模式已开启：点击起点文件夹，再点击终点文件夹" : "Shift+点击 或开启「框选」按钮可范围选择"}</span>
@@ -11771,7 +12000,9 @@ jQuery(async () => {
     const treeContainer = treeSection.find("#cfm-folder-tree");
 
     if (configSelectedFolderIds.size > 0) {
-      const selectedNames = Array.from(configSelectedFolderIds).map(id => escapeHtml(getTagName(id))).join("、");
+      const selectedNames = Array.from(configSelectedFolderIds)
+        .map((id) => escapeHtml(getTagName(id)))
+        .join("、");
       const selectedHint = $(
         `<div class="cfm-selected-hint"><i class="fa-solid fa-crosshairs"></i> 已选中 ${configSelectedFolderIds.size} 个：<strong>${selectedNames}</strong><button class="cfm-btn-deselect" title="全部取消选中"><i class="fa-solid fa-xmark"></i></button></div>`,
       );
@@ -12873,13 +13104,18 @@ jQuery(async () => {
         toastr.warning("无法解析，请检查格式");
         return;
       }
-      const batchParentIds = configSelectedFolderIds.size > 0 ? Array.from(configSelectedFolderIds) : [null];
+      const batchParentIds =
+        configSelectedFolderIds.size > 0
+          ? Array.from(configSelectedFolderIds)
+          : [null];
       let batchTotal = 0;
       for (const bpId of batchParentIds) {
         batchTotal += executeBatchCreate(tree, bpId, batchParentIds.length > 1);
       }
       if (batchParentIds.length > 1 && batchTotal > 0) {
-        toastr.success(`已在 ${batchParentIds.length} 个父级下创建共 ${batchTotal} 个文件夹`);
+        toastr.success(
+          `已在 ${batchParentIds.length} 个父级下创建共 ${batchTotal} 个文件夹`,
+        );
       }
       overlay.remove();
       renderConfigBody();
@@ -14351,13 +14587,25 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
+        // 绑定背景按钮
+        const bgBinding = getThemeBgBinding(name);
+        const bgLinkBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-bglink-btn ${bgBinding ? "cfm-bglink-active" : ""}" title="${bgBinding ? "已绑定背景: " + escapeHtml(getBackgroundDisplayName(bgBinding)) : "绑定背景"}">
+              <i class="fa-solid fa-link"></i>
+            </div>`
+          : "";
+        // 绑定背景标签
+        const bgBindHtml = bgBinding
+          ? `<span class="cfm-theme-bgbind-tag" title="绑定背景: ${escapeHtml(getBackgroundDisplayName(bgBinding))}"><i class="fa-solid fa-image"></i>${escapeHtml(getBackgroundDisplayName(bgBinding))}</span>`
+          : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-palette" style="font-size:20px;color:#cba6f7;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(name)}</span>${noteHtml}${bgBindHtml}</div>
             ${singleRenameBtn}
             ${singleNoteBtn}
+            ${bgLinkBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -14394,10 +14642,16 @@ jQuery(async () => {
           e.stopPropagation();
           executeThemeRename([name]);
         });
+        // 绑定背景按钮
+        row.find(".cfm-row-bglink-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleThemeBgLink(name);
+        });
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-bglink-btn",
             ).length
           )
             return;
@@ -16518,6 +16772,9 @@ jQuery(async () => {
         notes: JSON.parse(
           JSON.stringify(extension_settings[extensionName].themeNotes || {}),
         ),
+        bgBindings: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].themeBackgroundBindings || {}),
+        ),
       };
     }
 
@@ -16531,7 +16788,9 @@ jQuery(async () => {
           JSON.stringify(extension_settings[extensionName].bgNotes || {}),
         ),
         orientations: JSON.parse(
-          JSON.stringify(extension_settings[extensionName].bgOrientations || {}),
+          JSON.stringify(
+            extension_settings[extensionName].bgOrientations || {},
+          ),
         ),
       };
     }
@@ -16827,6 +17086,18 @@ jQuery(async () => {
         for (const [name, note] of Object.entries(notes)) {
           if (themeNameSet.has(name) && note) {
             setThemeNote(name, note);
+          }
+        }
+      }
+
+      // 恢复背景绑定
+      const bgBindings = jsonData.themes.bgBindings;
+      if (bgBindings && typeof bgBindings === "object") {
+        const themeNameList = getThemeNames();
+        const themeNameSet = new Set(themeNameList);
+        for (const [name, bgfile] of Object.entries(bgBindings)) {
+          if (themeNameSet.has(name) && bgfile) {
+            setThemeBgBinding(name, bgfile);
           }
         }
       }
