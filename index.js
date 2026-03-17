@@ -2877,6 +2877,23 @@ jQuery(async () => {
   let cfmExportMode = false;
   let cfmExportSelected = new Set(); // 导出模式下选中的资源标识符
 
+  // 收集当前活跃模式的选中集合（用于模式切换时保留选中状态）
+  function collectCurrentSelection() {
+    if (cfmExportMode && cfmExportSelected.size > 0) return new Set(cfmExportSelected);
+    if (cfmResDeleteMode && cfmResDeleteSelected.size > 0) return new Set(cfmResDeleteSelected);
+    if (cfmEditMode && cfmEditSelected.size > 0) return new Set(cfmEditSelected);
+    if (cfmThemeNoteMode && cfmThemeNoteSelected.size > 0) return new Set(cfmThemeNoteSelected);
+    if (cfmThemeRenameMode && cfmThemeRenameSelected.size > 0) return new Set(cfmThemeRenameSelected);
+    if (cfmBgNoteMode && cfmBgNoteSelected.size > 0) return new Set(cfmBgNoteSelected);
+    if (cfmBgRenameMode && cfmBgRenameSelected.size > 0) return new Set(cfmBgRenameSelected);
+    if (cfmPresetNoteMode && cfmPresetNoteSelected.size > 0) return new Set(cfmPresetNoteSelected);
+    if (cfmPresetRenameMode && cfmPresetRenameSelected.size > 0) return new Set(cfmPresetRenameSelected);
+    if (cfmWorldInfoNoteMode && cfmWorldInfoNoteSelected.size > 0) return new Set(cfmWorldInfoNoteSelected);
+    if (cfmWorldInfoRenameMode && cfmWorldInfoRenameSelected.size > 0) return new Set(cfmWorldInfoRenameSelected);
+    if (cfmMultiSelectMode && cfmMultiSelected.size > 0) return new Set(cfmMultiSelected);
+    return null;
+  }
+
   // 统一清理所有互斥模式的状态和 DOM（不触发渲染）
   function clearAllExclusiveModes() {
     // 多选模式
@@ -3021,10 +3038,11 @@ jQuery(async () => {
   }
 
   function enterExportMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     // 设置导出模式状态
     cfmExportMode = true;
-    cfmExportSelected.clear();
+    cfmExportSelected = prev || new Set();
     // 更新导出按钮外观
     $(".cfm-export-btn").addClass("cfm-export-active");
     $(".cfm-export-btn")
@@ -3476,10 +3494,11 @@ jQuery(async () => {
   let cfmResDeleteLastClicked = null;
 
   function enterResDeleteMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     // 设置删除模式状态
     cfmResDeleteMode = true;
-    cfmResDeleteSelected.clear();
+    cfmResDeleteSelected = prev || new Set();
     cfmResDeleteRangeMode = false;
     cfmResDeleteLastClicked = null;
     // 更新删除按钮外观
@@ -3825,9 +3844,10 @@ jQuery(async () => {
   }
 
   function enterThemeNoteMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmThemeNoteMode = true;
-    cfmThemeNoteSelected.clear();
+    cfmThemeNoteSelected = prev || new Set();
     cfmThemeNoteRangeMode = false;
     cfmThemeNoteLastClicked = null;
     $("#cfm-theme-note-btn").addClass("cfm-edit-active");
@@ -4034,9 +4054,10 @@ jQuery(async () => {
   }
 
   function enterBgNoteMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmBgNoteMode = true;
-    cfmBgNoteSelected.clear();
+    cfmBgNoteSelected = prev || new Set();
     cfmBgNoteRangeMode = false;
     cfmBgNoteLastClicked = null;
     $("#cfm-bg-note-btn").addClass("cfm-edit-active");
@@ -4230,9 +4251,10 @@ jQuery(async () => {
   let cfmThemeRenameLastClicked = null;
 
   function enterThemeRenameMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmThemeRenameMode = true;
-    cfmThemeRenameSelected.clear();
+    cfmThemeRenameSelected = prev || new Set();
     cfmThemeRenameRangeMode = false;
     cfmThemeRenameLastClicked = null;
     $("#cfm-theme-rename-btn").addClass("cfm-edit-active");
@@ -4604,9 +4626,10 @@ jQuery(async () => {
   let cfmBgRenameLastClicked = null;
 
   function enterBgRenameMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmBgRenameMode = true;
-    cfmBgRenameSelected.clear();
+    cfmBgRenameSelected = prev || new Set();
     cfmBgRenameRangeMode = false;
     cfmBgRenameLastClicked = null;
     $("#cfm-bg-rename-btn").addClass("cfm-edit-active");
@@ -4956,9 +4979,10 @@ jQuery(async () => {
   }
 
   function enterPresetNoteMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmPresetNoteMode = true;
-    cfmPresetNoteSelected.clear();
+    cfmPresetNoteSelected = prev || new Set();
     cfmPresetNoteRangeMode = false;
     cfmPresetNoteLastClicked = null;
     $("#cfm-preset-note-btn").addClass("cfm-edit-active");
@@ -5166,9 +5190,10 @@ jQuery(async () => {
   }
 
   function enterWorldInfoNoteMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmWorldInfoNoteMode = true;
-    cfmWorldInfoNoteSelected.clear();
+    cfmWorldInfoNoteSelected = prev || new Set();
     cfmWorldInfoNoteRangeMode = false;
     cfmWorldInfoNoteLastClicked = null;
     $("#cfm-worldinfo-note-btn").addClass("cfm-edit-active");
@@ -5365,9 +5390,10 @@ jQuery(async () => {
   let cfmPresetRenameLastClicked = null;
 
   function enterPresetRenameMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmPresetRenameMode = true;
-    cfmPresetRenameSelected.clear();
+    cfmPresetRenameSelected = prev || new Set();
     cfmPresetRenameRangeMode = false;
     cfmPresetRenameLastClicked = null;
     $("#cfm-preset-rename-btn").addClass("cfm-edit-active");
@@ -5984,9 +6010,10 @@ jQuery(async () => {
   let cfmWorldInfoRenameLastClicked = null;
 
   function enterWorldInfoRenameMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmWorldInfoRenameMode = true;
-    cfmWorldInfoRenameSelected.clear();
+    cfmWorldInfoRenameSelected = prev || new Set();
     cfmWorldInfoRenameRangeMode = false;
     cfmWorldInfoRenameLastClicked = null;
     $("#cfm-worldinfo-rename-btn").addClass("cfm-edit-active");
@@ -6462,9 +6489,10 @@ jQuery(async () => {
   let cfmEditLastClicked = null;
 
   function enterEditMode() {
+    const prev = collectCurrentSelection();
     clearAllExclusiveModes();
     cfmEditMode = true;
-    cfmEditSelected.clear();
+    cfmEditSelected = prev || new Set();
     cfmEditRangeMode = false;
     cfmEditLastClicked = null;
     // 更新按钮外观
@@ -7850,12 +7878,19 @@ jQuery(async () => {
     popup.find(".cfm-multisel-toggle").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
-      // 导出/删除/重命名模式下不允许切换多选
+      // 其他互斥模式下不允许切换多选
       if (
         cfmExportMode ||
         cfmResDeleteMode ||
+        cfmEditMode ||
         cfmPresetRenameMode ||
-        cfmWorldInfoRenameMode
+        cfmWorldInfoRenameMode ||
+        cfmThemeRenameMode ||
+        cfmBgRenameMode ||
+        cfmPresetNoteMode ||
+        cfmWorldInfoNoteMode ||
+        cfmThemeNoteMode ||
+        cfmBgNoteMode
       )
         return;
       cfmMultiSelectMode = !cfmMultiSelectMode;
