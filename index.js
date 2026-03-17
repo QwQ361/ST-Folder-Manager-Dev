@@ -6765,9 +6765,11 @@ jQuery(async () => {
     }
   }
 
-  // PC端dragend辅助：清除全局拖拽数据
+  // PC端dragend辅助：清除全局拖拽数据和视觉反馈
   function pcDragEnd() {
     _pcDragData = null;
+    // 清除所有右栏拖放高亮
+    $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
   }
 
   function showMainPopup() {
