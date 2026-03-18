@@ -18347,8 +18347,13 @@ jQuery(async () => {
         ev.stopPropagation();
       });
 
-      // 定位面板
-      $("body").append(panel);
+      // 定位面板 — 必须挂到 dialog 内部，否则被 top layer 遮挡
+      const dialogEl = btn.closest("dialog");
+      if (dialogEl.length) {
+        dialogEl.append(panel);
+      } else {
+        $("body").append(panel);
+      }
       const anchorRect = btn[0].getBoundingClientRect();
       let top = anchorRect.bottom + 4;
       let left = anchorRect.left;
