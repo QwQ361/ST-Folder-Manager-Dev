@@ -1344,16 +1344,19 @@
   align-items: stretch !important;
   max-height: 400px !important;
   overflow-y: auto !important;
-  gap: 6px !important;
+  gap: 0 !important;
 }
 .cfm-persona-popup-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 6px;
-  border-radius: 6px;
+  padding: 6px 8px;
   cursor: pointer;
   transition: background 0.15s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-persona-popup-row:last-child {
+  border-bottom: none;
 }
 .cfm-persona-popup-row:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -1363,8 +1366,9 @@
 }
 .cfm-persona-popup-info {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   flex: 1;
 }
@@ -1374,6 +1378,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .cfm-persona-popup-note {
   font-size: 11px;
@@ -1381,7 +1387,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 260px;
+  max-width: 200px;
+  flex-shrink: 1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(186, 194, 222, 0.1);
 }
 /* 锁链按钮激活状态（已绑定） */
 .cfm-row-bglink-btn.cfm-bglink-active {
