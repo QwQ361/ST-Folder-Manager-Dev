@@ -18232,12 +18232,271 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 角色卡世界书连接面板 - 文件夹过滤 ====================
+  /**
+   * 在角色卡「更多」→「连接到世界书」弹窗中注入文件夹过滤按钮
+   * 该弹窗每次都是动态创建的（从 #character_world_template 克隆），
+   * 因此需要用 MutationObserver 监听 .character_world 容器出现
+   */
+  function setupCharWorldPopupFilterObserver() {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          // 检测弹窗中的 .character_world 容器
+          const charWorldEl =
+            node.classList?.contains("character_world")
+              ? node
+              : node.querySelector?.(".character_world");
+          if (!charWorldEl) continue;
+          // 在主世界书选择器旁注入过滤按钮
+          injectCharWorldFilterBtn(
+            $(charWorldEl).find(".character_world_info_selector"),
+            "primary",
+          );
+          // 在辅助世界书选择器旁注入过滤按钮
+          injectCharWorldFilterBtn(
+            $(charWorldEl).find(".character_extra_world_info_selector"),
+            "extras",
+          );
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  /**
+   * 在角色卡世界书选择器旁注入文件夹过滤按钮
+   * @param {jQuery} selectEl - 选择器元素
+   * @param {string} kind - 'primary' | 'extras'
+   */
+  function injectCharWorldFilterBtn(selectEl, kind) {
+    if (!selectEl.length) return;
+    const parent = selectEl.closest(".range-block-range");
+    if (!parent.length) return;
+    // 防止重复注入
+    if (parent.find(".cfm-nf-btn").length) return;
+
+    // 使 parent 变成 flex 布局以容纳按钮
+    parent.css({ display: "flex", alignItems: "center", gap: "4px" });
+    selectEl.css({ flex: "1", minWidth: "0" });
+
+    const btn = $(
+      `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-kind="${kind}" title="文件夹过滤" style="flex-shrink:0;padding:4px 6px;"></div>`,
+    );
+    parent.append(btn);
+
+    // 过滤状态（临时，弹窗关闭后自然销毁）
+    let currentFilter = null;
+
+    btn.on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      // 如果面板已存在，关闭
+      if ($(`.cfm-nf-panel[data-nf-kind="${kind}"]`).length) {
+        $(".cfm-nf-panel").remove();
+        return;
+      }
+      $(".cfm-nf-panel").remove();
+
+      // 展开状态
+      if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
+      if (!showNativeFolderPanel._expanded["charworld_" + kind])
+        showNativeFolderPanel._expanded["charworld_" + kind] = new Set();
+      const expandedSet =
+        showNativeFolderPanel._expanded["charworld_" + kind];
+
+      const panel = $(
+        `<div class="cfm-nf-panel" data-nf-type="worldinfo" data-nf-kind="${kind}"></div>`,
+      );
+
+      // 顶部工具栏
+      const toolbar = $(`<div class="cfm-nf-toolbar">
+        <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
+        <span class="cfm-nf-toolbar-actions">
+          <i class="fa-solid fa-angles-down cfm-nf-expand-all" title="展开全部"></i>
+          <i class="fa-solid fa-angles-up cfm-nf-collapse-all" title="收起全部"></i>
+        </span>
+      </div>`);
+      panel.append(toolbar);
+
+      // "显示全部" 按钮
+      const showAllBtn = $(
+        `<div class="cfm-nf-item cfm-nf-show-all${!currentFilter ? " cfm-nf-active" : ""}">
+        <i class="fa-solid fa-layer-group cfm-nf-icon"></i>
+        <span class="cfm-nf-name">显示全部</span>
+      </div>`,
+      );
+      panel.append(showAllBtn);
+
+      // 文件夹树
+      const treeContainer = $(`<div class="cfm-nf-tree"></div>`);
+      treeContainer.html(
+        buildNativeFolderTreeHtml(
+          "worldinfo",
+          null,
+          0,
+          expandedSet,
+          currentFilter,
+        ),
+      );
+      panel.append(treeContainer);
+
+      // 阻止冒泡
+      panel.on("mousedown mouseup click touchstart touchend", function (ev) {
+        ev.stopPropagation();
+      });
+
+      // 定位面板
+      $("body").append(panel);
+      const anchorRect = btn[0].getBoundingClientRect();
+      let top = anchorRect.bottom + 4;
+      let left = anchorRect.left;
+      const panelWidth = panel.outerWidth();
+      const panelHeight = panel.outerHeight();
+      if (left + panelWidth > window.innerWidth)
+        left = window.innerWidth - panelWidth - 8;
+      if (left < 4) left = 4;
+      if (top + panelHeight > window.innerHeight)
+        top = anchorRect.top - panelHeight - 4;
+      panel.css({ top: top + "px", left: left + "px" });
+
+      // 展开/收起箭头
+      panel.on("click", ".cfm-nf-arrow", function (ev) {
+        ev.stopPropagation();
+        const fid = $(this).attr("data-folder-id");
+        if (expandedSet.has(fid)) expandedSet.delete(fid);
+        else expandedSet.add(fid);
+        treeContainer.html(
+          buildNativeFolderTreeHtml(
+            "worldinfo",
+            null,
+            0,
+            expandedSet,
+            currentFilter,
+          ),
+        );
+      });
+
+      // 展开全部
+      toolbar.find(".cfm-nf-expand-all").on("click", function (ev) {
+        ev.stopPropagation();
+        getResFolderIds("worldinfo").forEach((id) => expandedSet.add(id));
+        treeContainer.html(
+          buildNativeFolderTreeHtml(
+            "worldinfo",
+            null,
+            0,
+            expandedSet,
+            currentFilter,
+          ),
+        );
+      });
+
+      // 收起全部
+      toolbar.find(".cfm-nf-collapse-all").on("click", function (ev) {
+        ev.stopPropagation();
+        expandedSet.clear();
+        treeContainer.html(
+          buildNativeFolderTreeHtml(
+            "worldinfo",
+            null,
+            0,
+            expandedSet,
+            currentFilter,
+          ),
+        );
+      });
+
+      // 点击"显示全部"
+      showAllBtn.on("click", function () {
+        currentFilter = null;
+        applyCharWorldSelectFilter(selectEl, null, kind);
+        btn.removeClass("cfm-nf-active");
+        panel.remove();
+        $(document).off("mousedown.cfmCwPanel touchstart.cfmCwPanel");
+      });
+
+      // 点击文件夹项
+      panel.on("click", ".cfm-nf-item[data-folder-id]", function (ev) {
+        if ($(ev.target).closest(".cfm-nf-arrow").length) return;
+        const fid = $(this).attr("data-folder-id");
+        currentFilter = fid;
+        applyCharWorldSelectFilter(selectEl, fid, kind);
+        btn.addClass("cfm-nf-active");
+        panel.remove();
+        $(document).off("mousedown.cfmCwPanel touchstart.cfmCwPanel");
+      });
+
+      // 点击外部关闭
+      setTimeout(() => {
+        $(document).on(
+          "mousedown.cfmCwPanel touchstart.cfmCwPanel",
+          function (ev) {
+            if (
+              !$(ev.target).closest(".cfm-nf-panel, .cfm-nf-btn").length
+            ) {
+              $(".cfm-nf-panel").remove();
+              $(document).off(
+                "mousedown.cfmCwPanel touchstart.cfmCwPanel",
+              );
+            }
+          },
+        );
+      }, 0);
+    });
+  }
+
+  /**
+   * 对角色卡世界书选择器应用文件夹过滤
+   * @param {jQuery} selectEl - <select> 元素
+   * @param {string|null} folderId - 文件夹ID，null 表示显示全部
+   * @param {string} kind - 'primary' | 'extras'
+   */
+  function applyCharWorldSelectFilter(selectEl, folderId, kind) {
+    if (!selectEl.length) return;
+
+    // 先显示全部 option
+    selectEl.find("option").show();
+
+    if (folderId) {
+      const allowedNames = getAllItemsInFolderRecursive("worldinfo", folderId);
+      selectEl.find("option").each(function () {
+        const val = $(this).val();
+        const text = $(this).text().trim();
+        // 保留空值选项（"--- None ---" 或 "-- World Info not found --"）
+        if (val === "") return;
+        if (!allowedNames.has(text)) {
+          $(this).hide();
+        }
+      });
+    }
+
+    // 如果是辅助世界书且有 select2，刷新 select2
+    if (kind === "extras" && selectEl.hasClass("select2-hidden-accessible")) {
+      try {
+        const popupDialog = selectEl.closest(".popup-content, dialog, .dialogue_popup");
+        selectEl.select2("destroy");
+        selectEl.select2({
+          width: "100%",
+          placeholder: "No auxiliary Lorebooks set. Click here to select.",
+          allowClear: true,
+          closeOnSelect: false,
+          dropdownParent: popupDialog.length ? popupDialog : undefined,
+        });
+      } catch (e) {
+        /* ignore select2 refresh error */
+      }
+    }
+  }
+
   // ==================== 初始化 ====================
   autoImportAllTags(); // 首次加载自动导入所有标签
   config = loadConfig(); // 刷新配置（autoImport可能改了settings）
   autoCleanRedundantTags(); // 自动清理多余的路径标签
   initButton();
   injectNativeFilterButtons();
+  setupCharWorldPopupFilterObserver();
 
   // 监听角色卡列表重新渲染事件，自动重新应用过滤
   const eventSource = getContext().eventSource;
