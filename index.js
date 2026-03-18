@@ -1,4 +1,4 @@
-// 酒馆资源管理器 - Edge收藏夹风格双栏布局
+﻿// 酒馆资源管理器 - Edge收藏夹风格双栏布局
 jQuery(async () => {
   const extensionName = "ST-Char-Folder-Manager";
   const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -1683,7 +1683,7 @@ jQuery(async () => {
           renderPersonasView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个用户移出文件夹`
+              ? `已将 ${names.length} 个User移出文件夹`
               : `已将「${d.name}」移出文件夹`,
           );
         } else if (targetId) {
@@ -1692,7 +1692,7 @@ jQuery(async () => {
           renderPersonasView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个用户移入「${getResFolderDisplayName("personas", targetId)}」`
+              ? `已将 ${names.length} 个User移入「${getResFolderDisplayName("personas", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("personas", targetId)}」`,
           );
         } else if (
@@ -1709,7 +1709,7 @@ jQuery(async () => {
           renderPersonasView();
           toastr.success(
             names.length > 1
-              ? `已将 ${names.length} 个用户移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`
+              ? `已将 ${names.length} 个User移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`,
           );
         }
@@ -3038,7 +3038,7 @@ jQuery(async () => {
         if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
         if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
         if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
-        if ($(this).attr("id") === "cfm-export-persona-btn") return "导出用户";
+        if ($(this).attr("id") === "cfm-export-persona-btn") return "导出User";
         return "导出世界书";
       });
       $(".cfm-popup").removeClass("cfm-export-mode");
@@ -3063,7 +3063,7 @@ jQuery(async () => {
           return "删除主题";
         if ($(this).attr("id") === "cfm-res-delete-bg-btn") return "删除背景";
         if ($(this).attr("id") === "cfm-res-delete-persona-btn")
-          return "删除用户";
+          return "删除User";
         return "删除世界书";
       });
       $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -3193,7 +3193,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
       if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
       if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
-      if ($(this).attr("id") === "cfm-export-persona-btn") return "导出用户";
+      if ($(this).attr("id") === "cfm-export-persona-btn") return "导出User";
       return "导出世界书";
     });
     $(".cfm-popup").removeClass("cfm-export-mode");
@@ -3613,7 +3613,7 @@ jQuery(async () => {
     }
   }
 
-  // 用户/Persona导出
+  // User/Persona导出
   async function exportPersonas(avatarIds, headers) {
     const getThumbnailUrl =
       window.getThumbnailUrl ||
@@ -3632,9 +3632,9 @@ jQuery(async () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
-        toastr.success("用户头像已导出");
+        toastr.success("User头像已导出");
       } catch (e) {
-        throw new Error(`导出用户头像失败: ${e.message}`);
+        throw new Error(`导出User头像失败: ${e.message}`);
       }
     } else {
       if (!window.JSZip) {
@@ -3642,7 +3642,7 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${avatarIds.length} 个用户头像...`);
+      toastr.info(`正在导出 ${avatarIds.length} 个User头像...`);
       for (const avatarId of avatarIds) {
         try {
           const resp = await fetch(
@@ -3654,19 +3654,19 @@ jQuery(async () => {
             success++;
           }
         } catch (e) {
-          console.warn(`[CFM] 导出用户头像 ${avatarId} 失败`, e);
+          console.warn(`[CFM] 导出User头像 ${avatarId} 失败`, e);
         }
       }
-      if (success === 0) throw new Error("没有成功导出任何用户头像");
+      if (success === 0) throw new Error("没有成功导出任何User头像");
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
-      a.download = "用户头像.zip";
+      a.download = "User头像.zip";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个用户头像`);
+      toastr.success(`已导出 ${success} 个User头像`);
     }
   }
 
@@ -3711,7 +3711,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-res-delete-theme-btn") return "删除主题";
       if ($(this).attr("id") === "cfm-res-delete-bg-btn") return "删除背景";
       if ($(this).attr("id") === "cfm-res-delete-persona-btn")
-        return "删除用户";
+        return "删除User";
       return "删除世界书";
     });
     $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -3793,7 +3793,7 @@ jQuery(async () => {
             : currentResourceType === "backgrounds"
               ? "背景"
               : currentResourceType === "personas"
-                ? "用户"
+                ? "User"
                 : "世界书";
 
     // 确认弹窗
@@ -4021,7 +4021,7 @@ jQuery(async () => {
               fail++;
             }
           } catch (e) {
-            console.warn(`[CFM] 删除用户 ${avatarId} 失败`, e);
+            console.warn(`[CFM] 删除User ${avatarId} 失败`, e);
             fail++;
           }
         }
@@ -7496,7 +7496,7 @@ jQuery(async () => {
                     <div class="cfm-tab" data-tab="presets"><i class="fa-solid fa-sliders"></i> 预设</div>
                     <div class="cfm-tab" data-tab="themes"><i class="fa-solid fa-palette"></i> 美化</div>
                     <div class="cfm-tab" data-tab="backgrounds"><i class="fa-solid fa-panorama"></i> 背景</div>
-                    <div class="cfm-tab" data-tab="personas"><i class="fa-solid fa-user-pen"></i> 用户</div>
+                    <div class="cfm-tab" data-tab="personas"><i class="fa-solid fa-user-pen"></i> User</div>
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
                     <div class="cfm-search-input-wrapper">
@@ -7578,7 +7578,7 @@ jQuery(async () => {
                         <option value="all">全部文件夹</option>
                     </select>
                     <select id="cfm-persona-search-type" class="cfm-search-select" title="搜索类型">
-                        <option value="persona">用户</option>
+                        <option value="persona">User</option>
                         <option value="folder">文件夹</option>
                     </select>
                 </div>
@@ -7772,10 +7772,10 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-persona-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-persona-rh-count"></span>
                             <button class="cfm-edit-char-btn" id="cfm-persona-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <button class="cfm-export-btn" id="cfm-export-persona-btn" title="导出用户"><i class="fa-solid fa-file-export"></i></button>
-                            <button class="cfm-res-delete-btn" id="cfm-res-delete-persona-btn" title="删除用户"><i class="fa-solid fa-trash-can"></i></button>
+                            <button class="cfm-export-btn" id="cfm-export-persona-btn" title="导出User"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-persona-btn" title="删除User"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-persona-right-sort-wrapper">
-                                <button class="cfm-sort-trigger" id="cfm-persona-right-sort-btn" title="用户排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+                                <button class="cfm-sort-trigger" id="cfm-persona-right-sort-btn" title="User排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
                             </div>
                             <button class="cfm-multisel-toggle cfm-multisel-toggle-persona" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
                         </div>
@@ -8132,7 +8132,7 @@ jQuery(async () => {
       renderBackgroundsView();
     });
 
-    // 用户展开全部/收起全部
+    // User展开全部/收起全部
     popup.find("#cfm-persona-expand-all").on("click touchend", (e) => {
       e.preventDefault();
       for (const id of getResFolderIds("personas"))
@@ -8591,7 +8591,7 @@ jQuery(async () => {
       }, 0);
     });
 
-    // 用户左栏排序
+    // User左栏排序
     popup.find("#cfm-persona-left-sort-btn").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -8622,7 +8622,7 @@ jQuery(async () => {
         });
       }, 0);
     });
-    // 用户右栏排序
+    // User右栏排序
     popup.find("#cfm-persona-right-sort-btn").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -8636,8 +8636,8 @@ jQuery(async () => {
           : [];
       $(".cfm-sort-dropdown").remove();
       const dropdown = $(`<div class="cfm-sort-dropdown cfm-sort-open">
-        <div class="cfm-sort-dropdown-item ${personaRightSortMode === "az" ? "cfm-sort-item-active" : ""}" data-sort="item-az"><i class="fa-solid fa-arrow-down-a-z"></i> 用户 A → Z</div>
-        <div class="cfm-sort-dropdown-item ${personaRightSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="item-za"><i class="fa-solid fa-arrow-up-z-a"></i> 用户 Z → A</div>
+        <div class="cfm-sort-dropdown-item ${personaRightSortMode === "az" ? "cfm-sort-item-active" : ""}" data-sort="item-az"><i class="fa-solid fa-arrow-down-a-z"></i> User A→Z</div>
+        <div class="cfm-sort-dropdown-item ${personaRightSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="item-za"><i class="fa-solid fa-arrow-up-z-a"></i> User Z→A</div>
         ${childFolders.length > 0 ? `<div class="cfm-sort-dropdown-sep"></div><div class="cfm-sort-dropdown-item" data-sort="folder-az"><i class="fa-solid fa-folder"></i> 子文件夹 A → Z</div><div class="cfm-sort-dropdown-item" data-sort="folder-za"><i class="fa-solid fa-folder"></i> 子文件夹 Z → A</div>` : ""}
         <div class="cfm-sort-dropdown-sep"></div>
         <div class="cfm-sort-dropdown-item ${personaRightSortMode === null && !personaSortSnapshot ? "cfm-sort-item-disabled" : ""}" data-sort="revert"><i class="fa-solid fa-rotate-left"></i> 恢复默认</div>
@@ -9784,7 +9784,7 @@ jQuery(async () => {
       renderBackgroundsView();
     });
 
-    // 用户搜索框事件绑定
+    // User搜索框事件绑定
     popup.find("#cfm-persona-global-search").on("input", function () {
       const hasText = $(this).val().trim().length > 0;
       $(this)
@@ -9806,7 +9806,7 @@ jQuery(async () => {
       const type = $(this).val();
       $("#cfm-persona-global-search").attr(
         "placeholder",
-        type === "folder" ? "搜索文件夹..." : "搜索用户...",
+        type === "folder" ? "搜索文件夹..." : "搜索User...",
       );
       executePersonaSearch();
     });
@@ -12243,7 +12243,7 @@ jQuery(async () => {
       { value: "presets", label: "预设", icon: "fa-sliders" },
       { value: "themes", label: "美化", icon: "fa-palette" },
       { value: "backgrounds", label: "背景", icon: "fa-panorama" },
-      { value: "personas", label: "用户", icon: "fa-user-pen" },
+      { value: "personas", label: "User", icon: "fa-user-pen" },
       { value: "last", label: "记住上次页面", icon: "fa-clock-rotate-left" },
     ];
 
@@ -12623,7 +12623,7 @@ jQuery(async () => {
           : type === "backgrounds"
             ? "背景"
             : type === "personas"
-              ? "用户"
+              ? "User"
               : "世界书";
     const tree = getResFolderTree(type);
     const allFolderIds = getResFolderIds(type);
@@ -17299,7 +17299,7 @@ jQuery(async () => {
     }
   }
 
-  // ==================== 用户视图渲染（双栏 + 树形嵌套） ====================
+  // ==================== User视图渲染（双栏 + 树形嵌套） ====================
   // 获取当前 persona 列表
   async function getCurrentPersonas() {
     try {
@@ -17314,7 +17314,7 @@ jQuery(async () => {
       if (!pu) return [];
       return avatarIds.map((id) => ({
         avatarId: id,
-        name: (pu.personas && pu.personas[id]) || "[未命名用户]",
+        name: (pu.personas && pu.personas[id]) || "[未命名User]",
         description:
           (pu.persona_descriptions &&
             pu.persona_descriptions[id] &&
@@ -17327,13 +17327,13 @@ jQuery(async () => {
           "",
       }));
     } catch (e) {
-      console.error("[CFM] 获取用户列表失败", e);
+      console.error("[CFM] 获取User列表失败", e);
       return [];
     }
   }
 
   function selectPersona(avatarId) {
-    // 通过模拟点击酒馆原生 persona 选择来切换用户
+    // 通过模拟点击酒馆原生 persona 选择来切换 User
     const avatarBlock = $(`.avatar-container[data-avatar-id="${avatarId}"]`);
     if (avatarBlock.length > 0) {
       avatarBlock.find(".avatar").trigger("click");
@@ -17353,10 +17353,19 @@ jQuery(async () => {
     const rightList = $("#cfm-persona-right-list");
     const pathEl = $("#cfm-persona-rh-path");
     const countEl = $("#cfm-persona-rh-count");
+
+    // 使用渲染版本号防止异步竞争导致重复渲染
+    if (!renderPersonasView._renderId) renderPersonasView._renderId = 0;
+    const thisRenderId = ++renderPersonasView._renderId;
+
+    const personas = await getCurrentPersonas();
+
+    // 如果在 await 期间有新的渲染被触发，放弃当前渲染
+    if (thisRenderId !== renderPersonasView._renderId) return;
+
     leftTree.empty();
     const tree = getResFolderTree("personas");
     const allFolderIds = getResFolderIds("personas");
-    const personas = await getCurrentPersonas();
 
     // 注意：不在此处提前 return，即使 personas 为空也正常渲染左侧树和右侧面板，与其他资源类型行为保持一致
 
@@ -17372,7 +17381,7 @@ jQuery(async () => {
       }
     }
     if (personaGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的用户分组映射");
+      console.log("[CFM] 已清理不存在的User分组映射");
       getContext().saveSettingsDebounced();
     }
 
@@ -17441,7 +17450,7 @@ jQuery(async () => {
           (count, first) =>
             toastr.success(
               count > 1
-                ? `已将 ${count} 个用户移入「${getResFolderDisplayName("personas", folderId)}」`
+                ? `已将 ${count} 个User移入「${getResFolderDisplayName("personas", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("personas", folderId)}」`,
             ),
         );
@@ -17583,7 +17592,7 @@ jQuery(async () => {
           renderPersonasView();
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个用户移入「${getResFolderDisplayName("personas", folderId)}」`
+              ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("personas", folderId)}」`,
           );
         }
@@ -17621,7 +17630,7 @@ jQuery(async () => {
       <div class="cfm-tnode cfm-tnode-uncategorized ${selectedPersonaFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;">
         <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
         <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
-        <span class="cfm-tnode-label">未归类用户</span>
+        <span class="cfm-tnode-label">未归类User</span>
         <span class="cfm-tnode-target" title="移入此处"><i class="fa-solid fa-crosshairs"></i></span>
         <span class="cfm-tnode-count">${ungrouped.length}</span>
       </div>
@@ -17634,7 +17643,7 @@ jQuery(async () => {
         (count, first) =>
           toastr.success(
             count > 1
-              ? `已将 ${count} 个用户移出文件夹`
+              ? `已将 ${count} 个User移出文件夹`
               : `已将「${first}」移出文件夹`,
           ),
       );
@@ -17666,7 +17675,7 @@ jQuery(async () => {
           renderPersonasView();
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个用户移出文件夹`
+              ? `已将 ${pCount} 个User移出文件夹`
               : `已将「${d.name}」移出文件夹`,
           );
         }
@@ -17705,7 +17714,7 @@ jQuery(async () => {
       displayTitle = "⭐ 收藏";
     } else if (selectedPersonaFolder === "__ungrouped__") {
       displayItems = ungrouped;
-      displayTitle = "未归类用户";
+      displayTitle = "未归类User";
     } else if (selectedPersonaFolder && tree[selectedPersonaFolder]) {
       displayItems = folderItems[selectedPersonaFolder] || [];
       childFolders = sortResFolders(
@@ -17731,7 +17740,7 @@ jQuery(async () => {
       selectedPersonaFolder === "__favorites__" ||
       selectedPersonaFolder === "__ungrouped__"
     ) {
-      countEl.text(`${displayItems.length} 个用户`);
+      countEl.text(`${displayItems.length} 个User`);
     } else {
       countEl.text(selectedPersonaFolder ? `${totalItems} 项` : "");
     }
@@ -17742,10 +17751,10 @@ jQuery(async () => {
       );
     } else if (selectedPersonaFolder === "__favorites__" && totalItems === 0) {
       rightList.html(
-        '<div class="cfm-right-empty">还没有收藏任何用户<br><span style="font-size:12px;opacity:0.5;">点击用户行右侧的 ☆ 按钮添加收藏</span></div>',
+        '<div class="cfm-right-empty">还没有收藏任何User<br><span style="font-size:12px;opacity:0.5;">点击User行右侧的 ☆ 按钮添加收藏</span></div>',
       );
     } else if (selectedPersonaFolder === "__ungrouped__" && totalItems === 0) {
-      rightList.html('<div class="cfm-right-empty">没有未归类的用户</div>');
+      rightList.html('<div class="cfm-right-empty">没有未归类的User</div>');
     } else if (totalItems === 0) {
       rightList.html('<div class="cfm-right-empty">此文件夹为空</div>');
     } else {
@@ -17758,7 +17767,7 @@ jQuery(async () => {
             <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("personas", childId))}</div>
             <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
             <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
-            <div class="cfm-row-meta">${childCount} 个用户</div>
+            <div class="cfm-row-meta">${childCount} 个User</div>
           </div>
         `);
         row.find(".cfm-row-target-btn").on("click", (e) => {
@@ -17770,7 +17779,7 @@ jQuery(async () => {
             (count, first) =>
               toastr.success(
                 count > 1
-                  ? `已将 ${count} 个用户移入「${getResFolderDisplayName("personas", childId)}」`
+                  ? `已将 ${count} 个User移入「${getResFolderDisplayName("personas", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("personas", childId)}」`,
               ),
           );
@@ -17895,7 +17904,7 @@ jQuery(async () => {
             if (data.multiSelect) clearMultiSelect();
             toastr.success(
               pCount > 1
-                ? `已将 ${pCount} 个用户移入「${getResFolderDisplayName("personas", childId)}」`
+                ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("personas", childId)}」`,
             );
             renderPersonasView();
@@ -17909,7 +17918,7 @@ jQuery(async () => {
         }));
         rightList.append(row);
       }
-      // 用户行（带头像 + 星标 + 多选支持 + 备注）
+      // User行（带头像 + 星标 + 多选支持 + 备注）
       for (const p of displayItems) {
         const isActive = p.avatarId === currentUserAvatar;
         const fav = isResFavorite("personas", p.avatarId);
@@ -18007,7 +18016,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已切换到用户「${p.name}」`);
+          toastr.success(`已切换到User「${p.name}」`);
         });
         row.on("dragstart", (e) => {
           const singleData = {
@@ -18116,7 +18125,7 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           toastr.success(
             pCount > 1
-              ? `已将 ${pCount} 个用户移入「${getResFolderDisplayName("personas", currentFolder)}」`
+              ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("personas", currentFolder)}」`,
           );
           renderPersonasView();
@@ -18125,7 +18134,7 @@ jQuery(async () => {
     }
   }
 
-  // 用户搜索
+  // User搜索
   function executePersonaSearch() {
     const query = $("#cfm-persona-global-search").val();
     if (!query || !query.trim()) {
@@ -18178,7 +18187,7 @@ jQuery(async () => {
       countEl.text(`${matched.length} 个结果`);
 
       if (matched.length === 0) {
-        rightList.html('<div class="cfm-right-empty">未找到匹配的用户</div>');
+        rightList.html('<div class="cfm-right-empty">未找到匹配的User</div>');
         return;
       }
 
@@ -18223,7 +18232,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已切换到用户「${p.name}」`);
+          toastr.success(`已切换到User「${p.name}」`);
         });
         row.on("dragstart", (e) => {
           pcDragStart(e, {
@@ -18402,7 +18411,7 @@ jQuery(async () => {
               : scope === "backgrounds"
                 ? "背景"
                 : scope === "personas"
-                  ? "用户"
+                  ? "User"
                   : "世界书";
     a.download = `cfm-backup-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
@@ -18808,7 +18817,7 @@ jQuery(async () => {
         }
       }
 
-      // 恢复用户备注
+      // 恢复User备注
       const personaNotes = jsonData.personas.notes;
       if (personaNotes && typeof personaNotes === "object") {
         const personasList = await getCurrentPersonas();
@@ -18839,7 +18848,7 @@ jQuery(async () => {
             : currentResourceType === "backgrounds"
               ? "背景"
               : currentResourceType === "personas"
-                ? "用户"
+                ? "User"
                 : "世界书";
     const popup = $(`
       <div class="cfm-batch-popup" style="max-width:480px;">
@@ -18921,7 +18930,7 @@ jQuery(async () => {
           if (jsonData.backgrounds)
             html += `背景：匹配 ${report.backgrounds.matched} 个，跳过 ${report.backgrounds.skipped} 个<br>`;
           if (jsonData.personas)
-            html += `用户：匹配 ${report.personas.matched} 个，跳过 ${report.personas.skipped} 个<br>`;
+            html += `User：匹配 ${report.personas.matched} 个，跳过 ${report.personas.skipped} 个<br>`;
           if (report.favoritesRestored > 0)
             html += `恢复了 ${report.favoritesRestored} 个收藏<br>`;
           html += `</div>`;
