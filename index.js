@@ -17358,26 +17358,7 @@ jQuery(async () => {
     const allFolderIds = getResFolderIds("personas");
     const personas = await getCurrentPersonas();
 
-    // persona 列表为空时提示
-    if (personas.length === 0) {
-      if (!renderPersonasView._retryCount) renderPersonasView._retryCount = 0;
-      if (renderPersonasView._retryCount < 5) {
-        rightList.html(
-          '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 用户列表加载中...</div>',
-        );
-        renderPersonasView._retryCount++;
-        setTimeout(() => {
-          if (currentResourceType === "personas") renderPersonasView();
-        }, 500);
-      } else {
-        rightList.html(
-          '<div class="cfm-right-empty"><i class="fa-solid fa-user-slash"></i> 暂无用户设定<br><small style="opacity:0.6;">请在酒馆的「用户设定」面板中创建 Persona</small></div>',
-        );
-        renderPersonasView._retryCount = 0;
-      }
-      return;
-    }
-    renderPersonasView._retryCount = 0;
+    // 注意：不在此处提前 return，即使 personas 为空也正常渲染左侧树和右侧面板，与其他资源类型行为保持一致
 
     const groups = getResourceGroups("personas");
 
