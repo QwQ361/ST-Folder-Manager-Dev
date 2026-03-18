@@ -1,4 +1,4 @@
-﻿// 酒馆资源管理器 - Edge收藏夹风格双栏布局
+// 酒馆资源管理器 - Edge收藏夹风格双栏布局
 jQuery(async () => {
   const extensionName = "ST-Char-Folder-Manager";
   const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
@@ -17938,10 +17938,6 @@ jQuery(async () => {
         const noteHtml = personaNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(personaNote)}">${escapeHtml(personaNote)}</span>`
           : "";
-        // 描述信息
-        const descHtml = p.description
-          ? `<span class="cfm-persona-desc" title="${escapeHtml(p.description)}">${escapeHtml(p.description.length > 50 ? p.description.substring(0, 50) + "..." : p.description)}</span>`
-          : "";
         // 非模式状态下显示单个备注编辑按钮
         const noModeActive =
           !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode;
@@ -17954,7 +17950,7 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${descHtml}${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}</div>
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -18204,9 +18200,6 @@ jQuery(async () => {
         const noteHtml = personaNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(personaNote)}">${escapeHtml(personaNote)}</span>`
           : "";
-        const descHtml = p.description
-          ? `<span class="cfm-persona-desc">${escapeHtml(p.description.length > 50 ? p.description.substring(0, 50) + "..." : p.description)}</span>`
-          : "";
         // 文件夹路径
         const folderPathNames = getResFolderPathNames("personas", p.avatarId);
         const pathHtml = folderPathNames
@@ -18215,7 +18208,7 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${descHtml}${noteHtml}${pathHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${pathHtml}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
