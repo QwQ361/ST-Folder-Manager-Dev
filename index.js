@@ -17441,6 +17441,7 @@ jQuery(async () => {
   let nativeFilterWorldInfo = null; // 世界书当前过滤的文件夹id
   let nativeFilterTheme = null; // 主题当前过滤的文件夹id
   let nativeFilterBg = null; // 背景当前过滤的文件夹id
+  let nativeFilterGlobalWI = null; // 全局世界书当前过滤的文件夹id
 
   /**
    * 构建文件夹树HTML（递归），用于原生界面浮动面板
@@ -17586,6 +17587,9 @@ jQuery(async () => {
     // 移除已有面板
     $(".cfm-nf-panel").remove();
 
+    // globalworldinfo 共享 worldinfo 的文件夹结构
+    const treeType = type === "globalworldinfo" ? "worldinfo" : type;
+
     const currentFilter =
       type === "chars"
         ? nativeFilterChar
@@ -17595,7 +17599,9 @@ jQuery(async () => {
             ? nativeFilterTheme
             : type === "backgrounds"
               ? nativeFilterBg
-              : nativeFilterWorldInfo;
+              : type === "globalworldinfo"
+                ? nativeFilterGlobalWI
+                : nativeFilterWorldInfo;
 
     // 展开状态集合（持久化到会话中）
     if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
@@ -17626,7 +17632,7 @@ jQuery(async () => {
     // 文件夹树
     const treeContainer = $(`<div class="cfm-nf-tree"></div>`);
     treeContainer.html(
-      buildNativeFolderTreeHtml(type, null, 0, expandedSet, currentFilter),
+      buildNativeFolderTreeHtml(treeType, null, 0, expandedSet, currentFilter),
     );
     panel.append(treeContainer);
 
@@ -17657,7 +17663,7 @@ jQuery(async () => {
       if (expandedSet.has(fid)) expandedSet.delete(fid);
       else expandedSet.add(fid);
       treeContainer.html(
-        buildNativeFolderTreeHtml(type, null, 0, expandedSet, currentFilter),
+        buildNativeFolderTreeHtml(treeType, null, 0, expandedSet, currentFilter),
       );
     });
 
@@ -17668,29 +17674,11 @@ jQuery(async () => {
       if (type === "chars") {
         allIds = getFolderTagIds();
       } else {
-        const resType =
-          type === "presets"
-            ? "presets"
-            : type === "themes"
-              ? "themes"
-              : type === "backgrounds"
-                ? "backgrounds"
-                : "worldinfo";
-        allIds = getResFolderIds(resType);
+        allIds = getResFolderIds(treeType);
       }
       allIds.forEach((id) => expandedSet.add(id));
-      const cf =
-        type === "chars"
-          ? nativeFilterChar
-          : type === "presets"
-            ? nativeFilterPreset
-            : type === "themes"
-              ? nativeFilterTheme
-              : type === "backgrounds"
-                ? nativeFilterBg
-                : nativeFilterWorldInfo;
       treeContainer.html(
-        buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
+        buildNativeFolderTreeHtml(treeType, null, 0, expandedSet, currentFilter),
       );
     });
 
@@ -17698,18 +17686,8 @@ jQuery(async () => {
     toolbar.find(".cfm-nf-collapse-all").on("click", function (e) {
       e.stopPropagation();
       expandedSet.clear();
-      const cf =
-        type === "chars"
-          ? nativeFilterChar
-          : type === "presets"
-            ? nativeFilterPreset
-            : type === "themes"
-              ? nativeFilterTheme
-              : type === "backgrounds"
-                ? nativeFilterBg
-                : nativeFilterWorldInfo;
       treeContainer.html(
-        buildNativeFolderTreeHtml(type, null, 0, expandedSet, cf),
+        buildNativeFolderTreeHtml(treeType, null, 0, expandedSet, currentFilter),
       );
     });
 
@@ -17719,6 +17697,7 @@ jQuery(async () => {
       else if (type === "presets") nativeFilterPreset = null;
       else if (type === "themes") nativeFilterTheme = null;
       else if (type === "backgrounds") nativeFilterBg = null;
+      else if (type === "globalworldinfo") nativeFilterGlobalWI = null;
       else nativeFilterWorldInfo = null;
       applyNativeFilter(type);
       panel.remove();
@@ -17735,6 +17714,7 @@ jQuery(async () => {
       else if (type === "presets") nativeFilterPreset = fid;
       else if (type === "themes") nativeFilterTheme = fid;
       else if (type === "backgrounds") nativeFilterBg = fid;
+      else if (type === "globalworldinfo") nativeFilterGlobalWI = fid;
       else nativeFilterWorldInfo = fid;
       applyNativeFilter(type);
       panel.remove();
@@ -17860,6 +17840,8 @@ jQuery(async () => {
       applyThemeFilter();
     } else if (type === "backgrounds") {
       applyBgFilter();
+    } else if (type === "globalworldinfo") {
+      applyGlobalWorldInfoFilter();
     } else {
       applyWorldInfoFilter();
     }
@@ -17898,6 +17880,7 @@ jQuery(async () => {
   let _worldInfoDetachedOptions = [];
   let _themeDetachedOptions = [];
   let _bgDetachedElements = [];
+  let _globalWIDetachedOptions = [];
 
   /**
    * 预设过滤：通过 detach/append option 实现过滤
@@ -18094,7 +18077,9 @@ jQuery(async () => {
             ? nativeFilterTheme
             : type === "backgrounds"
               ? nativeFilterBg
-              : nativeFilterWorldInfo;
+              : type === "globalworldinfo"
+                ? nativeFilterGlobalWI
+                : nativeFilterWorldInfo;
     const btn = $(`.cfm-nf-btn[data-nf-type="${type}"]`);
     if (filter) {
       btn.addClass("cfm-nf-btn-active");
@@ -18229,6 +18214,90 @@ jQuery(async () => {
         }
         showNativeFolderPanel($(this), "backgrounds");
       });
+    }
+
+    // 6. 全局世界书选择器 - 注入到 #world_info 的 .range-block-range 容器
+    if (
+      $("#world_info").length &&
+      !$("#world_info").closest(".range-block-range").find(".cfm-nf-btn").length
+    ) {
+      const globalWIBtn = $(
+        `<div class="cfm-nf-btn menu_button menu_button_icon fa-solid fa-folder-tree" data-nf-type="globalworldinfo" title="文件夹过滤" style="flex-shrink:0;"></div>`,
+      );
+      const rangeBlock = $("#world_info").closest(".range-block-range");
+      rangeBlock.css({ display: "flex", alignItems: "center", gap: "4px" });
+      // 把 select2 容器设为 flex:1
+      rangeBlock.find(".select2-container").css({ flex: "1", minWidth: "0" });
+      rangeBlock.append(globalWIBtn);
+      globalWIBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="globalworldinfo"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "globalworldinfo");
+      });
+    }
+  }
+
+  /**
+   * 全局世界书过滤：通过 detach/append option 实现过滤
+   * 类似 applyWorldInfoFilter 但目标是 #world_info（select2 多选）
+   */
+  function applyGlobalWorldInfoFilter() {
+    const select = $("#world_info");
+    if (!select.length) return;
+
+    // 先 destroy select2
+    const hasSelect2 = select.hasClass("select2-hidden-accessible");
+    if (hasSelect2) {
+      try { select.select2("destroy"); } catch (e) { /* ignore */ }
+    }
+
+    // 恢复之前 detach 的 option
+    if (_globalWIDetachedOptions.length > 0) {
+      for (const opt of _globalWIDetachedOptions) {
+        select.append(opt);
+      }
+      _globalWIDetachedOptions = [];
+      _sortSelectOptions(select);
+    }
+
+    if (nativeFilterGlobalWI) {
+      const allowedNames = getAllItemsInFolderRecursive(
+        "worldinfo",
+        nativeFilterGlobalWI,
+      );
+      // detach 不匹配的 option（已选中的不移除，保留用户已激活的世界书）
+      select.find("option").each(function () {
+        const val = $(this).val();
+        const text = $(this).text().trim();
+        if (val === "") return; // 保留空值占位选项
+        if ($(this).prop("selected")) return; // 保留已选中的
+        if (!allowedNames.has(text)) {
+          _globalWIDetachedOptions.push($(this).detach());
+        }
+      });
+    }
+
+    // 重新初始化 select2
+    if (hasSelect2 || select.attr("multiple")) {
+      try {
+        select.select2({
+          width: "100%",
+          placeholder: "No Worlds active. Click here to select.",
+          allowClear: true,
+          closeOnSelect: false,
+        });
+      } catch (e) {
+        /* ignore select2 init error */
+      }
+      // 更新 flex 样式（select2 重建后容器会变）
+      const rangeBlock = select.closest(".range-block-range");
+      if (rangeBlock.length) {
+        rangeBlock.find(".select2-container").css({ flex: "1", minWidth: "0" });
+      }
     }
   }
 
