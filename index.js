@@ -18424,14 +18424,77 @@ jQuery(async () => {
       renderPersonasView();
       return;
     }
-    const searchText = query.trim().toLowerCase();
+    const q = query.trim().toLowerCase();
     const scope = $("#cfm-persona-search-scope").val() || "current";
-    const searchType = $("#cfm-persona-search-type").val() || "name";
+    const searchType = $("#cfm-persona-search-type").val() || "persona";
     const rightList = $("#cfm-persona-right-list");
     const pathEl = $("#cfm-persona-rh-path");
     const countEl = $("#cfm-persona-rh-count");
     rightList.empty();
 
+    if (searchType === "folder") {
+      // 搜索文件夹名（支持当前文件夹范围）
+      const folders = getResFolderIds("personas");
+      let matchedIds;
+      if (
+        scope === "current" &&
+        selectedPersonaFolder &&
+        selectedPersonaFolder !== "__ungrouped__" &&
+        selectedPersonaFolder !== "__favorites__" &&
+        getResFolderTree("personas")[selectedPersonaFolder]
+      ) {
+        const collectDesc = (pid) => {
+          let r = [pid];
+          for (const c of getResChildFolders("personas", pid))
+            r = r.concat(collectDesc(c));
+          return r;
+        };
+        const descendants = collectDesc(selectedPersonaFolder);
+        matchedIds = descendants.filter((f) =>
+          fuzzyMatch(
+            q,
+            getFolderSelfPathNames("personas", f).map((s) => s.toLowerCase()),
+          ),
+        );
+      } else {
+        matchedIds = folders.filter((f) =>
+          fuzzyMatch(
+            q,
+            getFolderSelfPathNames("personas", f).map((s) => s.toLowerCase()),
+          ),
+        );
+      }
+      pathEl.text(`搜索文件夹: "${q}"`);
+      countEl.text(`${matchedIds.length} 个结果`);
+      if (matchedIds.length === 0) {
+        rightList.html('<div class="cfm-right-empty">未找到匹配的文件夹</div>');
+        return;
+      }
+      for (const fname of matchedIds) {
+        const folderPath = getResFolderPath("personas", fname)
+          .map((id) => getResFolderDisplayName("personas", id))
+          .join(" › ");
+        const childCount = countResItemsRecursive("personas", fname);
+        const row = $(`
+          <div class="cfm-row cfm-row-folder cfm-search-result">
+            <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
+            <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("personas", fname))}<div class="cfm-row-folder-path">${escapeHtml(folderPath)}</div></div>
+            <div class="cfm-row-meta">${childCount} 个User</div>
+          </div>
+        `);
+        row.on("click", () => {
+          const path = getResFolderPath("personas", fname);
+          for (const pid of path) personaExpandedNodes.add(pid);
+          selectedPersonaFolder = fname;
+          $("#cfm-persona-global-search").val("");
+          renderPersonasView();
+        });
+        rightList.append(row);
+      }
+      return;
+    }
+
+    // 搜索User（模糊搜索）
     getCurrentPersonas().then((personas) => {
       const groups = getResourceGroups("personas");
       const tree = getResFolderTree("personas");
@@ -18444,6 +18507,18 @@ jQuery(async () => {
           searchPool = personas.filter(
             (p) => !groups[p.avatarId] || !tree[groups[p.avatarId]],
           );
+        } else if (tree[selectedPersonaFolder]) {
+          // 递归收集当前文件夹及子文件夹中的User
+          const collectFolderIds = (pid) => {
+            let r = [pid];
+            for (const c of getResChildFolders("personas", pid))
+              r = r.concat(collectFolderIds(c));
+            return r;
+          };
+          const allFids = collectFolderIds(selectedPersonaFolder);
+          searchPool = personas.filter((p) =>
+            allFids.includes(groups[p.avatarId]),
+          );
         } else {
           searchPool = personas.filter(
             (p) => groups[p.avatarId] === selectedPersonaFolder,
@@ -18454,19 +18529,22 @@ jQuery(async () => {
       }
 
       const matched = searchPool.filter((p) => {
-        if (searchType === "name") {
-          return p.name.toLowerCase().includes(searchText);
-        } else if (searchType === "desc") {
-          return p.description.toLowerCase().includes(searchText);
-        } else {
-          return (
-            p.name.toLowerCase().includes(searchText) ||
-            p.description.toLowerCase().includes(searchText)
-          );
-        }
+        const connNames = resolvePersonaConnections(p.connections).map(
+          (c) => (c.name || "").toLowerCase(),
+        );
+        const pool = [
+          (p.name || "").toLowerCase(),
+          (p.description || "").toLowerCase(),
+          (getPersonaNote(p.avatarId) || "").toLowerCase(),
+          ...getResFolderPathNames("personas", p.avatarId).map((s) =>
+            s.toLowerCase(),
+          ),
+          ...connNames,
+        ];
+        return fuzzyMatch(q, pool);
       });
 
-      pathEl.text(`搜索: "${query.trim()}"`);
+      pathEl.text(`搜索User: "${query.trim()}"`);
       countEl.text(`${matched.length} 个结果`);
 
       if (matched.length === 0) {
@@ -18491,8 +18569,8 @@ jQuery(async () => {
         const connHtml = buildPersonaConnHtml(p.connections);
         // 文件夹路径
         const folderPathNames = getResFolderPathNames("personas", p.avatarId);
-        const pathHtml = folderPathNames
-          ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames)}</span>`
+        const pathHtml = folderPathNames.length > 0
+          ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames.join(" › "))}</span>`
           : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
@@ -20529,7 +20607,8 @@ jQuery(async () => {
           if (!pu || !pu.persona_descriptions) return;
           let changed = false;
           for (const [pid, desc] of Object.entries(pu.persona_descriptions)) {
-            if (!desc || !desc.connections || !desc.connections.length) continue;
+            if (!desc || !desc.connections || !desc.connections.length)
+              continue;
             for (const conn of desc.connections) {
               if (conn && conn.type === "character" && conn.id === oldAvatar) {
                 conn.id = newAvatar;
@@ -20539,7 +20618,9 @@ jQuery(async () => {
           }
           if (changed) {
             getContext().saveSettingsDebounced();
-            console.log(`[CFM] 已更新 persona connections: ${oldAvatar} → ${newAvatar}`);
+            console.log(
+              `[CFM] 已更新 persona connections: ${oldAvatar} → ${newAvatar}`,
+            );
           }
         } catch (e) {
           console.warn("[CFM] CHARACTER_RENAMED handler error:", e);
