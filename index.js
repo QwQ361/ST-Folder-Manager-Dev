@@ -5658,7 +5658,8 @@ jQuery(async () => {
       if (lastIdx !== -1 && curIdx !== -1) {
         const [start, end] =
           lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
-        for (let i = start; i <= end; i++) cfmPersonaNoteSelected.add(visible[i]);
+        for (let i = start; i <= end; i++)
+          cfmPersonaNoteSelected.add(visible[i]);
       }
     } else {
       if (cfmPersonaNoteSelected.has(id)) cfmPersonaNoteSelected.delete(id);
@@ -5671,7 +5672,8 @@ jQuery(async () => {
     if (!cfmPersonaNoteMode) return;
     const visible = getVisibleResourceIds();
     const allSel =
-      visible.length > 0 && visible.every((id) => cfmPersonaNoteSelected.has(id));
+      visible.length > 0 &&
+      visible.every((id) => cfmPersonaNoteSelected.has(id));
     const toolbar = $(`
       <div class="cfm-edit-toolbar">
         <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
@@ -5711,20 +5713,24 @@ jQuery(async () => {
     if (personaIds.length === 1) {
       defaultNote = getPersonaNote(personaIds[0]);
     }
+    // 将 avatarId 转换为显示名称
+    const pu = getContext().powerUserSettings;
+    const getDisplayName = (id) => (pu && pu.personas && pu.personas[id]) || id;
+    const displayNames = personaIds.map(getDisplayName);
     const nameListHtml =
-      personaIds.length <= 5
-        ? personaIds
+      displayNames.length <= 5
+        ? displayNames
             .map(
               (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
             )
             .join("")
-        : personaIds
+        : displayNames
             .slice(0, 5)
             .map(
               (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
             )
             .join("") +
-          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${personaIds.length} 个User</div>`;
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${displayNames.length} 个User</div>`;
 
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
@@ -18173,7 +18179,10 @@ jQuery(async () => {
           : "";
         // 非模式状态下显示单个备注编辑按钮
         const noModeActive =
-          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode && !cfmPersonaNoteMode;
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmMultiSelectMode &&
+          !cfmPersonaNoteMode;
         const singleNoteBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
           : "";
@@ -18214,13 +18223,7 @@ jQuery(async () => {
         row.find(".cfm-row-note-btn").on("click touchend", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          // 内联编辑备注
-          const currentNote = getPersonaNote(p.avatarId) || "";
-          const newNote = prompt("编辑备注:", currentNote);
-          if (newNote !== null) {
-            setPersonaNote(p.avatarId, newNote.trim());
-            renderPersonasView();
-          }
+          executePersonaNoteEdit([p.avatarId]);
         });
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
