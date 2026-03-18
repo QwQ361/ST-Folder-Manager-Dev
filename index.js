@@ -10749,6 +10749,7 @@ jQuery(async () => {
     });
     uncatNode.on("drop", (e) => {
       e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       uncatNode.removeClass("cfm-drop-target");
       const data = pcGetDropData(e);
       if (!data) return;
@@ -10921,6 +10922,7 @@ jQuery(async () => {
     node.on("drop", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       const dropZone = node.data("dropZone") || "into";
       node.removeClass(
         "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
@@ -11264,6 +11266,7 @@ jQuery(async () => {
       row.on("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
         const dropZone = row.data("dropZone") || "into";
         row.removeClass(
           "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
@@ -11379,10 +11382,10 @@ jQuery(async () => {
       }
     });
     list.on("drop", (e) => {
+      list.removeClass("cfm-right-list-drop-target");
       if ($(e.target).closest(".cfm-row").length > 0) return;
       e.preventDefault();
       e.stopPropagation();
-      list.removeClass("cfm-right-list-drop-target");
       const data = pcGetDropData(e);
       if (!data) return;
 
@@ -13544,6 +13547,7 @@ jQuery(async () => {
       node.on("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
         const zone = node.data("dropZone") || "into";
         node.removeClass(
           "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
@@ -13668,6 +13672,7 @@ jQuery(async () => {
     uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
     uncatNode.on("drop", (e) => {
       e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d) {
@@ -13850,6 +13855,7 @@ jQuery(async () => {
         row.on("drop", (e) => {
           e.preventDefault();
           e.stopPropagation();
+          $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
           const zone = row.data("dropZone") || "into";
           row.removeClass(
             "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
@@ -14112,10 +14118,10 @@ jQuery(async () => {
         }
       });
       rightList.on("drop", (e) => {
+        rightList.removeClass("cfm-right-list-drop-target");
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
-        rightList.removeClass("cfm-right-list-drop-target");
         const data = pcGetDropData(e);
         if (!data) return;
         if (
@@ -14317,6 +14323,7 @@ jQuery(async () => {
       node.on("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
         const zone = node.data("dropZone") || "into";
         node.removeClass(
           "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
@@ -14434,6 +14441,7 @@ jQuery(async () => {
     uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
     uncatNode.on("drop", (e) => {
       e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d && d.type === "theme") {
@@ -14605,6 +14613,7 @@ jQuery(async () => {
         row.on("drop", (e) => {
           e.preventDefault();
           e.stopPropagation();
+          $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
           const zone = row.data("dropZone") || "into";
           row.removeClass(
             "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
@@ -14881,10 +14890,10 @@ jQuery(async () => {
           rightList.removeClass("cfm-right-list-drop-target");
       });
       rightList.on("drop", (e) => {
+        rightList.removeClass("cfm-right-list-drop-target");
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
-        rightList.removeClass("cfm-right-list-drop-target");
         const data = pcGetDropData(e);
         if (!data) return;
         if (
@@ -15078,6 +15087,7 @@ jQuery(async () => {
       node.on("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
         const zone = node.data("dropZone") || "into";
         node.removeClass(
           "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
@@ -15186,6 +15196,7 @@ jQuery(async () => {
     uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
     uncatNode.on("drop", (e) => {
       e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d && d.type === "background") {
@@ -15345,6 +15356,7 @@ jQuery(async () => {
         row.on("drop", (e) => {
           e.preventDefault();
           e.stopPropagation();
+          $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
           const zone = row.data("dropZone") || "into";
           row.removeClass(
             "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
@@ -15588,10 +15600,10 @@ jQuery(async () => {
           rightList.removeClass("cfm-right-list-drop-target");
       });
       rightList.on("drop", (e) => {
+        rightList.removeClass("cfm-right-list-drop-target");
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
-        rightList.removeClass("cfm-right-list-drop-target");
         const data = pcGetDropData(e);
         if (!data) return;
         if (
@@ -16173,6 +16185,7 @@ jQuery(async () => {
       node.on("drop", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
         const zone = node.data("dropZone") || "into";
         node.removeClass(
           "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
@@ -16313,6 +16326,7 @@ jQuery(async () => {
     uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
     uncatNode.on("drop", (e) => {
       e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d && d.type === "worldinfo") {
@@ -16498,6 +16512,7 @@ jQuery(async () => {
         row.on("drop", (e) => {
           e.preventDefault();
           e.stopPropagation();
+          $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
           const zone = row.data("dropZone") || "into";
           row.removeClass(
             "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
@@ -16756,10 +16771,10 @@ jQuery(async () => {
         }
       });
       rightList.on("drop", (e) => {
+        rightList.removeClass("cfm-right-list-drop-target");
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
-        rightList.removeClass("cfm-right-list-drop-target");
         const data = pcGetDropData(e);
         if (!data) return;
         if (
