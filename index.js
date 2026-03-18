@@ -17578,27 +17578,35 @@ jQuery(async () => {
     const ctx = getContext();
     const chars = ctx.characters || [];
     const grps = ctx.groups || [];
-    return connections.map(conn => {
-      if (conn.type === 'character') {
-        const ch = chars.find(c => c.avatar === conn.id);
-        return { type: 'character', name: ch ? ch.name : conn.id, avatar: conn.id };
-      }
-      if (conn.type === 'group') {
-        const g = grps.find(g => g.id === conn.id);
-        return { type: 'group', name: g ? g.name : conn.id, avatar: null };
-      }
-      return null;
-    }).filter(Boolean);
+    return connections
+      .map((conn) => {
+        if (conn.type === "character") {
+          const ch = chars.find((c) => c.avatar === conn.id);
+          return {
+            type: "character",
+            name: ch ? ch.name : conn.id,
+            avatar: conn.id,
+          };
+        }
+        if (conn.type === "group") {
+          const g = grps.find((g) => g.id === conn.id);
+          return { type: "group", name: g ? g.name : conn.id, avatar: null };
+        }
+        return null;
+      })
+      .filter(Boolean);
   }
 
   // 生成 persona 绑定角色标签 HTML
   function buildPersonaConnHtml(connections) {
     const resolved = resolvePersonaConnections(connections);
-    if (!resolved.length) return '';
-    return resolved.map(c => {
-      const icon = c.type === 'group' ? 'fa-users' : 'fa-user';
-      return `<span class="cfm-persona-conn-tag" title="绑定${c.type === 'group' ? '群组' : '角色'}: ${escapeHtml(c.name)}"><i class="fa-solid ${icon}"></i>${escapeHtml(c.name)}</span>`;
-    }).join('');
+    if (!resolved.length) return "";
+    return resolved
+      .map((c) => {
+        const icon = c.type === "group" ? "fa-users" : "fa-user";
+        return `<span class="cfm-persona-conn-tag" title="绑定${c.type === "group" ? "群组" : "角色"}: ${escapeHtml(c.name)}"><i class="fa-solid ${icon}"></i>${escapeHtml(c.name)}</span>`;
+      })
+      .join("");
   }
 
   function selectPersona(avatarId) {
@@ -20118,6 +20126,78 @@ jQuery(async () => {
 
   // ==================== 角色卡世界书连接面板 - 文件夹过滤 ====================
   /**
+   * 增强原生 Persona 选择弹窗：竖向列表布局 + 显示备注
+   * 当角色绑定多个 persona 时，酒馆会弹出 askForPersonaSelection 弹窗，
+   * 其中 .persona-list 容器默认是横向 flex wrap 排列。
+   * 本函数通过 MutationObserver 监听该容器出现，将其改为竖向列表并追加备注。
+   */
+  function setupPersonaSelectionPopupEnhancer() {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          // 检测弹窗中的 .persona-list 容器
+          const personaList = node.classList?.contains("persona-list")
+            ? node
+            : node.querySelector?.(".persona-list");
+          if (!personaList) continue;
+          // 避免重复处理
+          if (personaList.classList.contains("cfm-persona-popup-enhanced"))
+            continue;
+          personaList.classList.add("cfm-persona-popup-enhanced");
+          enhancePersonaPopupList(personaList);
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  /**
+   * 对 persona 选择弹窗列表进行增强处理
+   * @param {HTMLElement} listEl - .persona-list 容器元素
+   */
+  function enhancePersonaPopupList(listEl) {
+    const pu = getContext().powerUserSettings;
+    if (!pu) return;
+    const avatarBlocks = listEl.querySelectorAll(
+      '.avatar[data-type="persona"]',
+    );
+    avatarBlocks.forEach((block) => {
+      const pid = block.dataset.pid;
+      if (!pid) return;
+      // 创建信息容器
+      const infoDiv = document.createElement("div");
+      infoDiv.className = "cfm-persona-popup-info";
+      // 名称
+      const personaName = (pu.personas && pu.personas[pid]) || pid;
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "cfm-persona-popup-name";
+      nameSpan.textContent = personaName;
+      infoDiv.appendChild(nameSpan);
+      // 备注
+      const note = getPersonaNote(pid);
+      if (note) {
+        const noteSpan = document.createElement("span");
+        noteSpan.className = "cfm-persona-popup-note";
+        noteSpan.textContent = note;
+        noteSpan.title = "备注: " + note;
+        infoDiv.appendChild(noteSpan);
+      }
+      // 将 avatar 块包裹成行布局
+      const wrapper = document.createElement("div");
+      wrapper.className = "cfm-persona-popup-row";
+      block.parentNode.insertBefore(wrapper, block);
+      wrapper.appendChild(block);
+      wrapper.appendChild(infoDiv);
+      // 点击 wrapper 的非 avatar 区域时，转发点击到 avatar 块
+      wrapper.addEventListener("click", (e) => {
+        if (e.target === block || block.contains(e.target)) return;
+        block.click();
+      });
+    });
+  }
+
+  /**
    * 在角色卡「更多」→「连接到世界书」弹窗中注入文件夹过滤按钮
    * 该弹窗每次都是动态创建的（从 #character_world_template 克隆），
    * 因此需要用 MutationObserver 监听 .character_world 容器出现
@@ -20426,6 +20506,7 @@ jQuery(async () => {
   initButton();
   injectNativeFilterButtons();
   setupCharWorldPopupFilterObserver();
+  setupPersonaSelectionPopupEnhancer();
 
   // 监听角色卡列表重新渲染事件，自动重新应用过滤
   const eventSource = getContext().eventSource;

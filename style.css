@@ -1338,6 +1338,51 @@
   font-size: 9px;
   flex-shrink: 0;
 }
+/* ========== Persona选择弹窗增强（竖向列表+备注） ========== */
+.persona-list.cfm-persona-popup-enhanced {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  gap: 6px !important;
+}
+.cfm-persona-popup-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.cfm-persona-popup-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.cfm-persona-popup-row .avatar {
+  flex-shrink: 0;
+}
+.cfm-persona-popup-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.cfm-persona-popup-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-persona-popup-note {
+  font-size: 11px;
+  color: #a6adc8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
 /* 锁链按钮激活状态（已绑定） */
 .cfm-row-bglink-btn.cfm-bglink-active {
   opacity: 0.8 !important;
