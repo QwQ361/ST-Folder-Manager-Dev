@@ -18461,27 +18461,60 @@ jQuery(async () => {
   function applyCharWorldSelectFilter(selectEl, folderId, kind) {
     if (!selectEl.length) return;
 
-    // 先显示全部 option
-    selectEl.find("option").show();
-
-    if (folderId) {
-      const allowedNames = getAllItemsInFolderRecursive("worldinfo", folderId);
-      selectEl.find("option").each(function () {
-        const val = $(this).val();
-        const text = $(this).text().trim();
-        // 保留空值选项（"--- None ---" 或 "-- World Info not found --"）
-        if (val === "") return;
-        if (!allowedNames.has(text)) {
-          $(this).hide();
-        }
-      });
+    // 恢复之前被 detach 的 option
+    const storeKey = "_cfmDetachedOpts";
+    const detached = selectEl.data(storeKey);
+    if (detached && detached.length) {
+      selectEl.append(detached);
+      selectEl.data(storeKey, null);
     }
 
-    // 如果是辅助世界书且有 select2，刷新 select2
-    if (kind === "extras" && selectEl.hasClass("select2-hidden-accessible")) {
+    // 对主世界书（普通 select）：show/hide 即可
+    if (kind === "primary") {
+      selectEl.find("option").show();
+      if (folderId) {
+        const allowedNames = getAllItemsInFolderRecursive("worldinfo", folderId);
+        selectEl.find("option").each(function () {
+          const val = $(this).val();
+          const text = $(this).text().trim();
+          if (val === "") return; // 保留空值/默认选项
+          if (!allowedNames.has(text)) {
+            $(this).hide();
+          }
+        });
+      }
+      return;
+    }
+
+    // 对辅助世界书（select2 多选）：需要 detach 不匹配的 option，再 reinit select2
+    if (kind === "extras") {
+      // 先 destroy select2
+      if (selectEl.hasClass("select2-hidden-accessible")) {
+        try { selectEl.select2("destroy"); } catch (e) { /* ignore */ }
+      }
+
+      if (folderId) {
+        const allowedNames = getAllItemsInFolderRecursive("worldinfo", folderId);
+        const toDetach = [];
+        selectEl.find("option").each(function () {
+          const val = $(this).val();
+          const text = $(this).text().trim();
+          if (val === "") return; // 保留空值选项
+          // 已被选中的 option 不移除（保留用户已选的世界书）
+          if ($(this).prop("selected")) return;
+          if (!allowedNames.has(text)) {
+            toDetach.push(this);
+          }
+        });
+        if (toDetach.length) {
+          const $detached = $(toDetach).detach();
+          selectEl.data(storeKey, $detached);
+        }
+      }
+
+      // 重新初始化 select2
       try {
-        const popupDialog = selectEl.closest(".popup-content, dialog, .dialogue_popup");
-        selectEl.select2("destroy");
+        const popupDialog = selectEl.closest("dialog, .popup-content, .dialogue_popup");
         selectEl.select2({
           width: "100%",
           placeholder: "No auxiliary Lorebooks set. Click here to select.",
@@ -18490,7 +18523,7 @@ jQuery(async () => {
           dropdownParent: popupDialog.length ? popupDialog : undefined,
         });
       } catch (e) {
-        /* ignore select2 refresh error */
+        /* ignore select2 init error */
       }
     }
   }
