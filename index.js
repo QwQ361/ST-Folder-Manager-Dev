@@ -3007,6 +3007,8 @@ jQuery(async () => {
       return new Set(cfmWorldInfoNoteSelected);
     if (cfmWorldInfoRenameMode && cfmWorldInfoRenameSelected.size > 0)
       return new Set(cfmWorldInfoRenameSelected);
+    if (cfmPersonaNoteMode && cfmPersonaNoteSelected.size > 0)
+      return new Set(cfmPersonaNoteSelected);
     if (cfmMultiSelectMode && cfmMultiSelected.size > 0)
       return new Set(cfmMultiSelected);
     return null;
@@ -3156,6 +3158,20 @@ jQuery(async () => {
         .addClass("fa-pen-to-square");
       $("#cfm-preset-note-btn").attr("title", "编辑备注");
       $(".cfm-popup").removeClass("cfm-preset-note-mode");
+    }
+    // User备注模式
+    if (cfmPersonaNoteMode) {
+      cfmPersonaNoteMode = false;
+      cfmPersonaNoteSelected.clear();
+      cfmPersonaNoteRangeMode = false;
+      cfmPersonaNoteLastClicked = null;
+      $("#cfm-persona-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-persona-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-persona-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-persona-note-mode");
     }
   }
 
@@ -5596,6 +5612,201 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
 
+  // ==================== User备注编辑模式 ====================
+  let cfmPersonaNoteMode = false;
+  let cfmPersonaNoteSelected = new Set();
+  let cfmPersonaNoteRangeMode = false;
+  let cfmPersonaNoteLastClicked = null;
+
+  function enterPersonaNoteMode() {
+    const prev = collectCurrentSelection();
+    clearAllExclusiveModes();
+    cfmPersonaNoteMode = true;
+    cfmPersonaNoteSelected = prev || new Set();
+    cfmPersonaNoteRangeMode = false;
+    cfmPersonaNoteLastClicked = null;
+    $("#cfm-persona-note-btn").addClass("cfm-edit-active");
+    $("#cfm-persona-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-persona-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-persona-note-mode");
+    renderPersonasView();
+  }
+
+  function exitPersonaNoteMode() {
+    cfmPersonaNoteMode = false;
+    cfmPersonaNoteSelected.clear();
+    cfmPersonaNoteRangeMode = false;
+    cfmPersonaNoteLastClicked = null;
+    $("#cfm-persona-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-persona-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-persona-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-persona-note-mode");
+    renderPersonasView();
+  }
+
+  function togglePersonaNoteItem(id, shiftKey) {
+    if ((shiftKey || cfmPersonaNoteRangeMode) && cfmPersonaNoteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmPersonaNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmPersonaNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmPersonaNoteSelected.has(id)) cfmPersonaNoteSelected.delete(id);
+      else cfmPersonaNoteSelected.add(id);
+    }
+    cfmPersonaNoteLastClicked = id;
+  }
+
+  function prependPersonaNoteToolbar(listContainer, renderFn) {
+    if (!cfmPersonaNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmPersonaNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmPersonaNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmPersonaNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmPersonaNoteSelected.size > 0 ? `已选 ${cfmPersonaNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmPersonaNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmPersonaNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmPersonaNoteRangeMode = !cfmPersonaNoteRangeMode;
+      if (cfmPersonaNoteRangeMode) cfmPersonaNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitPersonaNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showPersonaNotePopup(personaIds) {
+    if (!personaIds || personaIds.length === 0) return;
+    let defaultNote = "";
+    if (personaIds.length === 1) {
+      defaultNote = getPersonaNote(personaIds[0]);
+    }
+    const nameListHtml =
+      personaIds.length <= 5
+        ? personaIds
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : personaIds
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${personaIds.length} 个User</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑User备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-persona-note-input" value="${escapeHtml(defaultNote)}" placeholder="${personaIds.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${personaIds.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-persona-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-persona-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executePersonaNoteEdit(ids) {
+    const result = await showPersonaNotePopup(ids);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = ids.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const id of ids) {
+      if (clear) {
+        setPersonaNote(id, "");
+        count++;
+      } else if (note) {
+        setPersonaNote(id, note);
+        count++;
+      } else if (!isBatch) {
+        setPersonaNote(id, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个User的备注`);
+      renderPersonasView();
+    }
+  }
+
   function enterPresetNoteMode() {
     const prev = collectCurrentSelection();
     clearAllExclusiveModes();
@@ -7839,6 +8050,7 @@ jQuery(async () => {
       if (cfmBgNoteMode) exitBgNoteMode();
       if (cfmPresetNoteMode) exitPresetNoteMode();
       if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+      if (cfmPersonaNoteMode) exitPersonaNoteMode();
       if (cfmPresetRenameMode) exitPresetRenameMode();
       if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
       // 切换视图
@@ -8713,7 +8925,8 @@ jQuery(async () => {
         cfmPresetNoteMode ||
         cfmWorldInfoNoteMode ||
         cfmThemeNoteMode ||
-        cfmBgNoteMode;
+        cfmBgNoteMode ||
+        cfmPersonaNoteMode;
       if (hasExclusiveMode) {
         // 收集选中并退出互斥模式，进入多选
         const prev = collectCurrentSelection();
@@ -9103,6 +9316,22 @@ jQuery(async () => {
         executeWorldInfoNoteEdit(names).then(() => exitWorldInfoNoteMode());
       } else {
         enterWorldInfoNoteMode();
+      }
+    });
+
+    // User备注编辑按钮
+    popup.find("#cfm-persona-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmPersonaNoteMode) {
+        if (cfmPersonaNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的User");
+          return;
+        }
+        const ids = Array.from(cfmPersonaNoteSelected);
+        executePersonaNoteEdit(ids).then(() => exitPersonaNoteMode());
+      } else {
+        enterPersonaNoteMode();
       }
     });
 
@@ -17926,13 +18155,17 @@ jQuery(async () => {
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.avatarId);
         const isDelSel =
           cfmResDeleteMode && cfmResDeleteSelected.has(p.avatarId);
+        const isNoteSel =
+          cfmPersonaNoteMode && cfmPersonaNoteSelected.has(p.avatarId);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
-            : cfmMultiSelectMode
-              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+            : cfmPersonaNoteMode
+              ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+              : cfmMultiSelectMode
+                ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+                : "";
         // 备注信息
         const personaNote = getPersonaNote(p.avatarId);
         const noteHtml = personaNote
@@ -17940,14 +18173,14 @@ jQuery(async () => {
           : "";
         // 非模式状态下显示单个备注编辑按钮
         const noModeActive =
-          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode;
+          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode && !cfmPersonaNoteMode;
         const singleNoteBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
           : "";
         // 头像缩略图
         const thumbUrl = getThumbnailUrl("persona", p.avatarId);
         const row = $(`
-          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
+          <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}</div>
@@ -17992,6 +18225,11 @@ jQuery(async () => {
         row.on("click", (e) => {
           if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
             return;
+          if (cfmPersonaNoteMode) {
+            togglePersonaNoteItem(p.avatarId, e.shiftKey);
+            renderPersonasView();
+            return;
+          }
           if (cfmResDeleteMode) {
             toggleResDeleteItem(p.avatarId, e.shiftKey);
             renderPersonasView();
@@ -18039,6 +18277,8 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, renderPersonasView);
       // 导出工具栏
       prependExportToolbar(rightList, renderPersonasView);
+      // User备注工具栏
+      prependPersonaNoteToolbar(rightList, renderPersonasView);
       // 多选工具栏
       if (cfmMultiSelectMode && selectedPersonaFolder) {
         const visible = getVisibleResourceIds();
