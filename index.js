@@ -20519,6 +20519,29 @@ jQuery(async () => {
         requestAnimationFrame(() => applyCharFilter());
       }
     });
+    // 角色卡重命名后，自动更新所有 persona connections 中的旧 avatar ID
+    // 酒馆原生代码未处理此同步，这里补上
+    if (event_types.CHARACTER_RENAMED) {
+      eventSource.on(event_types.CHARACTER_RENAMED, (oldAvatar, newAvatar) => {
+        if (!oldAvatar || !newAvatar || oldAvatar === newAvatar) return;
+        const pu = getContext().powerUserSettings;
+        if (!pu || !pu.persona_descriptions) return;
+        let changed = false;
+        for (const [pid, desc] of Object.entries(pu.persona_descriptions)) {
+          if (!desc.connections || !desc.connections.length) continue;
+          for (const conn of desc.connections) {
+            if (conn.type === "character" && conn.id === oldAvatar) {
+              conn.id = newAvatar;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          getContext().saveSettingsDebounced();
+          console.log(`[CFM] 已更新 persona connections: ${oldAvatar} → ${newAvatar}`);
+        }
+      });
+    }
   }
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
