@@ -1315,6 +1315,29 @@
   font-size: 9px;
   flex-shrink: 0;
 }
+/* ========== User绑定角色/群组标签 ========== */
+.cfm-persona-conn-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 1;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: rgba(166, 227, 161, 0.2);
+  color: #a6e3a1;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-persona-conn-tag i {
+  font-size: 9px;
+  flex-shrink: 0;
+}
 /* 锁链按钮激活状态（已绑定） */
 .cfm-row-bglink-btn.cfm-bglink-active {
   opacity: 0.8 !important;

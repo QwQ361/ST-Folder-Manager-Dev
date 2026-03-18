@@ -17560,11 +17560,45 @@ jQuery(async () => {
             pu.persona_descriptions[id] &&
             pu.persona_descriptions[id].title) ||
           "",
+        connections:
+          (pu.persona_descriptions &&
+            pu.persona_descriptions[id] &&
+            pu.persona_descriptions[id].connections) ||
+          [],
       }));
     } catch (e) {
       console.error("[CFM] 获取User列表失败", e);
       return [];
     }
+  }
+
+  // 解析 persona connections 为显示名称
+  function resolvePersonaConnections(connections) {
+    if (!connections || !connections.length) return [];
+    const ctx = getContext();
+    const chars = ctx.characters || [];
+    const grps = ctx.groups || [];
+    return connections.map(conn => {
+      if (conn.type === 'character') {
+        const ch = chars.find(c => c.avatar === conn.id);
+        return { type: 'character', name: ch ? ch.name : conn.id, avatar: conn.id };
+      }
+      if (conn.type === 'group') {
+        const g = grps.find(g => g.id === conn.id);
+        return { type: 'group', name: g ? g.name : conn.id, avatar: null };
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
+  // 生成 persona 绑定角色标签 HTML
+  function buildPersonaConnHtml(connections) {
+    const resolved = resolvePersonaConnections(connections);
+    if (!resolved.length) return '';
+    return resolved.map(c => {
+      const icon = c.type === 'group' ? 'fa-users' : 'fa-user';
+      return `<span class="cfm-persona-conn-tag" title="绑定${c.type === 'group' ? '群组' : '角色'}: ${escapeHtml(c.name)}"><i class="fa-solid ${icon}"></i>${escapeHtml(c.name)}</span>`;
+    }).join('');
   }
 
   function selectPersona(avatarId) {
@@ -18177,6 +18211,8 @@ jQuery(async () => {
         const noteHtml = personaNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(personaNote)}">${escapeHtml(personaNote)}</span>`
           : "";
+        // 绑定角色/群组标签
+        const connHtml = buildPersonaConnHtml(p.connections);
         // 非模式状态下显示单个备注编辑按钮
         const noModeActive =
           !cfmExportMode &&
@@ -18192,7 +18228,7 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -18443,6 +18479,8 @@ jQuery(async () => {
         const noteHtml = personaNote
           ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(personaNote)}">${escapeHtml(personaNote)}</span>`
           : "";
+        // 绑定角色/群组标签
+        const connHtml = buildPersonaConnHtml(p.connections);
         // 文件夹路径
         const folderPathNames = getResFolderPathNames("personas", p.avatarId);
         const pathHtml = folderPathNames
@@ -18451,7 +18489,7 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${pathHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
