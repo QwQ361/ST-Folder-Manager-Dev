@@ -6959,10 +6959,73 @@ jQuery(async () => {
         return;
       }
       try {
-        // 设置为全局 scope
-        setWiPresetScope(idx, "global");
-        await applyWorldInfoPreset(preset.books, wiCharBound);
-        toastr.success(`已应用激活分组「${preset.name}」到全局`);
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        // 过滤掉已不存在的索引和当前要应用的索引
+        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
+
+        let mode = "stack"; // 默认叠加
+        if (otherApplied.length > 0) {
+          const otherNames = otherApplied.map((i) => currentPresets[i].name).join("、");
+          // 弹出三选一确认框
+          const choice = await new Promise((resolve) => {
+            const confirmOverlay = $(`
+              <div class="cfm-edit-popup-overlay" style="z-index:100001;">
+                <div class="cfm-edit-popup" style="max-width:380px;">
+                  <div class="cfm-edit-popup-title">应用方式</div>
+                  <div class="cfm-edit-field" style="font-size:13px;line-height:1.6;">
+                    当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：
+                  </div>
+                  <div class="cfm-edit-popup-actions" style="gap:8px;">
+                    <button class="cfm-edit-popup-cancel" data-choice="cancel">取消</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="replace" style="background:#f38ba8;">替换</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="stack">叠加</button>
+                  </div>
+                </div>
+              </div>
+            `);
+            $("body").append(confirmOverlay);
+            confirmOverlay.find("[data-choice]").on("click", function () {
+              resolve($(this).attr("data-choice"));
+              confirmOverlay.remove();
+            });
+            confirmOverlay.on("click", function (ev) {
+              if ($(ev.target).is(confirmOverlay)) {
+                resolve("cancel");
+                confirmOverlay.remove();
+              }
+            });
+          });
+          if (choice === "cancel") return;
+          mode = choice;
+        }
+
+        if (mode === "replace") {
+          // 替换模式：先关闭其他已应用分组的独占世界书
+          const keepBooks = new Set(preset.books);
+          for (const oi of otherApplied) {
+            if (currentPresets[oi]) {
+              for (const b of currentPresets[oi].books) {
+                if (!wiCharBound.has(b) && !keepBooks.has(b)) {
+                  await toggleWorldInfoActivation(b, false);
+                }
+              }
+            }
+          }
+        }
+
+        // 激活当前分组的世界书
+        for (const b of preset.books) {
+          if (!wiCharBound.has(b)) {
+            await toggleWorldInfoActivation(b, true);
+          }
+        }
+
+        // 更新追踪
+        const newApplied = mode === "replace" ? [idx] : [...otherApplied.filter((i) => i !== idx), idx];
+        extension_settings[extensionName]._wiAppliedPresetIndices = newApplied;
+        getContext().saveSettingsDebounced();
+
+        toastr.success(`已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`);
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -6971,7 +7034,7 @@ jQuery(async () => {
       }
     });
 
-    // 取消应用分组（从全局移除该分组的世界书）
+    // 取消应用分组（只移除该分组独占的世界书）
     overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -6986,25 +7049,30 @@ jQuery(async () => {
         return;
       }
       try {
-        const wiModule = await import("../../../world-info.js");
-        const selectedWI = wiModule.selected_world_info;
-        const removeSet = new Set(preset.books);
-        // 从全局激活列表中移除该分组的世界书（不动角色关联的）
-        for (let i = selectedWI.length - 1; i >= 0; i--) {
-          if (removeSet.has(selectedWI[i]) && !wiCharBound.has(selectedWI[i])) {
-            selectedWI.splice(i, 1);
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        if (!applied.includes(idx)) {
+          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          return;
+        }
+        // 计算其他已应用分组覆盖的世界书
+        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
+        const otherBooks = new Set();
+        for (const oi of otherApplied) {
+          for (const b of currentPresets[oi].books) otherBooks.add(b);
+        }
+        // 只移除该分组独占的世界书（不被其他已应用分组包含的）
+        let removedCount = 0;
+        for (const b of preset.books) {
+          if (!wiCharBound.has(b) && !otherBooks.has(b)) {
+            await toggleWorldInfoActivation(b, false);
+            removedCount++;
           }
         }
-        // 同步 DOM
-        $("#world_info")
-          .find("option")
-          .each(function () {
-            const optName = $(this).text();
-            if (wiCharBound.has(optName)) return;
-            $(this).prop("selected", selectedWI.includes(optName));
-          });
-        $("#world_info").trigger("change");
-        toastr.success(`已取消应用分组「${preset.name}」`);
+        // 从追踪中移除
+        extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
+        getContext().saveSettingsDebounced();
+
+        toastr.success(`已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`);
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
