@@ -3542,3 +3542,149 @@ option.cfm-nf-hidden {
     max-width: 120px;
   }
 }
+
+/* ==================== 自定义布局设置 ==================== */
+.cfm-custom-layout-section {
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+}
+.cfm-layout-hint {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+.cfm-layout-tabs-title,
+.cfm-layout-actions-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cfm-layout-actions-tab-hint {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.4;
+}
+.cfm-layout-tabs-list,
+.cfm-layout-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cfm-layout-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.15));
+  cursor: grab;
+  user-select: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+.cfm-layout-item:hover {
+  background: var(--SmartThemeBlurTintColor, rgba(0,0,0,0.25));
+}
+.cfm-layout-item-highlight {
+  outline: 1px solid var(--SmartThemeQuoteColor, #89b4fa);
+  background: rgba(137, 180, 250, 0.08);
+}
+.cfm-layout-drag {
+  opacity: 0.3;
+  cursor: grab;
+  font-size: 12px;
+}
+.cfm-layout-icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  opacity: 0.7;
+}
+.cfm-layout-label {
+  flex: 1;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cfm-layout-label:hover {
+  text-decoration: underline;
+  color: var(--SmartThemeQuoteColor, #89b4fa);
+}
+/* 开关滑块 */
+.cfm-layout-toggle {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 17px;
+  flex-shrink: 0;
+}
+.cfm-layout-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.cfm-layout-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.15);
+  border-radius: 17px;
+  transition: 0.2s;
+}
+.cfm-layout-slider::before {
+  content: "";
+  position: absolute;
+  height: 13px;
+  width: 13px;
+  left: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+.cfm-layout-toggle input:checked + .cfm-layout-slider {
+  background: var(--SmartThemeQuoteColor, #89b4fa);
+}
+.cfm-layout-toggle input:checked + .cfm-layout-slider::before {
+  transform: translateX(15px);
+}
+/* 箭头按钮 */
+.cfm-layout-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.cfm-layout-arrow:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.1);
+}
+.cfm-layout-arrow-disabled {
+  opacity: 0.15 !important;
+  cursor: default;
+  pointer-events: none;
+}
+/* 拖拽状态 */
+.cfm-layout-dragging {
+  opacity: 0.4;
+}
+.cfm-layout-dragover {
+  outline: 2px dashed var(--SmartThemeQuoteColor, #89b4fa);
+  outline-offset: -2px;
+}
+.cfm-layout-empty {
+  font-size: 12px;
+  opacity: 0.4;
+  padding: 8px;
+  text-align: center;
+}

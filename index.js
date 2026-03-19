@@ -655,8 +655,176 @@ jQuery(async () => {
         selectedFolder: null,
         expandedNodes: [],
       };
+    // 自定义布局：标签页可见性/排序 + 子功能可见性/排序
+    if (!extension_settings[extensionName].customLayout) {
+      extension_settings[extensionName].customLayout = {
+        tabs: [
+          { id: "chars", visible: true },
+          { id: "worldinfo", visible: true },
+          { id: "presets", visible: true },
+          { id: "themes", visible: true },
+          { id: "backgrounds", visible: true },
+          { id: "personas", visible: true },
+        ],
+        tabActions: {
+          chars: [
+            { id: "import", visible: true },
+            { id: "quickedit", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          worldinfo: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          presets: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          themes: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          backgrounds: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          personas: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+        },
+      };
+    }
   }
   ensureSettings();
+
+  // ==================== 自定义布局：元数据定义 ====================
+  const CFM_TAB_META = [
+    { id: "chars", label: "角色卡", icon: "fa-users" },
+    { id: "worldinfo", label: "世界书", icon: "fa-book-atlas" },
+    { id: "presets", label: "预设", icon: "fa-sliders" },
+    { id: "themes", label: "美化", icon: "fa-palette" },
+    { id: "backgrounds", label: "背景", icon: "fa-panorama" },
+    { id: "personas", label: "User", icon: "fa-user-pen" },
+  ];
+  const CFM_ACTION_META = {
+    import: { label: "导入", icon: "fa-file-import" },
+    quickedit: { label: "快速编辑", icon: "fa-pen-to-square" },
+    note: { label: "编辑备注", icon: "fa-pen-to-square" },
+    rename: { label: "重命名", icon: "fa-i-cursor" },
+    export: { label: "导出", icon: "fa-file-export" },
+    delete: { label: "删除", icon: "fa-trash-can" },
+  };
+
+  /** 获取当前生效的标签页列表（已排序、已过滤不可见） */
+  function getVisibleTabs() {
+    const layout = extension_settings[extensionName].customLayout;
+    if (!layout || !layout.tabs) return CFM_TAB_META.map((t) => t.id);
+    return layout.tabs.filter((t) => t.visible !== false).map((t) => t.id);
+  }
+
+  /** 获取当前生效的标签页列表（已排序，含不可见） */
+  function getOrderedTabs() {
+    const layout = extension_settings[extensionName].customLayout;
+    if (!layout || !layout.tabs)
+      return CFM_TAB_META.map((t) => ({ id: t.id, visible: true }));
+    // 确保所有标签页都在列表中（防止新增标签页丢失）
+    const existing = new Set(layout.tabs.map((t) => t.id));
+    const result = [...layout.tabs];
+    for (const meta of CFM_TAB_META) {
+      if (!existing.has(meta.id)) result.push({ id: meta.id, visible: true });
+    }
+    return result;
+  }
+
+  /** 获取某标签页的子功能列表（已排序，含不可见） */
+  function getOrderedActions(tabId) {
+    const layout = extension_settings[extensionName].customLayout;
+    if (!layout || !layout.tabActions || !layout.tabActions[tabId]) {
+      // 返回默认
+      const defaults =
+        extension_settings[extensionName].customLayout?.tabActions?.[tabId];
+      return defaults || [];
+    }
+    return layout.tabActions[tabId];
+  }
+
+  /** 获取某标签页可见的子功能 ID 列表 */
+  function getVisibleActions(tabId) {
+    return getOrderedActions(tabId)
+      .filter((a) => a.visible !== false)
+      .map((a) => a.id);
+  }
+
+  /** 工具栏按钮 ID 映射：tabId -> { actionId -> jQuery selector } */
+  const CFM_ACTION_BTN_MAP = {
+    chars: {
+      import: "#cfm-import-char-btn",
+      quickedit: "#cfm-edit-char-btn",
+      export: "#cfm-export-char-btn",
+      delete: "#cfm-res-delete-char-btn",
+    },
+    worldinfo: {
+      import: "#cfm-import-worldinfo-btn",
+      note: "#cfm-worldinfo-note-btn",
+      rename: "#cfm-worldinfo-rename-btn",
+      export: "#cfm-export-worldinfo-btn",
+      delete: "#cfm-res-delete-worldinfo-btn",
+    },
+    presets: {
+      import: "#cfm-import-preset-btn",
+      note: "#cfm-preset-note-btn",
+      export: "#cfm-export-preset-btn",
+      delete: "#cfm-res-delete-preset-btn",
+    },
+    themes: {
+      import: "#cfm-import-theme-btn",
+      note: "#cfm-theme-note-btn",
+      export: "#cfm-export-theme-btn",
+      delete: "#cfm-res-delete-theme-btn",
+    },
+    backgrounds: {
+      import: "#cfm-import-bg-btn",
+      note: "#cfm-bg-note-btn",
+      export: "#cfm-export-bg-btn",
+      delete: "#cfm-res-delete-bg-btn",
+    },
+    personas: {
+      import: "#cfm-import-persona-btn",
+      note: "#cfm-persona-note-btn",
+      export: "#cfm-export-persona-btn",
+      delete: "#cfm-res-delete-persona-btn",
+    },
+  };
+
+  /** 应用工具栏按钮可见性（根据自定义布局配置） */
+  function applyToolbarVisibility(tabId) {
+    const btnMap = CFM_ACTION_BTN_MAP[tabId];
+    if (!btnMap) return;
+    const visibleActions = getVisibleActions(tabId);
+    for (const [actionId, selector] of Object.entries(btnMap)) {
+      $(selector).toggle(visibleActions.includes(actionId));
+    }
+  }
+
+  /** 对所有标签页应用工具栏按钮可见性 */
+  function applyAllToolbarVisibility() {
+    for (const tabId of Object.keys(CFM_ACTION_BTN_MAP)) {
+      applyToolbarVisibility(tabId);
+    }
+  }
 
   // ==================== 批量创建模板管理 ====================
   function getBatchTemplates(type) {
@@ -3733,7 +3901,7 @@ jQuery(async () => {
       if (existsInSettings && !existsOnServer) {
         // 设置残留但头像已删除，视为需要重新导入
         warnings.push(
-          `Persona "${key}" (${value}) 设置残留但头像已删除，重新导入`
+          `Persona "${key}" (${value}) 设置残留但头像已删除，重新导入`,
         );
       }
 
@@ -3744,7 +3912,7 @@ jQuery(async () => {
       // 如果头像文件不存在，上传默认头像
       if (!existsOnServer) {
         warnings.push(
-          `Persona 头像 "${key}" (${value}) 不存在于服务器，上传默认头像`
+          `Persona 头像 "${key}" (${value}) 不存在于服务器，上传默认头像`,
         );
         try {
           // 使用酒馆原生路径 img/user-default.png
@@ -3757,20 +3925,23 @@ jQuery(async () => {
             formData.append("overwrite_name", key);
             const uploadResp = await fetch("/api/avatars/upload", {
               method: "POST",
-              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              headers: getContext().getRequestHeaders({
+                omitContentType: true,
+              }),
               body: formData,
             });
             if (!uploadResp.ok) {
-              console.error(`[CFM] 上传默认头像失败 (${key}): ${uploadResp.statusText}`);
+              console.error(
+                `[CFM] 上传默认头像失败 (${key}): ${uploadResp.statusText}`,
+              );
             }
           } else {
-            console.error(`[CFM] 获取默认头像失败: ${defaultAvatarResp.statusText}`);
+            console.error(
+              `[CFM] 获取默认头像失败: ${defaultAvatarResp.statusText}`,
+            );
           }
         } catch (uploadErr) {
-          console.error(
-            `[CFM] 上传默认头像失败 (${key}):`,
-            uploadErr
-          );
+          console.error(`[CFM] 上传默认头像失败 (${key}):`, uploadErr);
         }
       }
     }
@@ -3782,7 +3953,7 @@ jQuery(async () => {
       const avatarExists = avatarsList.includes(key);
       if (descExists && avatarExists) {
         warnings.push(
-          `Persona 描述 "${key}" (${pu.personas[key] || key}) 已存在，跳过`
+          `Persona 描述 "${key}" (${pu.personas[key] || key}) 已存在，跳过`,
         );
         continue;
       }
@@ -3814,10 +3985,10 @@ jQuery(async () => {
 
     if (warnings.length) {
       toastr.success(
-        `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`
+        `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`,
       );
       console.warn(
-        `[CFM] PERSONA 导入报告\n====================\n${warnings.join("\n")}`
+        `[CFM] PERSONA 导入报告\n====================\n${warnings.join("\n")}`,
       );
     } else if (importedCount > 0) {
       toastr.success(`已成功导入 ${importedCount} 个 Persona`);
@@ -7805,6 +7976,11 @@ jQuery(async () => {
     } else if (defaultPage !== "last") {
       initialTab = defaultPage;
     }
+    // 如果选中的标签页被隐藏了，回退到第一个可见标签页
+    const visibleTabIds = getVisibleTabs();
+    if (!visibleTabIds.includes(initialTab)) {
+      initialTab = visibleTabIds[0] || "chars";
+    }
     currentResourceType = initialTab;
     selectedTreeNode = null;
     expandedNodes.clear();
@@ -7861,12 +8037,15 @@ jQuery(async () => {
                     </div>
                 </div>
                 <div class="cfm-resource-tabs">
-                    <div class="cfm-tab cfm-tab-active" data-tab="chars"><i class="fa-solid fa-users"></i> 角色卡</div>
-                    <div class="cfm-tab" data-tab="worldinfo"><i class="fa-solid fa-book-atlas"></i> 世界书</div>
-                    <div class="cfm-tab" data-tab="presets"><i class="fa-solid fa-sliders"></i> 预设</div>
-                    <div class="cfm-tab" data-tab="themes"><i class="fa-solid fa-palette"></i> 美化</div>
-                    <div class="cfm-tab" data-tab="backgrounds"><i class="fa-solid fa-panorama"></i> 背景</div>
-                    <div class="cfm-tab" data-tab="personas"><i class="fa-solid fa-user-pen"></i> User</div>
+                    ${getVisibleTabs()
+                      .map((tabId) => {
+                        const meta = CFM_TAB_META.find((m) => m.id === tabId);
+                        if (!meta) return "";
+                        const isActive =
+                          tabId === initialTab ? "cfm-tab-active" : "";
+                        return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
+                      })
+                      .join("")}
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
                     <div class="cfm-search-input-wrapper">
@@ -8190,6 +8369,9 @@ jQuery(async () => {
         `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
       );
     }
+
+    // 应用工具栏按钮可见性（根据自定义布局配置）
+    applyAllToolbarVisibility();
 
     // 资源类型标签切换
     popup.find(".cfm-tab").on("click touchend", function (e) {
@@ -12698,6 +12880,291 @@ jQuery(async () => {
     body.append(section);
   }
 
+  // ==================== 共享：自定义布局配置区域 ====================
+  function renderCustomLayoutSection(body) {
+    const layout = extension_settings[extensionName].customLayout;
+    const orderedTabs = getOrderedTabs();
+
+    // --- 标签页排序/可见性 ---
+    let tabItemsHtml = orderedTabs
+      .map((t) => {
+        const meta = CFM_TAB_META.find((m) => m.id === t.id);
+        if (!meta) return "";
+        const checked = t.visible !== false ? "checked" : "";
+        return `<div class="cfm-layout-item" data-id="${t.id}" draggable="true">
+          <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
+          <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
+          <span class="cfm-layout-label">${meta.label}</span>
+          <label class="cfm-layout-toggle"><input type="checkbox" data-tab-id="${t.id}" ${checked}><span class="cfm-layout-slider"></span></label>
+          <span class="cfm-layout-arrow cfm-layout-arrow-up" data-dir="up" title="上移"><i class="fa-solid fa-chevron-up"></i></span>
+          <span class="cfm-layout-arrow cfm-layout-arrow-down" data-dir="down" title="下移"><i class="fa-solid fa-chevron-down"></i></span>
+        </div>`;
+      })
+      .join("");
+
+    // --- 子功能排序/可见性（按当前选中的标签页展示） ---
+    const section = $(`
+      <div class="cfm-config-section cfm-custom-layout-section">
+        <label>自定义布局</label>
+        <div class="cfm-layout-hint">拖拽或使用箭头调整标签页顺序，开关控制显示/隐藏</div>
+        <div class="cfm-layout-tabs-title">标签页</div>
+        <div class="cfm-layout-tabs-list">
+          ${tabItemsHtml}
+        </div>
+        <div class="cfm-layout-actions-title">子功能 <span class="cfm-layout-actions-tab-hint">（点击上方标签页名称切换）</span></div>
+        <div class="cfm-layout-actions-list"></div>
+      </div>
+    `);
+
+    // 更新箭头边界样式
+    function updateArrowStyles() {
+      const items = section.find(".cfm-layout-tabs-list .cfm-layout-item");
+      items.find(".cfm-layout-arrow").removeClass("cfm-layout-arrow-disabled");
+      items
+        .first()
+        .find(".cfm-layout-arrow-up")
+        .addClass("cfm-layout-arrow-disabled");
+      items
+        .last()
+        .find(".cfm-layout-arrow-down")
+        .addClass("cfm-layout-arrow-disabled");
+    }
+
+    // 保存标签页顺序
+    function saveTabOrder() {
+      const newOrder = [];
+      section.find(".cfm-layout-tabs-list .cfm-layout-item").each(function () {
+        const id = $(this).data("id");
+        const visible = $(this).find("input[type=checkbox]").prop("checked");
+        newOrder.push({ id, visible });
+      });
+      layout.tabs = newOrder;
+      getContext().saveSettingsDebounced();
+      updateArrowStyles();
+    }
+
+    // 标签页可见性切换
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("change", "input[type=checkbox]", function () {
+        // 至少保留一个可见标签页
+        const allChecks = section.find(
+          ".cfm-layout-tabs-list input[type=checkbox]",
+        );
+        const checkedCount = allChecks.filter(":checked").length;
+        if (checkedCount === 0) {
+          $(this).prop("checked", true);
+          toastr.warning("至少需要保留一个标签页");
+          return;
+        }
+        saveTabOrder();
+      });
+
+    // 标签页箭头移动
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("click touchend", ".cfm-layout-arrow", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($(this).hasClass("cfm-layout-arrow-disabled")) return;
+        const item = $(this).closest(".cfm-layout-item");
+        const dir = $(this).data("dir");
+        if (dir === "up" && item.prev().length) {
+          item.insertBefore(item.prev());
+        } else if (dir === "down" && item.next().length) {
+          item.insertAfter(item.next());
+        }
+        saveTabOrder();
+      });
+
+    // 标签页拖拽排序
+    let dragSrcTab = null;
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("dragstart", ".cfm-layout-item", function (e) {
+        dragSrcTab = this;
+        $(this).addClass("cfm-layout-dragging");
+        e.originalEvent.dataTransfer.effectAllowed = "move";
+      });
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("dragover", ".cfm-layout-item", function (e) {
+        e.preventDefault();
+        e.originalEvent.dataTransfer.dropEffect = "move";
+        $(this).addClass("cfm-layout-dragover");
+      });
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("dragleave", ".cfm-layout-item", function () {
+        $(this).removeClass("cfm-layout-dragover");
+      });
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("drop", ".cfm-layout-item", function (e) {
+        e.preventDefault();
+        $(this).removeClass("cfm-layout-dragover");
+        if (dragSrcTab && dragSrcTab !== this) {
+          const srcIdx = $(dragSrcTab).index();
+          const tgtIdx = $(this).index();
+          if (srcIdx < tgtIdx) $(dragSrcTab).insertAfter(this);
+          else $(dragSrcTab).insertBefore(this);
+          saveTabOrder();
+        }
+      });
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("dragend", ".cfm-layout-item", function () {
+        $(this).removeClass("cfm-layout-dragging");
+        section.find(".cfm-layout-dragover").removeClass("cfm-layout-dragover");
+        dragSrcTab = null;
+      });
+
+    // --- 子功能面板 ---
+    let selectedLayoutTab = orderedTabs[0]?.id || "chars";
+
+    function renderActionsPanel(tabId) {
+      selectedLayoutTab = tabId;
+      const actionsList = section.find(".cfm-layout-actions-list");
+      actionsList.empty();
+      const actions = getOrderedActions(tabId);
+      if (!actions.length) {
+        actionsList.html(
+          '<div class="cfm-layout-empty">该标签页无子功能</div>',
+        );
+        return;
+      }
+      actions.forEach((a) => {
+        const meta = CFM_ACTION_META[a.id];
+        if (!meta) return;
+        const checked = a.visible !== false ? "checked" : "";
+        actionsList.append(`<div class="cfm-layout-item cfm-layout-action-item" data-id="${a.id}" draggable="true">
+          <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
+          <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
+          <span class="cfm-layout-label">${meta.label}</span>
+          <label class="cfm-layout-toggle"><input type="checkbox" data-action-id="${a.id}" ${checked}><span class="cfm-layout-slider"></span></label>
+          <span class="cfm-layout-arrow cfm-layout-arrow-up" data-dir="up" title="上移"><i class="fa-solid fa-chevron-up"></i></span>
+          <span class="cfm-layout-arrow cfm-layout-arrow-down" data-dir="down" title="下移"><i class="fa-solid fa-chevron-down"></i></span>
+        </div>`);
+      });
+      updateActionArrowStyles();
+      // 高亮当前选中的标签页名称
+      section
+        .find(".cfm-layout-tabs-list .cfm-layout-item")
+        .removeClass("cfm-layout-item-highlight");
+      section
+        .find(`.cfm-layout-tabs-list .cfm-layout-item[data-id="${tabId}"]`)
+        .addClass("cfm-layout-item-highlight");
+    }
+
+    function updateActionArrowStyles() {
+      const items = section.find(".cfm-layout-actions-list .cfm-layout-item");
+      items.find(".cfm-layout-arrow").removeClass("cfm-layout-arrow-disabled");
+      items
+        .first()
+        .find(".cfm-layout-arrow-up")
+        .addClass("cfm-layout-arrow-disabled");
+      items
+        .last()
+        .find(".cfm-layout-arrow-down")
+        .addClass("cfm-layout-arrow-disabled");
+    }
+
+    function saveActionOrder() {
+      const newOrder = [];
+      section
+        .find(".cfm-layout-actions-list .cfm-layout-item")
+        .each(function () {
+          const id = $(this).data("id");
+          const visible = $(this).find("input[type=checkbox]").prop("checked");
+          newOrder.push({ id, visible });
+        });
+      layout.tabActions[selectedLayoutTab] = newOrder;
+      getContext().saveSettingsDebounced();
+      updateActionArrowStyles();
+    }
+
+    // 子功能可见性切换
+    section
+      .find(".cfm-layout-actions-list")
+      .on("change", "input[type=checkbox]", function () {
+        saveActionOrder();
+      });
+
+    // 子功能箭头移动
+    section
+      .find(".cfm-layout-actions-list")
+      .on("click touchend", ".cfm-layout-arrow", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($(this).hasClass("cfm-layout-arrow-disabled")) return;
+        const item = $(this).closest(".cfm-layout-item");
+        const dir = $(this).data("dir");
+        if (dir === "up" && item.prev().length) {
+          item.insertBefore(item.prev());
+        } else if (dir === "down" && item.next().length) {
+          item.insertAfter(item.next());
+        }
+        saveActionOrder();
+      });
+
+    // 子功能拖拽排序
+    let dragSrcAction = null;
+    section
+      .find(".cfm-layout-actions-list")
+      .on("dragstart", ".cfm-layout-item", function (e) {
+        dragSrcAction = this;
+        $(this).addClass("cfm-layout-dragging");
+        e.originalEvent.dataTransfer.effectAllowed = "move";
+      });
+    section
+      .find(".cfm-layout-actions-list")
+      .on("dragover", ".cfm-layout-item", function (e) {
+        e.preventDefault();
+        e.originalEvent.dataTransfer.dropEffect = "move";
+        $(this).addClass("cfm-layout-dragover");
+      });
+    section
+      .find(".cfm-layout-actions-list")
+      .on("dragleave", ".cfm-layout-item", function () {
+        $(this).removeClass("cfm-layout-dragover");
+      });
+    section
+      .find(".cfm-layout-actions-list")
+      .on("drop", ".cfm-layout-item", function (e) {
+        e.preventDefault();
+        $(this).removeClass("cfm-layout-dragover");
+        if (dragSrcAction && dragSrcAction !== this) {
+          const srcIdx = $(dragSrcAction).index();
+          const tgtIdx = $(this).index();
+          if (srcIdx < tgtIdx) $(dragSrcAction).insertAfter(this);
+          else $(dragSrcAction).insertBefore(this);
+          saveActionOrder();
+        }
+      });
+    section
+      .find(".cfm-layout-actions-list")
+      .on("dragend", ".cfm-layout-item", function () {
+        $(this).removeClass("cfm-layout-dragging");
+        section.find(".cfm-layout-dragover").removeClass("cfm-layout-dragover");
+        dragSrcAction = null;
+      });
+
+    // 点击标签页名称切换子功能面板
+    section
+      .find(".cfm-layout-tabs-list")
+      .on("click", ".cfm-layout-label", function (e) {
+        e.stopPropagation();
+        const tabId = $(this).closest(".cfm-layout-item").data("id");
+        renderActionsPanel(tabId);
+      });
+
+    // 初始渲染第一个标签页的子功能
+    renderActionsPanel(selectedLayoutTab);
+    updateArrowStyles();
+
+    body.append(section);
+  }
+
   function renderConfigBody() {
     const body = $("#cfm-config-body");
     body.empty();
@@ -12748,6 +13215,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.7 自定义布局（共享函数）
+    renderCustomLayoutSection(body);
 
     // 1. 标签导入区域（一键导入 + 单个添加）
     const existingFolderIds = getFolderTagIds();
@@ -13082,6 +13551,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.7 自定义布局（共享函数）
+    renderCustomLayoutSection(body);
 
     // 1. 创建新文件夹（支持空格分隔批量创建）
     const resSelectedHintText =
