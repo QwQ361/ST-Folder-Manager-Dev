@@ -711,6 +711,9 @@ jQuery(async () => {
         },
       };
     }
+    // 世界书激活分组预设：[{name: string, books: string[]}]
+    if (!extension_settings[extensionName].wiActivePresets)
+      extension_settings[extensionName].wiActivePresets = [];
   }
   ensureSettings();
 
@@ -773,7 +776,14 @@ jQuery(async () => {
         worldinfo: ["import", "note", "rename", "export", "delete"],
         presets: ["import", "note", "rename", "export", "delete"],
         themes: ["import", "note", "rename", "export", "delete"],
-        backgrounds: ["import", "note", "rename", "default", "export", "delete"],
+        backgrounds: [
+          "import",
+          "note",
+          "rename",
+          "default",
+          "export",
+          "delete",
+        ],
         personas: ["import", "note", "export", "delete"],
       };
       const refOrder = defaultOrder[tabId] || Object.keys(knownIds);
@@ -6381,6 +6391,395 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 世界书激活状态管理 ====================
+  /**
+   * 获取当前角色关联的世界书名称集合（主绑定 + charLore辅助世界书）
+   * 这些世界书的 toggle 应锁定不可操作
+   */
+  async function getCharBoundWorldBooks() {
+    const bound = new Set();
+    try {
+      const wiModule = await import("../../../world-info.js");
+      const worldInfoObj = wiModule.world_info;
+      // 当前角色的主绑定世界书
+      const ctx = getContext();
+      const charId = ctx.characterId;
+      if (charId !== undefined && charId !== null) {
+        const characters = ctx.characters || getCharacters();
+        const ch = characters[charId];
+        if (ch?.data?.extensions?.world) {
+          bound.add(ch.data.extensions.world);
+        }
+      }
+      // charLore 中所有角色关联的世界书
+      if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
+        for (const entry of worldInfoObj.charLore) {
+          if (entry.extraBooks && Array.isArray(entry.extraBooks)) {
+            entry.extraBooks.forEach((b) => bound.add(b));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 获取角色关联世界书失败", e);
+    }
+    return bound;
+  }
+
+  /**
+   * 判断世界书是否已在全局激活列表中
+   */
+  async function isWorldInfoActive(name) {
+    try {
+      const wiModule = await import("../../../world-info.js");
+      return wiModule.selected_world_info.includes(name);
+    } catch (e) {
+      // fallback: 从 DOM 读取
+      const select = $("#world_info");
+      const selectedNames = [];
+      select.find("option:selected").each(function () {
+        selectedNames.push($(this).text());
+      });
+      return selectedNames.includes(name);
+    }
+  }
+
+  /**
+   * 批量获取所有世界书的激活状态
+   * @returns {Set<string>} 当前激活的世界书名称集合
+   */
+  async function getActiveWorldInfoSet() {
+    try {
+      const wiModule = await import("../../../world-info.js");
+      return new Set(wiModule.selected_world_info);
+    } catch (e) {
+      const select = $("#world_info");
+      const names = new Set();
+      select.find("option:selected").each(function () {
+        names.add($(this).text());
+      });
+      return names;
+    }
+  }
+
+  /**
+   * 切换世界书的全局激活状态
+   * @param {string} name - 世界书名称
+   * @param {boolean} activate - true=激活, false=取消激活
+   */
+  async function toggleWorldInfoActivation(name, activate) {
+    try {
+      const wiModule = await import("../../../world-info.js");
+      const selectedWI = wiModule.selected_world_info;
+      const worldNames = wiModule.world_names;
+      const idx = selectedWI.indexOf(name);
+      if (activate && idx === -1) {
+        selectedWI.push(name);
+      } else if (!activate && idx !== -1) {
+        selectedWI.splice(idx, 1);
+      }
+      // 同步 DOM: 更新 #world_info option 的 selected 状态
+      const wiIdx = worldNames.indexOf(name);
+      if (wiIdx !== -1) {
+        $("#world_info")
+          .find(`option[value='${wiIdx}']`)
+          .prop("selected", activate);
+      }
+      $("#world_info").trigger("change");
+    } catch (e) {
+      console.error("[CFM] 切换世界书激活状态失败", e);
+    }
+  }
+
+  /**
+   * 批量设置世界书激活状态（用于加载分组预设）
+   * @param {string[]} bookNames - 要激活的世界书名称列表
+   * @param {Set<string>} charBound - 角色关联的世界书（不操作）
+   */
+  async function applyWorldInfoPreset(bookNames, charBound) {
+    try {
+      const wiModule = await import("../../../world-info.js");
+      const selectedWI = wiModule.selected_world_info;
+      const worldNames = wiModule.world_names;
+      const targetSet = new Set(bookNames);
+      // 先取消所有非角色关联的世界书
+      const toRemove = [];
+      for (let i = selectedWI.length - 1; i >= 0; i--) {
+        if (!charBound.has(selectedWI[i]) && !targetSet.has(selectedWI[i])) {
+          toRemove.push(selectedWI[i]);
+          selectedWI.splice(i, 1);
+        }
+      }
+      // 再激活目标列表中未激活的
+      for (const name of bookNames) {
+        if (!charBound.has(name) && !selectedWI.includes(name)) {
+          selectedWI.push(name);
+        }
+      }
+      // 同步 DOM
+      $("#world_info")
+        .find("option")
+        .each(function () {
+          const optName = $(this).text();
+          if (charBound.has(optName)) return; // 不动角色关联的
+          $(this).prop("selected", selectedWI.includes(optName));
+        });
+      $("#world_info").trigger("change");
+    } catch (e) {
+      console.error("[CFM] 应用世界书分组预设失败", e);
+    }
+  }
+
+  // ==================== 世界书分组预设管理 ====================
+  function getWiActivePresets() {
+    return extension_settings[extensionName].wiActivePresets || [];
+  }
+  function saveWiActivePreset(name, books) {
+    const presets = getWiActivePresets();
+    const existing = presets.find((p) => p.name === name);
+    if (existing) {
+      existing.books = books;
+    } else {
+      presets.push({ name, books });
+    }
+    extension_settings[extensionName].wiActivePresets = presets;
+    getContext().saveSettingsDebounced();
+  }
+  function deleteWiActivePreset(name) {
+    const presets = getWiActivePresets();
+    extension_settings[extensionName].wiActivePresets = presets.filter(
+      (p) => p.name !== name,
+    );
+    getContext().saveSettingsDebounced();
+  }
+  function renameWiActivePreset(oldName, newName) {
+    const presets = getWiActivePresets();
+    const p = presets.find((p) => p.name === oldName);
+    if (p) {
+      p.name = newName;
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 显示世界书激活分组统一面板（保存 + 已有分组列表）
+   */
+  async function showWiPresetPanel() {
+    if ($("#cfm-wi-preset-panel-overlay").length > 0) return;
+    const wiActiveSet = await getActiveWorldInfoSet();
+    const wiCharBound = await getCharBoundWorldBooks();
+    const savableBooks = [...wiActiveSet].filter((b) => !wiCharBound.has(b));
+    const presets = getWiActivePresets();
+
+    // 构建已有分组列表
+    const presetsHtml =
+      presets.length === 0
+        ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
+        : presets
+            .map(
+              (p) => `
+        <div class="cfm-wi-preset-item" data-preset-name="${escapeHtml(p.name)}">
+          <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+          <span class="cfm-wi-preset-item-count">${p.books.length} 个</span>
+          <span class="cfm-wi-preset-item-actions">
+            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用此分组"></i>
+            <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
+            <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
+          </span>
+        </div>
+      `,
+            )
+            .join("");
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-wi-preset-panel-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-panel">
+          <div class="cfm-edit-popup-title"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>世界书激活分组</div>
+          <div class="cfm-wi-preset-save-section">
+            <div class="cfm-wi-preset-save-row">
+              <input type="text" class="cfm-edit-input" id="cfm-wi-preset-name-input" placeholder="输入分组名称，保存当前激活的 ${savableBooks.length} 个世界书">
+              <button class="cfm-edit-popup-confirm" id="cfm-wi-preset-save-confirm" ${savableBooks.length === 0 ? "disabled" : ""}><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+            </div>
+            ${savableBooks.length === 0 ? '<div class="cfm-wi-preset-save-hint">当前没有手动激活的世界书可保存</div>' : ""}
+          </div>
+          <div class="cfm-wi-preset-divider"></div>
+          <div class="cfm-wi-preset-list-section">
+            <div class="cfm-wi-preset-list-title">已保存的分组</div>
+            <div class="cfm-wi-preset-list">${presetsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">关闭</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    overlay.find("#cfm-wi-preset-name-input").focus();
+
+    // 关闭
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+
+    // 保存当前分组
+    overlay.find("#cfm-wi-preset-name-input").on("keydown", (e) => {
+      if (e.key === "Enter")
+        overlay.find("#cfm-wi-preset-save-confirm").trigger("click");
+      if (e.key === "Escape") overlay.remove();
+    });
+    overlay.find("#cfm-wi-preset-save-confirm").on("click", () => {
+      if (savableBooks.length === 0) return;
+      const name = overlay.find("#cfm-wi-preset-name-input").val().trim();
+      if (!name) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existing = getWiActivePresets().find((p) => p.name === name);
+      if (existing) {
+        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+      }
+      saveWiActivePreset(name, savableBooks);
+      toastr.success(
+        `已保存激活分组「${name}」（${savableBooks.length} 个世界书）`,
+      );
+      overlay.remove();
+    });
+
+    // 应用分组
+    overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
+      e.stopPropagation();
+      const presetName = $(this)
+        .closest(".cfm-wi-preset-item")
+        .data("preset-name");
+      const preset = getWiActivePresets().find((p) => p.name === presetName);
+      if (!preset) return;
+      await applyWorldInfoPreset(preset.books, wiCharBound);
+      toastr.success(`已应用激活分组「${preset.name}」`);
+      overlay.remove();
+      renderWorldInfoView();
+    });
+
+    // 编辑分组
+    overlay.find(".cfm-wi-preset-edit").on("click", async function (e) {
+      e.stopPropagation();
+      const presetName = $(this)
+        .closest(".cfm-wi-preset-item")
+        .data("preset-name");
+      const preset = getWiActivePresets().find((p) => p.name === presetName);
+      if (!preset) return;
+      overlay.remove();
+      showWiPresetEditPopup(preset);
+    });
+
+    // 删除分组
+    overlay.find(".cfm-wi-preset-del").on("click", function (e) {
+      e.stopPropagation();
+      const presetName = $(this)
+        .closest(".cfm-wi-preset-item")
+        .data("preset-name");
+      if (!confirm(`确定删除激活分组「${presetName}」？`)) return;
+      deleteWiActivePreset(presetName);
+      toastr.success(`已删除激活分组「${presetName}」`);
+      // 刷新列表
+      $(this).closest(".cfm-wi-preset-item").remove();
+      if (overlay.find(".cfm-wi-preset-item").length === 0) {
+        overlay
+          .find(".cfm-wi-preset-list")
+          .html('<div class="cfm-wi-preset-empty">暂无已保存的分组</div>');
+      }
+    });
+  }
+
+  /**
+   * 显示编辑世界书激活分组的弹窗（可修改名称和包含的世界书）
+   * @param {Object} preset - {name: string, books: string[]}
+   */
+  async function showWiPresetEditPopup(preset) {
+    if ($("#cfm-wi-preset-edit-overlay").length > 0) return;
+    const allNames = await getWorldInfoNames();
+    const charBound = await getCharBoundWorldBooks();
+    const bookSet = new Set(preset.books);
+    const booksHtml = allNames
+      .filter((n) => !charBound.has(n))
+      .map((n) => {
+        const checked = bookSet.has(n) ? "checked" : "";
+        return `<label class="cfm-wi-preset-edit-item">
+          <input type="checkbox" value="${escapeHtml(n)}" ${checked}>
+          <i class="fa-solid fa-book" style="color:#a6e3a1;"></i>
+          <span>${escapeHtml(n)}</span>
+        </label>`;
+      })
+      .join("");
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-wi-preset-edit-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
+          <div class="cfm-edit-popup-title">编辑激活分组</div>
+          <div class="cfm-edit-field">
+            <label>分组名称</label>
+            <input type="text" class="cfm-edit-input" id="cfm-wi-preset-edit-name" value="${escapeHtml(preset.name)}">
+          </div>
+          <div class="cfm-edit-field">
+            <label>包含的世界书 <span class="cfm-wi-preset-edit-hint">（角色关联的世界书已排除）</span></label>
+            <div class="cfm-wi-preset-edit-search">
+              <input type="text" class="cfm-edit-input" id="cfm-wi-preset-edit-filter" placeholder="搜索世界书...">
+            </div>
+            <div class="cfm-wi-preset-edit-list">${booksHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">取消</button>
+            <button class="cfm-edit-popup-confirm">保存</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    // 搜索过滤
+    overlay.find("#cfm-wi-preset-edit-filter").on("input", function () {
+      const q = $(this).val().toLowerCase().trim();
+      overlay.find(".cfm-wi-preset-edit-item").each(function () {
+        const name = $(this).find("span").text().toLowerCase();
+        $(this).toggle(!q || name.includes(q));
+      });
+    });
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+    overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+      const newName = overlay.find("#cfm-wi-preset-edit-name").val().trim();
+      if (!newName) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      // 检查重名（排除自身）
+      const existingOther = getWiActivePresets().find(
+        (p) => p.name === newName && p.name !== preset.name,
+      );
+      if (existingOther) {
+        toastr.warning(`分组名称「${newName}」已被使用`);
+        return;
+      }
+      const newBooks = [];
+      overlay.find(".cfm-wi-preset-edit-item input:checked").each(function () {
+        newBooks.push($(this).val());
+      });
+      if (newBooks.length === 0) {
+        toastr.warning("请至少选择一个世界书");
+        return;
+      }
+      // 如果名称变了，先重命名
+      if (newName !== preset.name) {
+        renameWiActivePreset(preset.name, newName);
+      }
+      // 更新世界书列表
+      saveWiActivePreset(newName, newBooks);
+      toastr.success(
+        `已更新激活分组「${newName}」（${newBooks.length} 个世界书）`,
+      );
+      overlay.remove();
+    });
+  }
+
   // ==================== 世界书备注编辑模式 ====================
   let cfmWorldInfoNoteMode = false;
   let cfmWorldInfoNoteSelected = new Set();
@@ -8268,6 +8667,7 @@ jQuery(async () => {
                     </div>
                     <div class="cfm-right-pane">
                         <div class="cfm-right-header">
+                            <button class="cfm-edit-char-btn" id="cfm-wi-preset-btn" title="世界书激活分组"><i class="fa-solid fa-layer-group"></i></button>
                             <span class="cfm-rh-path" id="cfm-worldinfo-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-worldinfo-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-worldinfo-btn" title="导入世界书"><i class="fa-solid fa-file-import"></i></button>
@@ -10119,6 +10519,13 @@ jQuery(async () => {
       e.target.value = null;
     });
 
+    // 世界书激活分组按钮
+    popup.find("#cfm-wi-preset-btn").on("click touchend", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showWiPresetPanel();
+    });
+
     // 世界书导入按钮
     popup.find("#cfm-import-worldinfo-btn").on("click touchend", function (e) {
       e.preventDefault();
@@ -11071,7 +11478,9 @@ jQuery(async () => {
       }
     } else {
       // 需要异步获取世界书名称列表
-      getWorldInfoNames().then((names) => {
+      getWorldInfoNames().then(async (names) => {
+        const wiActiveSet = await getActiveWorldInfoSet();
+        const wiCharBound = await getCharBoundWorldBooks();
         let searchPool = names;
         if (scope === "current" && selectedWorldInfoFolder) {
           if (selectedWorldInfoFolder === "__ungrouped__") {
@@ -11155,9 +11564,19 @@ jQuery(async () => {
           const singleRenameBtn = noModeActive
             ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
+          // 世界书激活开关
+          const wiIsActive = wiActiveSet.has(n);
+          const wiIsBound = wiCharBound.has(n);
+          const toggleTitle = wiIsBound
+            ? "角色关联世界书（不可手动切换）"
+            : wiIsActive
+              ? "点击取消激活"
+              : "点击激活";
+          const toggleHtml = `<div class="cfm-wi-toggle ${wiIsActive ? "cfm-wi-toggle-on" : ""} ${wiIsBound ? "cfm-wi-toggle-locked" : ""}" title="${toggleTitle}" data-wi-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${wiIsActive ? "on" : "off"}"></i></div>`;
           const row = $(`
             <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
+              ${toggleHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
               ${singleRenameBtn}
@@ -11165,6 +11584,27 @@ jQuery(async () => {
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
           `);
+          // 世界书激活开关事件（搜索视图）
+          row.find(".cfm-wi-toggle").on("click touchend", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (wiIsBound) {
+              toastr.warning("角色关联的世界书不可手动切换");
+              return;
+            }
+            const newState = !wiActiveSet.has(n);
+            toggleWorldInfoActivation(n, newState).then(() => {
+              if (newState) wiActiveSet.add(n);
+              else wiActiveSet.delete(n);
+              const el = $(this);
+              el.toggleClass("cfm-wi-toggle-on", newState);
+              el.find("i").attr(
+                "class",
+                `fa-solid fa-toggle-${newState ? "on" : "off"}`,
+              );
+              el.attr("title", newState ? "点击取消激活" : "点击激活");
+            });
+          });
           row.find(".cfm-row-star").on("click touchend", (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -11192,7 +11632,7 @@ jQuery(async () => {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
-                ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+                ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle",
               ).length
             )
               return;
@@ -12724,17 +13164,23 @@ jQuery(async () => {
       // --- 刷新标签栏（自定义布局生效） ---
       const visibleTabs = getVisibleTabs();
       // 如果当前标签被隐藏，切换到第一个可见标签
-      if (visibleTabs.length > 0 && !visibleTabs.includes(currentResourceType)) {
+      if (
+        visibleTabs.length > 0 &&
+        !visibleTabs.includes(currentResourceType)
+      ) {
         currentResourceType = visibleTabs[0];
       }
       const tabsContainer = $("#cfm-overlay .cfm-resource-tabs");
       if (tabsContainer.length > 0) {
-        const newTabsHtml = visibleTabs.map((tabId) => {
-          const meta = CFM_TAB_META.find((m) => m.id === tabId);
-          if (!meta) return "";
-          const isActive = tabId === currentResourceType ? "cfm-tab-active" : "";
-          return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
-        }).join("");
+        const newTabsHtml = visibleTabs
+          .map((tabId) => {
+            const meta = CFM_TAB_META.find((m) => m.id === tabId);
+            if (!meta) return "";
+            const isActive =
+              tabId === currentResourceType ? "cfm-tab-active" : "";
+            return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
+          })
+          .join("");
         tabsContainer.html(newTabsHtml);
         // 重新绑定标签点击事件
         tabsContainer.find(".cfm-tab").on("click touchend", function (e) {
@@ -12757,29 +13203,57 @@ jQuery(async () => {
           if (cfmPersonaNoteMode) exitPersonaNoteMode();
           if (cfmPresetRenameMode) exitPresetRenameMode();
           if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
-          $("#cfm-overlay").find("#cfm-chars-view").toggle(tab === "chars");
-          $("#cfm-overlay").find("#cfm-presets-view").toggle(tab === "presets");
-          $("#cfm-overlay").find("#cfm-worldinfo-view").toggle(tab === "worldinfo");
-          $("#cfm-overlay").find("#cfm-themes-view").toggle(tab === "themes");
-          $("#cfm-overlay").find("#cfm-backgrounds-view").toggle(tab === "backgrounds");
-          $("#cfm-overlay").find("#cfm-personas-view").toggle(tab === "personas");
+          $("#cfm-overlay")
+            .find("#cfm-chars-view")
+            .toggle(tab === "chars");
+          $("#cfm-overlay")
+            .find("#cfm-presets-view")
+            .toggle(tab === "presets");
+          $("#cfm-overlay")
+            .find("#cfm-worldinfo-view")
+            .toggle(tab === "worldinfo");
+          $("#cfm-overlay")
+            .find("#cfm-themes-view")
+            .toggle(tab === "themes");
+          $("#cfm-overlay")
+            .find("#cfm-backgrounds-view")
+            .toggle(tab === "backgrounds");
+          $("#cfm-overlay")
+            .find("#cfm-personas-view")
+            .toggle(tab === "personas");
           if (tab === "chars") {
             $("#cfm-overlay").find("#cfm-btn-copymode").show();
             const btn = $("#cfm-btn-copymode");
             btn.toggleClass("cfm-copymode-active", cfmCopyMode);
-            btn.html(`<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`);
+            btn.html(
+              `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
+            );
           } else {
             $("#cfm-overlay").find("#cfm-btn-copymode").show();
             const btn = $("#cfm-btn-copymode");
             btn.toggleClass("cfm-copymode-active", resCopyMode);
-            btn.html(`<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`);
+            btn.html(
+              `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
+            );
           }
-          $("#cfm-overlay").find("#cfm-global-search-bar").toggle(tab === "chars");
-          $("#cfm-overlay").find("#cfm-preset-search-bar").toggle(tab === "presets");
-          $("#cfm-overlay").find("#cfm-worldinfo-search-bar").toggle(tab === "worldinfo");
-          $("#cfm-overlay").find("#cfm-theme-search-bar").toggle(tab === "themes");
-          $("#cfm-overlay").find("#cfm-bg-search-bar").toggle(tab === "backgrounds");
-          $("#cfm-overlay").find("#cfm-persona-search-bar").toggle(tab === "personas");
+          $("#cfm-overlay")
+            .find("#cfm-global-search-bar")
+            .toggle(tab === "chars");
+          $("#cfm-overlay")
+            .find("#cfm-preset-search-bar")
+            .toggle(tab === "presets");
+          $("#cfm-overlay")
+            .find("#cfm-worldinfo-search-bar")
+            .toggle(tab === "worldinfo");
+          $("#cfm-overlay")
+            .find("#cfm-theme-search-bar")
+            .toggle(tab === "themes");
+          $("#cfm-overlay")
+            .find("#cfm-bg-search-bar")
+            .toggle(tab === "backgrounds");
+          $("#cfm-overlay")
+            .find("#cfm-persona-search-bar")
+            .toggle(tab === "personas");
           if (tab === "presets") renderPresetsView();
           else if (tab === "worldinfo") renderWorldInfoView();
           else if (tab === "themes") renderThemesView();
@@ -12789,19 +13263,43 @@ jQuery(async () => {
       }
       // --- 刷新视图和工具栏 ---
       // 确保正确的视图显示
-      $("#cfm-overlay").find("#cfm-chars-view").toggle(currentResourceType === "chars");
-      $("#cfm-overlay").find("#cfm-presets-view").toggle(currentResourceType === "presets");
-      $("#cfm-overlay").find("#cfm-worldinfo-view").toggle(currentResourceType === "worldinfo");
-      $("#cfm-overlay").find("#cfm-themes-view").toggle(currentResourceType === "themes");
-      $("#cfm-overlay").find("#cfm-backgrounds-view").toggle(currentResourceType === "backgrounds");
-      $("#cfm-overlay").find("#cfm-personas-view").toggle(currentResourceType === "personas");
+      $("#cfm-overlay")
+        .find("#cfm-chars-view")
+        .toggle(currentResourceType === "chars");
+      $("#cfm-overlay")
+        .find("#cfm-presets-view")
+        .toggle(currentResourceType === "presets");
+      $("#cfm-overlay")
+        .find("#cfm-worldinfo-view")
+        .toggle(currentResourceType === "worldinfo");
+      $("#cfm-overlay")
+        .find("#cfm-themes-view")
+        .toggle(currentResourceType === "themes");
+      $("#cfm-overlay")
+        .find("#cfm-backgrounds-view")
+        .toggle(currentResourceType === "backgrounds");
+      $("#cfm-overlay")
+        .find("#cfm-personas-view")
+        .toggle(currentResourceType === "personas");
       // 确保正确的搜索栏显示
-      $("#cfm-overlay").find("#cfm-global-search-bar").toggle(currentResourceType === "chars");
-      $("#cfm-overlay").find("#cfm-preset-search-bar").toggle(currentResourceType === "presets");
-      $("#cfm-overlay").find("#cfm-worldinfo-search-bar").toggle(currentResourceType === "worldinfo");
-      $("#cfm-overlay").find("#cfm-theme-search-bar").toggle(currentResourceType === "themes");
-      $("#cfm-overlay").find("#cfm-bg-search-bar").toggle(currentResourceType === "backgrounds");
-      $("#cfm-overlay").find("#cfm-persona-search-bar").toggle(currentResourceType === "personas");
+      $("#cfm-overlay")
+        .find("#cfm-global-search-bar")
+        .toggle(currentResourceType === "chars");
+      $("#cfm-overlay")
+        .find("#cfm-preset-search-bar")
+        .toggle(currentResourceType === "presets");
+      $("#cfm-overlay")
+        .find("#cfm-worldinfo-search-bar")
+        .toggle(currentResourceType === "worldinfo");
+      $("#cfm-overlay")
+        .find("#cfm-theme-search-bar")
+        .toggle(currentResourceType === "themes");
+      $("#cfm-overlay")
+        .find("#cfm-bg-search-bar")
+        .toggle(currentResourceType === "backgrounds");
+      $("#cfm-overlay")
+        .find("#cfm-persona-search-bar")
+        .toggle(currentResourceType === "personas");
       renderLeftTree();
       renderRightPane();
       if (currentResourceType === "presets") renderPresetsView();
@@ -13155,7 +13653,8 @@ jQuery(async () => {
       });
 
     // --- 子功能面板 ---
-    let selectedLayoutTab = currentResourceType || orderedTabs[0]?.id || "chars";
+    let selectedLayoutTab =
+      currentResourceType || orderedTabs[0]?.id || "chars";
 
     function renderActionsPanel(tabId) {
       selectedLayoutTab = tabId;
@@ -17601,6 +18100,10 @@ jQuery(async () => {
       names = await getWorldInfoNames();
     }
 
+    // 获取世界书激活状态和角色关联世界书（用于 toggle 开关）
+    const wiActiveSet = await getActiveWorldInfoSet();
+    const wiCharBound = await getCharBoundWorldBooks();
+
     leftTree.empty();
     const tree = getResFolderTree("worldinfo");
     const allFolderIds = getResFolderIds("worldinfo");
@@ -18151,7 +18654,7 @@ jQuery(async () => {
         }));
         rightList.append(row);
       }
-      // 世界书行（带星标 + 多选支持 + 备注）
+      // 世界书行（带星标 + 多选支持 + 备注 + 激活开关）
       for (const n of displayItems) {
         const fav = isResFavorite("worldinfo", n);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
@@ -18190,9 +18693,19 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
+        // 世界书激活开关
+        const wiIsActive = wiActiveSet.has(n);
+        const wiIsBound = wiCharBound.has(n);
+        const toggleTitle = wiIsBound
+          ? "角色关联世界书（不可手动切换）"
+          : wiIsActive
+            ? "点击取消激活"
+            : "点击激活";
+        const toggleHtml = `<div class="cfm-wi-toggle ${wiIsActive ? "cfm-wi-toggle-on" : ""} ${wiIsBound ? "cfm-wi-toggle-locked" : ""}" title="${toggleTitle}" data-wi-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${wiIsActive ? "on" : "off"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
+            ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
             <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
             ${singleRenameBtn}
@@ -18200,6 +18713,29 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
+        // 世界书激活开关事件
+        row.find(".cfm-wi-toggle").on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (wiIsBound) {
+            toastr.warning("角色关联的世界书不可手动切换");
+            return;
+          }
+          const newState = !wiActiveSet.has(n);
+          toggleWorldInfoActivation(n, newState).then(() => {
+            // 更新本地缓存
+            if (newState) wiActiveSet.add(n);
+            else wiActiveSet.delete(n);
+            // 更新 toggle 按钮外观
+            const el = $(this);
+            el.toggleClass("cfm-wi-toggle-on", newState);
+            el.find("i").attr(
+              "class",
+              `fa-solid fa-toggle-${newState ? "on" : "off"}`,
+            );
+            el.attr("title", newState ? "点击取消激活" : "点击激活");
+          });
+        });
         row.find(".cfm-row-star").on("click touchend", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -18237,7 +18773,7 @@ jQuery(async () => {
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle",
             ).length
           )
             return;
