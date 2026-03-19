@@ -12668,6 +12668,87 @@ jQuery(async () => {
     $(document).off("click.cfmIconDropdown");
     $("#cfm-config-overlay").remove();
     if ($("#cfm-overlay").length > 0) {
+      // --- 刷新标签栏（自定义布局生效） ---
+      const visibleTabs = getVisibleTabs();
+      // 如果当前标签被隐藏，切换到第一个可见标签
+      if (visibleTabs.length > 0 && !visibleTabs.includes(currentResourceType)) {
+        currentResourceType = visibleTabs[0];
+      }
+      const tabsContainer = $("#cfm-overlay .cfm-resource-tabs");
+      if (tabsContainer.length > 0) {
+        const newTabsHtml = visibleTabs.map((tabId) => {
+          const meta = CFM_TAB_META.find((m) => m.id === tabId);
+          if (!meta) return "";
+          const isActive = tabId === currentResourceType ? "cfm-tab-active" : "";
+          return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
+        }).join("");
+        tabsContainer.html(newTabsHtml);
+        // 重新绑定标签点击事件
+        tabsContainer.find(".cfm-tab").on("click touchend", function (e) {
+          e.preventDefault();
+          const tab = $(this).data("tab");
+          if (tab === currentResourceType) return;
+          currentResourceType = tab;
+          $("#cfm-overlay .cfm-tab").removeClass("cfm-tab-active");
+          $(this).addClass("cfm-tab-active");
+          cfmMultiSelectMode = false;
+          clearMultiSelect();
+          cfmMultiSelectRangeMode = false;
+          $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+          if (cfmExportMode) exitExportMode();
+          if (cfmResDeleteMode) exitResDeleteMode();
+          if (cfmThemeNoteMode) exitThemeNoteMode();
+          if (cfmBgNoteMode) exitBgNoteMode();
+          if (cfmPresetNoteMode) exitPresetNoteMode();
+          if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+          if (cfmPersonaNoteMode) exitPersonaNoteMode();
+          if (cfmPresetRenameMode) exitPresetRenameMode();
+          if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+          $("#cfm-overlay").find("#cfm-chars-view").toggle(tab === "chars");
+          $("#cfm-overlay").find("#cfm-presets-view").toggle(tab === "presets");
+          $("#cfm-overlay").find("#cfm-worldinfo-view").toggle(tab === "worldinfo");
+          $("#cfm-overlay").find("#cfm-themes-view").toggle(tab === "themes");
+          $("#cfm-overlay").find("#cfm-backgrounds-view").toggle(tab === "backgrounds");
+          $("#cfm-overlay").find("#cfm-personas-view").toggle(tab === "personas");
+          if (tab === "chars") {
+            $("#cfm-overlay").find("#cfm-btn-copymode").show();
+            const btn = $("#cfm-btn-copymode");
+            btn.toggleClass("cfm-copymode-active", cfmCopyMode);
+            btn.html(`<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`);
+          } else {
+            $("#cfm-overlay").find("#cfm-btn-copymode").show();
+            const btn = $("#cfm-btn-copymode");
+            btn.toggleClass("cfm-copymode-active", resCopyMode);
+            btn.html(`<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`);
+          }
+          $("#cfm-overlay").find("#cfm-global-search-bar").toggle(tab === "chars");
+          $("#cfm-overlay").find("#cfm-preset-search-bar").toggle(tab === "presets");
+          $("#cfm-overlay").find("#cfm-worldinfo-search-bar").toggle(tab === "worldinfo");
+          $("#cfm-overlay").find("#cfm-theme-search-bar").toggle(tab === "themes");
+          $("#cfm-overlay").find("#cfm-bg-search-bar").toggle(tab === "backgrounds");
+          $("#cfm-overlay").find("#cfm-persona-search-bar").toggle(tab === "personas");
+          if (tab === "presets") renderPresetsView();
+          else if (tab === "worldinfo") renderWorldInfoView();
+          else if (tab === "themes") renderThemesView();
+          else if (tab === "backgrounds") renderBackgroundsView();
+          else if (tab === "personas") renderPersonasView();
+        });
+      }
+      // --- 刷新视图和工具栏 ---
+      // 确保正确的视图显示
+      $("#cfm-overlay").find("#cfm-chars-view").toggle(currentResourceType === "chars");
+      $("#cfm-overlay").find("#cfm-presets-view").toggle(currentResourceType === "presets");
+      $("#cfm-overlay").find("#cfm-worldinfo-view").toggle(currentResourceType === "worldinfo");
+      $("#cfm-overlay").find("#cfm-themes-view").toggle(currentResourceType === "themes");
+      $("#cfm-overlay").find("#cfm-backgrounds-view").toggle(currentResourceType === "backgrounds");
+      $("#cfm-overlay").find("#cfm-personas-view").toggle(currentResourceType === "personas");
+      // 确保正确的搜索栏显示
+      $("#cfm-overlay").find("#cfm-global-search-bar").toggle(currentResourceType === "chars");
+      $("#cfm-overlay").find("#cfm-preset-search-bar").toggle(currentResourceType === "presets");
+      $("#cfm-overlay").find("#cfm-worldinfo-search-bar").toggle(currentResourceType === "worldinfo");
+      $("#cfm-overlay").find("#cfm-theme-search-bar").toggle(currentResourceType === "themes");
+      $("#cfm-overlay").find("#cfm-bg-search-bar").toggle(currentResourceType === "backgrounds");
+      $("#cfm-overlay").find("#cfm-persona-search-bar").toggle(currentResourceType === "personas");
       renderLeftTree();
       renderRightPane();
       if (currentResourceType === "presets") renderPresetsView();
@@ -12675,6 +12756,7 @@ jQuery(async () => {
       else if (currentResourceType === "themes") renderThemesView();
       else if (currentResourceType === "backgrounds") renderBackgroundsView();
       else if (currentResourceType === "personas") renderPersonasView();
+      applyAllToolbarVisibility();
     }
   }
 
