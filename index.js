@@ -6965,15 +6965,31 @@ jQuery(async () => {
 
         let mode = "stack"; // 默认叠加
         if (otherApplied.length > 0) {
-          const otherNames = otherApplied.map((i) => currentPresets[i].name).join("、");
+          // 构建已应用分组的详细信息
+          let detailHtml = '';
+          for (const oi of otherApplied) {
+            const op = currentPresets[oi];
+            const bindSummary = getWiPresetBindSummary(op);
+            const scopeLabel = op.scope === "bound" ? "绑定" : "全局";
+            let info = `<div style="margin:4px 0;padding:4px 8px;border-radius:4px;background:rgba(255,255,255,0.05);">`;
+            info += `<span style="color:#f9e2af;">「${escapeHtml(op.name)}」</span>`;
+            info += `<span style="font-size:11px;margin-left:6px;opacity:0.7;">${op.books.length} 个世界书 · ${scopeLabel}</span>`;
+            if (bindSummary) {
+              info += `<div style="font-size:11px;margin-top:2px;opacity:0.7;"><i class="fa-solid fa-link" style="margin-right:4px;"></i>${escapeHtml(bindSummary)}</div>`;
+            }
+            info += `</div>`;
+            detailHtml += info;
+          }
           // 弹出三选一确认框
           const choice = await new Promise((resolve) => {
             const confirmOverlay = $(`
               <div class="cfm-edit-popup-overlay" style="z-index:100001;">
-                <div class="cfm-edit-popup" style="max-width:380px;">
+                <div class="cfm-edit-popup" style="max-width:420px;">
                   <div class="cfm-edit-popup-title">应用方式</div>
                   <div class="cfm-edit-field" style="font-size:13px;line-height:1.6;">
-                    当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：
+                    当前已有以下分组处于应用状态：
+                    ${detailHtml}
+                    请选择应用方式：
                   </div>
                   <div class="cfm-edit-popup-actions" style="gap:8px;">
                     <button class="cfm-edit-popup-cancel" data-choice="cancel">取消</button>
