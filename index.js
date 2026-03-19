@@ -3721,32 +3721,50 @@ jQuery(async () => {
 
     // 合并 personas
     for (const [key, value] of Object.entries(data.personas)) {
-      if (key in pu.personas) {
+      const existsInSettings = key in pu.personas;
+      const existsOnServer = avatarsList.includes(key);
+
+      if (existsInSettings && existsOnServer) {
+        // 设置和头像文件都存在，真正的重复，跳过
         warnings.push(`Persona "${key}" (${value}) 已存在，跳过`);
         continue;
       }
+
+      if (existsInSettings && !existsOnServer) {
+        // 设置残留但头像已删除，视为需要重新导入
+        warnings.push(
+          `Persona "${key}" (${value}) 设置残留但头像已删除，重新导入`
+        );
+      }
+
       pu.personas[key] = value;
       importedAvatarIds.push(key);
       importedCount++;
 
       // 如果头像文件不存在，上传默认头像
-      if (!avatarsList.includes(key)) {
+      if (!existsOnServer) {
         warnings.push(
           `Persona 头像 "${key}" (${value}) 不存在于服务器，上传默认头像`
         );
         try {
-          // 使用酒馆原生API上传默认头像
-          const defaultAvatarResp = await fetch("/img/default-user.png");
+          // 使用酒馆原生路径 img/user-default.png
+          const defaultAvatarResp = await fetch("img/user-default.png");
           if (defaultAvatarResp.ok) {
             const blob = await defaultAvatarResp.blob();
+            const file = new File([blob], "avatar.png", { type: "image/png" });
             const formData = new FormData();
-            formData.append("avatar", blob, key);
+            formData.append("avatar", file);
             formData.append("overwrite_name", key);
-            await fetch("/api/avatars/upload", {
+            const uploadResp = await fetch("/api/avatars/upload", {
               method: "POST",
               headers: getContext().getRequestHeaders({ omitContentType: true }),
               body: formData,
             });
+            if (!uploadResp.ok) {
+              console.error(`[CFM] 上传默认头像失败 (${key}): ${uploadResp.statusText}`);
+            }
+          } else {
+            console.error(`[CFM] 获取默认头像失败: ${defaultAvatarResp.statusText}`);
           }
         } catch (uploadErr) {
           console.error(
@@ -3759,7 +3777,10 @@ jQuery(async () => {
 
     // 合并 persona_descriptions
     for (const [key, value] of Object.entries(data.persona_descriptions)) {
-      if (key in pu.persona_descriptions) {
+      // 只有当设置和头像都存在时才视为真正已存在，跳过描述
+      const descExists = key in pu.persona_descriptions;
+      const avatarExists = avatarsList.includes(key);
+      if (descExists && avatarExists) {
         warnings.push(
           `Persona 描述 "${key}" (${pu.personas[key] || key}) 已存在，跳过`
         );
@@ -3802,6 +3823,16 @@ jQuery(async () => {
       toastr.success(`已成功导入 ${importedCount} 个 Persona`);
     } else {
       toastr.info("没有新的 Persona 需要导入（全部已存在）");
+    }
+
+    // 刷新酒馆原生 persona 面板
+    try {
+      const personaModule = await import("../../../personas.js");
+      if (typeof personaModule.getUserAvatars === "function") {
+        await personaModule.getUserAvatars(true);
+      }
+    } catch (e) {
+      console.warn("[CFM] 无法刷新酒馆原生User面板，可能需要手动刷新", e);
     }
 
     // 刷新 persona 视图
@@ -9460,10 +9491,10 @@ jQuery(async () => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
       const targetFolder =
-        selectedTreeNode &&
-        selectedTreeNode !== "__uncategorized__" &&
-        selectedTreeNode !== "__favorites__"
-          ? selectedTreeNode
+        selectedPersonaFolder &&
+        selectedPersonaFolder !== "__ungrouped__" &&
+        selectedPersonaFolder !== "__favorites__"
+          ? selectedPersonaFolder
           : null;
       for (const file of files) {
         await importPersonas(file, targetFolder);
