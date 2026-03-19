@@ -20196,15 +20196,15 @@ jQuery(async () => {
       });
     }
 
-    // 7. User/Persona 面板 - 注入到 #user_avatar_block 前面
+    // 7. User/Persona 面板 - 注入到搜索栏与排序下拉框之间
     if (
-      $("#user_avatar_block").length &&
-      !$("#user_avatar_block").parent().find(".cfm-nf-btn[data-nf-type='personas']").length
+      $("#persona_sort_order").length &&
+      !$("#persona_sort_order").parent().find(".cfm-nf-btn[data-nf-type='personas']").length
     ) {
       const personaBtn = $(
         `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="personas" title="文件夹过滤" style="display:inline-block;margin:2px 4px;"></div>`,
       );
-      $("#user_avatar_block").before(personaBtn);
+      $("#persona_sort_order").before(personaBtn);
       personaBtn.on("click touchend", function (e) {
         e.preventDefault();
         e.stopPropagation();
