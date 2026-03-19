@@ -7217,16 +7217,27 @@ jQuery(async () => {
         toastr.success(`已取消绑定`);
         // 检查是否还有绑定，如果没有了就恢复为全局
         const updated = getWiActivePresets()[idx];
-        if (
-          updated &&
-          (!updated.bindChars || updated.bindChars.length === 0) &&
-          (!updated.bindPresets || updated.bindPresets.length === 0)
-        ) {
-          setWiPresetScope(idx, "global");
+        const stillHasBindings = updated &&
+          ((updated.bindChars && updated.bindChars.length > 0) ||
+           (updated.bindPresets && updated.bindPresets.length > 0));
+        if (!stillHasBindings) {
+          if (updated) setWiPresetScope(idx, "global");
+          // 最后一个绑定被取消，重建面板
+          overlay.remove();
+          showWiPresetPanel();
+        } else {
+          // 仍有其他绑定，只刷新当前下拉内容
+          entry.remove();
+          // 更新 scope 标签和绑定摘要
+          const item = overlay.find(`.cfm-wi-preset-item[data-preset-idx="${idx}"]`);
+          const bindSummary = getWiPresetBindSummary(updated);
+          item.find(".cfm-wi-preset-scope-tag").text("绑定").css("color", "#cba6f7");
+          // 如果下拉中没有条目了（理论上不会走到这里），也收起
+          if (dropdown.find(".cfm-wi-bind-entry").length === 0) {
+            dropdown.slideUp(150);
+            icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+          }
         }
-        // 刷新面板
-        overlay.remove();
-        showWiPresetPanel();
       });
     });
 
