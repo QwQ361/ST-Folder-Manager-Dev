@@ -11714,12 +11714,23 @@ jQuery(async () => {
           .join(" › ");
         const childCount = countCharsInFolderRecursive(fid);
         const row = $(`
-          <div class="cfm-row cfm-row-folder cfm-search-result" data-folder-id="${fid}">
+          <div class="cfm-row cfm-row-folder cfm-search-result" data-folder-id="${fid}" draggable="true">
             <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
             <div class="cfm-row-name">${escapeHtml(getTagName(fid))}<div class="cfm-row-folder-path">${escapeHtml(folderPath)}</div></div>
             <div class="cfm-row-meta">${childCount} 个角色</div>
           </div>
         `);
+        // PC端拖拽（搜索结果中的文件夹可拖拽到左侧树）
+        row.on("dragstart", (e) => {
+          pcDragStart(e, { type: "folder", id: fid });
+          row.addClass("cfm-dragging");
+        });
+        row.on("dragend", () => {
+          row.removeClass("cfm-dragging");
+          pcDragEnd();
+        });
+        // 移动端触摸拖拽
+        touchDragMgr.bind(row, () => ({ type: "folder", id: fid }));
         row.on("click", (e) => {
           e.preventDefault();
           // 导航到该文件夹
