@@ -683,18 +683,22 @@ jQuery(async () => {
           presets: [
             { id: "import", visible: true },
             { id: "note", visible: true },
+            { id: "rename", visible: true },
             { id: "export", visible: true },
             { id: "delete", visible: true },
           ],
           themes: [
             { id: "import", visible: true },
             { id: "note", visible: true },
+            { id: "rename", visible: true },
             { id: "export", visible: true },
             { id: "delete", visible: true },
           ],
           backgrounds: [
             { id: "import", visible: true },
             { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "default", visible: true },
             { id: "export", visible: true },
             { id: "delete", visible: true },
           ],
@@ -726,6 +730,7 @@ jQuery(async () => {
     rename: { label: "重命名", icon: "fa-i-cursor" },
     export: { label: "导出", icon: "fa-file-export" },
     delete: { label: "删除", icon: "fa-trash-can" },
+    default: { label: "设置默认背景", icon: "fa-image" },
   };
 
   /** 获取当前生效的标签页列表（已排序、已过滤不可见） */
@@ -753,12 +758,48 @@ jQuery(async () => {
   function getOrderedActions(tabId) {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabActions || !layout.tabActions[tabId]) {
-      // 返回默认
       const defaults =
         extension_settings[extensionName].customLayout?.tabActions?.[tabId];
       return defaults || [];
     }
-    return layout.tabActions[tabId];
+    // 自动补充新增的 action（迁移兼容，按默认顺序插入正确位置）
+    const saved = layout.tabActions[tabId];
+    const knownIds = CFM_ACTION_BTN_MAP[tabId];
+    if (knownIds) {
+      const existingIds = new Set(saved.map((a) => a.id));
+      // 默认顺序参考表
+      const defaultOrder = {
+        chars: ["import", "quickedit", "export", "delete"],
+        worldinfo: ["import", "note", "rename", "export", "delete"],
+        presets: ["import", "note", "rename", "export", "delete"],
+        themes: ["import", "note", "rename", "export", "delete"],
+        backgrounds: ["import", "note", "rename", "default", "export", "delete"],
+        personas: ["import", "note", "export", "delete"],
+      };
+      const refOrder = defaultOrder[tabId] || Object.keys(knownIds);
+      for (const actionId of Object.keys(knownIds)) {
+        if (!existingIds.has(actionId)) {
+          // 找到默认顺序中该 action 前面的 action，插入到其后面
+          const refIdx = refOrder.indexOf(actionId);
+          let insertIdx = saved.length; // 默认追加到末尾
+          if (refIdx > 0) {
+            // 从该 action 在默认顺序中的前一个开始，向前找已存在的 action
+            for (let i = refIdx - 1; i >= 0; i--) {
+              const prevId = refOrder[i];
+              const prevSavedIdx = saved.findIndex((a) => a.id === prevId);
+              if (prevSavedIdx !== -1) {
+                insertIdx = prevSavedIdx + 1;
+                break;
+              }
+            }
+          } else {
+            insertIdx = 0; // 默认顺序中排第一，插入到最前面
+          }
+          saved.splice(insertIdx, 0, { id: actionId, visible: true });
+        }
+      }
+    }
+    return saved;
   }
 
   /** 获取某标签页可见的子功能 ID 列表 */
@@ -786,18 +827,22 @@ jQuery(async () => {
     presets: {
       import: "#cfm-import-preset-btn",
       note: "#cfm-preset-note-btn",
+      rename: "#cfm-preset-rename-btn",
       export: "#cfm-export-preset-btn",
       delete: "#cfm-res-delete-preset-btn",
     },
     themes: {
       import: "#cfm-import-theme-btn",
       note: "#cfm-theme-note-btn",
+      rename: "#cfm-theme-rename-btn",
       export: "#cfm-export-theme-btn",
       delete: "#cfm-res-delete-theme-btn",
     },
     backgrounds: {
       import: "#cfm-import-bg-btn",
       note: "#cfm-bg-note-btn",
+      rename: "#cfm-bg-rename-btn",
+      default: "#cfm-bg-default-btn",
       export: "#cfm-export-bg-btn",
       delete: "#cfm-res-delete-bg-btn",
     },
@@ -12987,7 +13032,7 @@ jQuery(async () => {
     // --- 子功能排序/可见性（按当前选中的标签页展示） ---
     const section = $(`
       <div class="cfm-config-section cfm-custom-layout-section">
-        <label>自定义布局</label>
+        <div class="cfm-layout-header-row"><label>自定义布局</label><button class="cfm-layout-reset-btn" title="恢复默认布局"><i class="fa-solid fa-rotate-left"></i> 恢复默认</button></div>
         <div class="cfm-layout-hint">拖拽或使用箭头调整标签页顺序，开关控制显示/隐藏</div>
         <div class="cfm-layout-tabs-title">标签页</div>
         <div class="cfm-layout-tabs-list">
@@ -13102,7 +13147,7 @@ jQuery(async () => {
       });
 
     // --- 子功能面板 ---
-    let selectedLayoutTab = orderedTabs[0]?.id || "chars";
+    let selectedLayoutTab = currentResourceType || orderedTabs[0]?.id || "chars";
 
     function renderActionsPanel(tabId) {
       selectedLayoutTab = tabId;
@@ -13239,6 +13284,70 @@ jQuery(async () => {
         const tabId = $(this).closest(".cfm-layout-item").data("id");
         renderActionsPanel(tabId);
       });
+
+    // 恢复默认按钮
+    section.find(".cfm-layout-reset-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      const defaultLayout = {
+        tabs: [
+          { id: "chars", visible: true },
+          { id: "worldinfo", visible: true },
+          { id: "presets", visible: true },
+          { id: "themes", visible: true },
+          { id: "backgrounds", visible: true },
+          { id: "personas", visible: true },
+        ],
+        tabActions: {
+          chars: [
+            { id: "import", visible: true },
+            { id: "quickedit", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          worldinfo: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          presets: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          themes: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          backgrounds: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "rename", visible: true },
+            { id: "default", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+          personas: [
+            { id: "import", visible: true },
+            { id: "note", visible: true },
+            { id: "export", visible: true },
+            { id: "delete", visible: true },
+          ],
+        },
+      };
+      extension_settings[extensionName].customLayout = defaultLayout;
+      getContext().saveSettingsDebounced();
+      // 重新渲染整个自定义布局区域
+      section.remove();
+      renderCustomLayoutSection(body);
+      toastr.success("已恢复默认布局");
+    });
 
     // 初始渲染第一个标签页的子功能
     renderActionsPanel(selectedLayoutTab);

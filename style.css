@@ -3688,3 +3688,26 @@ option.cfm-nf-hidden {
   padding: 8px;
   text-align: center;
 }
+/* 恢复默认按钮 */
+.cfm-layout-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cfm-layout-reset-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,80,80,0.12);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cfm-layout-reset-btn:hover {
+  background: rgba(255,80,80,0.28);
+  border-color: rgba(255,80,80,0.4);
+}
+.cfm-layout-reset-btn i {
+  margin-right: 4px;
+}
