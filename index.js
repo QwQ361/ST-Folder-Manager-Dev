@@ -1382,7 +1382,7 @@ jQuery(async () => {
           if (mgr.active) return;
           if (
             e.target.closest(
-              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn",
+              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn, .cfm-wi-toggle",
             )
           )
             return;
@@ -6570,14 +6570,24 @@ jQuery(async () => {
     const savableBooks = [...wiActiveSet].filter((b) => !wiCharBound.has(b));
     const presets = getWiActivePresets();
 
-    // 构建已有分组列表
+    // 检测当前激活组合是否与某个已有分组完全相同
+    const savableSet = new Set(savableBooks);
+    let matchedPresetName = null;
+    for (const p of presets) {
+      if (p.books.length === savableBooks.length && p.books.every((b) => savableSet.has(b))) {
+        matchedPresetName = p.name;
+        break;
+      }
+    }
+
+    // 构建已有分组列表（用索引定位）
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
         : presets
             .map(
-              (p) => `
-        <div class="cfm-wi-preset-item" data-preset-name="${escapeHtml(p.name)}">
+              (p, idx) => `
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
           <span class="cfm-wi-preset-item-count">${p.books.length} 个</span>
           <span class="cfm-wi-preset-item-actions">
@@ -6600,6 +6610,7 @@ jQuery(async () => {
               <button class="cfm-edit-popup-confirm" id="cfm-wi-preset-save-confirm" ${savableBooks.length === 0 ? "disabled" : ""}><i class="fa-solid fa-floppy-disk"></i> 保存</button>
             </div>
             ${savableBooks.length === 0 ? '<div class="cfm-wi-preset-save-hint">当前没有手动激活的世界书可保存</div>' : ""}
+            ${matchedPresetName ? `<div class="cfm-wi-preset-save-hint" style="color:#f9e2af;">当前激活组合与已有分组「${escapeHtml(matchedPresetName)}」相同</div>` : ""}
           </div>
           <div class="cfm-wi-preset-divider"></div>
           <div class="cfm-wi-preset-list-section">
@@ -6645,41 +6656,51 @@ jQuery(async () => {
       overlay.remove();
     });
 
-    // 应用分组
+    // 应用分组（用索引定位）
     overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
       e.stopPropagation();
-      const presetName = $(this)
-        .closest(".cfm-wi-preset-item")
-        .data("preset-name");
-      const preset = getWiActivePresets().find((p) => p.name === presetName);
-      if (!preset) return;
-      await applyWorldInfoPreset(preset.books, wiCharBound);
-      toastr.success(`已应用激活分组「${preset.name}」`);
-      overlay.remove();
-      renderWorldInfoView();
+      e.preventDefault();
+      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const currentPresets = getWiActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        await applyWorldInfoPreset(preset.books, wiCharBound);
+        toastr.success(`已应用激活分组「${preset.name}」`);
+        overlay.remove();
+        renderWorldInfoView();
+      } catch (err) {
+        console.error("[CFM] 应用分组失败", err);
+        toastr.error("应用分组失败");
+      }
     });
 
-    // 编辑分组
+    // 编辑分组（用索引定位）
     overlay.find(".cfm-wi-preset-edit").on("click", async function (e) {
       e.stopPropagation();
-      const presetName = $(this)
-        .closest(".cfm-wi-preset-item")
-        .data("preset-name");
-      const preset = getWiActivePresets().find((p) => p.name === presetName);
+      e.preventDefault();
+      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const currentPresets = getWiActivePresets();
+      const preset = currentPresets[idx];
       if (!preset) return;
       overlay.remove();
       showWiPresetEditPopup(preset);
     });
 
-    // 删除分组
+    // 删除分组（用索引定位）
     overlay.find(".cfm-wi-preset-del").on("click", function (e) {
       e.stopPropagation();
-      const presetName = $(this)
-        .closest(".cfm-wi-preset-item")
-        .data("preset-name");
-      if (!confirm(`确定删除激活分组「${presetName}」？`)) return;
-      deleteWiActivePreset(presetName);
-      toastr.success(`已删除激活分组「${presetName}」`);
+      e.preventDefault();
+      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const currentPresets = getWiActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      deleteWiActivePreset(preset.name);
+      toastr.success(`已删除激活分组「${preset.name}」`);
       // 刷新列表
       $(this).closest(".cfm-wi-preset-item").remove();
       if (overlay.find(".cfm-wi-preset-item").length === 0) {
