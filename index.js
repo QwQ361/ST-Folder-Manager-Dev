@@ -3673,6 +3673,141 @@ jQuery(async () => {
     toastr.success(`已导出 ${avatarIds.length} 个 Persona 数据`);
   }
 
+  // User/Persona导入（酒馆原生 Backup 格式 JSON）
+  async function importPersonas(file, targetFolder) {
+    if (!file) return;
+    let data;
+    try {
+      const text = await file.text();
+      data = JSON.parse(text);
+    } catch (e) {
+      toastr.warning("无法解析文件，请选择有效的 JSON 文件");
+      return;
+    }
+    if (
+      !data.personas ||
+      !data.persona_descriptions ||
+      typeof data.personas !== "object" ||
+      typeof data.persona_descriptions !== "object"
+    ) {
+      toastr.warning("无效的 Persona 备份文件格式");
+      return;
+    }
+    const pu = getContext().powerUserSettings;
+    if (!pu) {
+      toastr.error("无法获取用户设置");
+      return;
+    }
+    // 获取当前服务器上已存在的头像列表
+    let avatarsList = [];
+    try {
+      const resp = await fetch("/api/avatars/get", {
+        method: "POST",
+        headers: getContext().getRequestHeaders({ omitContentType: true }),
+      });
+      if (resp.ok) avatarsList = await resp.json();
+    } catch (e) {
+      console.error("[CFM] 获取头像列表失败", e);
+    }
+    if (!Array.isArray(avatarsList)) avatarsList = [];
+
+    const warnings = [];
+    let importedCount = 0;
+    const importedAvatarIds = [];
+
+    // 确保 pu.personas 和 pu.persona_descriptions 存在
+    if (!pu.personas) pu.personas = {};
+    if (!pu.persona_descriptions) pu.persona_descriptions = {};
+
+    // 合并 personas
+    for (const [key, value] of Object.entries(data.personas)) {
+      if (key in pu.personas) {
+        warnings.push(`Persona "${key}" (${value}) 已存在，跳过`);
+        continue;
+      }
+      pu.personas[key] = value;
+      importedAvatarIds.push(key);
+      importedCount++;
+
+      // 如果头像文件不存在，上传默认头像
+      if (!avatarsList.includes(key)) {
+        warnings.push(
+          `Persona 头像 "${key}" (${value}) 不存在于服务器，上传默认头像`
+        );
+        try {
+          // 使用酒馆原生API上传默认头像
+          const defaultAvatarResp = await fetch("/img/default-user.png");
+          if (defaultAvatarResp.ok) {
+            const blob = await defaultAvatarResp.blob();
+            const formData = new FormData();
+            formData.append("avatar", blob, key);
+            formData.append("overwrite_name", key);
+            await fetch("/api/avatars/upload", {
+              method: "POST",
+              headers: getContext().getRequestHeaders({ omitContentType: true }),
+              body: formData,
+            });
+          }
+        } catch (uploadErr) {
+          console.error(
+            `[CFM] 上传默认头像失败 (${key}):`,
+            uploadErr
+          );
+        }
+      }
+    }
+
+    // 合并 persona_descriptions
+    for (const [key, value] of Object.entries(data.persona_descriptions)) {
+      if (key in pu.persona_descriptions) {
+        warnings.push(
+          `Persona 描述 "${key}" (${pu.personas[key] || key}) 已存在，跳过`
+        );
+        continue;
+      }
+      if (!pu.personas[key]) {
+        warnings.push(`Persona "${key}" 不存在，跳过其描述`);
+        continue;
+      }
+      pu.persona_descriptions[key] = value;
+    }
+
+    // 处理 default_persona
+    if (data.default_persona && data.default_persona in pu.personas) {
+      // 不自动覆盖默认 persona，只在当前没有默认时设置
+      if (!pu.default_persona) {
+        pu.default_persona = data.default_persona;
+      }
+    }
+
+    // 将导入的 persona 分配到目标文件夹
+    if (targetFolder && importedAvatarIds.length > 0) {
+      const groups = getResourceGroups("personas");
+      for (const avatarId of importedAvatarIds) {
+        groups[avatarId] = targetFolder;
+      }
+    }
+
+    // 保存设置
+    getContext().saveSettingsDebounced();
+
+    if (warnings.length) {
+      toastr.success(
+        `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`
+      );
+      console.warn(
+        `[CFM] PERSONA 导入报告\n====================\n${warnings.join("\n")}`
+      );
+    } else if (importedCount > 0) {
+      toastr.success(`已成功导入 ${importedCount} 个 Persona`);
+    } else {
+      toastr.info("没有新的 Persona 需要导入（全部已存在）");
+    }
+
+    // 刷新 persona 视图
+    await renderPersonasView();
+  }
+
   // ==================== 资源删除模式状态 ====================
   let cfmResDeleteMode = false;
   let cfmResDeleteSelected = new Set();
@@ -7975,6 +8110,8 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-persona-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-persona-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-persona-btn" title="导入User"><i class="fa-solid fa-file-import"></i></button>
+                            <input type="file" id="cfm-import-persona-file" accept=".json" style="display:none;">
                             <button class="cfm-edit-char-btn" id="cfm-persona-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-persona-btn" title="导出User"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-persona-btn" title="删除User"><i class="fa-solid fa-trash-can"></i></button>
@@ -9310,6 +9447,28 @@ jQuery(async () => {
       } else {
         enterWorldInfoNoteMode();
       }
+    });
+
+    // User导入按钮
+    popup.find("#cfm-import-persona-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-import-persona-file").val("").trigger("click");
+    });
+
+    popup.find("#cfm-import-persona-file").on("change", async function (e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const targetFolder =
+        selectedTreeNode &&
+        selectedTreeNode !== "__uncategorized__" &&
+        selectedTreeNode !== "__favorites__"
+          ? selectedTreeNode
+          : null;
+      for (const file of files) {
+        await importPersonas(file, targetFolder);
+      }
+      $(this).val("");
     });
 
     // User备注编辑按钮
