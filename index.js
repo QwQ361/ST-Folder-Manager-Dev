@@ -854,14 +854,22 @@ jQuery(async () => {
     },
   };
 
-  /** 应用工具栏按钮可见性（根据自定义布局配置） */
+  /** 应用工具栏按钮可见性和排序（根据自定义布局配置） */
   function applyToolbarVisibility(tabId) {
     const btnMap = CFM_ACTION_BTN_MAP[tabId];
     if (!btnMap) return;
     const visibleActions = getVisibleActions(tabId);
+    const orderedActions = getOrderedActions(tabId);
     for (const [actionId, selector] of Object.entries(btnMap)) {
       $(selector).toggle(visibleActions.includes(actionId));
     }
+    // 按配置顺序设置 CSS order
+    orderedActions.forEach((a, idx) => {
+      const selector = btnMap[a.id];
+      if (selector) {
+        $(selector).css("order", idx + 10); // 从10开始，给 path/count 等留空间
+      }
+    });
   }
 
   /** 对所有标签页应用工具栏按钮可见性 */
@@ -13343,9 +13351,8 @@ jQuery(async () => {
       };
       extension_settings[extensionName].customLayout = defaultLayout;
       getContext().saveSettingsDebounced();
-      // 重新渲染整个自定义布局区域
-      section.remove();
-      renderCustomLayoutSection(body);
+      // 重新渲染整个设置面板（保持位置）
+      renderConfigBody();
       toastr.success("已恢复默认布局");
     });
 

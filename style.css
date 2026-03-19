@@ -317,11 +317,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  order: 0;
 }
 .cfm-right-header .cfm-rh-count {
   opacity: 0.4;
   font-size: 12px;
   flex-shrink: 0;
+  order: 1;
+}
+.cfm-right-header input[type="file"] {
+  order: -1;
+}
+.cfm-right-header .cfm-sort-wrapper {
+  order: 100;
+}
+.cfm-right-header .cfm-multisel-toggle {
+  order: 101;
 }
 .cfm-right-list {
   flex: 1;
