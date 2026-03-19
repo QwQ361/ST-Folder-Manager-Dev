@@ -7088,6 +7088,20 @@ jQuery(async () => {
           toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
+        // 检查该分组是否因绑定条件匹配而自动应用，如果是则阻止手动取消
+        const { indices: autoIndices, details: autoDetails } = getAutoApplyPresetIndices();
+        if (autoIndices.includes(idx)) {
+          const detail = autoDetails[idx];
+          const reasons = [];
+          if (detail.charMatch) reasons.push(`角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`);
+          if (detail.presetMatch) reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
+          toastr.warning(
+            `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
+            "无法取消应用",
+            { timeOut: 5000 }
+          );
+          return;
+        }
         // 计算其他已应用分组覆盖的世界书
         const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
         const otherBooks = new Set();
@@ -7231,7 +7245,7 @@ jQuery(async () => {
       icon.removeClass("fa-caret-down").addClass("fa-caret-up");
 
       // 取消绑定事件
-      dropdown.find(".cfm-wi-bind-remove").on("click", function (ev) {
+      dropdown.find(".cfm-wi-bind-remove").on("click", async function (ev) {
         ev.stopPropagation();
         const entry = $(this).closest(".cfm-wi-bind-entry");
         const bindType = entry.data("bind-type");
@@ -7248,7 +7262,35 @@ jQuery(async () => {
         } else {
           unbindWiPresetFromPreset(idx, bindId);
         }
-        toastr.success(`已取消绑定`);
+        // 取消绑定后，检查该分组是否仍满足自动应用条件，不满足则自动取消应用
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        if (applied.includes(idx)) {
+          const { indices: stillAutoIndices } = getAutoApplyPresetIndices();
+          if (!stillAutoIndices.includes(idx)) {
+            // 不再满足绑定条件，自动取消应用
+            const allPresets = getWiActivePresets();
+            const otherApplied = applied.filter((i) => i !== idx && allPresets[i]);
+            const otherBooks = new Set();
+            for (const oi of otherApplied) {
+              for (const b of allPresets[oi].books) otherBooks.add(b);
+            }
+            const wiCharBoundLocal = await getCharBoundWorldBooks();
+            let removedCount = 0;
+            for (const b of preset.books) {
+              if (!wiCharBoundLocal.has(b) && !otherBooks.has(b)) {
+                await toggleWorldInfoActivation(b, false);
+                removedCount++;
+              }
+            }
+            extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
+            getContext().saveSettingsDebounced();
+            toastr.info(`已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`);
+          } else {
+            toastr.success(`已取消绑定（分组仍因其他绑定条件匹配而保持应用）`);
+          }
+        } else {
+          toastr.success(`已取消绑定`);
+        }
         // 检查是否还有绑定，如果没有了就恢复为全局
         const updated = getWiActivePresets()[idx];
         const stillHasBindings = updated &&
