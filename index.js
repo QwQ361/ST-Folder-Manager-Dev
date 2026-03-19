@@ -3629,61 +3629,48 @@ jQuery(async () => {
     }
   }
 
-  // User/Persona导出
+  // User/Persona导出（酒馆原生 Backup 格式 JSON）
   async function exportPersonas(avatarIds, headers) {
-    const getThumbnailUrl =
-      window.getThumbnailUrl ||
-      ((type, file) => `/thumbnails/${type}/${encodeURIComponent(file)}`);
-    if (avatarIds.length === 1) {
-      const avatarId = avatarIds[0];
-      const url = `/User Avatars/${encodeURIComponent(avatarId)}`;
-      try {
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const blob = await resp.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = avatarId;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-        toastr.success("User头像已导出");
-      } catch (e) {
-        throw new Error(`导出User头像失败: ${e.message}`);
+    const pu = getContext().powerUserSettings;
+    if (!pu) throw new Error("无法获取 powerUserSettings");
+    const exportData = {
+      personas: {},
+      persona_descriptions: {},
+      default_persona: pu.default_persona || null,
+    };
+    for (const avatarId of avatarIds) {
+      // personas: avatarId -> displayName
+      if (pu.personas && pu.personas[avatarId] !== undefined) {
+        exportData.personas[avatarId] = pu.personas[avatarId];
+      } else {
+        exportData.personas[avatarId] = avatarId;
       }
-    } else {
-      if (!window.JSZip) {
-        await import("../../../../lib/jszip.min.js");
+      // persona_descriptions: avatarId -> description object
+      if (pu.persona_descriptions && pu.persona_descriptions[avatarId]) {
+        exportData.persona_descriptions[avatarId] =
+          pu.persona_descriptions[avatarId];
       }
-      const zip = new JSZip();
-      let success = 0;
-      toastr.info(`正在导出 ${avatarIds.length} 个User头像...`);
-      for (const avatarId of avatarIds) {
-        try {
-          const resp = await fetch(
-            `/User Avatars/${encodeURIComponent(avatarId)}`,
-          );
-          if (resp.ok) {
-            const blob = await resp.blob();
-            zip.file(avatarId, blob);
-            success++;
-          }
-        } catch (e) {
-          console.warn(`[CFM] 导出User头像 ${avatarId} 失败`, e);
-        }
-      }
-      if (success === 0) throw new Error("没有成功导出任何User头像");
-      const content = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(content);
-      a.download = "User头像.zip";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个User头像`);
     }
+    // 如果 default_persona 不在导出列表中，设为 null
+    if (
+      exportData.default_persona &&
+      !avatarIds.includes(exportData.default_persona)
+    ) {
+      exportData.default_persona = null;
+    }
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+    const fileName = `personas_${dateStr}.json`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toastr.success(`已导出 ${avatarIds.length} 个 Persona 数据`);
   }
 
   // ==================== 资源删除模式状态 ====================
@@ -18529,8 +18516,8 @@ jQuery(async () => {
       }
 
       const matched = searchPool.filter((p) => {
-        const connNames = resolvePersonaConnections(p.connections).map(
-          (c) => (c.name || "").toLowerCase(),
+        const connNames = resolvePersonaConnections(p.connections).map((c) =>
+          (c.name || "").toLowerCase(),
         );
         const pool = [
           (p.name || "").toLowerCase(),
@@ -18569,9 +18556,10 @@ jQuery(async () => {
         const connHtml = buildPersonaConnHtml(p.connections);
         // 文件夹路径
         const folderPathNames = getResFolderPathNames("personas", p.avatarId);
-        const pathHtml = folderPathNames.length > 0
-          ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames.join(" › "))}</span>`
-          : "";
+        const pathHtml =
+          folderPathNames.length > 0
+            ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames.join(" › "))}</span>`
+            : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
@@ -20199,7 +20187,9 @@ jQuery(async () => {
     // 7. User/Persona 面板 - 注入到搜索栏与排序下拉框之间
     if (
       $("#persona_sort_order").length &&
-      !$("#persona_sort_order").parent().find(".cfm-nf-btn[data-nf-type='personas']").length
+      !$("#persona_sort_order")
+        .parent()
+        .find(".cfm-nf-btn[data-nf-type='personas']").length
     ) {
       const personaBtn = $(
         `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="personas" title="文件夹过滤" style="display:inline-block;margin:2px 4px;"></div>`,
