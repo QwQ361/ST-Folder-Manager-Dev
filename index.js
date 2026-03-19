@@ -19321,6 +19321,7 @@ jQuery(async () => {
   let nativeFilterTheme = null; // 主题当前过滤的文件夹id
   let nativeFilterBg = null; // 背景当前过滤的文件夹id
   let nativeFilterGlobalWI = null; // 全局世界书当前过滤的文件夹id
+  let nativeFilterPersona = null; // User当前过滤的文件夹id
 
   /**
    * 构建文件夹树HTML（递归），用于原生界面浮动面板
@@ -19354,7 +19355,9 @@ jQuery(async () => {
             ? "themes"
             : type === "backgrounds"
               ? "backgrounds"
-              : "worldinfo";
+              : type === "personas"
+                ? "personas"
+                : "worldinfo";
       folderIds = parentId
         ? sortResFolders(resType, getResChildFolders(resType, parentId))
         : sortResFolders(resType, getResTopLevelFolders(resType));
@@ -19412,7 +19415,9 @@ jQuery(async () => {
               ? "themes"
               : type === "backgrounds"
                 ? "backgrounds"
-                : "worldinfo";
+                : type === "personas"
+                  ? "personas"
+                  : "worldinfo";
         const groups = getResourceGroups(resType);
         const tree = getResFolderTree(resType);
         let allItems;
@@ -19422,6 +19427,12 @@ jQuery(async () => {
           allItems = getThemeNames();
         } else if (type === "backgrounds") {
           allItems = getBackgroundNames();
+        } else if (type === "personas") {
+          allItems = [];
+          $("#user_avatar_block .avatar-container").each(function () {
+            const aid = $(this).attr("data-avatar-id");
+            if (aid) allItems.push(aid);
+          });
         } else {
           allItems = [];
           $("#world_editor_select option").each(function () {
@@ -19450,7 +19461,7 @@ jQuery(async () => {
       html += `<div class="cfm-nf-item cfm-nf-uncat${isUncatActive ? " cfm-nf-active" : ""}" data-folder-id="__ungrouped__" data-type="${type}" style="padding-left:12px;">`;
       html += `<span class="cfm-nf-arrow-placeholder"></span>`;
       html += `<i class="fa-solid fa-box-open cfm-nf-icon"></i>`;
-      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : type === "themes" ? "未归类主题" : type === "backgrounds" ? "未归类背景" : "未归类世界书"}</span>`;
+      html += `<span class="cfm-nf-name">${type === "chars" ? "未归类角色" : type === "presets" ? "未归类预设" : type === "themes" ? "未归类主题" : type === "backgrounds" ? "未归类背景" : type === "personas" ? "未归类User" : "未归类世界书"}</span>`;
       html += `<span class="cfm-nf-count">${uncatCount}</span>`;
       html += `</div>`;
     }
@@ -19478,9 +19489,11 @@ jQuery(async () => {
             ? nativeFilterTheme
             : type === "backgrounds"
               ? nativeFilterBg
-              : type === "globalworldinfo"
-                ? nativeFilterGlobalWI
-                : nativeFilterWorldInfo;
+              : type === "personas"
+                ? nativeFilterPersona
+                : type === "globalworldinfo"
+                  ? nativeFilterGlobalWI
+                  : nativeFilterWorldInfo;
 
     // 展开状态集合（持久化到会话中）
     if (!showNativeFolderPanel._expanded) showNativeFolderPanel._expanded = {};
@@ -19594,6 +19607,7 @@ jQuery(async () => {
       else if (type === "presets") nativeFilterPreset = null;
       else if (type === "themes") nativeFilterTheme = null;
       else if (type === "backgrounds") nativeFilterBg = null;
+      else if (type === "personas") nativeFilterPersona = null;
       else if (type === "globalworldinfo") nativeFilterGlobalWI = null;
       else nativeFilterWorldInfo = null;
       applyNativeFilter(type);
@@ -19611,6 +19625,7 @@ jQuery(async () => {
       else if (type === "presets") nativeFilterPreset = fid;
       else if (type === "themes") nativeFilterTheme = fid;
       else if (type === "backgrounds") nativeFilterBg = fid;
+      else if (type === "personas") nativeFilterPersona = fid;
       else if (type === "globalworldinfo") nativeFilterGlobalWI = fid;
       else nativeFilterWorldInfo = fid;
       applyNativeFilter(type);
@@ -19652,7 +19667,9 @@ jQuery(async () => {
               ? "themes"
               : type === "backgrounds"
                 ? "backgrounds"
-                : "worldinfo";
+                : type === "personas"
+                  ? "personas"
+                  : "worldinfo";
         const groups = getResourceGroups(resType);
         const tree = getResFolderTree(resType);
         let allNames;
@@ -19662,6 +19679,12 @@ jQuery(async () => {
           allNames = getThemeNames();
         } else if (type === "backgrounds") {
           allNames = getBackgroundNames();
+        } else if (type === "personas") {
+          allNames = [];
+          $("#user_avatar_block .avatar-container").each(function () {
+            const aid = $(this).attr("data-avatar-id");
+            if (aid) allNames.push(aid);
+          });
         } else {
           $("#world_editor_select option").each(function () {
             const v = $(this).val();
@@ -19711,7 +19734,9 @@ jQuery(async () => {
             ? "themes"
             : type === "backgrounds"
               ? "backgrounds"
-              : "worldinfo";
+              : type === "personas"
+                ? "personas"
+                : "worldinfo";
       const groups = getResourceGroups(resType);
       for (const [name, fid] of Object.entries(groups)) {
         if (fid === folderId) items.add(name);
@@ -19737,6 +19762,8 @@ jQuery(async () => {
       applyThemeFilter();
     } else if (type === "backgrounds") {
       applyBgFilter();
+    } else if (type === "personas") {
+      applyPersonaFilter();
     } else if (type === "globalworldinfo") {
       applyGlobalWorldInfoFilter();
     } else {
@@ -19764,6 +19791,32 @@ jQuery(async () => {
       if (chid !== undefined && chid !== null && chid !== "") {
         const char = chars[parseInt(chid)];
         if (char && allowedAvatars.has(char.avatar)) {
+          $(this).show();
+        } else {
+          $(this).hide();
+        }
+      }
+    });
+  }
+
+  /**
+   * User过滤：隐藏/显示 #user_avatar_block 中的 persona
+   */
+  function applyPersonaFilter() {
+    const block = $("#user_avatar_block");
+    if (!nativeFilterPersona) {
+      // 显示全部
+      block.find(".avatar-container").show();
+      return;
+    }
+    const allowedAvatarIds = getAllItemsInFolderRecursive(
+      "personas",
+      nativeFilterPersona,
+    );
+    block.find(".avatar-container").each(function () {
+      const aid = $(this).attr("data-avatar-id");
+      if (aid) {
+        if (allowedAvatarIds.has(aid)) {
           $(this).show();
         } else {
           $(this).hide();
@@ -19974,9 +20027,11 @@ jQuery(async () => {
             ? nativeFilterTheme
             : type === "backgrounds"
               ? nativeFilterBg
-              : type === "globalworldinfo"
-                ? nativeFilterGlobalWI
-                : nativeFilterWorldInfo;
+              : type === "personas"
+                ? nativeFilterPersona
+                : type === "globalworldinfo"
+                  ? nativeFilterGlobalWI
+                  : nativeFilterWorldInfo;
     const btn = $(`.cfm-nf-btn[data-nf-type="${type}"]`);
     if (filter) {
       btn.addClass("cfm-nf-btn-active");
@@ -19991,7 +20046,9 @@ jQuery(async () => {
                 ? "未归类主题"
                 : type === "backgrounds"
                   ? "未归类背景"
-                  : "未归类世界书";
+                  : type === "personas"
+                    ? "未归类User"
+                    : "未归类世界书";
       } else if (type === "chars") {
         name = getTagName(filter);
       } else {
@@ -20002,7 +20059,9 @@ jQuery(async () => {
               ? "themes"
               : type === "backgrounds"
                 ? "backgrounds"
-                : "worldinfo";
+                : type === "personas"
+                  ? "personas"
+                  : "worldinfo";
         name = getResFolderDisplayName(resType, filter);
       }
       btn.attr("title", `文件夹过滤: ${name}`);
@@ -20134,6 +20193,26 @@ jQuery(async () => {
           return;
         }
         showNativeFolderPanel($(this), "globalworldinfo");
+      });
+    }
+
+    // 7. User/Persona 面板 - 注入到 #user_avatar_block 前面
+    if (
+      $("#user_avatar_block").length &&
+      !$("#user_avatar_block").parent().find(".cfm-nf-btn[data-nf-type='personas']").length
+    ) {
+      const personaBtn = $(
+        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="personas" title="文件夹过滤" style="display:inline-block;margin:2px 4px;"></div>`,
+      );
+      $("#user_avatar_block").before(personaBtn);
+      personaBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($('.cfm-nf-panel[data-nf-type="personas"]').length) {
+          $(".cfm-nf-panel").remove();
+          return;
+        }
+        showNativeFolderPanel($(this), "personas");
       });
     }
   }
