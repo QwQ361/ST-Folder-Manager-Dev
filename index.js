@@ -6701,33 +6701,28 @@ jQuery(async () => {
   }
 
   /**
-   * 获取当前角色/预设应该自动应用的分组列表
-   * 一个分组可以同时绑定多个角色和多个预设，只要任一匹配就应用
-   * @returns {number[]} 应该激活的分组索引列表
+   * 获取当前角色/预设应该自动应用的分组列表（含匹配原因）
+   * @returns {{indices: number[], details: Object<number, {charMatch: boolean, presetMatch: boolean}>}}
    */
   function getAutoApplyPresetIndices() {
     const presets = getWiActivePresets();
     const currentChar = getCurrentCharAvatar();
     const currentPreset = getCurrentPresetName();
     const indices = [];
+    const details = {};
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
-      if (p.scope === "global") {
-        // 全局分组不自动管理
-        continue;
-      }
+      if (p.scope === "global") continue;
       const hasBindings = (p.bindChars && p.bindChars.length > 0) || (p.bindPresets && p.bindPresets.length > 0);
       if (!hasBindings) continue;
-      // 检查角色绑定匹配
-      const charMatch = currentChar && p.bindChars && p.bindChars.includes(currentChar);
-      // 检查预设绑定匹配
-      const presetMatch = currentPreset && p.bindPresets && p.bindPresets.includes(currentPreset);
-      // 只要任一匹配就应用
+      const charMatch = !!(currentChar && p.bindChars && p.bindChars.includes(currentChar));
+      const presetMatch = !!(currentPreset && p.bindPresets && p.bindPresets.includes(currentPreset));
       if (charMatch || presetMatch) {
         indices.push(i);
+        details[i] = { charMatch, presetMatch };
       }
     }
-    return indices;
+    return { indices, details };
   }
 
   /**
@@ -6737,16 +6732,21 @@ jQuery(async () => {
     try {
       const presets = getWiActivePresets();
       const charBound = await getCharBoundWorldBooks();
-      const shouldApply = getAutoApplyPresetIndices();
+      const { indices: shouldApply, details } = getAutoApplyPresetIndices();
       const prevApplied =
         extension_settings[extensionName]._wiAppliedPresetIndices || [];
+
+      const currentCharName = getCurrentCharName();
+      const currentPresetName = getCurrentPresetName();
 
       // 计算需要关闭的分组（之前应用但现在不需要的）
       const toDeactivate = prevApplied.filter((i) => !shouldApply.includes(i));
       // 计算需要新激活的分组
       const toActivate = shouldApply.filter((i) => !prevApplied.includes(i));
+      // 计算保持应用的分组（之前应用且现在仍需应用）
+      const stillApplied = shouldApply.filter((i) => prevApplied.includes(i));
 
-      if (toDeactivate.length === 0 && toActivate.length === 0) return;
+      if (toDeactivate.length === 0 && toActivate.length === 0 && stillApplied.length === 0) return;
 
       // 收集需要关闭的世界书
       const booksToDeactivate = new Set();
@@ -6785,21 +6785,55 @@ jQuery(async () => {
         ...shouldApply,
       ];
 
-      if (toActivate.length > 0 || toDeactivate.length > 0) {
-        const activatedNames = toActivate
-          .map((i) => presets[i]?.name)
-          .filter(Boolean);
-        const deactivatedNames = toDeactivate
-          .map((i) => presets[i]?.name)
-          .filter(Boolean);
-        let msg = "";
-        if (activatedNames.length > 0)
-          msg += `已自动应用分组：${activatedNames.join("、")}`;
-        if (deactivatedNames.length > 0)
-          msg +=
-            (msg ? "；" : "") +
-            `已自动关闭分组：${deactivatedNames.join("、")}`;
-        if (msg) toastr.info(msg, "世界书分组", { timeOut: 3000 });
+      // 构建详细的 toast 提示
+      const msgParts = [];
+
+      // 辅助：描述匹配原因
+      function describeMatchReason(idx) {
+        const d = details[idx];
+        if (!d) return "";
+        const reasons = [];
+        if (d.charMatch && currentCharName) reasons.push(`角色「${currentCharName}」`);
+        if (d.presetMatch && currentPresetName) reasons.push(`预设「${currentPresetName}」`);
+        return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
+      }
+
+      // 新激活的分组
+      for (const idx of toActivate) {
+        const name = presets[idx]?.name;
+        if (name) {
+          msgParts.push(`✅ 已开启「${name}」${describeMatchReason(idx)}`);
+        }
+      }
+
+      // 关闭的分组
+      for (const idx of toDeactivate) {
+        const name = presets[idx]?.name;
+        if (name) {
+          // 分析关闭原因：哪些绑定不再匹配
+          const p = presets[idx];
+          const reasons = [];
+          if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
+          if (p.bindPresets && p.bindPresets.length > 0) reasons.push("预设不匹配");
+          msgParts.push(`❌ 已关闭「${name}」（${reasons.join("且")}）`);
+        }
+      }
+
+      // 保持应用的分组（只在有变化时才提示，即有激活或关闭操作时）
+      if ((toActivate.length > 0 || toDeactivate.length > 0) && stillApplied.length > 0) {
+        for (const idx of stillApplied) {
+          const name = presets[idx]?.name;
+          if (name) {
+            msgParts.push(`🔄 「${name}」保持开启${describeMatchReason(idx)}`);
+          }
+        }
+      }
+
+      if (msgParts.length > 0) {
+        toastr.info(msgParts.join("<br>"), "世界书分组", {
+          timeOut: 4000,
+          escapeHtml: false,
+        });
       }
     } catch (e) {
       console.error("[CFM] 自动应用世界书分组失败", e);
