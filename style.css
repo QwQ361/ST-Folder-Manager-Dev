@@ -1328,8 +1328,10 @@
   gap: 3px;
   font-weight: 500;
   line-height: 1.4;
-  background: rgba(166, 227, 161, 0.2);
+  background: rgba(166, 227, 161, 0.25);
   color: #a6e3a1;
+  border: 1px solid rgba(166, 227, 161, 0.5);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1422,19 +1424,22 @@
   font-size: 9px;
 }
 .cfm-bg-orient-landscape {
-  background: rgba(116, 199, 236, 0.15);
+  background: rgba(116, 199, 236, 0.2);
   color: #74c7ec;
-  border: 1px solid rgba(116, 199, 236, 0.3);
+  border: 1px solid rgba(116, 199, 236, 0.5);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 .cfm-bg-orient-portrait {
-  background: rgba(203, 166, 247, 0.15);
+  background: rgba(203, 166, 247, 0.2);
   color: #cba6f7;
-  border: 1px solid rgba(203, 166, 247, 0.3);
+  border: 1px solid rgba(203, 166, 247, 0.5);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 .cfm-bg-orient-other {
-  background: rgba(166, 227, 161, 0.15);
+  background: rgba(166, 227, 161, 0.2);
   color: #a6e3a1;
-  border: 1px solid rgba(166, 227, 161, 0.3);
+  border: 1px solid rgba(166, 227, 161, 0.5);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
 }
 
 /* ========== 方向选择框（备注弹窗内） ========== */
