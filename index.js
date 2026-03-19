@@ -711,9 +711,20 @@ jQuery(async () => {
         },
       };
     }
-    // 世界书激活分组预设：[{name: string, books: string[]}]
+    // 世界书激活分组预设：[{name, books, scope, bindChars, bindPresets}]
     if (!extension_settings[extensionName].wiActivePresets)
       extension_settings[extensionName].wiActivePresets = [];
+    // 迁移旧格式：为缺少 scope/bindChars/bindPresets 的预设补充默认值
+    for (const p of extension_settings[extensionName].wiActivePresets) {
+      if (!p.scope) p.scope = "global";
+      // 迁移旧的 "char"/"preset" scope 为统一的 "bound"
+      if (p.scope === "char" || p.scope === "preset") p.scope = "bound";
+      if (!Array.isArray(p.bindChars)) p.bindChars = [];
+      if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+    }
+    // 当前已应用的世界书分组索引集合（用于自动应用/关闭追踪）
+    if (!extension_settings[extensionName]._wiAppliedPresetIndices)
+      extension_settings[extensionName]._wiAppliedPresetIndices = [];
   }
   ensureSettings();
 
@@ -6533,13 +6544,22 @@ jQuery(async () => {
   function getWiActivePresets() {
     return extension_settings[extensionName].wiActivePresets || [];
   }
-  function saveWiActivePreset(name, books) {
+  function saveWiActivePreset(name, books, scope, bindChars, bindPresets) {
     const presets = getWiActivePresets();
     const existing = presets.find((p) => p.name === name);
     if (existing) {
       existing.books = books;
+      if (scope !== undefined) existing.scope = scope;
+      if (bindChars !== undefined) existing.bindChars = bindChars;
+      if (bindPresets !== undefined) existing.bindPresets = bindPresets;
     } else {
-      presets.push({ name, books });
+      presets.push({
+        name,
+        books,
+        scope: scope || "global",
+        bindChars: bindChars || [],
+        bindPresets: bindPresets || [],
+      });
     }
     extension_settings[extensionName].wiActivePresets = presets;
     getContext().saveSettingsDebounced();
@@ -6560,6 +6580,252 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 世界书分组绑定与自动应用 ====================
+  /**
+   * 获取当前角色的 avatar 标识
+   */
+  function getCurrentCharAvatar() {
+    try {
+      const ctx = getContext();
+      const charId = ctx.characterId;
+      if (charId === undefined || charId === null) return null;
+      const characters = ctx.characters || getCharacters();
+      const ch = characters[charId];
+      return ch ? ch.avatar : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 获取当前角色的显示名称
+   */
+  function getCurrentCharName() {
+    try {
+      const ctx = getContext();
+      const charId = ctx.characterId;
+      if (charId === undefined || charId === null) return null;
+      const characters = ctx.characters || getCharacters();
+      const ch = characters[charId];
+      return ch ? ch.name : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 获取当前选中的预设名称
+   */
+  function getCurrentPresetName() {
+    try {
+      const pm = getContext().getPresetManager();
+      if (!pm || !pm.select) return null;
+      const selected = pm.select.find("option:selected");
+      return selected.length > 0 ? selected.text() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 更新分组的 scope
+   * scope: "global"（不自动管理）| "bound"（有绑定，自动管理）
+   */
+  function setWiPresetScope(presetIdx, scope) {
+    const presets = getWiActivePresets();
+    if (presets[presetIdx]) {
+      presets[presetIdx].scope = scope;
+      // 切换到全局时清空所有绑定
+      if (scope === "global") {
+        presets[presetIdx].bindChars = [];
+        presets[presetIdx].bindPresets = [];
+      }
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 绑定分组到角色卡
+   */
+  function bindWiPresetToChar(presetIdx, charAvatar) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindChars)) p.bindChars = [];
+    if (!p.bindChars.includes(charAvatar)) {
+      p.bindChars.push(charAvatar);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 绑定分组到预设
+   */
+  function bindWiPresetToPreset(presetIdx, presetName) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+    if (!p.bindPresets.includes(presetName)) {
+      p.bindPresets.push(presetName);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 取消绑定分组与角色卡
+   */
+  function unbindWiPresetFromChar(presetIdx, charAvatar) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindChars)) return;
+    const idx = p.bindChars.indexOf(charAvatar);
+    if (idx !== -1) {
+      p.bindChars.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 取消绑定分组与预设
+   */
+  function unbindWiPresetFromPreset(presetIdx, presetName) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindPresets)) return;
+    const idx = p.bindPresets.indexOf(presetName);
+    if (idx !== -1) {
+      p.bindPresets.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 获取当前角色/预设应该自动应用的分组列表
+   * 一个分组可以同时绑定多个角色和多个预设，只要任一匹配就应用
+   * @returns {number[]} 应该激活的分组索引列表
+   */
+  function getAutoApplyPresetIndices() {
+    const presets = getWiActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentPreset = getCurrentPresetName();
+    const indices = [];
+    for (let i = 0; i < presets.length; i++) {
+      const p = presets[i];
+      if (p.scope === "global") {
+        // 全局分组不自动管理
+        continue;
+      }
+      const hasBindings = (p.bindChars && p.bindChars.length > 0) || (p.bindPresets && p.bindPresets.length > 0);
+      if (!hasBindings) continue;
+      // 检查角色绑定匹配
+      const charMatch = currentChar && p.bindChars && p.bindChars.includes(currentChar);
+      // 检查预设绑定匹配
+      const presetMatch = currentPreset && p.bindPresets && p.bindPresets.includes(currentPreset);
+      // 只要任一匹配就应用
+      if (charMatch || presetMatch) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  }
+
+  /**
+   * 自动应用/关闭世界书分组（角色或预设切换时调用）
+   */
+  async function autoApplyWiPresets() {
+    try {
+      const presets = getWiActivePresets();
+      const charBound = await getCharBoundWorldBooks();
+      const shouldApply = getAutoApplyPresetIndices();
+      const prevApplied =
+        extension_settings[extensionName]._wiAppliedPresetIndices || [];
+
+      // 计算需要关闭的分组（之前应用但现在不需要的）
+      const toDeactivate = prevApplied.filter((i) => !shouldApply.includes(i));
+      // 计算需要新激活的分组
+      const toActivate = shouldApply.filter((i) => !prevApplied.includes(i));
+
+      if (toDeactivate.length === 0 && toActivate.length === 0) return;
+
+      // 收集需要关闭的世界书
+      const booksToDeactivate = new Set();
+      for (const idx of toDeactivate) {
+        if (presets[idx]) {
+          for (const b of presets[idx].books) {
+            if (!charBound.has(b)) booksToDeactivate.add(b);
+          }
+        }
+      }
+      // 收集需要激活的世界书
+      const booksToActivate = new Set();
+      for (const idx of shouldApply) {
+        if (presets[idx]) {
+          for (const b of presets[idx].books) {
+            if (!charBound.has(b)) booksToActivate.add(b);
+          }
+        }
+      }
+      // 从关闭列表中移除仍需激活的
+      for (const b of booksToActivate) {
+        booksToDeactivate.delete(b);
+      }
+
+      // 执行关闭
+      for (const b of booksToDeactivate) {
+        await toggleWorldInfoActivation(b, false);
+      }
+      // 执行激活
+      for (const b of booksToActivate) {
+        await toggleWorldInfoActivation(b, true);
+      }
+
+      // 更新追踪状态
+      extension_settings[extensionName]._wiAppliedPresetIndices = [
+        ...shouldApply,
+      ];
+
+      if (toActivate.length > 0 || toDeactivate.length > 0) {
+        const activatedNames = toActivate
+          .map((i) => presets[i]?.name)
+          .filter(Boolean);
+        const deactivatedNames = toDeactivate
+          .map((i) => presets[i]?.name)
+          .filter(Boolean);
+        let msg = "";
+        if (activatedNames.length > 0)
+          msg += `已自动应用分组：${activatedNames.join("、")}`;
+        if (deactivatedNames.length > 0)
+          msg +=
+            (msg ? "；" : "") +
+            `已自动关闭分组：${deactivatedNames.join("、")}`;
+        if (msg) toastr.info(msg, "世界书分组", { timeOut: 3000 });
+      }
+    } catch (e) {
+      console.error("[CFM] 自动应用世界书分组失败", e);
+    }
+  }
+
+  /**
+   * 获取分组的绑定摘要文本
+   */
+  function getWiPresetBindSummary(preset) {
+    if (preset.scope === "global") return "全局";
+    const parts = [];
+    if (preset.bindChars && preset.bindChars.length > 0) {
+      const chars = getCharacters();
+      const names = preset.bindChars.map((av) => {
+        const ch = chars.find((c) => c.avatar === av);
+        return ch ? ch.name : av;
+      });
+      parts.push(`角色: ${names.join(", ")}`);
+    }
+    if (preset.bindPresets && preset.bindPresets.length > 0) {
+      parts.push(`预设: ${preset.bindPresets.join(", ")}`);
+    }
+    return parts.length > 0 ? parts.join(" | ") : "未绑定";
+  }
+
   /**
    * 显示世界书激活分组统一面板（保存 + 已有分组列表）
    */
@@ -6569,35 +6835,57 @@ jQuery(async () => {
     const wiCharBound = await getCharBoundWorldBooks();
     const savableBooks = [...wiActiveSet].filter((b) => !wiCharBound.has(b));
     const presets = getWiActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentCharName = getCurrentCharName();
+    const currentPresetName = getCurrentPresetName();
 
     // 检测当前激活组合是否与某个已有分组完全相同
     const savableSet = new Set(savableBooks);
     let matchedPresetName = null;
     for (const p of presets) {
-      if (p.books.length === savableBooks.length && p.books.every((b) => savableSet.has(b))) {
+      if (
+        p.books.length === savableBooks.length &&
+        p.books.every((b) => savableSet.has(b))
+      ) {
         matchedPresetName = p.name;
         break;
       }
     }
+
+    // scope 标签映射（global=全局不自动管理，bound=有绑定自动管理）
+    const scopeLabels = { global: "全局", bound: "已绑定" };
+    const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
 
     // 构建已有分组列表（用索引定位）
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
         : presets
-            .map(
-              (p, idx) => `
+            .map((p, idx) => {
+              const scope = p.scope || "global";
+              const hasBindings =
+                (p.bindChars && p.bindChars.length > 0) ||
+                (p.bindPresets && p.bindPresets.length > 0);
+              const bindSummary = getWiPresetBindSummary(p);
+              return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
-          <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
-          <span class="cfm-wi-preset-item-count">${p.books.length} 个</span>
+          <div class="cfm-wi-preset-item-left">
+            <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+            <span class="cfm-wi-preset-scope-tag" style="color:${scopeColors[scope]};border-color:${scopeColors[scope]}40;background:${scopeColors[scope]}15;">${scopeLabels[scope]}</span>
+            <span class="cfm-wi-preset-item-count">${p.books.length} 个</span>
+            ${hasBindings ? `<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>` : ""}
+          </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用此分组"></i>
+            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用到全局"></i>
+            <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
+            <i class="fa-solid fa-link cfm-wi-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
             <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
           </span>
+          ${hasBindings ? `<div class="cfm-wi-preset-bind-dropdown" style="display:none;"></div>` : ""}
         </div>
-      `,
-            )
+      `;
+            })
             .join("");
 
     const overlay = $(`
@@ -6656,11 +6944,14 @@ jQuery(async () => {
       overlay.remove();
     });
 
-    // 应用分组（用索引定位）
+    // 应用分组到全局（用索引定位）
     overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
@@ -6668,8 +6959,10 @@ jQuery(async () => {
         return;
       }
       try {
+        // 设置为全局 scope
+        setWiPresetScope(idx, "global");
         await applyWorldInfoPreset(preset.books, wiCharBound);
-        toastr.success(`已应用激活分组「${preset.name}」`);
+        toastr.success(`已应用激活分组「${preset.name}」到全局`);
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -6678,11 +6971,205 @@ jQuery(async () => {
       }
     });
 
+    // 取消应用分组（从全局移除该分组的世界书）
+    overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getWiActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const wiModule = await import("../../../world-info.js");
+        const selectedWI = wiModule.selected_world_info;
+        const removeSet = new Set(preset.books);
+        // 从全局激活列表中移除该分组的世界书（不动角色关联的）
+        for (let i = selectedWI.length - 1; i >= 0; i--) {
+          if (removeSet.has(selectedWI[i]) && !wiCharBound.has(selectedWI[i])) {
+            selectedWI.splice(i, 1);
+          }
+        }
+        // 同步 DOM
+        $("#world_info")
+          .find("option")
+          .each(function () {
+            const optName = $(this).text();
+            if (wiCharBound.has(optName)) return;
+            $(this).prop("selected", selectedWI.includes(optName));
+          });
+        $("#world_info").trigger("change");
+        toastr.success(`已取消应用分组「${preset.name}」`);
+        overlay.remove();
+        renderWorldInfoView();
+      } catch (err) {
+        console.error("[CFM] 取消应用分组失败", err);
+        toastr.error("取消应用分组失败");
+      }
+    });
+
+    // 绑定管理按钮
+    overlay.find(".cfm-wi-preset-bind").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const btn = $(this);
+      const item = btn.closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      // 关闭其他已打开的绑定菜单
+      $(".cfm-wi-preset-bind-menu").remove();
+      const menu = $(`
+        <div class="cfm-wi-preset-bind-menu">
+          <div class="cfm-wi-preset-bind-menu-title">应用方式</div>
+          <div class="cfm-wi-preset-bind-menu-item" data-action="global"><i class="fa-solid fa-globe" style="color:#a6e3a1;"></i> 应用到全局</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentPresetName ? "cfm-disabled" : ""}" data-action="preset"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定到当前预设${currentPresetName ? "「" + escapeHtml(currentPresetName) + "」" : "（无预设）"}</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</div>
+        </div>
+      `);
+      // append 到 overlay 层避免被 overflow 裁剪，用 fixed 定位
+      overlay.append(menu);
+      const btnRect = btn[0].getBoundingClientRect();
+      let menuTop = btnRect.bottom + 4;
+      let menuLeft = btnRect.right - 240;
+      // 边界检测
+      if (menuLeft < 8) menuLeft = 8;
+      if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
+      menu.css({ top: menuTop + 'px', left: menuLeft + 'px' });
+
+      menu
+        .find(".cfm-wi-preset-bind-menu-item")
+        .on("click", async function (ev) {
+          ev.stopPropagation();
+          if ($(this).hasClass("cfm-disabled")) return;
+          const action = $(this).data("action");
+          const allPresets = getWiActivePresets();
+          const preset = allPresets[idx];
+          if (!preset) return;
+
+          if (action === "global") {
+            setWiPresetScope(idx, "global");
+            await applyWorldInfoPreset(preset.books, wiCharBound);
+            toastr.success(`已将分组「${preset.name}」设为全局应用`);
+          } else if (action === "preset") {
+            if (!currentPresetName) return;
+            // 确保 scope 为 bound
+            if (preset.scope === "global") setWiPresetScope(idx, "bound");
+            bindWiPresetToPreset(idx, currentPresetName);
+            await applyWorldInfoPreset(preset.books, wiCharBound);
+            toastr.success(`已将分组「${preset.name}」绑定到预设「${currentPresetName}」`);
+          } else if (action === "char") {
+            if (!currentChar) return;
+            if (preset.scope === "global") setWiPresetScope(idx, "bound");
+            bindWiPresetToChar(idx, currentChar);
+            await applyWorldInfoPreset(preset.books, wiCharBound);
+            toastr.success(`已将分组「${preset.name}」绑定到角色「${currentCharName}」`);
+          }
+          menu.remove();
+          overlay.remove();
+          showWiPresetPanel();
+        });
+
+      // 点击其他地方关闭菜单
+      setTimeout(() => {
+        $(document).one("click", () => menu.remove());
+      }, 10);
+    });
+
+    // 绑定三角下拉：展开/收起绑定详情
+    overlay.find(".cfm-wi-preset-bind-toggle").on("click", function (e) {
+      e.stopPropagation();
+      const item = $(this).closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      const dropdown = item.find(".cfm-wi-preset-bind-dropdown");
+      const icon = $(this).find("i");
+
+      if (dropdown.is(":visible")) {
+        dropdown.slideUp(150);
+        icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+        return;
+      }
+
+      // 构建绑定详情内容
+      const allPresets = getWiActivePresets();
+      const preset = allPresets[idx];
+      if (!preset) return;
+
+      let html = "";
+      if (preset.bindChars && preset.bindChars.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定的角色卡</div>';
+        for (const av of preset.bindChars) {
+          const ch = chars.find((c) => c.avatar === av);
+          const name = ch ? ch.name : av;
+          html += `<div class="cfm-wi-bind-entry" data-bind-type="char" data-bind-id="${escapeHtml(av)}">
+            <span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span>
+            <i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i>
+          </div>`;
+        }
+      }
+      if (preset.bindPresets && preset.bindPresets.length > 0) {
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
+        for (const pn of preset.bindPresets) {
+          html += `<div class="cfm-wi-bind-entry" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}">
+            <span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span>
+            <i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i>
+          </div>`;
+        }
+      }
+      if (!html) html = '<div class="cfm-wi-bind-empty">无绑定</div>';
+
+      dropdown.html(html);
+      dropdown.slideDown(150);
+      icon.removeClass("fa-caret-down").addClass("fa-caret-up");
+
+      // 取消绑定事件
+      dropdown.find(".cfm-wi-bind-remove").on("click", function (ev) {
+        ev.stopPropagation();
+        const entry = $(this).closest(".cfm-wi-bind-entry");
+        const bindType = entry.data("bind-type");
+        const bindId = entry.data("bind-id");
+        const displayName = entry.find(".cfm-wi-bind-entry-name").text();
+        if (
+          !confirm(
+            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : "预设"}「${displayName}」的绑定？`,
+          )
+        )
+          return;
+        if (bindType === "char") {
+          unbindWiPresetFromChar(idx, bindId);
+        } else {
+          unbindWiPresetFromPreset(idx, bindId);
+        }
+        toastr.success(`已取消绑定`);
+        // 检查是否还有绑定，如果没有了就恢复为全局
+        const updated = getWiActivePresets()[idx];
+        if (
+          updated &&
+          (!updated.bindChars || updated.bindChars.length === 0) &&
+          (!updated.bindPresets || updated.bindPresets.length === 0)
+        ) {
+          setWiPresetScope(idx, "global");
+        }
+        // 刷新面板
+        overlay.remove();
+        showWiPresetPanel();
+      });
+    });
+
     // 编辑分组（用索引定位）
     overlay.find(".cfm-wi-preset-edit").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) return;
@@ -6694,20 +7181,19 @@ jQuery(async () => {
     overlay.find(".cfm-wi-preset-del").on("click", function (e) {
       e.stopPropagation();
       e.preventDefault();
-      const idx = parseInt($(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"), 10);
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) return;
       if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
       deleteWiActivePreset(preset.name);
       toastr.success(`已删除激活分组「${preset.name}」`);
-      // 刷新列表
-      $(this).closest(".cfm-wi-preset-item").remove();
-      if (overlay.find(".cfm-wi-preset-item").length === 0) {
-        overlay
-          .find(".cfm-wi-preset-list")
-          .html('<div class="cfm-wi-preset-empty">暂无已保存的分组</div>');
-      }
+      // 刷新面板
+      overlay.remove();
+      showWiPresetPanel();
     });
   }
 
@@ -6720,17 +7206,41 @@ jQuery(async () => {
     const allNames = await getWorldInfoNames();
     const charBound = await getCharBoundWorldBooks();
     const bookSet = new Set(preset.books);
+    const wiGroups = getResourceGroups("worldinfo");
+    const wiTree = getResFolderTree("worldinfo");
     const booksHtml = allNames
       .filter((n) => !charBound.has(n))
       .map((n) => {
         const checked = bookSet.has(n) ? "checked" : "";
-        return `<label class="cfm-wi-preset-edit-item">
+        const folder = wiGroups[n] || "";
+        return `<label class="cfm-wi-preset-edit-item" data-folder="${escapeHtml(folder)}">
           <input type="checkbox" value="${escapeHtml(n)}" ${checked}>
           <i class="fa-solid fa-book" style="color:#a6e3a1;"></i>
           <span>${escapeHtml(n)}</span>
         </label>`;
       })
       .join("");
+    // 构建文件夹过滤选项（递归缩进）
+    function buildWiFilterOptions() {
+      const opts = ['<option value="__all__">全部</option>', '<option value="__ungrouped__">未归类</option>'];
+      function addOpts(parentId, depth) {
+        const children = sortResFolders(
+          "worldinfo",
+          Object.keys(wiTree).filter(
+            (id) => wiTree[id].parentId === (parentId || null),
+          ),
+        );
+        for (const id of children) {
+          const indent = "&nbsp;".repeat(depth * 3);
+          opts.push(
+            `<option value="${escapeHtml(id)}">${indent}📁 ${escapeHtml(getResFolderDisplayName("worldinfo", id))}</option>`,
+          );
+          addOpts(id, depth + 1);
+        }
+      }
+      addOpts(null, 0);
+      return opts.join("");
+    }
     const overlay = $(`
       <div class="cfm-edit-popup-overlay" id="cfm-wi-preset-edit-overlay">
         <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
@@ -6742,6 +7252,7 @@ jQuery(async () => {
           <div class="cfm-edit-field">
             <label>包含的世界书 <span class="cfm-wi-preset-edit-hint">（角色关联的世界书已排除）</span></label>
             <div class="cfm-wi-preset-edit-search">
+              <select class="cfm-edit-input" id="cfm-wi-preset-edit-folder-filter">${buildWiFilterOptions()}</select>
               <input type="text" class="cfm-edit-input" id="cfm-wi-preset-edit-filter" placeholder="搜索世界书...">
             </div>
             <div class="cfm-wi-preset-edit-list">${booksHtml}</div>
@@ -6754,14 +7265,36 @@ jQuery(async () => {
       </div>
     `);
     $("body").append(overlay);
-    // 搜索过滤
-    overlay.find("#cfm-wi-preset-edit-filter").on("input", function () {
-      const q = $(this).val().toLowerCase().trim();
+    // 组合过滤函数（文件夹 + 文本搜索）
+    function applyEditFilters() {
+      const folderVal = overlay.find("#cfm-wi-preset-edit-folder-filter").val();
+      const q = overlay.find("#cfm-wi-preset-edit-filter").val().toLowerCase().trim();
+      // 预计算选中文件夹下所有递归子文件夹 ID
+      let allowedFolders = null;
+      if (folderVal && folderVal !== "__all__" && folderVal !== "__ungrouped__") {
+        allowedFolders = new Set();
+        function collectChildren(pid) {
+          allowedFolders.add(pid);
+          const children = Object.keys(wiTree).filter((id) => wiTree[id].parentId === pid);
+          for (const c of children) collectChildren(c);
+        }
+        collectChildren(folderVal);
+      }
       overlay.find(".cfm-wi-preset-edit-item").each(function () {
         const name = $(this).find("span").text().toLowerCase();
-        $(this).toggle(!q || name.includes(q));
+        const folder = $(this).attr("data-folder") || "";
+        let folderMatch = true;
+        if (folderVal === "__ungrouped__") {
+          folderMatch = !folder || !wiTree[folder];
+        } else if (allowedFolders) {
+          folderMatch = allowedFolders.has(folder);
+        }
+        const textMatch = !q || name.includes(q);
+        $(this).toggle(folderMatch && textMatch);
       });
-    });
+    }
+    overlay.find("#cfm-wi-preset-edit-folder-filter").on("change", applyEditFilters);
+    overlay.find("#cfm-wi-preset-edit-filter").on("input", applyEditFilters);
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -7612,6 +8145,14 @@ jQuery(async () => {
       if (notes && notes[oldName]) {
         notes[newName] = notes[oldName];
         delete notes[oldName];
+      }
+      // 同步世界书激活分组中绑定的预设名称
+      const wiPresets = getWiActivePresets();
+      for (const wp of wiPresets) {
+        if (Array.isArray(wp.bindPresets)) {
+          const idx = wp.bindPresets.indexOf(oldName);
+          if (idx !== -1) wp.bindPresets[idx] = newName;
+        }
       }
     } else if (resType === "worldinfo") {
       const notes = extension_settings[extensionName].worldInfoNotes;
@@ -22107,9 +22648,45 @@ jQuery(async () => {
               `[CFM] 已更新 persona connections: ${oldAvatar} → ${newAvatar}`,
             );
           }
+          // 同步世界书激活分组中绑定的角色卡 avatar
+          const wiPresets = getWiActivePresets();
+          let wiChanged = false;
+          for (const wp of wiPresets) {
+            if (Array.isArray(wp.bindChars)) {
+              const idx = wp.bindChars.indexOf(oldAvatar);
+              if (idx !== -1) {
+                wp.bindChars[idx] = newAvatar;
+                wiChanged = true;
+              }
+            }
+          }
+          if (wiChanged) {
+            getContext().saveSettingsDebounced();
+            console.log(
+              `[CFM] 已更新世界书分组绑定角色: ${oldAvatar} → ${newAvatar}`,
+            );
+          }
         } catch (e) {
           console.warn("[CFM] CHARACTER_RENAMED handler error:", e);
         }
+      });
+    }
+    // 角色/聊天切换时自动应用/关闭世界书分组
+    if (event_types.CHAT_CHANGED) {
+      eventSource.on(event_types.CHAT_CHANGED, () => {
+        // 延迟执行，确保角色信息已更新
+        setTimeout(() => autoApplyWiPresets(), 300);
+      });
+    }
+    // 预设切换时自动应用/关闭世界书分组
+    if (event_types.OAI_PRESET_CHANGED_AFTER) {
+      eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+        setTimeout(() => autoApplyWiPresets(), 300);
+      });
+    }
+    if (event_types.PRESET_CHANGED) {
+      eventSource.on(event_types.PRESET_CHANGED, () => {
+        setTimeout(() => autoApplyWiPresets(), 300);
       });
     }
   }

@@ -3834,17 +3834,25 @@ option.cfm-nf-hidden {
 }
 .cfm-wi-preset-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
   border-radius: 6px;
   transition: background 0.12s;
+  position: relative;
 }
 .cfm-wi-preset-item:hover {
   background: rgba(255,255,255,0.06);
 }
-.cfm-wi-preset-item-name {
+.cfm-wi-preset-item-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 1;
+  min-width: 0;
+}
+.cfm-wi-preset-item-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3855,11 +3863,31 @@ option.cfm-nf-hidden {
   margin-right: 6px;
   color: #89b4fa;
 }
+.cfm-wi-preset-scope-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
 .cfm-wi-preset-item-count {
   font-size: 11px;
   color: rgba(255,255,255,0.4);
   flex-shrink: 0;
   cursor: pointer;
+}
+.cfm-wi-preset-bind-toggle {
+  cursor: pointer;
+  color: #f9e2af;
+  font-size: 13px;
+  padding: 2px 4px;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.cfm-wi-preset-bind-toggle:hover {
+  color: #fab387;
 }
 .cfm-wi-preset-item-actions {
   display: flex;
@@ -3880,11 +3908,112 @@ option.cfm-nf-hidden {
 .cfm-wi-preset-item-actions .cfm-wi-preset-apply:hover {
   color: #a6e3a1;
 }
+.cfm-wi-preset-item-actions .cfm-wi-preset-unapply:hover {
+  color: #fab387;
+}
+.cfm-wi-preset-item-actions .cfm-wi-preset-bind:hover {
+  color: #cba6f7;
+}
 .cfm-wi-preset-item-actions .cfm-wi-preset-edit:hover {
   color: #89b4fa;
 }
 .cfm-wi-preset-item-actions .cfm-wi-preset-del:hover {
   color: #f38ba8;
+}
+
+/* 绑定下拉详情 */
+.cfm-wi-preset-bind-dropdown {
+  width: 100%;
+  padding: 6px 8px 4px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 4px;
+}
+.cfm-wi-bind-section-title {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin: 4px 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cfm-wi-bind-section-title:first-child {
+  margin-top: 0;
+}
+.cfm-wi-bind-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: background 0.12s;
+}
+.cfm-wi-bind-entry:hover {
+  background: rgba(255,255,255,0.06);
+}
+.cfm-wi-bind-entry-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfm-wi-bind-remove {
+  cursor: pointer;
+  color: rgba(255,255,255,0.3);
+  font-size: 11px;
+  padding: 2px 4px;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.cfm-wi-bind-remove:hover {
+  color: #f38ba8;
+}
+.cfm-wi-bind-empty {
+  font-size: 11px;
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  padding: 4px;
+}
+
+/* 绑定菜单 */
+.cfm-wi-preset-bind-menu {
+  position: fixed;
+  z-index: 100002;
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 240px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.cfm-wi-preset-bind-menu-title {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  padding: 4px 12px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 2px;
+}
+.cfm-wi-preset-bind-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.12s;
+}
+.cfm-wi-preset-bind-menu-item:hover:not(.cfm-disabled) {
+  background: rgba(255,255,255,0.06);
+}
+.cfm-wi-preset-bind-menu-item.cfm-disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.cfm-wi-preset-bind-menu-item i {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
 }
 
 /* 编辑弹窗 */
@@ -3899,6 +4028,19 @@ option.cfm-nf-hidden {
 }
 .cfm-wi-preset-edit-search {
   margin-bottom: 6px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.cfm-wi-preset-edit-search #cfm-wi-preset-edit-folder-filter {
+  flex: 0 0 auto;
+  max-width: 140px;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+.cfm-wi-preset-edit-search #cfm-wi-preset-edit-filter {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .cfm-wi-preset-edit-list {
   max-height: 300px;
