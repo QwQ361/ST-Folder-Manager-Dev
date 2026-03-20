@@ -571,6 +571,23 @@ jQuery(async () => {
   let cfmCopyMode = false;
 
   const getContext = SillyTavern.getContext;
+
+  // 动态导入酒馆核心模块，获取 entitiesFilter 和 printCharactersDebounced
+  // 用于在分页前进行数据级过滤，而非 DOM 级 show/hide
+  let entitiesFilter = null;
+  let printCharactersDebounced = null;
+  try {
+    const scriptModule = await import("../../../../script.js");
+    entitiesFilter = scriptModule.entitiesFilter;
+    printCharactersDebounced = scriptModule.printCharactersDebounced;
+    console.log("[CFM] 成功获取 entitiesFilter 和 printCharactersDebounced");
+  } catch (e) {
+    console.warn(
+      "[CFM] 无法导入 script.js 模块，角色卡文件夹过滤将回退到 DOM 级过滤:",
+      e,
+    );
+  }
+
   function getTagList() {
     return getContext().tags || [];
   }
@@ -6713,10 +6730,20 @@ jQuery(async () => {
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
       if (p.scope === "global") continue;
-      const hasBindings = (p.bindChars && p.bindChars.length > 0) || (p.bindPresets && p.bindPresets.length > 0);
+      const hasBindings =
+        (p.bindChars && p.bindChars.length > 0) ||
+        (p.bindPresets && p.bindPresets.length > 0);
       if (!hasBindings) continue;
-      const charMatch = !!(currentChar && p.bindChars && p.bindChars.includes(currentChar));
-      const presetMatch = !!(currentPreset && p.bindPresets && p.bindPresets.includes(currentPreset));
+      const charMatch = !!(
+        currentChar &&
+        p.bindChars &&
+        p.bindChars.includes(currentChar)
+      );
+      const presetMatch = !!(
+        currentPreset &&
+        p.bindPresets &&
+        p.bindPresets.includes(currentPreset)
+      );
       if (charMatch || presetMatch) {
         indices.push(i);
         details[i] = { charMatch, presetMatch };
@@ -6746,7 +6773,12 @@ jQuery(async () => {
       // 计算保持应用的分组（之前应用且现在仍需应用）
       const stillApplied = shouldApply.filter((i) => prevApplied.includes(i));
 
-      if (toDeactivate.length === 0 && toActivate.length === 0 && stillApplied.length === 0) return;
+      if (
+        toDeactivate.length === 0 &&
+        toActivate.length === 0 &&
+        stillApplied.length === 0
+      )
+        return;
 
       // 收集需要关闭的世界书
       const booksToDeactivate = new Set();
@@ -6793,8 +6825,10 @@ jQuery(async () => {
         const d = details[idx];
         if (!d) return "";
         const reasons = [];
-        if (d.charMatch && currentCharName) reasons.push(`角色「${currentCharName}」`);
-        if (d.presetMatch && currentPresetName) reasons.push(`预设「${currentPresetName}」`);
+        if (d.charMatch && currentCharName)
+          reasons.push(`角色「${currentCharName}」`);
+        if (d.presetMatch && currentPresetName)
+          reasons.push(`预设「${currentPresetName}」`);
         return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
       }
 
@@ -6814,13 +6848,17 @@ jQuery(async () => {
           const p = presets[idx];
           const reasons = [];
           if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
-          if (p.bindPresets && p.bindPresets.length > 0) reasons.push("预设不匹配");
+          if (p.bindPresets && p.bindPresets.length > 0)
+            reasons.push("预设不匹配");
           msgParts.push(`❌ 已关闭「${name}」（${reasons.join("且")}）`);
         }
       }
 
       // 保持应用的分组（只在有变化时才提示，即有激活或关闭操作时）
-      if ((toActivate.length > 0 || toDeactivate.length > 0) && stillApplied.length > 0) {
+      if (
+        (toActivate.length > 0 || toDeactivate.length > 0) &&
+        stillApplied.length > 0
+      ) {
         for (const idx of stillApplied) {
           const name = presets[idx]?.name;
           if (name) {
@@ -6993,13 +7031,18 @@ jQuery(async () => {
         return;
       }
       try {
-        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied =
+          extension_settings[extensionName]._wiAppliedPresetIndices || [];
         // 过滤掉已不存在的索引和当前要应用的索引
-        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
 
         let mode = "stack"; // 默认叠加
         if (otherApplied.length > 0) {
-          const otherNames = otherApplied.map((i) => currentPresets[i].name).join("、");
+          const otherNames = otherApplied
+            .map((i) => currentPresets[i].name)
+            .join("、");
           // 弹出三选一确认框
           const choice = await new Promise((resolve) => {
             const confirmOverlay = $(`
@@ -7055,11 +7098,16 @@ jQuery(async () => {
         }
 
         // 更新追踪
-        const newApplied = mode === "replace" ? [idx] : [...otherApplied.filter((i) => i !== idx), idx];
+        const newApplied =
+          mode === "replace"
+            ? [idx]
+            : [...otherApplied.filter((i) => i !== idx), idx];
         extension_settings[extensionName]._wiAppliedPresetIndices = newApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(`已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`);
+        toastr.success(
+          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
+        );
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -7083,27 +7131,35 @@ jQuery(async () => {
         return;
       }
       try {
-        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied =
+          extension_settings[extensionName]._wiAppliedPresetIndices || [];
         if (!applied.includes(idx)) {
           toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         // 检查该分组是否因绑定条件匹配而自动应用，如果是则阻止手动取消
-        const { indices: autoIndices, details: autoDetails } = getAutoApplyPresetIndices();
+        const { indices: autoIndices, details: autoDetails } =
+          getAutoApplyPresetIndices();
         if (autoIndices.includes(idx)) {
           const detail = autoDetails[idx];
           const reasons = [];
-          if (detail.charMatch) reasons.push(`角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`);
-          if (detail.presetMatch) reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
+          if (detail.charMatch)
+            reasons.push(
+              `角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`,
+            );
+          if (detail.presetMatch)
+            reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
           toastr.warning(
             `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
             "无法取消应用",
-            { timeOut: 5000 }
+            { timeOut: 5000 },
           );
           return;
         }
         // 计算其他已应用分组覆盖的世界书
-        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
         const otherBooks = new Set();
         for (const oi of otherApplied) {
           for (const b of currentPresets[oi].books) otherBooks.add(b);
@@ -7117,10 +7173,13 @@ jQuery(async () => {
           }
         }
         // 从追踪中移除
-        extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
+        extension_settings[extensionName]._wiAppliedPresetIndices =
+          otherApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(`已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`);
+        toastr.success(
+          `已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`,
+        );
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -7154,7 +7213,7 @@ jQuery(async () => {
       // 边界检测
       if (menuLeft < 8) menuLeft = 8;
       if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
-      menu.css({ top: menuTop + 'px', left: menuLeft + 'px' });
+      menu.css({ top: menuTop + "px", left: menuLeft + "px" });
 
       menu
         .find(".cfm-wi-preset-bind-menu-item")
@@ -7176,13 +7235,17 @@ jQuery(async () => {
             if (preset.scope === "global") setWiPresetScope(idx, "bound");
             bindWiPresetToPreset(idx, currentPresetName);
             await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(`已将分组「${preset.name}」绑定到预设「${currentPresetName}」`);
+            toastr.success(
+              `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
+            );
           } else if (action === "char") {
             if (!currentChar) return;
             if (preset.scope === "global") setWiPresetScope(idx, "bound");
             bindWiPresetToChar(idx, currentChar);
             await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(`已将分组「${preset.name}」绑定到角色「${currentCharName}」`);
+            toastr.success(
+              `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
+            );
           }
           menu.remove();
           overlay.remove();
@@ -7263,13 +7326,16 @@ jQuery(async () => {
           unbindWiPresetFromPreset(idx, bindId);
         }
         // 取消绑定后，检查该分组是否仍满足自动应用条件，不满足则自动取消应用
-        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied =
+          extension_settings[extensionName]._wiAppliedPresetIndices || [];
         if (applied.includes(idx)) {
           const { indices: stillAutoIndices } = getAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
             // 不再满足绑定条件，自动取消应用
             const allPresets = getWiActivePresets();
-            const otherApplied = applied.filter((i) => i !== idx && allPresets[i]);
+            const otherApplied = applied.filter(
+              (i) => i !== idx && allPresets[i],
+            );
             const otherBooks = new Set();
             for (const oi of otherApplied) {
               for (const b of allPresets[oi].books) otherBooks.add(b);
@@ -7282,9 +7348,12 @@ jQuery(async () => {
                 removedCount++;
               }
             }
-            extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
+            extension_settings[extensionName]._wiAppliedPresetIndices =
+              otherApplied;
             getContext().saveSettingsDebounced();
-            toastr.info(`已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`);
+            toastr.info(
+              `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`,
+            );
           } else {
             toastr.success(`已取消绑定（分组仍因其他绑定条件匹配而保持应用）`);
           }
@@ -7293,9 +7362,10 @@ jQuery(async () => {
         }
         // 检查是否还有绑定，如果没有了就恢复为全局
         const updated = getWiActivePresets()[idx];
-        const stillHasBindings = updated &&
+        const stillHasBindings =
+          updated &&
           ((updated.bindChars && updated.bindChars.length > 0) ||
-           (updated.bindPresets && updated.bindPresets.length > 0));
+            (updated.bindPresets && updated.bindPresets.length > 0));
         if (!stillHasBindings) {
           if (updated) setWiPresetScope(idx, "global");
           // 最后一个绑定被取消，重建面板
@@ -7305,9 +7375,14 @@ jQuery(async () => {
           // 仍有其他绑定，只刷新当前下拉内容
           entry.remove();
           // 更新 scope 标签和绑定摘要
-          const item = overlay.find(`.cfm-wi-preset-item[data-preset-idx="${idx}"]`);
+          const item = overlay.find(
+            `.cfm-wi-preset-item[data-preset-idx="${idx}"]`,
+          );
           const bindSummary = getWiPresetBindSummary(updated);
-          item.find(".cfm-wi-preset-scope-tag").text("绑定").css("color", "#cba6f7");
+          item
+            .find(".cfm-wi-preset-scope-tag")
+            .text("绑定")
+            .css("color", "#cba6f7");
           // 如果下拉中没有条目了（理论上不会走到这里），也收起
           if (dropdown.find(".cfm-wi-bind-entry").length === 0) {
             dropdown.slideUp(150);
@@ -7377,7 +7452,10 @@ jQuery(async () => {
       .join("");
     // 构建文件夹过滤选项（递归缩进）
     function buildWiFilterOptions() {
-      const opts = ['<option value="__all__">全部</option>', '<option value="__ungrouped__">未归类</option>'];
+      const opts = [
+        '<option value="__all__">全部</option>',
+        '<option value="__ungrouped__">未归类</option>',
+      ];
       function addOpts(parentId, depth) {
         const children = sortResFolders(
           "worldinfo",
@@ -7423,14 +7501,24 @@ jQuery(async () => {
     // 组合过滤函数（文件夹 + 文本搜索）
     function applyEditFilters() {
       const folderVal = overlay.find("#cfm-wi-preset-edit-folder-filter").val();
-      const q = overlay.find("#cfm-wi-preset-edit-filter").val().toLowerCase().trim();
+      const q = overlay
+        .find("#cfm-wi-preset-edit-filter")
+        .val()
+        .toLowerCase()
+        .trim();
       // 预计算选中文件夹下所有递归子文件夹 ID
       let allowedFolders = null;
-      if (folderVal && folderVal !== "__all__" && folderVal !== "__ungrouped__") {
+      if (
+        folderVal &&
+        folderVal !== "__all__" &&
+        folderVal !== "__ungrouped__"
+      ) {
         allowedFolders = new Set();
         function collectChildren(pid) {
           allowedFolders.add(pid);
-          const children = Object.keys(wiTree).filter((id) => wiTree[id].parentId === pid);
+          const children = Object.keys(wiTree).filter(
+            (id) => wiTree[id].parentId === pid,
+          );
           for (const c of children) collectChildren(c);
         }
         collectChildren(folderVal);
@@ -7448,7 +7536,9 @@ jQuery(async () => {
         $(this).toggle(folderMatch && textMatch);
       });
     }
-    overlay.find("#cfm-wi-preset-edit-folder-filter").on("change", applyEditFilters);
+    overlay
+      .find("#cfm-wi-preset-edit-folder-filter")
+      .on("change", applyEditFilters);
     overlay.find("#cfm-wi-preset-edit-filter").on("input", applyEditFilters);
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
@@ -21878,12 +21968,39 @@ jQuery(async () => {
   }
 
   /**
-   * 角色卡过滤：隐藏/显示 #rm_print_characters_block 中的角色卡
+   * 角色卡过滤：通过 entitiesFilter 在数据层进行过滤（分页前），
+   * 回退方案为 DOM 级 show/hide（仅在 entitiesFilter 不可用时使用）
    */
   function applyCharFilter() {
+    // 优先使用 entitiesFilter（数据层过滤，兼容分页）
+    if (entitiesFilter && printCharactersDebounced) {
+      if (!nativeFilterChar) {
+        // 清除自定义过滤函数，恢复显示全部
+        delete entitiesFilter.filterFunctions["cfm_char_folder"];
+      } else {
+        // 注册/更新自定义过滤函数
+        const allowedAvatars = getAllItemsInFolderRecursive(
+          "chars",
+          nativeFilterChar,
+        );
+        entitiesFilter.filterFunctions["cfm_char_folder"] = (entities) => {
+          return entities.filter((entity) => {
+            // 保留非角色类型的实体（如 tag 类型的文件夹分隔符等）
+            if (entity.type !== "character") return true;
+            // 角色实体：检查 avatar 是否在允许列表中
+            const avatar = entity.item?.avatar;
+            return avatar && allowedAvatars.has(avatar);
+          });
+        };
+      }
+      // 触发重新渲染（过滤在 getEntitiesList -> applyFilters 中执行，分页前生效）
+      printCharactersDebounced();
+      return;
+    }
+
+    // 回退方案：DOM 级过滤（entitiesFilter 不可用时）
     const block = $("#rm_print_characters_block");
     if (!nativeFilterChar) {
-      // 显示全部
       block.find(".character_select").show();
       return;
     }
@@ -22777,10 +22894,11 @@ jQuery(async () => {
   const eventSource = getContext().eventSource;
   const event_types = getContext().eventTypes;
   if (eventSource && event_types) {
-    // 角色卡列表翻页/重新渲染后重新应用过滤
+    // 角色卡列表翻页/重新渲染后重新应用过滤（仅回退方案需要）
+    // 当 entitiesFilter 可用时，过滤在数据层（分页前）完成，无需 DOM 级重新过滤
     eventSource.on(event_types.CHARACTER_PAGE_LOADED, () => {
-      if (nativeFilterChar) {
-        // 延迟一帧确保DOM已更新
+      if (nativeFilterChar && !entitiesFilter) {
+        // 仅在回退方案（DOM级过滤）下，延迟一帧确保DOM已更新后重新应用
         requestAnimationFrame(() => applyCharFilter());
       }
     });
