@@ -9318,7 +9318,14 @@ jQuery(async () => {
       if (!Array.isArray(chatData) || chatData.length === 0) {
         throw new Error("聊天数据为空或格式错误");
       }
-      // 2. 重新保存以更新文件修改时间
+      // 2. 更新最后一条消息的 send_date 为当前时间
+      //    酒馆的"最近聊天"列表按 last_mes（即最后消息的 send_date）排序
+      //    更新 send_date 可以让该聊天排到最前面
+      const lastMsg = chatData[chatData.length - 1];
+      if (lastMsg) {
+        lastMsg.send_date = new Date().toISOString();
+      }
+      // 3. 重新保存以更新文件内容和修改时间
       const saveResp = await fetch("/api/chats/save", {
         method: "POST",
         headers,
@@ -9326,6 +9333,7 @@ jQuery(async () => {
           avatar_url: avatar,
           file_name: chatFileName,
           chat: chatData,
+          force: true,
         }),
       });
       if (!saveResp.ok) throw new Error("保存聊天文件失败");
