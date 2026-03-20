@@ -4080,3 +4080,233 @@ option.cfm-nf-hidden {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ==================== 聊天记录管理模式 ==================== */
+
+/* 聊天模式按钮高亮 */
+.cfm-chat-mode-active {
+  color: #89b4fa !important;
+  border-color: #89b4fa !important;
+  background-color: rgba(137, 180, 250, 0.15) !important;
+}
+
+/* 小三角展开按钮 */
+.cfm-chat-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.15s;
+  flex-shrink: 0;
+  border-radius: 4px;
+  margin-right: 2px;
+}
+.cfm-chat-toggle:hover {
+  color: #89b4fa;
+  background-color: rgba(137, 180, 250, 0.1);
+}
+.cfm-chat-toggle i {
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.cfm-chat-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 聊天记录子列表容器 */
+.cfm-chat-sublist {
+  margin-left: 30px;
+  margin-right: 8px;
+  margin-bottom: 4px;
+  border-left: 2px solid rgba(137, 180, 250, 0.2);
+  padding-left: 8px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 0 6px 6px 0;
+}
+
+/* 聊天操作工具栏 */
+.cfm-chat-action-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-chat-action-toolbar .cfm-btn-sm,
+.cfm-chat-batch-toolbar .cfm-btn-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cfm-chat-action-toolbar .cfm-btn-sm:hover,
+.cfm-chat-batch-toolbar .cfm-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+.cfm-chat-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: auto;
+}
+
+/* 批量操作工具栏 */
+.cfm-chat-batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background-color: rgba(137, 180, 250, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-chat-batch-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: auto;
+}
+
+/* 聊天记录行 */
+.cfm-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  user-select: none;
+  position: relative;
+}
+.cfm-chat-row:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.cfm-chat-row:last-child {
+  border-bottom: none;
+}
+
+/* 当前聊天高亮 */
+.cfm-chat-current {
+  background-color: rgba(137, 180, 250, 0.08);
+}
+.cfm-chat-current:hover {
+  background-color: rgba(137, 180, 250, 0.12);
+}
+.cfm-chat-icon-current {
+  color: #89b4fa;
+}
+.cfm-chat-current-badge {
+  font-size: 10px;
+  color: #89b4fa;
+  background-color: rgba(137, 180, 250, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+/* 批量选中 */
+.cfm-chat-batch-selected {
+  background-color: rgba(137, 180, 250, 0.12);
+}
+.cfm-chat-batch-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+.cfm-chat-batch-check:hover {
+  color: #89b4fa;
+}
+
+/* 聊天行图标 */
+.cfm-chat-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+/* 聊天行信息 */
+.cfm-chat-row-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.cfm-chat-row-name {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-chat-row-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 2px;
+}
+.cfm-chat-note-badge {
+  cursor: help;
+  font-size: 11px;
+}
+
+/* 聊天行操作按钮 */
+.cfm-chat-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.cfm-chat-row:hover .cfm-chat-row-actions {
+  opacity: 1;
+}
+.cfm-chat-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.45);
+  transition: all 0.15s;
+  font-size: 11px;
+  background: none;
+  border: none;
+}
+.cfm-chat-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+.cfm-chat-pin-btn:hover {
+  color: #f9e2af;
+}
+.cfm-chat-rename-btn:hover {
+  color: #89b4fa;
+}
+.cfm-chat-note-btn:hover {
+  color: #a6e3a1;
+}
+.cfm-chat-export-btn:hover {
+  color: #94e2d5;
+}
+.cfm-chat-delete-btn:hover {
+  color: #ed4245;
+}

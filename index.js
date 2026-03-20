@@ -576,11 +576,22 @@ jQuery(async () => {
   // 用于在分页前进行数据级过滤，而非 DOM 级 show/hide
   let entitiesFilter = null;
   let printCharactersDebounced = null;
+  // 聊天记录管理相关 API
+  let getPastCharacterChatsFunc = null;
+  let deleteCharacterChatByNameFunc = null;
+  let renameGroupOrCharacterChatFunc = null;
+  let openCharacterChatFunc = null;
+  let importCharacterChatFunc = null;
   try {
     const scriptModule = await import("../../../../script.js");
     entitiesFilter = scriptModule.entitiesFilter;
     printCharactersDebounced = scriptModule.printCharactersDebounced;
-    console.log("[CFM] 成功获取 entitiesFilter 和 printCharactersDebounced");
+    getPastCharacterChatsFunc = scriptModule.getPastCharacterChats;
+    deleteCharacterChatByNameFunc = scriptModule.deleteCharacterChatByName;
+    renameGroupOrCharacterChatFunc = scriptModule.renameGroupOrCharacterChat;
+    openCharacterChatFunc = scriptModule.openCharacterChat;
+    importCharacterChatFunc = scriptModule.importCharacterChat;
+    console.log("[CFM] 成功获取 entitiesFilter, printCharactersDebounced 和聊天记录管理 API");
   } catch (e) {
     console.warn(
       "[CFM] 无法导入 script.js 模块，角色卡文件夹过滤将回退到 DOM 级过滤:",
@@ -9038,6 +9049,532 @@ jQuery(async () => {
     listContainer.prepend(toolbar);
   }
 
+  // ==================== 角色卡聊天记录管理模式 ====================
+  let cfmChatMode = false; // 聊天记录展示模式
+  let cfmChatExpandedAvatars = new Set(); // 当前展开聊天记录的角色avatar集合
+  let cfmChatCache = new Map(); // avatar -> chats[] 缓存
+  let cfmChatNotes = {}; // chatFileName -> note 备注映射
+  let cfmChatBatchMode = false; // 聊天记录批量操作模式
+  let cfmChatBatchSelected = new Set(); // 批量选中的 "avatar::chatFileName" 集合
+
+  // 初始化聊天记录备注（从 extension_settings 读取）
+  function initChatNotes() {
+    if (!extension_settings[extensionName].chatNotes)
+      extension_settings[extensionName].chatNotes = {};
+    cfmChatNotes = extension_settings[extensionName].chatNotes;
+  }
+
+  function saveChatNotes() {
+    extension_settings[extensionName].chatNotes = cfmChatNotes;
+    getContext().saveSettingsDebounced();
+  }
+
+  function enterChatMode() {
+    cfmChatMode = true;
+    cfmChatExpandedAvatars.clear();
+    cfmChatCache.clear();
+    cfmChatBatchMode = false;
+    cfmChatBatchSelected.clear();
+    $("#cfm-chat-mode-btn").addClass("cfm-chat-mode-active");
+    $("#cfm-chat-mode-btn").find("i").removeClass("fa-comments").addClass("fa-comments");
+    $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
+    rerenderCurrentView();
+  }
+
+  function exitChatMode() {
+    cfmChatMode = false;
+    cfmChatExpandedAvatars.clear();
+    cfmChatCache.clear();
+    cfmChatBatchMode = false;
+    cfmChatBatchSelected.clear();
+    $("#cfm-chat-mode-btn").removeClass("cfm-chat-mode-active");
+    $("#cfm-chat-mode-btn").attr("title", "显示聊天记录");
+    rerenderCurrentView();
+  }
+
+  function toggleChatMode() {
+    if (cfmChatMode) exitChatMode();
+    else enterChatMode();
+  }
+
+  /**
+   * 获取角色的聊天记录列表（带缓存）
+   * @param {string} avatar - 角色的 avatar 文件名
+   * @returns {Promise<Array>} 聊天记录列表
+   */
+  async function getCharChats(avatar) {
+    if (cfmChatCache.has(avatar)) return cfmChatCache.get(avatar);
+    const characters = getCharacters();
+    const charIdx = characters.findIndex((c) => c.avatar === avatar);
+    if (charIdx < 0) return [];
+    if (!getPastCharacterChatsFunc) {
+      // 回退：通过 getContext 获取
+      const ctx = getContext();
+      if (ctx.getRequestHeaders) {
+        try {
+          const response = await fetch("/api/characters/chats", {
+            method: "POST",
+            body: JSON.stringify({ avatar_url: avatar }),
+            headers: ctx.getRequestHeaders(),
+          });
+          if (!response.ok) return [];
+          const data = await response.json();
+          if (typeof data === "object" && data.error === true) return [];
+          const chats = Object.values(data)
+            .sort((a, b) => a["file_name"].localeCompare(b["file_name"]))
+            .reverse();
+          cfmChatCache.set(avatar, chats);
+          return chats;
+        } catch (e) {
+          console.error("[CFM] 获取聊天记录失败:", e);
+          return [];
+        }
+      }
+      return [];
+    }
+    try {
+      const chats = await getPastCharacterChatsFunc(charIdx);
+      cfmChatCache.set(avatar, chats);
+      return chats;
+    } catch (e) {
+      console.error("[CFM] 获取聊天记录失败:", e);
+      return [];
+    }
+  }
+
+  /**
+   * 使某个角色的聊天缓存失效
+   */
+  function invalidateChatCache(avatar) {
+    cfmChatCache.delete(avatar);
+  }
+
+  /**
+   * 重命名聊天记录
+   */
+  async function renameChatFile(avatar, oldFileName, newName) {
+    const characters = getCharacters();
+    const charIdx = characters.findIndex((c) => c.avatar === avatar);
+    if (charIdx < 0) return false;
+    try {
+      if (renameGroupOrCharacterChatFunc) {
+        await renameGroupOrCharacterChatFunc({
+          characterId: String(charIdx),
+          oldFileName: oldFileName,
+          newFileName: newName,
+          loader: false,
+        });
+      } else {
+        // 回退：通过 getContext
+        const ctx = getContext();
+        if (ctx.renameChat) {
+          await ctx.renameChat(oldFileName, newName);
+        }
+      }
+      // 迁移备注
+      if (cfmChatNotes[oldFileName]) {
+        cfmChatNotes[newName] = cfmChatNotes[oldFileName];
+        delete cfmChatNotes[oldFileName];
+        saveChatNotes();
+      }
+      invalidateChatCache(avatar);
+      return true;
+    } catch (e) {
+      console.error("[CFM] 重命名聊天记录失败:", e);
+      return false;
+    }
+  }
+
+  /**
+   * 删除聊天记录
+   */
+  async function deleteChatFile(avatar, chatFileName) {
+    const characters = getCharacters();
+    const charIdx = characters.findIndex((c) => c.avatar === avatar);
+    if (charIdx < 0) return false;
+    try {
+      if (deleteCharacterChatByNameFunc) {
+        await deleteCharacterChatByNameFunc(String(charIdx), chatFileName);
+      } else {
+        // 回退：直接调用 API
+        const ctx = getContext();
+        const response = await fetch("/api/chats/delete", {
+          method: "POST",
+          headers: ctx.getRequestHeaders(),
+          body: JSON.stringify({
+            chatfile: chatFileName + ".jsonl",
+            avatar_url: avatar,
+          }),
+        });
+        if (!response.ok) return false;
+      }
+      // 清理备注
+      if (cfmChatNotes[chatFileName]) {
+        delete cfmChatNotes[chatFileName];
+        saveChatNotes();
+      }
+      // 从批量选中中移除
+      cfmChatBatchSelected.delete(`${avatar}::${chatFileName}`);
+      invalidateChatCache(avatar);
+      return true;
+    } catch (e) {
+      console.error("[CFM] 删除聊天记录失败:", e);
+      return false;
+    }
+  }
+
+  /**
+   * 导出聊天记录
+   */
+  async function exportChatFile(avatar, chatFileName, format = "jsonl") {
+    try {
+      const ctx = getContext();
+      const body = {
+        is_group: false,
+        avatar_url: avatar,
+        file: `${chatFileName}.jsonl`,
+        exportfilename: `${chatFileName}.${format}`,
+        format: format,
+      };
+      const response = await fetch("/api/chats/export", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: ctx.getRequestHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        toastr.error(`导出失败: ${data.message}`);
+        return false;
+      }
+      const mimeType =
+        format === "txt" ? "text/plain" : "application/octet-stream";
+      const download = (await import("../../../utils.js")).download;
+      download(data.result, body.exportfilename, mimeType);
+      toastr.success(`已导出: ${chatFileName}.${format}`);
+      return true;
+    } catch (e) {
+      console.error("[CFM] 导出聊天记录失败:", e);
+      toastr.error(`导出失败: ${e.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * 打开聊天记录（选中角色并切换到对应聊天）
+   */
+  async function openChatFile(avatar, chatFileName) {
+    try {
+      const characters = getCharacters();
+      const charIdx = characters.findIndex((c) => c.avatar === avatar);
+      if (charIdx < 0) return;
+      const ctx = getContext();
+      // 先选中角色
+      if (ctx.selectCharacterById) {
+        await ctx.selectCharacterById(charIdx);
+      }
+      // 然后打开指定聊天
+      if (openCharacterChatFunc) {
+        await openCharacterChatFunc(chatFileName);
+      } else if (ctx.openCharacterChat) {
+        await ctx.openCharacterChat(chatFileName);
+      }
+      closeMainPopup();
+    } catch (e) {
+      console.error("[CFM] 打开聊天记录失败:", e);
+      toastr.error("打开聊天记录失败");
+    }
+  }
+
+  /**
+   * 导入聊天记录文件
+   * @param {string} avatar - 角色的 avatar 文件名
+   * @param {FileList} files - 要导入的文件列表
+   */
+  async function importChatFiles(avatar, files) {
+    const characters = getCharacters();
+    const char = characters.find((c) => c.avatar === avatar);
+    if (!char) {
+      toastr.error("找不到对应角色");
+      return;
+    }
+    const ctx = getContext();
+    let successCount = 0;
+    let failCount = 0;
+    toastr.info(`正在导入 ${files.length} 个聊天记录...`);
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append("avatar_url", avatar);
+        formData.append("file", file);
+        formData.append("file_type", "jsonl");
+        if (importCharacterChatFunc) {
+          const result = await importCharacterChatFunc(formData, { refresh: false });
+          if (result && result.length > 0) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } else {
+          // 回退：直接调用 API
+          const response = await fetch("/api/chats/import", {
+            method: "POST",
+            body: formData,
+            headers: ctx.getRequestHeaders({ omitContentType: true }),
+          });
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+      } catch (e) {
+        console.error("[CFM] 导入聊天记录失败:", e);
+        failCount++;
+      }
+    }
+    invalidateChatCache(avatar);
+    if (successCount > 0) {
+      toastr.success(`成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`);
+    } else {
+      toastr.error(`导入失败`);
+    }
+    rerenderCurrentView();
+  }
+
+  /**
+   * 渲染角色的聊天记录子列表
+   * @param {jQuery} charRow - 角色卡行的 jQuery 对象
+   * @param {string} avatar - 角色的 avatar
+   * @param {Array} chats - 聊天记录列表
+   */
+  function renderChatSubList(charRow, avatar, chats) {
+    // 移除已有的子列表
+    charRow.next(".cfm-chat-sublist").remove();
+
+    const characters = getCharacters();
+    const char = characters.find((c) => c.avatar === avatar);
+    const currentChatName = char ? char.chat : null;
+
+    const subList = $('<div class="cfm-chat-sublist"></div>');
+
+    // 聊天记录操作工具栏（始终显示）
+    const chatToolbar = $(`
+      <div class="cfm-chat-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-chat-import-btn" title="导入聊天记录"><i class="fa-solid fa-file-import"></i> 导入</button>
+        <input type="file" class="cfm-chat-import-file" multiple accept=".jsonl" style="display:none;">
+        <button class="cfm-btn cfm-btn-sm cfm-chat-batch-toggle ${cfmChatBatchMode ? "cfm-chat-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmChatBatchMode ? "退出批量" : "批量操作"}</button>
+      </div>
+    `);
+    chatToolbar.find(".cfm-chat-import-btn").on("click", (e) => {
+      e.stopPropagation();
+      chatToolbar.find(".cfm-chat-import-file").val("").trigger("click");
+    });
+    chatToolbar.find(".cfm-chat-import-file").on("change", async (e) => {
+      e.stopPropagation();
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      await importChatFiles(avatar, files);
+    });
+    chatToolbar.find(".cfm-chat-batch-toggle").on("click", (e) => {
+      e.stopPropagation();
+      cfmChatBatchMode = !cfmChatBatchMode;
+      cfmChatBatchSelected.clear();
+      rerenderCurrentView();
+    });
+    subList.append(chatToolbar);
+
+    // 批量操作工具栏
+    if (cfmChatBatchMode) {
+      const relevantSelected = Array.from(cfmChatBatchSelected).filter((k) =>
+        k.startsWith(avatar + "::"),
+      );
+      const allSel = chats.every((c) => {
+        const fn = c.file_name.replace(".jsonl", "");
+        return cfmChatBatchSelected.has(`${avatar}::${fn}`);
+      });
+      const batchToolbar = $(`
+        <div class="cfm-chat-batch-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-chat-batch-selall" title="全选/全不选">
+            <i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}
+          </button>
+          <span class="cfm-chat-batch-count">${relevantSelected.length > 0 ? `已选 ${relevantSelected.length} 项` : ""}</span>
+          <button class="cfm-btn cfm-btn-sm cfm-chat-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
+          <button class="cfm-btn cfm-btn-sm cfm-chat-batch-delete" title="批量删除"><i class="fa-solid fa-trash-can"></i> 删除</button>
+        </div>
+      `);
+      batchToolbar.find(".cfm-chat-batch-selall").on("click", (e) => {
+        e.stopPropagation();
+        if (allSel) {
+          chats.forEach((c) => {
+            const fn = c.file_name.replace(".jsonl", "");
+            cfmChatBatchSelected.delete(`${avatar}::${fn}`);
+          });
+        } else {
+          chats.forEach((c) => {
+            const fn = c.file_name.replace(".jsonl", "");
+            cfmChatBatchSelected.add(`${avatar}::${fn}`);
+          });
+        }
+        rerenderCurrentView();
+      });
+      batchToolbar.find(".cfm-chat-batch-export").on("click", async (e) => {
+        e.stopPropagation();
+        const toExport = Array.from(cfmChatBatchSelected).filter((k) =>
+          k.startsWith(avatar + "::"),
+        );
+        if (toExport.length === 0) {
+          toastr.warning("请先选择要导出的聊天记录");
+          return;
+        }
+        for (const key of toExport) {
+          const fn = key.split("::")[1];
+          await exportChatFile(avatar, fn, "jsonl");
+        }
+      });
+      batchToolbar.find(".cfm-chat-batch-delete").on("click", async (e) => {
+        e.stopPropagation();
+        const toDelete = Array.from(cfmChatBatchSelected).filter((k) =>
+          k.startsWith(avatar + "::"),
+        );
+        if (toDelete.length === 0) {
+          toastr.warning("请先选择要删除的聊天记录");
+          return;
+        }
+        if (!confirm(`确定要删除选中的 ${toDelete.length} 条聊天记录吗？此操作不可撤销。`)) return;
+        let successCount = 0;
+        for (const key of toDelete) {
+          const fn = key.split("::")[1];
+          if (await deleteChatFile(avatar, fn)) successCount++;
+        }
+        toastr.success(`已删除 ${successCount} 条聊天记录`);
+        rerenderCurrentView();
+      });
+      subList.append(batchToolbar);
+    }
+
+    for (const chat of chats) {
+      const chatName = chat.file_name.replace(".jsonl", "");
+      const isCurrentChat = chatName === currentChatName;
+      const note = cfmChatNotes[chatName] || "";
+      const batchKey = `${avatar}::${chatName}`;
+      const isBatchSel = cfmChatBatchMode && cfmChatBatchSelected.has(batchKey);
+      const msgCount = chat.chat_items || 0;
+      const lastMes = chat.last_mes || "";
+      const fileSize = chat.file_size || "";
+
+      // 格式化日期
+      let dateStr = "";
+      try {
+        const { timestampToMoment } = getContext();
+        if (timestampToMoment && lastMes) {
+          dateStr = timestampToMoment(lastMes).format("YYYY-MM-DD HH:mm");
+        }
+      } catch (e) {
+        dateStr = lastMes;
+      }
+
+      const chatRow = $(`
+        <div class="cfm-chat-row ${isCurrentChat ? "cfm-chat-current" : ""} ${isBatchSel ? "cfm-chat-batch-selected" : ""}" data-chat-name="${escapeHtml(chatName)}" data-avatar="${escapeHtml(avatar)}">
+          ${cfmChatBatchMode ? `<div class="cfm-chat-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+          <div class="cfm-chat-row-icon"><i class="fa-solid fa-message${isCurrentChat ? " cfm-chat-icon-current" : ""}"></i></div>
+          <div class="cfm-chat-row-info">
+            <div class="cfm-chat-row-name">${escapeHtml(chatName)}${isCurrentChat ? ' <span class="cfm-chat-current-badge">当前</span>' : ""}${note ? ` <span class="cfm-chat-note-badge" title="${escapeHtml(note)}">📝</span>` : ""}</div>
+            <div class="cfm-chat-row-meta">
+              <span title="消息数">${msgCount} 条消息</span>
+              <span title="文件大小">${fileSize}</span>
+              ${dateStr ? `<span title="最后消息时间">${dateStr}</span>` : ""}
+            </div>
+          </div>
+          <div class="cfm-chat-row-actions">
+            <div class="cfm-chat-action-btn cfm-chat-pin-btn" title="置顶到最近聊天"><i class="fa-solid fa-thumbtack"></i></div>
+            <div class="cfm-chat-action-btn cfm-chat-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
+            <div class="cfm-chat-action-btn cfm-chat-note-btn" title="${note ? "编辑备注" : "添加备注"}"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="cfm-chat-action-btn cfm-chat-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
+            <div class="cfm-chat-action-btn cfm-chat-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
+          </div>
+        </div>
+      `);
+
+      // 点击行：打开聊天 / 批量模式下切换选中
+      chatRow.on("click", (e) => {
+        if ($(e.target).closest(".cfm-chat-row-actions, .cfm-chat-batch-check").length) return;
+        if (cfmChatBatchMode) {
+          if (cfmChatBatchSelected.has(batchKey)) cfmChatBatchSelected.delete(batchKey);
+          else cfmChatBatchSelected.add(batchKey);
+          rerenderCurrentView();
+          return;
+        }
+        openChatFile(avatar, chatName);
+      });
+
+      // 批量模式复选框
+      chatRow.find(".cfm-chat-batch-check").on("click", (e) => {
+        e.stopPropagation();
+        if (cfmChatBatchSelected.has(batchKey)) cfmChatBatchSelected.delete(batchKey);
+        else cfmChatBatchSelected.add(batchKey);
+        rerenderCurrentView();
+      });
+
+      // 置顶到最近聊天（本质上是打开这个聊天，让它出现在 recent chats 中）
+      chatRow.find(".cfm-chat-pin-btn").on("click", async (e) => {
+        e.stopPropagation();
+        // 打开聊天会自动将其更新为最近聊天
+        await openChatFile(avatar, chatName);
+      });
+
+      // 重命名
+      chatRow.find(".cfm-chat-rename-btn").on("click", async (e) => {
+        e.stopPropagation();
+        const newName = prompt("请输入新的聊天记录名称:", chatName);
+        if (!newName || newName === chatName) return;
+        if (await renameChatFile(avatar, chatName, newName)) {
+          toastr.success(`已重命名: ${chatName} → ${newName}`);
+          rerenderCurrentView();
+        } else {
+          toastr.error("重命名失败");
+        }
+      });
+
+      // 备注
+      chatRow.find(".cfm-chat-note-btn").on("click", async (e) => {
+        e.stopPropagation();
+        const currentNote = cfmChatNotes[chatName] || "";
+        const newNote = prompt("请输入聊天记录备注:", currentNote);
+        if (newNote === null) return; // 取消
+        if (newNote === "") {
+          delete cfmChatNotes[chatName];
+        } else {
+          cfmChatNotes[chatName] = newNote;
+        }
+        saveChatNotes();
+        rerenderCurrentView();
+      });
+
+      // 导出
+      chatRow.find(".cfm-chat-export-btn").on("click", async (e) => {
+        e.stopPropagation();
+        await exportChatFile(avatar, chatName, "jsonl");
+      });
+
+      // 删除
+      chatRow.find(".cfm-chat-delete-btn").on("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`确定要删除聊天记录「${chatName}」吗？此操作不可撤销。`)) return;
+        if (await deleteChatFile(avatar, chatName)) {
+          toastr.success(`已删除: ${chatName}`);
+          rerenderCurrentView();
+        } else {
+          toastr.error("删除失败");
+        }
+      });
+
+      subList.append(chatRow);
+    }
+
+    // 插入到角色行之后
+    charRow.after(subList);
+  }
+
   // 显示编辑弹窗（支持单个或批量）
   async function showEditPopup(avatars) {
     if (!avatars || avatars.length === 0) return;
@@ -9427,6 +9964,7 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
+                            <button class="cfm-chat-mode-btn" id="cfm-chat-mode-btn" title="显示聊天记录"><i class="fa-solid fa-comments"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-edit-char-btn" title="快速编辑角色卡"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-char-btn" title="导出角色卡"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-char-btn" title="删除角色卡"><i class="fa-solid fa-trash-can"></i></button>
@@ -10597,6 +11135,13 @@ jQuery(async () => {
       } else {
         enterResDeleteMode();
       }
+    });
+
+    // ==================== 聊天记录模式按钮 ====================
+    popup.find("#cfm-chat-mode-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleChatMode();
     });
 
     // ==================== 角色卡快速编辑功能 ====================
@@ -13836,9 +14381,15 @@ jQuery(async () => {
       !cfmExportMode && !cfmResDeleteMode && !cfmEditMode && !cfmMultiSelectMode
         ? `<div class="cfm-row-edit-btn" title="编辑作者名/版本名"><i class="fa-solid fa-pen-to-square"></i></div>`
         : "";
+    // 聊天模式下的小三角按钮
+    const isExpanded = cfmChatMode && cfmChatExpandedAvatars.has(char.avatar);
+    const chatToggleHtml = cfmChatMode
+      ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
+      : "";
     const row = $(`
             <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
+                ${chatToggleHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
                 ${singleEditBtn}
@@ -13870,11 +14421,33 @@ jQuery(async () => {
       e.stopPropagation();
       executeCharEdit([char.avatar]);
     });
+    // 聊天模式下小三角点击：展开/折叠聊天记录
+    row.find(".cfm-chat-toggle").on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const avatar = char.avatar;
+      if (cfmChatExpandedAvatars.has(avatar)) {
+        // 折叠
+        cfmChatExpandedAvatars.delete(avatar);
+        row.next(".cfm-chat-sublist").slideUp(150, function () {
+          $(this).remove();
+        });
+        row.find(".cfm-chat-toggle i").removeClass("fa-caret-down").addClass("fa-caret-right");
+      } else {
+        // 展开：异步获取聊天记录
+        cfmChatExpandedAvatars.add(avatar);
+        row.find(".cfm-chat-toggle i").removeClass("fa-caret-right").addClass("fa-caret-down");
+        const chats = await getCharChats(avatar);
+        renderChatSubList(row, avatar, chats || []);
+        row.next(".cfm-chat-sublist").hide().slideDown(150);
+      }
+    });
     // 点击行为：多选模式下切换选中，否则打开角色聊天
     row.on("click", (e) => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
       if ($(e.target).closest(".cfm-row-edit-btn").length) return;
+      if ($(e.target).closest(".cfm-chat-toggle").length) return;
       if (cfmResDeleteMode) {
         toggleResDeleteItem(char.avatar, e.shiftKey);
         renderRightPane();
@@ -13929,6 +14502,13 @@ jQuery(async () => {
       pcDragEnd();
     });
     container.append(row);
+    // 聊天模式下，如果该角色已展开，立即渲染聊天子列表
+    if (cfmChatMode && cfmChatExpandedAvatars.has(char.avatar)) {
+      (async () => {
+        const chats = await getCharChats(char.avatar);
+        renderChatSubList(row, char.avatar, chats || []);
+      })();
+    }
   }
 
   // ==================== 标签管理配置弹窗 ====================
