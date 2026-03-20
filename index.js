@@ -9163,6 +9163,111 @@ jQuery(async () => {
   }
 
   /**
+   * 聊天记录重命名弹窗（cfm-edit-popup 风格）
+   */
+  function showChatRenamePopup(chatName) {
+    return new Promise((resolve) => {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">重命名聊天记录</div>
+            <div class="cfm-edit-popup-names"><span class="cfm-edit-popup-name-tag">${escapeHtml(chatName)}</span></div>
+            <div class="cfm-edit-popup-field">
+              <label>新名称</label>
+              <input type="text" class="cfm-edit-input" id="cfm-chat-rename-input" value="${escapeHtml(chatName)}" placeholder="输入新名称">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-chat-rename-input").trigger("focus").select();
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(null); });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(null); } });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const newName = overlay.find("#cfm-chat-rename-input").val().trim();
+        overlay.remove();
+        resolve(newName || null);
+      });
+      overlay.find("#cfm-chat-rename-input").on("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); overlay.find(".cfm-edit-popup-confirm").trigger("click"); }
+        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
+      });
+    });
+  }
+
+  /**
+   * 聊天记录备注弹窗（cfm-edit-popup 风格）
+   */
+  function showChatNotePopup(chatName, currentNote) {
+    return new Promise((resolve) => {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">编辑聊天记录备注</div>
+            <div class="cfm-edit-popup-names"><span class="cfm-edit-popup-name-tag">${escapeHtml(chatName)}</span></div>
+            <div class="cfm-edit-popup-field">
+              <label>备注</label>
+              <input type="text" class="cfm-edit-input" id="cfm-chat-note-input" value="${escapeHtml(currentNote)}" placeholder="输入备注内容">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              ${currentNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : ''}
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-chat-note-input").trigger("focus");
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(undefined); });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(undefined); } });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => { overlay.remove(); resolve(""); });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-chat-note-input").val().trim();
+        overlay.remove();
+        resolve(note);
+      });
+      overlay.find("#cfm-chat-note-input").on("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); overlay.find(".cfm-edit-popup-confirm").trigger("click"); }
+        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
+      });
+    });
+  }
+
+  /**
+   * 聊天记录删除确认弹窗（cfm-edit-popup 风格）
+   */
+  function showChatDeleteConfirmPopup(message) {
+    return new Promise((resolve) => {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">确认删除</div>
+            <div class="cfm-edit-popup-field" style="font-size:13px;line-height:1.6;">
+              ${escapeHtml(message)}
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm" style="background:#f38ba8;">确认删除</button>
+            </div>
+          </div>
+        </div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(false); });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(false); } });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => { overlay.remove(); resolve(true); });
+      $(document).one("keydown.cfmChatDelete", (e) => {
+        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
+      });
+    });
+  }
+
+  /**
    * 重命名聊天记录
    */
   async function renameChatFile(avatar, oldFileName, newName) {
@@ -9758,7 +9863,7 @@ jQuery(async () => {
           toastr.warning("请先选择要删除的聊天记录");
           return;
         }
-        if (!confirm(`确定要删除选中的 ${toDelete.length} 条聊天记录吗？此操作不可撤销。`)) return;
+        if (!(await showChatDeleteConfirmPopup(`确定要删除选中的 ${toDelete.length} 条聊天记录吗？此操作不可撤销。`))) return;
         let successCount = 0;
         for (const key of toDelete) {
           const fn = key.split("::")[1];
@@ -9848,7 +9953,7 @@ jQuery(async () => {
       // 重命名
       chatRow.find(".cfm-chat-rename-btn").on("click", async (e) => {
         e.stopPropagation();
-        const newName = prompt("请输入新的聊天记录名称:", chatName);
+        const newName = await showChatRenamePopup(chatName);
         if (!newName || newName === chatName) return;
         if (await renameChatFile(avatar, chatName, newName)) {
           toastr.success(`已重命名: ${chatName} → ${newName}`);
@@ -9862,8 +9967,8 @@ jQuery(async () => {
       chatRow.find(".cfm-chat-note-btn").on("click", async (e) => {
         e.stopPropagation();
         const currentNote = cfmChatNotes[chatName] || "";
-        const newNote = prompt("请输入聊天记录备注:", currentNote);
-        if (newNote === null) return; // 取消
+        const newNote = await showChatNotePopup(chatName, currentNote);
+        if (newNote === undefined) return; // 取消
         if (newNote === "") {
           delete cfmChatNotes[chatName];
         } else {
@@ -9882,7 +9987,7 @@ jQuery(async () => {
       // 删除
       chatRow.find(".cfm-chat-delete-btn").on("click", async (e) => {
         e.stopPropagation();
-        if (!confirm(`确定要删除聊天记录「${chatName}」吗？此操作不可撤销。`)) return;
+        if (!(await showChatDeleteConfirmPopup(`确定要删除聊天记录「${chatName}」吗？此操作不可撤销。`))) return;
         if (await deleteChatFile(avatar, chatName)) {
           toastr.success(`已删除: ${chatName}`);
           rerenderCurrentView();
