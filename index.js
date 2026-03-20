@@ -9072,7 +9072,7 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
 
-  function enterChatMode() {
+  async function enterChatMode() {
     cfmChatMode = true;
     cfmChatExpandedAvatars.clear();
     cfmChatCache.clear();
@@ -9081,6 +9081,13 @@ jQuery(async () => {
     $("#cfm-chat-mode-btn").addClass("cfm-chat-mode-active");
     $("#cfm-chat-mode-btn").find("i").removeClass("fa-comments").addClass("fa-comments");
     $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
+    // 批量预加载所有角色的聊天数据到缓存，避免小三角逐个异步出现
+    try {
+      const characters = getCharacters();
+      await Promise.all(characters.map((c) => getCharChats(c.avatar)));
+    } catch (e) {
+      console.warn("[CFM] 批量预加载聊天数据时出错:", e);
+    }
     rerenderCurrentView();
   }
 
@@ -14386,10 +14393,17 @@ jQuery(async () => {
         : "";
     // 聊天模式下的小三角按钮（需同时检查自定义布局中 chatmode 是否可见）
     const chatmodeVisible = cfmChatMode && getVisibleActions("chars").includes("chatmode");
-    const isExpanded = chatmodeVisible && cfmChatExpandedAvatars.has(char.avatar);
-    // 小三角初始隐藏，异步检查是否有实质性聊天后再显示
-    const chatToggleHtml = chatmodeVisible
-      ? `<div class="cfm-chat-toggle" style="display:none" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
+    // 从缓存同步判断是否有实质性聊天（enterChatMode 已批量预加载）
+    let showChatToggle = false;
+    if (chatmodeVisible) {
+      const cachedChats = cfmChatCache.get(char.avatar);
+      if (cachedChats && cachedChats.length > 0) {
+        showChatToggle = cachedChats.length > 1 || (cachedChats[0] && (cachedChats[0].chat_items || 0) > 1);
+      }
+    }
+    const isExpanded = showChatToggle && cfmChatExpandedAvatars.has(char.avatar);
+    const chatToggleHtml = showChatToggle
+      ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
     const row = $(`
             <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
@@ -14507,26 +14521,12 @@ jQuery(async () => {
       pcDragEnd();
     });
     container.append(row);
-    // 聊天模式下，异步检查是否有实质性聊天记录来决定小三角显示
-    if (chatmodeVisible) {
-      (async () => {
-        const chats = await getCharChats(char.avatar);
-        // 判断是否有实质性聊天：多条聊天记录，或单条但消息数 > 1（不仅是开场白）
-        const hasRealChats = chats && chats.length > 0 && (
-          chats.length > 1 || (chats[0] && (chats[0].chat_items || 0) > 1)
-        );
-        if (hasRealChats) {
-          row.find(".cfm-chat-toggle").show();
-          // 如果该角色已展开，立即渲染聊天子列表
-          if (cfmChatExpandedAvatars.has(char.avatar)) {
-            renderChatSubList(row, char.avatar, chats || []);
-          }
-        } else {
-          // 无实质性聊天，移除小三角并从展开集合中清除
-          row.find(".cfm-chat-toggle").remove();
-          cfmChatExpandedAvatars.delete(char.avatar);
-        }
-      })();
+    // 聊天模式下，如果该角色已展开且有实质性聊天，立即渲染聊天子列表
+    if (showChatToggle && cfmChatExpandedAvatars.has(char.avatar)) {
+      const cachedChats = cfmChatCache.get(char.avatar);
+      if (cachedChats) {
+        renderChatSubList(row, char.avatar, cachedChats);
+      }
     }
   }
 
