@@ -10591,37 +10591,46 @@ jQuery(async () => {
         if (selectedTreeNode) {
           const fullPath = getFolderPath(selectedTreeNode);
           // 排除最后一个（即选中节点本身），只展开其祖先
-          for (let i = 0; i < fullPath.length - 1; i++) expandedNodes.add(fullPath[i]);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            expandedNodes.add(fullPath[i]);
         }
       } else if (initialTab === "presets") {
         selectedPresetFolder = folder || null;
         if (selectedPresetFolder) {
           const fullPath = getResFolderPath("presets", selectedPresetFolder);
-          for (let i = 0; i < fullPath.length - 1; i++) presetExpandedNodes.add(fullPath[i]);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            presetExpandedNodes.add(fullPath[i]);
         }
       } else if (initialTab === "worldinfo") {
         selectedWorldInfoFolder = folder || null;
         if (selectedWorldInfoFolder) {
-          const fullPath = getResFolderPath("worldinfo", selectedWorldInfoFolder);
-          for (let i = 0; i < fullPath.length - 1; i++) worldInfoExpandedNodes.add(fullPath[i]);
+          const fullPath = getResFolderPath(
+            "worldinfo",
+            selectedWorldInfoFolder,
+          );
+          for (let i = 0; i < fullPath.length - 1; i++)
+            worldInfoExpandedNodes.add(fullPath[i]);
         }
       } else if (initialTab === "themes") {
         selectedThemeFolder = folder || null;
         if (selectedThemeFolder) {
           const fullPath = getResFolderPath("themes", selectedThemeFolder);
-          for (let i = 0; i < fullPath.length - 1; i++) themeExpandedNodes.add(fullPath[i]);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            themeExpandedNodes.add(fullPath[i]);
         }
       } else if (initialTab === "backgrounds") {
         selectedBgFolder = folder || null;
         if (selectedBgFolder) {
           const fullPath = getResFolderPath("backgrounds", selectedBgFolder);
-          for (let i = 0; i < fullPath.length - 1; i++) bgExpandedNodes.add(fullPath[i]);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            bgExpandedNodes.add(fullPath[i]);
         }
       } else if (initialTab === "personas") {
         selectedPersonaFolder = folder || null;
         if (selectedPersonaFolder) {
           const fullPath = getResFolderPath("personas", selectedPersonaFolder);
-          for (let i = 0; i < fullPath.length - 1; i++) personaExpandedNodes.add(fullPath[i]);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            personaExpandedNodes.add(fullPath[i]);
         }
       }
     }
@@ -23116,6 +23125,111 @@ jQuery(async () => {
         setRightPane("角色正则 — " + title, totalItems, contentHtml);
       }
     });
+
+    // --- 绑定正则脚本toggle点击事件（启用/禁用） ---
+    rightList
+      .off("click.rxtoggle")
+      .on(
+        "click.rxtoggle",
+        ".cfm-regex-script-row .cfm-wi-toggle",
+        async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const row = $(this).closest(".cfm-regex-script-row");
+          const scriptId = row.data("script-id");
+          const scriptType = Number(row.data("script-type"));
+          const owner = row.data("owner") || "";
+          if (!scriptId) return;
+
+          // 根据类型找到脚本引用并切换 disabled
+          let script = null;
+          let scripts = null;
+          if (scriptType === 0) {
+            // 全局正则
+            scripts = extension_settings.regex || [];
+            script = scripts.find((s) => s.id === scriptId);
+          } else if (scriptType === 2) {
+            // 预设正则
+            const pm = getContext().getPresetManager();
+            if (pm) {
+              try {
+                scripts = pm.readPresetExtensionField({
+                  name: owner,
+                  path: "regex_scripts",
+                });
+                if (Array.isArray(scripts))
+                  script = scripts.find((s) => s.id === scriptId);
+              } catch (e) {
+                /* skip */
+              }
+            }
+          } else if (scriptType === 1) {
+            // 角色正则
+            const chars = getCharacters();
+            const ch = chars.find((c) => c.name === owner);
+            if (ch?.data?.extensions?.regex_scripts) {
+              scripts = ch.data.extensions.regex_scripts;
+              script = scripts.find((s) => s.id === scriptId);
+            }
+          }
+          if (!script) {
+            toastr.warning("未找到对应的正则脚本");
+            return;
+          }
+
+          // 切换 disabled 状态
+          script.disabled = !script.disabled;
+
+          // 保存
+          try {
+            if (scriptType === 0) {
+              getContext().saveSettingsDebounced();
+            } else if (scriptType === 2) {
+              const pm = getContext().getPresetManager();
+              if (pm)
+                await pm.writePresetExtensionField({
+                  path: "regex_scripts",
+                  value: scripts,
+                });
+            } else if (scriptType === 1) {
+              const chars = getCharacters();
+              const ch = chars.find((c) => c.name === owner);
+              if (ch) {
+                const headers = getContext().getRequestHeaders();
+                await fetch("/api/characters/merge-attributes", {
+                  method: "POST",
+                  headers: headers,
+                  body: JSON.stringify({
+                    avatar: ch.avatar,
+                    data: { extensions: { regex_scripts: scripts } },
+                  }),
+                });
+              }
+            }
+          } catch (err) {
+            console.error("[CFM] 正则toggle保存失败:", err);
+            toastr.error("保存失败: " + err.message);
+            // 回滚
+            script.disabled = !script.disabled;
+            return;
+          }
+
+          // 更新 toggle 按钮外观
+          const isNowDisabled = !!script.disabled;
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+          );
+          el.attr(
+            "title",
+            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+          );
+          // 更新行的禁用样式
+          row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        },
+      );
 
     // --- 绑定右栏子文件夹/子项行点击 → 左栏展开并选中 ---
     rightList
