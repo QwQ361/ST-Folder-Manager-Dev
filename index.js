@@ -14384,9 +14384,10 @@ jQuery(async () => {
       !cfmExportMode && !cfmResDeleteMode && !cfmEditMode && !cfmMultiSelectMode
         ? `<div class="cfm-row-edit-btn" title="编辑作者名/版本名"><i class="fa-solid fa-pen-to-square"></i></div>`
         : "";
-    // 聊天模式下的小三角按钮
-    const isExpanded = cfmChatMode && cfmChatExpandedAvatars.has(char.avatar);
-    const chatToggleHtml = cfmChatMode
+    // 聊天模式下的小三角按钮（需同时检查自定义布局中 chatmode 是否可见）
+    const chatmodeVisible = cfmChatMode && getVisibleActions("chars").includes("chatmode");
+    const isExpanded = chatmodeVisible && cfmChatExpandedAvatars.has(char.avatar);
+    const chatToggleHtml = chatmodeVisible
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
     const row = $(`
@@ -14505,8 +14506,8 @@ jQuery(async () => {
       pcDragEnd();
     });
     container.append(row);
-    // 聊天模式下，如果该角色已展开，立即渲染聊天子列表
-    if (cfmChatMode && cfmChatExpandedAvatars.has(char.avatar)) {
+    // 聊天模式下，如果该角色已展开且 chatmode 子功能可见，立即渲染聊天子列表
+    if (cfmChatMode && getVisibleActions("chars").includes("chatmode") && cfmChatExpandedAvatars.has(char.avatar)) {
       (async () => {
         const chats = await getCharChats(char.avatar);
         renderChatSubList(row, char.avatar, chats || []);
