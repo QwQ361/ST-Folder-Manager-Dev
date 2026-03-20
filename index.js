@@ -9550,14 +9550,14 @@ jQuery(async () => {
     pinnedElements.forEach((el) => {
       el.classList.add("cfm-pinned-chat");
       el.classList.remove("hidden"); // 置顶项始终可见
-      // 在角色名前添加图钉图标
+      // 在角色名后添加图钉图标
       if (!el.querySelector(".cfm-pin-indicator")) {
         const nameEl = el.querySelector(".characterName");
         if (nameEl) {
           const pinIcon = document.createElement("i");
           pinIcon.className = "fa-solid fa-thumbtack cfm-pin-indicator";
           pinIcon.title = "已置顶";
-          nameEl.parentNode.insertBefore(pinIcon, nameEl);
+          nameEl.parentNode.insertBefore(pinIcon, nameEl.nextSibling);
         }
       }
     });
@@ -9665,8 +9665,8 @@ jQuery(async () => {
           <div class="recentChatInfo">
             <div class="chatNameContainer">
               <div class="chatName" title="${eChatFile}.jsonl">
-                <i class="fa-solid fa-thumbtack cfm-pin-indicator" title="已置顶"></i>
                 <strong class="characterName">${eName}</strong>
+                <i class="fa-solid fa-thumbtack cfm-pin-indicator" title="已置顶"></i>
                 <span>&ndash;</span>
                 <span>${eChatFile}</span>
               </div>

@@ -4355,7 +4355,7 @@ option.cfm-nf-hidden {
 .recentChat.cfm-pinned-chat .cfm-pin-indicator {
   color: #f9e2af;
   font-size: 0.75em;
-  margin-right: 4px;
+  margin-left: 4px;
   transform: rotate(-45deg);
 }
 .cfm-chat-rename-btn:hover {
