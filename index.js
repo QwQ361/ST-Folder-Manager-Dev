@@ -15012,6 +15012,57 @@ jQuery(async () => {
       return;
     }
 
+    // ===== 聊天标签页：只渲染通用配置，不显示文件夹管理 =====
+    if (currentResourceType === "chats") {
+      // 0. 按钮位置设置（共享）
+      const currentMode = getButtonMode();
+      const modeSection = $(`
+        <div class="cfm-config-section cfm-mode-section">
+          <label>按钮位置</label>
+          <div class="cfm-mode-toggle">
+            <button class="cfm-mode-btn ${currentMode === "topbar" ? "cfm-mode-active" : ""}" data-mode="topbar"><i class="fa-solid fa-bars"></i> 固定在顶栏</button>
+            <button class="cfm-mode-btn ${currentMode === "float" ? "cfm-mode-active" : ""}" data-mode="float"><i class="fa-solid fa-up-down-left-right"></i> 浮动按钮</button>
+            <button class="cfm-mode-btn ${currentMode === "wand" ? "cfm-mode-active" : ""}" data-mode="wand"><i class="fa-solid fa-magic-wand-sparkles"></i> 魔术棒菜单</button>
+          </div>
+        </div>
+      `);
+      modeSection.find(".cfm-mode-btn").on("click touchend", function (e) {
+        e.preventDefault();
+        const newMode = $(this).data("mode");
+        if (newMode === getButtonMode()) return;
+        switchButtonMode(newMode);
+        const modeLabels = {
+          topbar: "已切换为顶栏按钮",
+          float: "已切换为浮动按钮",
+          wand: "已切换为魔术棒菜单",
+        };
+        toastr.success(modeLabels[newMode] || "已切换");
+        modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
+        $(this).addClass("cfm-mode-active");
+      });
+      body.append(modeSection);
+
+      // 0.5 自定义顶栏图标（共享函数）
+      renderTopbarIconConfigSection(body);
+      // 0.6 默认打开页面（共享函数）
+      renderDefaultPageConfigSection(body);
+      // 0.7 自定义布局（共享函数）
+      renderCustomLayoutSection(body);
+
+      // 提示：聊天文件夹复用角色卡
+      const chatHint = $(`
+        <div class="cfm-config-section">
+          <label>文件夹管理</label>
+          <div style="padding:12px;font-size:12px;opacity:0.7;line-height:1.6;">
+            <i class="fa-solid fa-circle-info"></i> 聊天标签页的文件夹树直接复用角色卡的文件夹结构，无需单独管理。<br>
+            如需新增、删除或重命名文件夹，请切换到「角色」标签页后打开此设置面板进行操作。
+          </div>
+        </div>
+      `);
+      body.append(chatHint);
+      return;
+    }
+
     // ===== 以下为角色卡（chars）配置 =====
 
     // 0. 按钮位置设置
