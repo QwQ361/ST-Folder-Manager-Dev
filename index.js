@@ -9108,7 +9108,7 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
 
-  async function enterChatMode() {
+  function enterChatMode() {
     cfmChatMode = true;
     cfmChatExpandedAvatars.clear();
     cfmChatCache.clear();
@@ -9120,17 +9120,18 @@ jQuery(async () => {
       .removeClass("fa-comments")
       .addClass("fa-comments");
     $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
-    // 先立即渲染，让用户看到聊天模式已激活
+    // 立即渲染：三角箭头通过乐观渲染策略立即显示（缓存 undefined → 默认显示）
     rerenderCurrentView();
-    // 再异步批量预加载所有角色的聊天数据到缓存
-    try {
-      const characters = getCharacters();
-      await Promise.all(characters.map((c) => getCharChats(c.avatar)));
-    } catch (e) {
-      console.warn("[CFM] 批量预加载聊天数据时出错:", e);
-    }
-    // 数据加载完成后再次渲染，此时三角箭头会正常显示
-    rerenderCurrentView();
+    // 非阻塞后台预加载：加载完成后精确刷新三角（移除无聊天记录的角色的三角）
+    const characters = getCharacters();
+    Promise.all(characters.map((c) => getCharChats(c.avatar)))
+      .then(() => {
+        // 仅当没有展开的子列表时才刷新，避免打断用户交互
+        if (cfmChatMode && cfmChatExpandedAvatars.size === 0) {
+          rerenderCurrentView();
+        }
+      })
+      .catch((e) => console.warn("[CFM] 批量预加载聊天数据时出错:", e));
   }
 
   function exitChatMode() {
@@ -15143,11 +15144,15 @@ jQuery(async () => {
     // 聊天模式下的小三角按钮（需同时检查自定义布局中 chatmode 是否可见）
     const chatmodeVisible =
       cfmChatMode && getVisibleActions("chars").includes("chatmode");
-    // 从缓存同步判断是否有实质性聊天（enterChatMode 已批量预加载）
+    // 乐观渲染：缓存尚未加载时默认显示三角，加载完成后根据实际数据精确判断
     let showChatToggle = false;
     if (chatmodeVisible) {
       const cachedChats = cfmChatCache.get(char.avatar);
-      if (cachedChats && cachedChats.length > 0) {
+      if (cachedChats === undefined) {
+        // 缓存尚未加载 → 乐观显示三角，让用户立即看到
+        showChatToggle = true;
+      } else if (cachedChats && cachedChats.length > 0) {
+        // 缓存已加载 → 根据实际数据判断是否有实质性聊天
         showChatToggle =
           cachedChats.length > 1 ||
           (cachedChats[0] && (cachedChats[0].chat_items || 0) > 1);
