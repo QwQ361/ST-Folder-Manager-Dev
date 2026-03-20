@@ -9795,19 +9795,6 @@ jQuery(async () => {
       const note = cfmChatNotes[chatName];
 
       if (note) {
-        // 在文件名后添加备注标识
-        const filenameEl = wrapper.querySelector(".select_chat_block_filename");
-        if (
-          filenameEl &&
-          !filenameEl.querySelector(".cfm-native-chat-note-badge")
-        ) {
-          const badge = document.createElement("span");
-          badge.className = "cfm-native-chat-note-badge";
-          badge.textContent = " 📝";
-          badge.title = "备注: " + note;
-          filenameEl.appendChild(badge);
-        }
-
         // 在预览消息上方添加备注内容
         const mesEl = wrapper.querySelector(".select_chat_block_mes");
         if (
@@ -9852,11 +9839,15 @@ jQuery(async () => {
           }
           saveChatNotes();
           // 刷新弹窗内容：移除所有增强标记和已注入的备注元素，然后重新处理
-          document.querySelectorAll("#select_chat_div .cfm-native-chat-enhanced").forEach((w) => {
-            w.classList.remove("cfm-native-chat-enhanced");
-            // 移除旧的备注元素
-            w.querySelectorAll(".cfm-native-chat-note-badge, .cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn").forEach((el) => el.remove());
-          });
+          document
+            .querySelectorAll("#select_chat_div .cfm-native-chat-enhanced")
+            .forEach((w) => {
+              w.classList.remove("cfm-native-chat-enhanced");
+              // 移除旧的备注元素
+              w.querySelectorAll(
+                ".cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn",
+              ).forEach((el) => el.remove());
+            });
           enhanceNativeChatPopup();
         });
       }
@@ -9907,16 +9898,6 @@ jQuery(async () => {
       noteDiv.textContent = "📝 " + note;
       noteDiv.title = "备注: " + note;
       chatInfoEl.insertBefore(noteDiv, msgContainer);
-
-      // 在 chatName 中添加备注标识
-      const chatNameEl = item.querySelector(".chatName");
-      if (chatNameEl && !chatNameEl.querySelector(".cfm-recent-note-badge")) {
-        const badge = document.createElement("span");
-        badge.className = "cfm-recent-note-badge";
-        badge.textContent = " 📝";
-        badge.title = "备注: " + note;
-        chatNameEl.appendChild(badge);
-      }
     });
   }
 
@@ -10164,7 +10145,7 @@ jQuery(async () => {
           ${cfmChatBatchMode ? `<div class="cfm-chat-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
           <div class="cfm-chat-row-icon"><i class="fa-solid fa-message${isCurrentChat ? " cfm-chat-icon-current" : ""}"></i></div>
           <div class="cfm-chat-row-info">
-            <div class="cfm-chat-row-name">${escapeHtml(chatName)}${isCurrentChat ? ' <span class="cfm-chat-current-badge">当前</span>' : ""}${note ? ` <span class="cfm-chat-note-badge">📝</span>` : ""}</div>
+            <div class="cfm-chat-row-name">${escapeHtml(chatName)}${isCurrentChat ? ' <span class="cfm-chat-current-badge">当前</span>' : ""}</div>
             ${note ? `<div class="cfm-chat-row-note">${escapeHtml(note)}</div>` : ""}
             <div class="cfm-chat-row-meta">
               <span title="消息数">${msgCount} 条消息</span>
