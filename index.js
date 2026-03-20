@@ -9598,6 +9598,9 @@ jQuery(async () => {
     if (missingPinned.length > 0) {
       fetchAndInsertMissingPinnedChats(recentList, missingPinned, insertBefore);
     }
+
+    // 在置顶操作完成后应用备注显示
+    requestAnimationFrame(() => enhanceRecentChatsWithNotes());
   }
 
   /**
@@ -9711,6 +9714,8 @@ jQuery(async () => {
         console.warn("[CFM] 获取置顶聊天信息失败:", pin, e);
       }
     }
+    // 异步插入完成后应用备注显示
+    requestAnimationFrame(() => enhanceRecentChatsWithNotes());
   }
 
   /**
@@ -9741,6 +9746,208 @@ jQuery(async () => {
     // 如果当前已有 welcomePanel，立即应用
     if (chatEl.querySelector(".welcomePanel")) {
       applyPinnedChatsToWelcomeScreen();
+    }
+  }
+
+  // ==================== 增强原生聊天管理弹窗 & 最近聊天显示备注 ====================
+
+  /**
+   * 增强酒馆原生「管理聊天记录」弹窗（#shadow_select_chat_popup）
+   * 在每条聊天记录上显示用户通过本插件添加的备注，并支持在原生弹窗中编辑备注。
+   * 使用 MutationObserver 监听 #select_chat_div 的子元素变化。
+   */
+  function setupNativeChatPopupEnhancer() {
+    const selectChatDiv = document.getElementById("select_chat_div");
+    if (!selectChatDiv) return;
+
+    const observer = new MutationObserver(() => {
+      // 延迟一帧确保 DOM 已完成渲染
+      requestAnimationFrame(() => enhanceNativeChatPopup());
+    });
+
+    observer.observe(selectChatDiv, { childList: true });
+  }
+
+  /**
+   * 对原生聊天管理弹窗中的聊天记录列表注入备注信息
+   */
+  function enhanceNativeChatPopup() {
+    // 确保备注数据已加载
+    if (!cfmChatNotes || Object.keys(cfmChatNotes).length === 0) {
+      initChatNotes();
+    }
+
+    const wrappers = document.querySelectorAll(
+      "#select_chat_div .select_chat_block_wrapper",
+    );
+    if (!wrappers.length) return;
+
+    wrappers.forEach((wrapper) => {
+      // 避免重复处理
+      if (wrapper.classList.contains("cfm-native-chat-enhanced")) return;
+      wrapper.classList.add("cfm-native-chat-enhanced");
+
+      const block = wrapper.querySelector(".select_chat_block");
+      if (!block) return;
+
+      const fileNameFull = block.getAttribute("file_name") || "";
+      const chatName = fileNameFull.replace(".jsonl", "");
+      const note = cfmChatNotes[chatName];
+
+      if (note) {
+        // 在文件名后添加备注标识
+        const filenameEl = wrapper.querySelector(".select_chat_block_filename");
+        if (
+          filenameEl &&
+          !filenameEl.querySelector(".cfm-native-chat-note-badge")
+        ) {
+          const badge = document.createElement("span");
+          badge.className = "cfm-native-chat-note-badge";
+          badge.textContent = " 📝";
+          badge.title = "备注: " + note;
+          filenameEl.appendChild(badge);
+        }
+
+        // 在预览消息上方添加备注内容
+        const mesEl = wrapper.querySelector(".select_chat_block_mes");
+        if (
+          mesEl &&
+          !mesEl.previousElementSibling?.classList?.contains(
+            "cfm-native-chat-note-line",
+          )
+        ) {
+          const noteLine = document.createElement("div");
+          noteLine.className = "cfm-native-chat-note-line";
+          noteLine.textContent = "📝 " + note;
+          noteLine.title = "备注: " + note;
+          mesEl.parentNode.insertBefore(noteLine, mesEl);
+        }
+      }
+
+      // 添加备注编辑按钮（在操作按钮区域）
+      const actionsContainer = wrapper.querySelector(
+        ".flex-container.gap10px:last-child",
+      );
+      if (
+        actionsContainer &&
+        !actionsContainer.querySelector(".cfm-native-chat-note-edit-btn")
+      ) {
+        const noteEditBtn = document.createElement("div");
+        noteEditBtn.className =
+          "cfm-native-chat-note-edit-btn opacity50p hoverglow fa-solid fa-pen-to-square";
+        noteEditBtn.title = note ? "编辑备注" : "添加备注";
+        noteEditBtn.style.cursor = "pointer";
+        // 插入到第一个按钮之前
+        actionsContainer.insertBefore(noteEditBtn, actionsContainer.firstChild);
+
+        noteEditBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const currentNote = cfmChatNotes[chatName] || "";
+          const newNote = await showChatNotePopup(chatName, currentNote);
+          if (newNote === null) return; // 取消
+          if (newNote === "") {
+            delete cfmChatNotes[chatName];
+          } else {
+            cfmChatNotes[chatName] = newNote;
+          }
+          saveChatNotes();
+          // 刷新弹窗内容：移除所有增强标记和已注入的备注元素，然后重新处理
+          document.querySelectorAll("#select_chat_div .cfm-native-chat-enhanced").forEach((w) => {
+            w.classList.remove("cfm-native-chat-enhanced");
+            // 移除旧的备注元素
+            w.querySelectorAll(".cfm-native-chat-note-badge, .cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn").forEach((el) => el.remove());
+          });
+          enhanceNativeChatPopup();
+        });
+      }
+    });
+  }
+
+  /**
+   * 增强 welcome-screen 最近聊天列表：显示备注
+   * 在 applyPinnedChatsToWelcomeScreen 之后调用，或通过 MutationObserver 自动触发
+   */
+  function enhanceRecentChatsWithNotes() {
+    // 确保备注数据已加载
+    if (!cfmChatNotes || Object.keys(cfmChatNotes).length === 0) {
+      initChatNotes();
+    }
+
+    const chatEl = document.getElementById("chat");
+    if (!chatEl) return;
+    const welcomePanel = chatEl.querySelector(".welcomePanel");
+    if (!welcomePanel) return;
+    const recentList = welcomePanel.querySelector(".recentChatList");
+    if (!recentList) return;
+
+    const chatItems = recentList.querySelectorAll(".recentChat");
+    chatItems.forEach((item) => {
+      // 避免重复处理
+      if (item.classList.contains("cfm-recent-chat-enhanced")) return;
+      item.classList.add("cfm-recent-chat-enhanced");
+
+      const chatFileName = item.getAttribute("data-file") || "";
+      if (!chatFileName) return;
+
+      const note = cfmChatNotes[chatFileName];
+      if (!note) return;
+
+      // 在 chatNameContainer 下方、chatMessageContainer 上方插入备注行
+      const chatInfoEl = item.querySelector(".recentChatInfo");
+      if (!chatInfoEl) return;
+
+      const msgContainer = chatInfoEl.querySelector(".chatMessageContainer");
+      if (!msgContainer) return;
+
+      // 检查是否已有备注行
+      if (chatInfoEl.querySelector(".cfm-recent-chat-note")) return;
+
+      const noteDiv = document.createElement("div");
+      noteDiv.className = "cfm-recent-chat-note";
+      noteDiv.textContent = "📝 " + note;
+      noteDiv.title = "备注: " + note;
+      chatInfoEl.insertBefore(noteDiv, msgContainer);
+
+      // 在 chatName 中添加备注标识
+      const chatNameEl = item.querySelector(".chatName");
+      if (chatNameEl && !chatNameEl.querySelector(".cfm-recent-note-badge")) {
+        const badge = document.createElement("span");
+        badge.className = "cfm-recent-note-badge";
+        badge.textContent = " 📝";
+        badge.title = "备注: " + note;
+        chatNameEl.appendChild(badge);
+      }
+    });
+  }
+
+  /**
+   * 初始化 welcome-screen 备注显示 hook
+   * 扩展 initPinnedChatHook 的 MutationObserver，当 welcomePanel 出现时也应用备注
+   */
+  function initRecentChatNotesHook() {
+    const chatEl = document.getElementById("chat");
+    if (!chatEl) return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node.classList?.contains("welcomePanel") ||
+              node.querySelector?.(".welcomePanel"))
+          ) {
+            // welcomePanel 被插入，延迟一帧应用备注
+            requestAnimationFrame(() => enhanceRecentChatsWithNotes());
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(chatEl, { childList: true, subtree: true });
+    // 如果当前已有 welcomePanel，立即应用
+    if (chatEl.querySelector(".welcomePanel")) {
+      requestAnimationFrame(() => enhanceRecentChatsWithNotes());
     }
   }
 
@@ -24017,6 +24224,9 @@ jQuery(async () => {
   setupCharWorldPopupFilterObserver();
   setupPersonaSelectionPopupEnhancer();
   initPinnedChatHook(); // 初始化聊天置顶 welcome-screen hook
+  initChatNotes(); // 初始化聊天记录备注数据
+  setupNativeChatPopupEnhancer(); // 增强原生聊天管理弹窗显示备注
+  initRecentChatNotesHook(); // 增强 welcome-screen 最近聊天显示备注
 
   // 监听角色卡列表重新渲染事件，自动重新应用过滤
   const eventSource = getContext().eventSource;

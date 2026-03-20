@@ -4370,3 +4370,58 @@ option.cfm-nf-hidden {
 .cfm-chat-delete-btn:hover {
   color: #ed4245;
 }
+
+/* ==================== 增强原生聊天管理弹窗备注样式 ==================== */
+
+/* 原生弹窗中的备注标识 */
+.cfm-native-chat-note-badge {
+  cursor: help;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+/* 原生弹窗中的备注行（在预览消息上方） */
+.cfm-native-chat-note-line {
+  font-size: 11.5px;
+  color: rgba(166, 227, 161, 0.8);
+  padding: 2px 8px 3px;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+/* 原生弹窗中的备注编辑按钮 */
+.cfm-native-chat-note-edit-btn {
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.cfm-native-chat-note-edit-btn:hover {
+  color: #a6e3a1 !important;
+  opacity: 1 !important;
+}
+
+/* ==================== welcome-screen 最近聊天备注样式 ==================== */
+
+/* 最近聊天列表中的备注行 */
+.cfm-recent-chat-note {
+  font-size: 11.5px;
+  color: rgba(166, 227, 161, 0.75);
+  padding: 1px 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+/* 最近聊天 chatName 中的备注标识 */
+.cfm-recent-note-badge {
+  cursor: help;
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
