@@ -9120,13 +9120,16 @@ jQuery(async () => {
       .removeClass("fa-comments")
       .addClass("fa-comments");
     $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
-    // 批量预加载所有角色的聊天数据到缓存，避免小三角逐个异步出现
+    // 先立即渲染，让用户看到聊天模式已激活
+    rerenderCurrentView();
+    // 再异步批量预加载所有角色的聊天数据到缓存
     try {
       const characters = getCharacters();
       await Promise.all(characters.map((c) => getCharChats(c.avatar)));
     } catch (e) {
       console.warn("[CFM] 批量预加载聊天数据时出错:", e);
     }
+    // 数据加载完成后再次渲染，此时三角箭头会正常显示
     rerenderCurrentView();
   }
 
