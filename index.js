@@ -9064,6 +9064,37 @@ jQuery(async () => {
   let cfmChatNotes = {}; // chatFileName -> note 备注映射
   let cfmChatBatchMode = false; // 聊天记录批量操作模式
   let cfmChatBatchSelected = new Set(); // 批量选中的 "avatar::chatFileName" 集合
+  let cfmChatBatchRangeMode = false; // 聊天记录框选模式
+  let cfmChatBatchLastClicked = null; // 聊天记录框选锚点
+
+  /**
+   * 聊天记录批量选择切换（支持框选/Shift多选）
+   * @param {string} batchKey - "avatar::chatName" 格式的键
+   * @param {boolean} shiftKey - 是否按住了 Shift 键
+   * @param {Array} chats - 当前聊天列表
+   * @param {string} avatar - 当前角色 avatar
+   */
+  function toggleChatBatchItem(batchKey, shiftKey, chats, avatar) {
+    if ((shiftKey || cfmChatBatchRangeMode) && cfmChatBatchLastClicked) {
+      // 构建当前可见聊天的 batchKey 列表
+      const visibleKeys = chats.map(
+        (c) => `${avatar}::${c.file_name.replace(".jsonl", "")}`,
+      );
+      const lastIdx = visibleKeys.indexOf(cfmChatBatchLastClicked);
+      const curIdx = visibleKeys.indexOf(batchKey);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++)
+          cfmChatBatchSelected.add(visibleKeys[i]);
+      }
+    } else {
+      if (cfmChatBatchSelected.has(batchKey))
+        cfmChatBatchSelected.delete(batchKey);
+      else cfmChatBatchSelected.add(batchKey);
+    }
+    cfmChatBatchLastClicked = batchKey;
+  }
 
   // 初始化聊天记录备注（从 extension_settings 读取）
   function initChatNotes() {
@@ -9811,6 +9842,8 @@ jQuery(async () => {
       e.stopPropagation();
       cfmChatBatchMode = !cfmChatBatchMode;
       cfmChatBatchSelected.clear();
+      cfmChatBatchRangeMode = false;
+      cfmChatBatchLastClicked = null;
       rerenderCurrentView();
     });
     subList.append(chatToolbar);
@@ -9828,6 +9861,9 @@ jQuery(async () => {
         <div class="cfm-chat-batch-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-chat-batch-selall" title="全选/全不选">
             <i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}
+          </button>
+          <button class="cfm-btn cfm-btn-sm cfm-chat-batch-range ${cfmChatBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
+            <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmChatBatchRangeMode ? "(开)" : ""}
           </button>
           <span class="cfm-chat-batch-count">${relevantSelected.length > 0 ? `已选 ${relevantSelected.length} 项` : ""}</span>
           <button class="cfm-btn cfm-btn-sm cfm-chat-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
@@ -9847,6 +9883,12 @@ jQuery(async () => {
             cfmChatBatchSelected.add(`${avatar}::${fn}`);
           });
         }
+        rerenderCurrentView();
+      });
+      batchToolbar.find(".cfm-chat-batch-range").on("click", (e) => {
+        e.stopPropagation();
+        cfmChatBatchRangeMode = !cfmChatBatchRangeMode;
+        if (cfmChatBatchRangeMode) cfmChatBatchLastClicked = null;
         rerenderCurrentView();
       });
       batchToolbar.find(".cfm-chat-batch-export").on("click", async (e) => {
@@ -9932,7 +9974,7 @@ jQuery(async () => {
         </div>
       `);
 
-      // 点击行：打开聊天 / 批量模式下切换选中
+      // 点击行：打开聊天 / 批量模式下切换选中（支持框选）
       chatRow.on("click", (e) => {
         if (
           $(e.target).closest(".cfm-chat-row-actions, .cfm-chat-batch-check")
@@ -9940,21 +9982,17 @@ jQuery(async () => {
         )
           return;
         if (cfmChatBatchMode) {
-          if (cfmChatBatchSelected.has(batchKey))
-            cfmChatBatchSelected.delete(batchKey);
-          else cfmChatBatchSelected.add(batchKey);
+          toggleChatBatchItem(batchKey, e.shiftKey, chats, avatar);
           rerenderCurrentView();
           return;
         }
         openChatFile(avatar, chatName);
       });
 
-      // 批量模式复选框
+      // 批量模式复选框（支持框选）
       chatRow.find(".cfm-chat-batch-check").on("click", (e) => {
         e.stopPropagation();
-        if (cfmChatBatchSelected.has(batchKey))
-          cfmChatBatchSelected.delete(batchKey);
-        else cfmChatBatchSelected.add(batchKey);
+        toggleChatBatchItem(batchKey, e.shiftKey, chats, avatar);
         rerenderCurrentView();
       });
 
