@@ -9546,7 +9546,7 @@ jQuery(async () => {
       return aIdx - bIdx;
     });
 
-    // 为置顶项添加标记样式和图钉图标
+    // 为置顶项添加标记样式和图钉图标（可点击取消置顶）
     pinnedElements.forEach((el) => {
       el.classList.add("cfm-pinned-chat");
       el.classList.remove("hidden"); // 置顶项始终可见
@@ -9556,7 +9556,14 @@ jQuery(async () => {
         if (nameEl) {
           const pinIcon = document.createElement("i");
           pinIcon.className = "fa-solid fa-thumbtack cfm-pin-indicator";
-          pinIcon.title = "已置顶";
+          pinIcon.title = "点击取消置顶";
+          const elAvatar = el.getAttribute("data-avatar") || "";
+          const elFile = el.getAttribute("data-file") || "";
+          pinIcon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            toggleChatPin(elAvatar, elFile);
+          });
           nameEl.parentNode.insertBefore(pinIcon, nameEl.nextSibling);
         }
       }
@@ -9669,7 +9676,7 @@ jQuery(async () => {
             <div class="chatNameContainer">
               <div class="chatName" title="${eChatFile}.jsonl">
                 <strong class="characterName">${eName}</strong>
-                <i class="fa-solid fa-thumbtack cfm-pin-indicator" title="已置顶"></i>
+                <i class="fa-solid fa-thumbtack cfm-pin-indicator" title="点击取消置顶"></i>
                 <span>&ndash;</span>
                 <span>${eChatFile}</span>
               </div>
@@ -9696,6 +9703,16 @@ jQuery(async () => {
             </div>
           </div>
         `;
+
+        // 绑定图钉图标的取消置顶事件
+        const pinIndicator = chatItem.querySelector(".cfm-pin-indicator");
+        if (pinIndicator) {
+          pinIndicator.addEventListener("click", (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            toggleChatPin(pin.avatar, pin.chatFileName);
+          });
+        }
 
         // 绑定点击事件
         chatItem.addEventListener("click", () => {
