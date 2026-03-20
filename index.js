@@ -3226,7 +3226,8 @@ jQuery(async () => {
   function getMultiDragData(singleData) {
     if (!cfmMultiSelectMode || cfmMultiSelected.size <= 1) return singleData;
     // 如果当前拖拽的项在选中集合中，拖拽整个集合
-    const idKey = singleData.avatar || singleData.name;
+    // 注意：角色卡用 avatar，Persona 用 avatarId，其它资源用 name
+    const idKey = singleData.avatar || singleData.avatarId || singleData.name;
     if (!cfmMultiSelected.has(idKey)) return singleData;
     return {
       ...singleData,
