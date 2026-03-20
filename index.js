@@ -9194,8 +9194,10 @@ jQuery(async () => {
   /**
    * 使某个角色的聊天缓存失效
    */
-  function invalidateChatCache(avatar) {
+  async function invalidateChatCache(avatar) {
     cfmChatCache.delete(avatar);
+    // 立即重新加载缓存，避免后续 rerenderCurrentView 时三角箭头消失
+    await getCharChats(avatar);
   }
 
   /**
@@ -9331,7 +9333,7 @@ jQuery(async () => {
         delete cfmChatNotes[oldFileName];
         saveChatNotes();
       }
-      invalidateChatCache(avatar);
+      await invalidateChatCache(avatar);
       return true;
     } catch (e) {
       console.error("[CFM] 重命名聊天记录失败:", e);
@@ -9369,7 +9371,7 @@ jQuery(async () => {
       }
       // 从批量选中中移除
       cfmChatBatchSelected.delete(`${avatar}::${chatFileName}`);
-      invalidateChatCache(avatar);
+      await invalidateChatCache(avatar);
       return true;
     } catch (e) {
       console.error("[CFM] 删除聊天记录失败:", e);
@@ -10008,7 +10010,7 @@ jQuery(async () => {
         failCount++;
       }
     }
-    invalidateChatCache(avatar);
+    await invalidateChatCache(avatar);
     if (successCount > 0) {
       toastr.success(
         `成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`,
