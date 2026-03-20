@@ -796,6 +796,7 @@ jQuery(async () => {
   const CFM_ACTION_META = {
     import: { label: "导入", icon: "fa-file-import" },
     chatmode: { label: "显示聊天记录", icon: "fa-comments" },
+    regexmode: { label: "查看正则", icon: "fa-code" },
     quickedit: { label: "快速编辑", icon: "fa-pen-to-square" },
     note: { label: "编辑备注", icon: "fa-pen-to-square" },
     rename: { label: "重命名", icon: "fa-i-cursor" },
@@ -846,9 +847,16 @@ jQuery(async () => {
       const existingIds = new Set(saved.map((a) => a.id));
       // 默认顺序参考表
       const defaultOrder = {
-        chars: ["import", "chatmode", "quickedit", "export", "delete"],
+        chars: [
+          "import",
+          "chatmode",
+          "regexmode",
+          "quickedit",
+          "export",
+          "delete",
+        ],
         worldinfo: ["import", "note", "rename", "export", "delete"],
-        presets: ["import", "note", "rename", "export", "delete"],
+        presets: ["import", "regexmode", "note", "rename", "export", "delete"],
         themes: ["import", "note", "rename", "export", "delete"],
         backgrounds: [
           "import",
@@ -899,6 +907,7 @@ jQuery(async () => {
     chars: {
       import: "#cfm-import-char-btn",
       chatmode: "#cfm-chat-mode-btn",
+      regexmode: "#cfm-char-regex-mode-btn",
       quickedit: "#cfm-edit-char-btn",
       export: "#cfm-export-char-btn",
       delete: "#cfm-res-delete-char-btn",
@@ -912,6 +921,7 @@ jQuery(async () => {
     },
     presets: {
       import: "#cfm-import-preset-btn",
+      regexmode: "#cfm-preset-regex-mode-btn",
       note: "#cfm-preset-note-btn",
       rename: "#cfm-preset-rename-btn",
       export: "#cfm-export-preset-btn",
@@ -9165,6 +9175,195 @@ jQuery(async () => {
     else enterChatMode();
   }
 
+  // ==================== 角色卡/预设 正则查看模式 ====================
+  let cfmCharRegexMode = false; // 角色卡正则展示模式
+  let cfmCharRegexExpandedAvatars = new Set(); // 当前展开正则的角色avatar集合
+  let cfmPresetRegexMode = false; // 预设正则展示模式
+  let cfmPresetRegexExpandedNames = new Set(); // 当前展开正则的预设name集合
+
+  function enterCharRegexMode() {
+    cfmCharRegexMode = true;
+    cfmCharRegexExpandedAvatars.clear();
+    $("#cfm-char-regex-mode-btn").addClass("cfm-chat-mode-active");
+    $("#cfm-char-regex-mode-btn").attr("title", "关闭正则查看");
+    rerenderCurrentView();
+  }
+
+  function exitCharRegexMode() {
+    cfmCharRegexMode = false;
+    cfmCharRegexExpandedAvatars.clear();
+    $("#cfm-char-regex-mode-btn").removeClass("cfm-chat-mode-active");
+    $("#cfm-char-regex-mode-btn").attr("title", "查看角色正则");
+    rerenderCurrentView();
+  }
+
+  function toggleCharRegexMode() {
+    if (cfmCharRegexMode) exitCharRegexMode();
+    else enterCharRegexMode();
+  }
+
+  function enterPresetRegexMode() {
+    cfmPresetRegexMode = true;
+    cfmPresetRegexExpandedNames.clear();
+    $("#cfm-preset-regex-mode-btn").addClass("cfm-chat-mode-active");
+    $("#cfm-preset-regex-mode-btn").attr("title", "关闭正则查看");
+    renderPresetsView();
+  }
+
+  function exitPresetRegexMode() {
+    cfmPresetRegexMode = false;
+    cfmPresetRegexExpandedNames.clear();
+    $("#cfm-preset-regex-mode-btn").removeClass("cfm-chat-mode-active");
+    $("#cfm-preset-regex-mode-btn").attr("title", "查看预设正则");
+    renderPresetsView();
+  }
+
+  function togglePresetRegexMode() {
+    if (cfmPresetRegexMode) exitPresetRegexMode();
+    else enterPresetRegexMode();
+  }
+
+  /**
+   * 渲染角色的正则脚本子列表
+   * @param {jQuery} charRow - 角色卡行的 jQuery 对象
+   * @param {string} avatar - 角色的 avatar
+   * @param {Array} scripts - 正则脚本列表
+   * @param {string} charName - 角色名称
+   */
+  function renderCharRegexSubList(charRow, avatar, scripts, charName) {
+    charRow.next(".cfm-regex-sublist").remove();
+    const subList = $('<div class="cfm-regex-sublist"></div>');
+    if (!scripts || scripts.length === 0) {
+      subList.append(
+        '<div class="cfm-right-empty" style="padding:8px 16px;font-size:12px;">该角色没有绑定正则脚本</div>',
+      );
+    } else {
+      for (const script of scripts) {
+        const isDisabled = !!script.disabled;
+        const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+        const row = $(`
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
+               data-script-id="${escapeHtml(script.id || "")}"
+               data-script-type="1"
+               data-owner="${escapeHtml(charName || "")}">
+            ${toggleHtml}
+            <div class="cfm-row-name">
+              <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
+            </div>
+            <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+          </div>
+        `);
+        // toggle 点击
+        row.find(".cfm-wi-toggle").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          script.disabled = !script.disabled;
+          try {
+            const chars = getCharacters();
+            const ch = chars.find((c) => c.avatar === avatar);
+            if (ch) {
+              const headers = getContext().getRequestHeaders();
+              await fetch("/api/characters/merge-attributes", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                  avatar: ch.avatar,
+                  data: { extensions: { regex_scripts: scripts } },
+                }),
+              });
+            }
+          } catch (err) {
+            console.error("[CFM] 正则toggle保存失败:", err);
+            toastr.error("保存失败: " + err.message);
+            script.disabled = !script.disabled;
+            return;
+          }
+          const isNowDisabled = !!script.disabled;
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+          );
+          el.attr(
+            "title",
+            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+          );
+          row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        });
+        subList.append(row);
+      }
+    }
+    charRow.after(subList);
+  }
+
+  /**
+   * 渲染预设的正则脚本子列表
+   * @param {jQuery} presetRow - 预设行的 jQuery 对象
+   * @param {string} presetName - 预设名称
+   * @param {Array} scripts - 正则脚本列表
+   */
+  function renderPresetRegexSubList(presetRow, presetName, scripts) {
+    presetRow.next(".cfm-regex-sublist").remove();
+    const subList = $('<div class="cfm-regex-sublist"></div>');
+    if (!scripts || scripts.length === 0) {
+      subList.append(
+        '<div class="cfm-right-empty" style="padding:8px 16px;font-size:12px;">该预设没有绑定正则脚本</div>',
+      );
+    } else {
+      for (const script of scripts) {
+        const isDisabled = !!script.disabled;
+        const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+        const row = $(`
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
+               data-script-id="${escapeHtml(script.id || "")}"
+               data-script-type="2"
+               data-owner="${escapeHtml(presetName || "")}">
+            ${toggleHtml}
+            <div class="cfm-row-name">
+              <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
+            </div>
+            <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+          </div>
+        `);
+        // toggle 点击
+        row.find(".cfm-wi-toggle").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          script.disabled = !script.disabled;
+          try {
+            const pm = getContext().getPresetManager();
+            if (pm) {
+              await pm.writePresetExtensionField({
+                path: "regex_scripts",
+                value: scripts,
+              });
+            }
+          } catch (err) {
+            console.error("[CFM] 正则toggle保存失败:", err);
+            toastr.error("保存失败: " + err.message);
+            script.disabled = !script.disabled;
+            return;
+          }
+          const isNowDisabled = !!script.disabled;
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+          );
+          el.attr(
+            "title",
+            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+          );
+          row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        });
+        subList.append(row);
+      }
+    }
+    presetRow.after(subList);
+  }
+
   /**
    * 获取角色的聊天记录列表（带缓存）
    * @param {string} avatar - 角色的 avatar 文件名
@@ -10774,6 +10973,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
                             <button class="cfm-chat-mode-btn" id="cfm-chat-mode-btn" title="显示聊天记录"><i class="fa-solid fa-comments"></i></button>
+                            <button class="cfm-chat-mode-btn" id="cfm-char-regex-mode-btn" title="查看角色正则"><i class="fa-solid fa-code"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-edit-char-btn" title="快速编辑角色卡"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-char-btn" title="导出角色卡"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-char-btn" title="删除角色卡"><i class="fa-solid fa-trash-can"></i></button>
@@ -10806,6 +11006,7 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-preset-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-preset-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-preset-btn" title="导入预设"><i class="fa-solid fa-file-import"></i></button>
+                            <button class="cfm-chat-mode-btn" id="cfm-preset-regex-mode-btn" title="查看预设正则"><i class="fa-solid fa-code"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-preset-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-preset-rename-btn" title="重命名预设"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-preset-file" multiple accept=".json" style="display:none;">
@@ -11996,6 +12197,20 @@ jQuery(async () => {
       e.preventDefault();
       e.stopPropagation();
       toggleChatMode();
+    });
+
+    // ==================== 角色卡正则查看模式按钮 ====================
+    popup.find("#cfm-char-regex-mode-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleCharRegexMode();
+    });
+
+    // ==================== 预设正则查看模式按钮 ====================
+    popup.find("#cfm-preset-regex-mode-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePresetRegexMode();
     });
 
     // ==================== 角色卡快速编辑功能 ====================
@@ -15258,10 +15473,24 @@ jQuery(async () => {
     const chatToggleHtml = showChatToggle
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
+    // 正则模式下的小三角按钮
+    const regexmodeVisible =
+      cfmCharRegexMode && getVisibleActions("chars").includes("regexmode");
+    let showRegexToggle = false;
+    if (regexmodeVisible) {
+      const scripts = char?.data?.extensions?.regex_scripts;
+      showRegexToggle = Array.isArray(scripts) && scripts.length > 0;
+    }
+    const isRegexExpanded =
+      showRegexToggle && cfmCharRegexExpandedAvatars.has(char.avatar);
+    const regexToggleHtml = showRegexToggle
+      ? `<div class="cfm-regex-toggle" title="展开/折叠正则脚本"><i class="fa-solid fa-caret-${isRegexExpanded ? "down" : "right"}"></i></div>`
+      : "";
     const row = $(`
             <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 ${chatToggleHtml}
+                ${regexToggleHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
                 ${singleEditBtn}
@@ -15320,12 +15549,40 @@ jQuery(async () => {
         row.next(".cfm-chat-sublist").hide().slideDown(150);
       }
     });
+    // 正则模式下小三角点击：展开/折叠正则脚本
+    row.find(".cfm-regex-toggle").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const avatar = char.avatar;
+      if (cfmCharRegexExpandedAvatars.has(avatar)) {
+        // 折叠
+        cfmCharRegexExpandedAvatars.delete(avatar);
+        row.next(".cfm-regex-sublist").slideUp(150, function () {
+          $(this).remove();
+        });
+        row
+          .find(".cfm-regex-toggle i")
+          .removeClass("fa-caret-down")
+          .addClass("fa-caret-right");
+      } else {
+        // 展开
+        cfmCharRegexExpandedAvatars.add(avatar);
+        row
+          .find(".cfm-regex-toggle i")
+          .removeClass("fa-caret-right")
+          .addClass("fa-caret-down");
+        const scripts = char?.data?.extensions?.regex_scripts || [];
+        renderCharRegexSubList(row, avatar, scripts, char.name);
+        row.next(".cfm-regex-sublist").hide().slideDown(150);
+      }
+    });
     // 点击行为：多选模式下切换选中，否则打开角色聊天
     row.on("click", (e) => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
       if ($(e.target).closest(".cfm-row-edit-btn").length) return;
       if ($(e.target).closest(".cfm-chat-toggle").length) return;
+      if ($(e.target).closest(".cfm-regex-toggle").length) return;
       if (cfmResDeleteMode) {
         toggleResDeleteItem(char.avatar, e.shiftKey);
         renderRightPane();
@@ -18320,9 +18577,36 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
+        // 正则模式下的小三角按钮
+        const presetRegexModeVisible =
+          cfmPresetRegexMode &&
+          getVisibleActions("presets").includes("regexmode");
+        let showPresetRegexToggle = false;
+        let presetRegexScripts = null;
+        if (presetRegexModeVisible) {
+          try {
+            const pm = getContext().getPresetManager();
+            if (pm) {
+              presetRegexScripts = pm.readPresetExtensionField({
+                name: p.name,
+                path: "regex_scripts",
+              });
+            }
+          } catch (e) {
+            /* skip */
+          }
+          showPresetRegexToggle =
+            Array.isArray(presetRegexScripts) && presetRegexScripts.length > 0;
+        }
+        const isPresetRegexExpanded =
+          showPresetRegexToggle && cfmPresetRegexExpandedNames.has(p.name);
+        const presetRegexToggleHtml = showPresetRegexToggle
+          ? `<div class="cfm-regex-toggle" title="展开/折叠正则脚本"><i class="fa-solid fa-caret-${isPresetRegexExpanded ? "down" : "right"}"></i></div>`
+          : "";
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
+            ${presetRegexToggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
             <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}</div>
             ${singleRenameBtn}
@@ -18364,10 +18648,37 @@ jQuery(async () => {
           e.stopPropagation();
           executePresetRename([p.name]);
         });
+        // 正则模式下小三角点击：展开/折叠正则脚本
+        row.find(".cfm-regex-toggle").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const name = p.name;
+          if (cfmPresetRegexExpandedNames.has(name)) {
+            // 折叠
+            cfmPresetRegexExpandedNames.delete(name);
+            row.next(".cfm-regex-sublist").slideUp(150, function () {
+              $(this).remove();
+            });
+            row
+              .find(".cfm-regex-toggle i")
+              .removeClass("fa-caret-down")
+              .addClass("fa-caret-right");
+          } else {
+            // 展开
+            cfmPresetRegexExpandedNames.add(name);
+            row
+              .find(".cfm-regex-toggle i")
+              .removeClass("fa-caret-right")
+              .addClass("fa-caret-down");
+            const scripts = presetRegexScripts || [];
+            renderPresetRegexSubList(row, name, scripts);
+            row.next(".cfm-regex-sublist").hide().slideDown(150);
+          }
+        });
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-regex-toggle",
             ).length
           )
             return;
@@ -22306,37 +22617,6 @@ jQuery(async () => {
     return extension_settings.regex ?? [];
   }
 
-  function scanAllPresetsForRegex() {
-    const pm = getContext().getPresetManager();
-    if (!pm) return new Map();
-    const presets = getCurrentPresets();
-    const result = new Map();
-    for (const preset of presets) {
-      try {
-        const scripts = pm.readPresetExtensionField({
-          name: preset.name,
-          path: "regex_scripts",
-        });
-        if (Array.isArray(scripts) && scripts.length > 0)
-          result.set(preset.name, scripts);
-      } catch (e) {
-        /* skip */
-      }
-    }
-    return result;
-  }
-
-  function scanAllCharsForRegex() {
-    const chars = getCharacters();
-    const result = new Map();
-    for (let i = 0; i < chars.length; i++) {
-      const scripts = chars[i]?.data?.extensions?.regex_scripts;
-      if (Array.isArray(scripts) && scripts.length > 0)
-        result.set(chars[i].avatar, { name: chars[i].name, chid: i, scripts });
-    }
-    return result;
-  }
-
   // --- 正则辅助函数 ---
   function getRegexPlacementLabel(placement) {
     const labels = {
@@ -22452,8 +22732,6 @@ jQuery(async () => {
     const globalScripts = getRegexGlobalScripts();
     const folderTree = extension_settings[extensionName].regexFolderTree;
     const globalGroups = extension_settings[extensionName].regexGlobalGroups;
-    const presetsWithRegex = scanAllPresetsForRegex();
-    const charsWithRegex = scanAllCharsForRegex();
 
     // --- 辅助：设置右栏内容 ---
     function setRightPane(title, count, contentHtml) {
@@ -22559,257 +22837,6 @@ jQuery(async () => {
       }
     }
 
-    // ===== 2. 预设正则顶层节点 =====
-    const presetTotalScripts = Array.from(presetsWithRegex.values()).reduce(
-      (sum, s) => sum + s.length,
-      0,
-    );
-    regexAllNodeIds.push("rx-preset");
-    const isPresetExp = regexExpandedNodes.has("rx-preset");
-    html += buildRegexTreeNodeHtml(
-      "rx-preset",
-      "预设正则",
-      "fa-folder",
-      presetTotalScripts,
-      0,
-      true,
-      isPresetExp,
-      selectedRegexNode === "rx-preset",
-      "",
-    );
-
-    if (isPresetExp && presetsWithRegex.size > 0) {
-      const markedPresetFolders = buildPrunedFolderSet(
-        "presets",
-        new Set(presetsWithRegex.keys()),
-      );
-      const presetGroups = getResourceGroups("presets");
-      const presetTree = getResFolderTree("presets");
-
-      function renderPresetFolderNodes(parentId, level) {
-        let childIds;
-        if (parentId === null) {
-          childIds = Object.keys(presetTree).filter(
-            (id) => !presetTree[id].parentId,
-          );
-        } else {
-          childIds = Object.keys(presetTree).filter(
-            (id) => presetTree[id].parentId === parentId,
-          );
-        }
-        childIds = childIds.filter((id) => markedPresetFolders.has(id));
-        childIds = sortResFolders("presets", childIds);
-
-        for (const fid of childIds) {
-          const displayName = getResFolderDisplayName("presets", fid);
-          const subChildIds = Object.keys(presetTree)
-            .filter((id) => presetTree[id].parentId === fid)
-            .filter((id) => markedPresetFolders.has(id));
-          const nodeId = "rx-pf-" + fid;
-          const isExpanded = regexExpandedNodes.has(nodeId);
-          const presetsInFolder = [];
-          for (const [pName] of presetsWithRegex) {
-            if (presetGroups[pName] === fid) presetsInFolder.push(pName);
-          }
-          const hasChildren =
-            subChildIds.length > 0 || presetsInFolder.length > 0;
-          regexAllNodeIds.push(nodeId);
-          html += buildRegexTreeNodeHtml(
-            nodeId,
-            displayName,
-            "fa-folder",
-            null,
-            level,
-            hasChildren,
-            isExpanded,
-            selectedRegexNode === nodeId,
-            "",
-          );
-
-          if (isExpanded) {
-            renderPresetFolderNodes(fid, level + 1);
-            for (const pName of presetsInFolder) {
-              const sc = presetsWithRegex.get(pName);
-              const piNodeId = "rx-pi-" + pName;
-              html += buildRegexTreeNodeHtml(
-                piNodeId,
-                pName,
-                "fa-file-code",
-                sc.length,
-                level + 1,
-                false,
-                false,
-                selectedRegexNode === piNodeId,
-                "",
-              );
-            }
-          }
-        }
-      }
-      renderPresetFolderNodes(null, 1);
-
-      // 预设未归类
-      const uncatPresets = [];
-      for (const [pName] of presetsWithRegex) {
-        const fid = presetGroups[pName];
-        if (!fid || !presetTree[fid]) uncatPresets.push(pName);
-      }
-      if (uncatPresets.length > 0) {
-        const isUncatExp = regexExpandedNodes.has("rx-preset-uncat");
-        regexAllNodeIds.push("rx-preset-uncat");
-        html += buildRegexTreeNodeHtml(
-          "rx-preset-uncat",
-          "未归类",
-          "fa-inbox",
-          uncatPresets.length,
-          1,
-          true,
-          isUncatExp,
-          selectedRegexNode === "rx-preset-uncat",
-          "",
-        );
-        if (isUncatExp) {
-          for (const pName of uncatPresets) {
-            const sc = presetsWithRegex.get(pName);
-            const piNodeId = "rx-pi-" + pName;
-            html += buildRegexTreeNodeHtml(
-              piNodeId,
-              pName,
-              "fa-file-code",
-              sc.length,
-              2,
-              false,
-              false,
-              selectedRegexNode === piNodeId,
-              "",
-            );
-          }
-        }
-      }
-    }
-
-    // ===== 3. 角色正则顶层节点 =====
-    const scopedTotalScripts = Array.from(charsWithRegex.values()).reduce(
-      (sum, info) => sum + info.scripts.length,
-      0,
-    );
-    regexAllNodeIds.push("rx-scoped");
-    const isScopedExp = regexExpandedNodes.has("rx-scoped");
-    html += buildRegexTreeNodeHtml(
-      "rx-scoped",
-      "角色正则",
-      "fa-folder",
-      scopedTotalScripts,
-      0,
-      true,
-      isScopedExp,
-      selectedRegexNode === "rx-scoped",
-      "",
-    );
-
-    if (isScopedExp && charsWithRegex.size > 0) {
-      const markedCharFolders = buildPrunedFolderSet(
-        "chars",
-        new Set(charsWithRegex.keys()),
-      );
-
-      function renderCharFolderNodes(parentId, level) {
-        let childFolderIds;
-        if (parentId === null) {
-          childFolderIds = getTopLevelFolders();
-        } else {
-          childFolderIds = getChildFolders(parentId);
-        }
-        childFolderIds = childFolderIds.filter((id) =>
-          markedCharFolders.has(id),
-        );
-        childFolderIds = sortFolders(childFolderIds);
-
-        for (const fid of childFolderIds) {
-          const displayName = getTagName(fid);
-          const subChildren = getChildFolders(fid).filter((id) =>
-            markedCharFolders.has(id),
-          );
-          const nodeId = "rx-sf-" + fid;
-          const isExpanded = regexExpandedNodes.has(nodeId);
-          const charsInFolder = getCharactersInFolder(fid).filter((c) =>
-            charsWithRegex.has(c.avatar),
-          );
-          const hasChildren =
-            subChildren.length > 0 || charsInFolder.length > 0;
-          regexAllNodeIds.push(nodeId);
-          html += buildRegexTreeNodeHtml(
-            nodeId,
-            displayName,
-            "fa-folder",
-            null,
-            level,
-            hasChildren,
-            isExpanded,
-            selectedRegexNode === nodeId,
-            "cfm-regex-synced-folder",
-          );
-
-          if (isExpanded) {
-            renderCharFolderNodes(fid, level + 1);
-            for (const char of charsInFolder) {
-              const info = charsWithRegex.get(char.avatar);
-              const siNodeId = "rx-si-" + char.avatar;
-              html += buildRegexTreeNodeHtml(
-                siNodeId,
-                info.name,
-                "fa-user",
-                info.scripts.length,
-                level + 1,
-                false,
-                false,
-                selectedRegexNode === siNodeId,
-                "cfm-regex-item-node",
-              );
-            }
-          }
-        }
-      }
-      renderCharFolderNodes(null, 1);
-
-      // 角色未归类
-      const uncatChars = getUncategorizedCharacters().filter((c) =>
-        charsWithRegex.has(c.avatar),
-      );
-      if (uncatChars.length > 0) {
-        const isUncatExp = regexExpandedNodes.has("rx-scoped-uncat");
-        regexAllNodeIds.push("rx-scoped-uncat");
-        html += buildRegexTreeNodeHtml(
-          "rx-scoped-uncat",
-          "未归类",
-          "fa-inbox",
-          uncatChars.length,
-          1,
-          true,
-          isUncatExp,
-          selectedRegexNode === "rx-scoped-uncat",
-          "",
-        );
-        if (isUncatExp) {
-          for (const char of uncatChars) {
-            const info = charsWithRegex.get(char.avatar);
-            const siNodeId = "rx-si-" + char.avatar;
-            html += buildRegexTreeNodeHtml(
-              siNodeId,
-              info.name,
-              "fa-user",
-              info.scripts.length,
-              2,
-              false,
-              false,
-              selectedRegexNode === siNodeId,
-              "cfm-regex-item-node",
-            );
-          }
-        }
-      }
-    }
-
     treeEl.html(html);
 
     // --- 辅助：构建右栏子文件夹行HTML ---
@@ -22817,17 +22844,6 @@ jQuery(async () => {
       return `
         <div class="cfm-row cfm-row-folder" data-target-node="${escapeHtml(nodeId)}">
           <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
-          <div class="cfm-row-name">${escapeHtml(displayName)}</div>
-          <div class="cfm-row-meta">${count} 个脚本</div>
-        </div>
-      `;
-    }
-
-    // --- 辅助：构建右栏预设/角色子项行HTML ---
-    function buildRegexItemRowHtml(nodeId, displayName, icon, count) {
-      return `
-        <div class="cfm-row cfm-row-folder" data-target-node="${escapeHtml(nodeId)}">
-          <div class="cfm-row-icon"><i class="fa-solid ${icon}" style="font-size:20px;color:#8b9dfc;"></i></div>
           <div class="cfm-row-name">${escapeHtml(displayName)}</div>
           <div class="cfm-row-meta">${count} 个脚本</div>
         </div>
@@ -22938,191 +22954,6 @@ jQuery(async () => {
           totalItems,
           contentHtml,
         );
-      }
-
-      // == 预设正则相关节点 ==
-      else if (nodeId === "rx-preset") {
-        // 显示预设文件夹 + 直属预设项
-        let contentHtml = "";
-        const presetGroups2 = getResourceGroups("presets");
-        const presetTree2 = getResFolderTree("presets");
-        const markedFolders2 = buildPrunedFolderSet(
-          "presets",
-          new Set(presetsWithRegex.keys()),
-        );
-        // 顶层文件夹
-        const topPFolders = Object.keys(presetTree2).filter(
-          (id) => !presetTree2[id].parentId && markedFolders2.has(id),
-        );
-        for (const fid of sortResFolders("presets", topPFolders)) {
-          contentHtml += buildRegexFolderRowHtml(
-            "rx-pf-" + fid,
-            getResFolderDisplayName("presets", fid),
-            0,
-          );
-        }
-        // 未归类的预设项
-        const uncatPresetNames = [];
-        for (const [pName] of presetsWithRegex) {
-          const g = presetGroups2[pName];
-          if (!g || !presetTree2[g]) uncatPresetNames.push(pName);
-        }
-        for (const pName of uncatPresetNames) {
-          const sc = presetsWithRegex.get(pName);
-          contentHtml += buildRegexItemRowHtml(
-            "rx-pi-" + pName,
-            pName,
-            "fa-file-code",
-            sc.length,
-          );
-        }
-        setRightPane("预设正则", presetsWithRegex.size, contentHtml);
-      } else if (nodeId.startsWith("rx-pi-")) {
-        const pName = nodeId.slice(6);
-        const scripts = presetsWithRegex.get(pName) || [];
-        let contentHtml = "";
-        scripts.forEach((s) => {
-          contentHtml += buildRegexScriptRowHtml(s, 2, pName);
-        });
-        setRightPane("预设正则 — " + pName, scripts.length, contentHtml);
-      } else if (nodeId.startsWith("rx-pf-") || nodeId === "rx-preset-uncat") {
-        const fid = nodeId === "rx-preset-uncat" ? null : nodeId.slice(6);
-        const presetGroups2 = getResourceGroups("presets");
-        const presetTree2 = getResFolderTree("presets");
-        const title =
-          fid === null ? "未归类" : getResFolderDisplayName("presets", fid);
-        let contentHtml = "";
-        if (fid !== null) {
-          // 子文件夹行
-          const markedFolders2 = buildPrunedFolderSet(
-            "presets",
-            new Set(presetsWithRegex.keys()),
-          );
-          const childFids = Object.keys(presetTree2).filter(
-            (id) => presetTree2[id].parentId === fid && markedFolders2.has(id),
-          );
-          for (const cfid of sortResFolders("presets", childFids)) {
-            contentHtml += buildRegexFolderRowHtml(
-              "rx-pf-" + cfid,
-              getResFolderDisplayName("presets", cfid),
-              0,
-            );
-          }
-        }
-        // 直属预设项行
-        const directPresets = [];
-        for (const [pName] of presetsWithRegex) {
-          if (fid === null) {
-            const g = presetGroups2[pName];
-            if (!g || !presetTree2[g]) directPresets.push(pName);
-          } else {
-            if (presetGroups2[pName] === fid) directPresets.push(pName);
-          }
-        }
-        for (const pName of directPresets) {
-          const sc = presetsWithRegex.get(pName);
-          contentHtml += buildRegexItemRowHtml(
-            "rx-pi-" + pName,
-            pName,
-            "fa-file-code",
-            sc ? sc.length : 0,
-          );
-        }
-        const totalItems = directPresets.length;
-        setRightPane("预设正则 — " + title, totalItems, contentHtml);
-      }
-
-      // == 角色正则相关节点 ==
-      else if (nodeId === "rx-scoped") {
-        // 显示角色文件夹 + 直属角色项
-        let contentHtml = "";
-        const markedFolders2 = buildPrunedFolderSet(
-          "chars",
-          new Set(charsWithRegex.keys()),
-        );
-        // 顶层文件夹
-        const topCFolders = sortFolders(
-          getTopLevelFolders().filter((id) => markedFolders2.has(id)),
-        );
-        for (const fid of topCFolders) {
-          contentHtml += buildRegexFolderRowHtml(
-            "rx-sf-" + fid,
-            getTagName(fid),
-            0,
-          );
-        }
-        // 未归类角色项
-        const uncatChars = getUncategorizedCharacters().filter((c) =>
-          charsWithRegex.has(c.avatar),
-        );
-        for (const char of uncatChars) {
-          const info = charsWithRegex.get(char.avatar);
-          contentHtml += buildRegexItemRowHtml(
-            "rx-si-" + char.avatar,
-            info.name,
-            "fa-user",
-            info.scripts.length,
-          );
-        }
-        setRightPane("角色正则", charsWithRegex.size, contentHtml);
-      } else if (nodeId.startsWith("rx-si-")) {
-        const avatar = nodeId.slice(6);
-        const info = charsWithRegex.get(avatar);
-        if (info) {
-          let contentHtml = "";
-          info.scripts.forEach((s) => {
-            contentHtml += buildRegexScriptRowHtml(s, 1, info.name);
-          });
-          setRightPane(
-            "角色正则 — " + info.name,
-            info.scripts.length,
-            contentHtml,
-          );
-        } else {
-          setRightPane("", 0, "");
-        }
-      } else if (nodeId.startsWith("rx-sf-") || nodeId === "rx-scoped-uncat") {
-        const fid = nodeId === "rx-scoped-uncat" ? null : nodeId.slice(6);
-        const title = fid === null ? "未归类" : getTagName(fid);
-        let contentHtml = "";
-        if (fid !== null) {
-          // 子文件夹行
-          const markedFolders2 = buildPrunedFolderSet(
-            "chars",
-            new Set(charsWithRegex.keys()),
-          );
-          const childFids = getChildFolders(fid).filter((id) =>
-            markedFolders2.has(id),
-          );
-          for (const cfid of sortFolders(childFids)) {
-            contentHtml += buildRegexFolderRowHtml(
-              "rx-sf-" + cfid,
-              getTagName(cfid),
-              0,
-            );
-          }
-        }
-        // 直属角色项行
-        const directChars =
-          fid === null
-            ? getUncategorizedCharacters().filter((c) =>
-                charsWithRegex.has(c.avatar),
-              )
-            : getCharactersInFolder(fid).filter((c) =>
-                charsWithRegex.has(c.avatar),
-              );
-        for (const char of directChars) {
-          const info = charsWithRegex.get(char.avatar);
-          if (!info) continue;
-          contentHtml += buildRegexItemRowHtml(
-            "rx-si-" + char.avatar,
-            info.name,
-            "fa-user",
-            info.scripts.length,
-          );
-        }
-        const totalItems = directChars.length;
-        setRightPane("角色正则 — " + title, totalItems, contentHtml);
       }
     });
 
@@ -23250,47 +23081,6 @@ jQuery(async () => {
               regexExpandedNodes.add("rx-gf-" + cur);
               cur = folderTree[cur]?.parentId;
             }
-          } else if (targetNodeId.startsWith("rx-pf-")) {
-            regexExpandedNodes.add("rx-preset");
-            const presetTree2 = getResFolderTree("presets");
-            let cur = presetTree2[targetNodeId.slice(6)]?.parentId;
-            while (cur) {
-              regexExpandedNodes.add("rx-pf-" + cur);
-              cur = presetTree2[cur]?.parentId;
-            }
-          } else if (targetNodeId.startsWith("rx-pi-")) {
-            regexExpandedNodes.add("rx-preset");
-            // 展开所在文件夹
-            const presetGroups2 = getResourceGroups("presets");
-            const presetTree2 = getResFolderTree("presets");
-            let cur = presetGroups2[targetNodeId.slice(6)];
-            while (cur) {
-              regexExpandedNodes.add("rx-pf-" + cur);
-              cur = presetTree2[cur]?.parentId;
-            }
-            if (!cur) regexExpandedNodes.add("rx-preset-uncat");
-          } else if (targetNodeId.startsWith("rx-sf-")) {
-            regexExpandedNodes.add("rx-scoped");
-            let cur = config.folders[targetNodeId.slice(6)]?.parentId;
-            while (cur) {
-              regexExpandedNodes.add("rx-sf-" + cur);
-              cur = config.folders[cur]?.parentId;
-            }
-          } else if (targetNodeId.startsWith("rx-si-")) {
-            regexExpandedNodes.add("rx-scoped");
-            // 展开所在角色文件夹
-            const tagMap = getTagMap();
-            const folderTagIdSet = new Set(getFolderTagIds());
-            const charTags = tagMap[targetNodeId.slice(6)] || [];
-            for (const tagId of charTags) {
-              if (!folderTagIdSet.has(tagId)) continue;
-              let cur = tagId;
-              while (cur) {
-                regexExpandedNodes.add("rx-sf-" + cur);
-                cur = config.folders[cur]?.parentId;
-              }
-            }
-            regexExpandedNodes.add("rx-scoped-uncat");
           }
           selectedRegexNode = targetNodeId;
           renderRegexView();

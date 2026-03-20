@@ -4156,6 +4156,55 @@ option.cfm-nf-hidden {
   pointer-events: none;
 }
 
+/* 正则脚本展开小三角按钮（角色卡/预设行） */
+.cfm-regex-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.15s;
+  flex-shrink: 0;
+  border-radius: 4px;
+  margin-right: 2px;
+}
+.cfm-regex-toggle:hover {
+  color: #f9e2af;
+  background-color: rgba(249, 226, 175, 0.1);
+}
+.cfm-regex-toggle i {
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+/* 正则脚本子列表容器（角色卡/预设行展开后） */
+.cfm-regex-sublist {
+  margin-left: 30px;
+  margin-right: 8px;
+  margin-bottom: 4px;
+  border-left: 2px solid rgba(249, 226, 175, 0.25);
+  padding-left: 8px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 0 6px 6px 0;
+}
+
+/* 正则脚本行（子列表内） */
+.cfm-regex-script-row {
+  padding: 4px 8px;
+  font-size: 13px;
+  gap: 6px;
+  min-height: 32px;
+}
+.cfm-regex-script-row .cfm-row-name {
+  font-size: 13px;
+}
+.cfm-regex-script-row .cfm-regex-edit-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 /* 聊天记录子列表容器 */
 .cfm-chat-sublist {
   margin-left: 30px;
