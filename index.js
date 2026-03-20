@@ -9957,7 +9957,8 @@ jQuery(async () => {
           ${cfmChatBatchMode ? `<div class="cfm-chat-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
           <div class="cfm-chat-row-icon"><i class="fa-solid fa-message${isCurrentChat ? " cfm-chat-icon-current" : ""}"></i></div>
           <div class="cfm-chat-row-info">
-            <div class="cfm-chat-row-name">${escapeHtml(chatName)}${isCurrentChat ? ' <span class="cfm-chat-current-badge">当前</span>' : ""}${note ? ` <span class="cfm-chat-note-badge" title="${escapeHtml(note)}">📝</span>` : ""}</div>
+            <div class="cfm-chat-row-name">${escapeHtml(chatName)}${isCurrentChat ? ' <span class="cfm-chat-current-badge">当前</span>' : ""}${note ? ` <span class="cfm-chat-note-badge">📝</span>` : ""}</div>
+            ${note ? `<div class="cfm-chat-row-note">${escapeHtml(note)}</div>` : ""}
             <div class="cfm-chat-row-meta">
               <span title="消息数">${msgCount} 条消息</span>
               <span title="文件大小">${fileSize}</span>
