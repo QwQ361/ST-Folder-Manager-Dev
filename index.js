@@ -591,7 +591,9 @@ jQuery(async () => {
     renameGroupOrCharacterChatFunc = scriptModule.renameGroupOrCharacterChat;
     openCharacterChatFunc = scriptModule.openCharacterChat;
     importCharacterChatFunc = scriptModule.importCharacterChat;
-    console.log("[CFM] 成功获取 entitiesFilter, printCharactersDebounced 和聊天记录管理 API");
+    console.log(
+      "[CFM] 成功获取 entitiesFilter, printCharactersDebounced 和聊天记录管理 API",
+    );
   } catch (e) {
     console.warn(
       "[CFM] 无法导入 script.js 模块，角色卡文件夹过滤将回退到 DOM 级过滤:",
@@ -9082,7 +9084,10 @@ jQuery(async () => {
     cfmChatBatchMode = false;
     cfmChatBatchSelected.clear();
     $("#cfm-chat-mode-btn").addClass("cfm-chat-mode-active");
-    $("#cfm-chat-mode-btn").find("i").removeClass("fa-comments").addClass("fa-comments");
+    $("#cfm-chat-mode-btn")
+      .find("i")
+      .removeClass("fa-comments")
+      .addClass("fa-comments");
     $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
     // 批量预加载所有角色的聊天数据到缓存，避免小三角逐个异步出现
     try {
@@ -9185,16 +9190,29 @@ jQuery(async () => {
       const overlay = $(popupHtml);
       $("body").append(overlay);
       overlay.find("#cfm-chat-rename-input").trigger("focus").select();
-      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(null); });
-      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(null); } });
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         const newName = overlay.find("#cfm-chat-rename-input").val().trim();
         overlay.remove();
         resolve(newName || null);
       });
       overlay.find("#cfm-chat-rename-input").on("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); overlay.find(".cfm-edit-popup-confirm").trigger("click"); }
-        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
       });
     });
   }
@@ -9215,7 +9233,7 @@ jQuery(async () => {
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-              ${currentNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : ''}
+              ${currentNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : ""}
               <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
             </div>
           </div>
@@ -9223,46 +9241,33 @@ jQuery(async () => {
       const overlay = $(popupHtml);
       $("body").append(overlay);
       overlay.find("#cfm-chat-note-input").trigger("focus");
-      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(undefined); });
-      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(undefined); } });
-      overlay.find(".cfm-edit-popup-clear").on("click", () => { overlay.remove(); resolve(""); });
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(undefined);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(undefined);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve("");
+      });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         const note = overlay.find("#cfm-chat-note-input").val().trim();
         overlay.remove();
         resolve(note);
       });
       overlay.find("#cfm-chat-note-input").on("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); overlay.find(".cfm-edit-popup-confirm").trigger("click"); }
-        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
-      });
-    });
-  }
-
-  /**
-   * 聊天记录删除确认弹窗（cfm-edit-popup 风格）
-   */
-  function showChatDeleteConfirmPopup(message) {
-    return new Promise((resolve) => {
-      const popupHtml = `
-        <div class="cfm-edit-popup-overlay">
-          <div class="cfm-edit-popup">
-            <div class="cfm-edit-popup-title">确认删除</div>
-            <div class="cfm-edit-popup-field" style="font-size:13px;line-height:1.6;">
-              ${escapeHtml(message)}
-            </div>
-            <div class="cfm-edit-popup-actions">
-              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-              <button class="cfm-btn cfm-edit-popup-confirm" style="background:#f38ba8;">确认删除</button>
-            </div>
-          </div>
-        </div>`;
-      const overlay = $(popupHtml);
-      $("body").append(overlay);
-      overlay.find(".cfm-edit-popup-cancel").on("click", () => { overlay.remove(); resolve(false); });
-      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => { if ($(e.target).hasClass("cfm-edit-popup-overlay")) { overlay.remove(); resolve(false); } });
-      overlay.find(".cfm-edit-popup-confirm").on("click", () => { overlay.remove(); resolve(true); });
-      $(document).one("keydown.cfmChatDelete", (e) => {
-        if (e.key === "Escape") { overlay.find(".cfm-edit-popup-cancel").trigger("click"); }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
       });
     });
   }
@@ -9731,7 +9736,9 @@ jQuery(async () => {
         formData.append("file", file);
         formData.append("file_type", "jsonl");
         if (importCharacterChatFunc) {
-          const result = await importCharacterChatFunc(formData, { refresh: false });
+          const result = await importCharacterChatFunc(formData, {
+            refresh: false,
+          });
           if (result && result.length > 0) {
             successCount++;
           } else {
@@ -9757,7 +9764,9 @@ jQuery(async () => {
     }
     invalidateChatCache(avatar);
     if (successCount > 0) {
-      toastr.success(`成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`);
+      toastr.success(
+        `成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`,
+      );
     } else {
       toastr.error(`导入失败`);
     }
@@ -9863,7 +9872,12 @@ jQuery(async () => {
           toastr.warning("请先选择要删除的聊天记录");
           return;
         }
-        if (!(await showChatDeleteConfirmPopup(`确定要删除选中的 ${toDelete.length} 条聊天记录吗？此操作不可撤销。`))) return;
+        if (
+          !confirm(
+            `确定要删除选中的 ${toDelete.length} 条聊天记录吗？\n此操作不可撤销！`,
+          )
+        )
+          return;
         let successCount = 0;
         for (const key of toDelete) {
           const fn = key.split("::")[1];
@@ -9920,9 +9934,14 @@ jQuery(async () => {
 
       // 点击行：打开聊天 / 批量模式下切换选中
       chatRow.on("click", (e) => {
-        if ($(e.target).closest(".cfm-chat-row-actions, .cfm-chat-batch-check").length) return;
+        if (
+          $(e.target).closest(".cfm-chat-row-actions, .cfm-chat-batch-check")
+            .length
+        )
+          return;
         if (cfmChatBatchMode) {
-          if (cfmChatBatchSelected.has(batchKey)) cfmChatBatchSelected.delete(batchKey);
+          if (cfmChatBatchSelected.has(batchKey))
+            cfmChatBatchSelected.delete(batchKey);
           else cfmChatBatchSelected.add(batchKey);
           rerenderCurrentView();
           return;
@@ -9933,7 +9952,8 @@ jQuery(async () => {
       // 批量模式复选框
       chatRow.find(".cfm-chat-batch-check").on("click", (e) => {
         e.stopPropagation();
-        if (cfmChatBatchSelected.has(batchKey)) cfmChatBatchSelected.delete(batchKey);
+        if (cfmChatBatchSelected.has(batchKey))
+          cfmChatBatchSelected.delete(batchKey);
         else cfmChatBatchSelected.add(batchKey);
         rerenderCurrentView();
       });
@@ -9987,7 +10007,8 @@ jQuery(async () => {
       // 删除
       chatRow.find(".cfm-chat-delete-btn").on("click", async (e) => {
         e.stopPropagation();
-        if (!(await showChatDeleteConfirmPopup(`确定要删除聊天记录「${chatName}」吗？此操作不可撤销。`))) return;
+        if (!confirm(`确定要删除聊天记录「${chatName}」吗？\n此操作不可撤销！`))
+          return;
         if (await deleteChatFile(avatar, chatName)) {
           toastr.success(`已删除: ${chatName}`);
           rerenderCurrentView();
@@ -14810,16 +14831,20 @@ jQuery(async () => {
         ? `<div class="cfm-row-edit-btn" title="编辑作者名/版本名"><i class="fa-solid fa-pen-to-square"></i></div>`
         : "";
     // 聊天模式下的小三角按钮（需同时检查自定义布局中 chatmode 是否可见）
-    const chatmodeVisible = cfmChatMode && getVisibleActions("chars").includes("chatmode");
+    const chatmodeVisible =
+      cfmChatMode && getVisibleActions("chars").includes("chatmode");
     // 从缓存同步判断是否有实质性聊天（enterChatMode 已批量预加载）
     let showChatToggle = false;
     if (chatmodeVisible) {
       const cachedChats = cfmChatCache.get(char.avatar);
       if (cachedChats && cachedChats.length > 0) {
-        showChatToggle = cachedChats.length > 1 || (cachedChats[0] && (cachedChats[0].chat_items || 0) > 1);
+        showChatToggle =
+          cachedChats.length > 1 ||
+          (cachedChats[0] && (cachedChats[0].chat_items || 0) > 1);
       }
     }
-    const isExpanded = showChatToggle && cfmChatExpandedAvatars.has(char.avatar);
+    const isExpanded =
+      showChatToggle && cfmChatExpandedAvatars.has(char.avatar);
     const chatToggleHtml = showChatToggle
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
@@ -14869,11 +14894,17 @@ jQuery(async () => {
         row.next(".cfm-chat-sublist").slideUp(150, function () {
           $(this).remove();
         });
-        row.find(".cfm-chat-toggle i").removeClass("fa-caret-down").addClass("fa-caret-right");
+        row
+          .find(".cfm-chat-toggle i")
+          .removeClass("fa-caret-down")
+          .addClass("fa-caret-right");
       } else {
         // 展开：异步获取聊天记录
         cfmChatExpandedAvatars.add(avatar);
-        row.find(".cfm-chat-toggle i").removeClass("fa-caret-right").addClass("fa-caret-down");
+        row
+          .find(".cfm-chat-toggle i")
+          .removeClass("fa-caret-right")
+          .addClass("fa-caret-down");
         const chats = await getCharChats(avatar);
         renderChatSubList(row, avatar, chats || []);
         row.next(".cfm-chat-sublist").hide().slideDown(150);
