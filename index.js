@@ -9296,6 +9296,47 @@ jQuery(async () => {
   }
 
   /**
+   * 置顶聊天到最近聊天（通过读取后重新保存来更新文件mtime）
+   * 不会关闭弹窗或切换角色
+   * @param {string} avatar - 角色的 avatar 文件名
+   * @param {string} chatFileName - 聊天文件名（不含扩展名）
+   */
+  async function pinChatToRecent(avatar, chatFileName) {
+    try {
+      const headers = getContext().getRequestHeaders();
+      // 1. 读取聊天文件内容
+      const getResp = await fetch("/api/chats/get", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          avatar_url: avatar,
+          file_name: chatFileName,
+        }),
+      });
+      if (!getResp.ok) throw new Error("读取聊天文件失败");
+      const chatData = await getResp.json();
+      if (!Array.isArray(chatData) || chatData.length === 0) {
+        throw new Error("聊天数据为空或格式错误");
+      }
+      // 2. 重新保存以更新文件修改时间
+      const saveResp = await fetch("/api/chats/save", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          avatar_url: avatar,
+          file_name: chatFileName,
+          chat: chatData,
+        }),
+      });
+      if (!saveResp.ok) throw new Error("保存聊天文件失败");
+      toastr.success("已置顶到最近聊天");
+    } catch (e) {
+      console.error("[CFM] 置顶聊天失败:", e);
+      toastr.error("置顶聊天失败");
+    }
+  }
+
+  /**
    * 导入聊天记录文件
    * @param {string} avatar - 角色的 avatar 文件名
    * @param {FileList} files - 要导入的文件列表
@@ -9525,11 +9566,10 @@ jQuery(async () => {
         rerenderCurrentView();
       });
 
-      // 置顶到最近聊天（本质上是打开这个聊天，让它出现在 recent chats 中）
+      // 置顶到最近聊天（通过重新保存聊天文件来更新 mtime）
       chatRow.find(".cfm-chat-pin-btn").on("click", async (e) => {
         e.stopPropagation();
-        // 打开聊天会自动将其更新为最近聊天
-        await openChatFile(avatar, chatName);
+        await pinChatToRecent(avatar, chatName);
       });
 
       // 重命名
