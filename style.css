@@ -2042,6 +2042,7 @@ l/* ========== 浮动按钮 ========== */
 }
 .cfm-tab {
   flex: 1;
+  min-width: 0;
   padding: 6px 10px;
   text-align: center;
   font-size: 13px;
@@ -2058,6 +2059,8 @@ l/* ========== 浮动按钮 ========== */
   align-items: center;
   justify-content: center;
   gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .cfm-tab:hover {
   opacity: 0.8;

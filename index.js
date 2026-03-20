@@ -808,7 +808,13 @@ jQuery(async () => {
   function getVisibleTabs() {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabs) return CFM_TAB_META.map((t) => t.id);
-    return layout.tabs.filter((t) => t.visible !== false).map((t) => t.id);
+    // 确保新增标签页也被包含（防止新增标签页在已有布局中缺失）
+    const existing = new Set(layout.tabs.map((t) => t.id));
+    const allTabs = [...layout.tabs];
+    for (const meta of CFM_TAB_META) {
+      if (!existing.has(meta.id)) allTabs.push({ id: meta.id, visible: true });
+    }
+    return allTabs.filter((t) => t.visible !== false).map((t) => t.id);
   }
 
   /** 获取当前生效的标签页列表（已排序，含不可见） */
