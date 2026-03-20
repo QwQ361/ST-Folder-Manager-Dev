@@ -588,6 +588,22 @@ jQuery(async () => {
     );
   }
 
+  // 动态导入酒馆 personas 模块，获取 personasFilter 和 getUserAvatars
+  // 用于在分页前进行数据级过滤，修复 Persona 文件夹过滤与分页不兼容的问题
+  let personasFilter = null;
+  let getUserAvatarsFunc = null;
+  try {
+    const personasModule = await import("../../../personas.js");
+    personasFilter = personasModule.personasFilter;
+    getUserAvatarsFunc = personasModule.getUserAvatars;
+    console.log("[CFM] 成功获取 personasFilter 和 getUserAvatars");
+  } catch (e) {
+    console.warn(
+      "[CFM] 无法导入 personas.js 模块，Persona 文件夹过滤将回退到 DOM 级过滤:",
+      e,
+    );
+  }
+
   function getTagList() {
     return getContext().tags || [];
   }
@@ -22024,9 +22040,31 @@ jQuery(async () => {
   }
 
   /**
-   * User过滤：隐藏/显示 #user_avatar_block 中的 persona
+   * User过滤：通过 personasFilter 在数据级过滤 persona
+   * 确保过滤在分页之前执行，解决文件夹过滤与分页不兼容的问题
    */
   function applyPersonaFilter() {
+    if (personasFilter && getUserAvatarsFunc) {
+      // 数据级过滤模式：注册/注销 personasFilter 的自定义过滤函数
+      if (!nativeFilterPersona) {
+        // 取消过滤：移除自定义过滤函数
+        delete personasFilter.filterFunctions["cfm_persona_folder"];
+      } else {
+        // 应用过滤：注册自定义过滤函数
+        const allowedAvatarIds = getAllItemsInFolderRecursive(
+          "personas",
+          nativeFilterPersona,
+        );
+        personasFilter.filterFunctions["cfm_persona_folder"] = (entities) => {
+          return entities.filter((avatarId) => allowedAvatarIds.has(avatarId));
+        };
+      }
+      // 触发重新渲染（getUserAvatars 内部会调用 personasFilter.applyFilters）
+      getUserAvatarsFunc(true);
+      return;
+    }
+
+    // 回退方案：DOM 级过滤（当无法导入 personas.js 时使用）
     const block = $("#user_avatar_block");
     if (!nativeFilterPersona) {
       // 显示全部
