@@ -4205,6 +4205,28 @@ option.cfm-nf-hidden {
   flex-shrink: 0;
 }
 
+/* 正则查看模式：目标角色/预设行高亮 */
+.cfm-regex-target-row {
+  background-color: rgba(249, 226, 175, 0.15) !important;
+  border-left: 3px solid #f9e2af !important;
+  box-shadow: inset 0 0 8px rgba(249, 226, 175, 0.1);
+}
+.cfm-regex-target-row:hover {
+  background-color: rgba(249, 226, 175, 0.22) !important;
+}
+
+/* 正则查看模式：路径上的文件夹行高亮 */
+.cfm-regex-target-folder {
+  background-color: rgba(249, 226, 175, 0.08) !important;
+  border-left: 3px solid rgba(249, 226, 175, 0.5) !important;
+}
+.cfm-regex-target-folder:hover {
+  background-color: rgba(249, 226, 175, 0.15) !important;
+}
+.cfm-regex-target-folder .cfm-row-icon i {
+  color: #f9e2af !important;
+}
+
 /* 聊天记录子列表容器 */
 .cfm-chat-sublist {
   margin-left: 30px;
