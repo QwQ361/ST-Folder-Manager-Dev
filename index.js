@@ -31,12 +31,6 @@ jQuery(async () => {
       extension_settings[extensionName].bgNotes = {};
     if (!extension_settings[extensionName].personaNotes)
       extension_settings[extensionName].personaNotes = {};
-    if (!extension_settings[extensionName].chatGroups)
-      extension_settings[extensionName].chatGroups = {};
-    if (!extension_settings[extensionName].chatNotes)
-      extension_settings[extensionName].chatNotes = {};
-    if (!extension_settings[extensionName].chatPins)
-      extension_settings[extensionName].chatPins = [];
     if (!extension_settings[extensionName].bgOrientations)
       extension_settings[extensionName].bgOrientations = {};
     if (!extension_settings[extensionName].themeBackgroundBindings)
@@ -261,9 +255,7 @@ jQuery(async () => {
           ? extension_settings[extensionName].bgGroups
           : type === "personas"
             ? extension_settings[extensionName].personaGroups
-            : type === "chats"
-              ? extension_settings[extensionName].chatGroups
-              : extension_settings[extensionName].worldInfoGroups;
+            : extension_settings[extensionName].worldInfoGroups;
   }
   function setItemGroup(type, itemName, folderName) {
     const groups = getResourceGroups(type);
@@ -673,7 +665,6 @@ jQuery(async () => {
           { id: "themes", visible: true },
           { id: "backgrounds", visible: true },
           { id: "personas", visible: true },
-          { id: "chats", visible: true },
         ],
         tabActions: {
           chars: [
@@ -717,7 +708,6 @@ jQuery(async () => {
             { id: "export", visible: true },
             { id: "delete", visible: true },
           ],
-          chats: [{ id: "note", visible: true }],
         },
       };
     }
@@ -746,7 +736,6 @@ jQuery(async () => {
     { id: "themes", label: "美化", icon: "fa-palette" },
     { id: "backgrounds", label: "背景", icon: "fa-panorama" },
     { id: "personas", label: "User", icon: "fa-user-pen" },
-    { id: "chats", label: "聊天", icon: "fa-comments" },
   ];
   const CFM_ACTION_META = {
     import: { label: "导入", icon: "fa-file-import" },
@@ -762,13 +751,7 @@ jQuery(async () => {
   function getVisibleTabs() {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabs) return CFM_TAB_META.map((t) => t.id);
-    // 自动补充新增标签页（防止已有用户的保存数据缺少新标签）
-    const existing = new Set(layout.tabs.map((t) => t.id));
-    const allTabs = [...layout.tabs];
-    for (const meta of CFM_TAB_META) {
-      if (!existing.has(meta.id)) allTabs.push({ id: meta.id, visible: true });
-    }
-    return allTabs.filter((t) => t.visible !== false).map((t) => t.id);
+    return layout.tabs.filter((t) => t.visible !== false).map((t) => t.id);
   }
 
   /** 获取当前生效的标签页列表（已排序，含不可见） */
@@ -813,7 +796,6 @@ jQuery(async () => {
           "delete",
         ],
         personas: ["import", "note", "export", "delete"],
-        chats: ["note"],
       };
       const refOrder = defaultOrder[tabId] || Object.keys(knownIds);
       for (const actionId of Object.keys(knownIds)) {
@@ -855,9 +837,6 @@ jQuery(async () => {
       quickedit: "#cfm-edit-char-btn",
       export: "#cfm-export-char-btn",
       delete: "#cfm-res-delete-char-btn",
-    },
-    chats: {
-      note: "#cfm-chat-note-btn",
     },
     worldinfo: {
       import: "#cfm-import-worldinfo-btn",
@@ -2963,8 +2942,6 @@ jQuery(async () => {
       extension_settings[extensionName].bgFavorites = [];
     if (!extension_settings[extensionName].personaFavorites)
       extension_settings[extensionName].personaFavorites = [];
-    if (!extension_settings[extensionName].chatFavorites)
-      extension_settings[extensionName].chatFavorites = [];
   }
   function getResFavorites(type) {
     ensureResFavorites();
@@ -2976,9 +2953,7 @@ jQuery(async () => {
           ? extension_settings[extensionName].bgFavorites
           : type === "personas"
             ? extension_settings[extensionName].personaFavorites
-            : type === "chats"
-              ? extension_settings[extensionName].chatFavorites
-              : extension_settings[extensionName].worldInfoFavorites;
+            : extension_settings[extensionName].worldInfoFavorites;
   }
   function isResFavorite(type, name) {
     return getResFavorites(type).includes(name);
@@ -3506,7 +3481,6 @@ jQuery(async () => {
     else if (currentResourceType === "themes") renderThemesView();
     else if (currentResourceType === "backgrounds") renderBackgroundsView();
     else if (currentResourceType === "personas") renderPersonasView();
-    else if (currentResourceType === "chats") renderChatsView();
     else renderWorldInfoView();
   }
 
@@ -6036,106 +6010,6 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
 
-  // ==================== 聊天记录数据函数 ====================
-  function getChatNote(chatKey) {
-    return extension_settings[extensionName].chatNotes?.[chatKey] || "";
-  }
-  function setChatNote(chatKey, note) {
-    if (!extension_settings[extensionName].chatNotes)
-      extension_settings[extensionName].chatNotes = {};
-    if (note) {
-      extension_settings[extensionName].chatNotes[chatKey] = note;
-    } else {
-      delete extension_settings[extensionName].chatNotes[chatKey];
-    }
-    getContext().saveSettingsDebounced();
-  }
-  function getChatGroups() {
-    ensureResourceSettings();
-    return extension_settings[extensionName].chatGroups;
-  }
-  function setChatGroup(chatKey, folderId) {
-    const groups = getChatGroups();
-    if (folderId) groups[chatKey] = folderId;
-    else delete groups[chatKey];
-    getContext().saveSettingsDebounced();
-  }
-  function getChatPins() {
-    ensureResourceSettings();
-    return extension_settings[extensionName].chatPins;
-  }
-  function isChatPinned(chatKey) {
-    return getChatPins().includes(chatKey);
-  }
-  function toggleChatPin(chatKey) {
-    const pins = getChatPins();
-    const idx = pins.indexOf(chatKey);
-    if (idx >= 0) pins.splice(idx, 1);
-    else pins.push(chatKey);
-    getContext().saveSettingsDebounced();
-    return idx < 0;
-  }
-  /** 构建 chatKey: "char:{avatar}:{file_name}" 或 "group:{groupId}:{file_name}" */
-  function makeChatKey(chat) {
-    if (chat.is_group || chat.group) {
-      return `group:${chat.group}:${chat.file_name}`;
-    }
-    return `char:${chat.avatar || chat.char_name}:${chat.file_name}`;
-  }
-  /** 从 chatKey 解析出类型、标识、文件名 */
-  function parseChatKey(chatKey) {
-    const parts = chatKey.split(":");
-    if (parts.length < 3) return null;
-    const type = parts[0]; // "char" or "group"
-    const id = parts[1];
-    const fileName = parts.slice(2).join(":");
-    return { type, id, fileName };
-  }
-
-  // 聊天视图排序/展开状态
-  let chatLeftSortMode = null;
-  let chatRightSortMode = null;
-  let selectedChatFolder = null;
-  let chatExpandedNodes = new Set();
-  let _chatListCache = null;
-  let _chatListCacheTime = 0;
-  const CHAT_CACHE_TTL = 30000; // 30秒缓存
-
-  /** 获取所有聊天记录（带缓存） */
-  async function getAllChats(forceRefresh) {
-    const now = Date.now();
-    if (
-      !forceRefresh &&
-      _chatListCache &&
-      now - _chatListCacheTime < CHAT_CACHE_TTL
-    ) {
-      return _chatListCache;
-    }
-    try {
-      const resp = await fetch("/api/chats/recent", {
-        method: "POST",
-        headers: getContext().getRequestHeaders(),
-        body: JSON.stringify({ limit: 9999 }),
-      });
-      if (!resp.ok) {
-        console.error("[CFM] Failed to fetch recent chats:", resp.status);
-        return _chatListCache || [];
-      }
-      const data = await resp.json();
-      _chatListCache = Array.isArray(data) ? data : [];
-      _chatListCacheTime = now;
-      return _chatListCache;
-    } catch (err) {
-      console.error("[CFM] Error fetching chats:", err);
-      return _chatListCache || [];
-    }
-  }
-
-  /** 获取聊天记录所属的文件夹 ID（复用角色卡文件夹树的 tagId） */
-  function getChatFolderId(chatKey) {
-    return getChatGroups()[chatKey] || null;
-  }
-
   // ==================== User备注编辑模式 ====================
   let cfmPersonaNoteMode = false;
   let cfmPersonaNoteSelected = new Set();
@@ -6839,20 +6713,10 @@ jQuery(async () => {
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
       if (p.scope === "global") continue;
-      const hasBindings =
-        (p.bindChars && p.bindChars.length > 0) ||
-        (p.bindPresets && p.bindPresets.length > 0);
+      const hasBindings = (p.bindChars && p.bindChars.length > 0) || (p.bindPresets && p.bindPresets.length > 0);
       if (!hasBindings) continue;
-      const charMatch = !!(
-        currentChar &&
-        p.bindChars &&
-        p.bindChars.includes(currentChar)
-      );
-      const presetMatch = !!(
-        currentPreset &&
-        p.bindPresets &&
-        p.bindPresets.includes(currentPreset)
-      );
+      const charMatch = !!(currentChar && p.bindChars && p.bindChars.includes(currentChar));
+      const presetMatch = !!(currentPreset && p.bindPresets && p.bindPresets.includes(currentPreset));
       if (charMatch || presetMatch) {
         indices.push(i);
         details[i] = { charMatch, presetMatch };
@@ -6882,12 +6746,7 @@ jQuery(async () => {
       // 计算保持应用的分组（之前应用且现在仍需应用）
       const stillApplied = shouldApply.filter((i) => prevApplied.includes(i));
 
-      if (
-        toDeactivate.length === 0 &&
-        toActivate.length === 0 &&
-        stillApplied.length === 0
-      )
-        return;
+      if (toDeactivate.length === 0 && toActivate.length === 0 && stillApplied.length === 0) return;
 
       // 收集需要关闭的世界书
       const booksToDeactivate = new Set();
@@ -6934,10 +6793,8 @@ jQuery(async () => {
         const d = details[idx];
         if (!d) return "";
         const reasons = [];
-        if (d.charMatch && currentCharName)
-          reasons.push(`角色「${currentCharName}」`);
-        if (d.presetMatch && currentPresetName)
-          reasons.push(`预设「${currentPresetName}」`);
+        if (d.charMatch && currentCharName) reasons.push(`角色「${currentCharName}」`);
+        if (d.presetMatch && currentPresetName) reasons.push(`预设「${currentPresetName}」`);
         return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
       }
 
@@ -6957,17 +6814,13 @@ jQuery(async () => {
           const p = presets[idx];
           const reasons = [];
           if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
-          if (p.bindPresets && p.bindPresets.length > 0)
-            reasons.push("预设不匹配");
+          if (p.bindPresets && p.bindPresets.length > 0) reasons.push("预设不匹配");
           msgParts.push(`❌ 已关闭「${name}」（${reasons.join("且")}）`);
         }
       }
 
       // 保持应用的分组（只在有变化时才提示，即有激活或关闭操作时）
-      if (
-        (toActivate.length > 0 || toDeactivate.length > 0) &&
-        stillApplied.length > 0
-      ) {
+      if ((toActivate.length > 0 || toDeactivate.length > 0) && stillApplied.length > 0) {
         for (const idx of stillApplied) {
           const name = presets[idx]?.name;
           if (name) {
@@ -7140,18 +6993,13 @@ jQuery(async () => {
         return;
       }
       try {
-        const applied =
-          extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
         // 过滤掉已不存在的索引和当前要应用的索引
-        const otherApplied = applied.filter(
-          (i) => i !== idx && currentPresets[i],
-        );
+        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
 
         let mode = "stack"; // 默认叠加
         if (otherApplied.length > 0) {
-          const otherNames = otherApplied
-            .map((i) => currentPresets[i].name)
-            .join("、");
+          const otherNames = otherApplied.map((i) => currentPresets[i].name).join("、");
           // 弹出三选一确认框
           const choice = await new Promise((resolve) => {
             const confirmOverlay = $(`
@@ -7207,16 +7055,11 @@ jQuery(async () => {
         }
 
         // 更新追踪
-        const newApplied =
-          mode === "replace"
-            ? [idx]
-            : [...otherApplied.filter((i) => i !== idx), idx];
+        const newApplied = mode === "replace" ? [idx] : [...otherApplied.filter((i) => i !== idx), idx];
         extension_settings[extensionName]._wiAppliedPresetIndices = newApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
-          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
-        );
+        toastr.success(`已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`);
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -7240,35 +7083,27 @@ jQuery(async () => {
         return;
       }
       try {
-        const applied =
-          extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
         if (!applied.includes(idx)) {
           toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         // 检查该分组是否因绑定条件匹配而自动应用，如果是则阻止手动取消
-        const { indices: autoIndices, details: autoDetails } =
-          getAutoApplyPresetIndices();
+        const { indices: autoIndices, details: autoDetails } = getAutoApplyPresetIndices();
         if (autoIndices.includes(idx)) {
           const detail = autoDetails[idx];
           const reasons = [];
-          if (detail.charMatch)
-            reasons.push(
-              `角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`,
-            );
-          if (detail.presetMatch)
-            reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
+          if (detail.charMatch) reasons.push(`角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`);
+          if (detail.presetMatch) reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
           toastr.warning(
             `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
             "无法取消应用",
-            { timeOut: 5000 },
+            { timeOut: 5000 }
           );
           return;
         }
         // 计算其他已应用分组覆盖的世界书
-        const otherApplied = applied.filter(
-          (i) => i !== idx && currentPresets[i],
-        );
+        const otherApplied = applied.filter((i) => i !== idx && currentPresets[i]);
         const otherBooks = new Set();
         for (const oi of otherApplied) {
           for (const b of currentPresets[oi].books) otherBooks.add(b);
@@ -7282,13 +7117,10 @@ jQuery(async () => {
           }
         }
         // 从追踪中移除
-        extension_settings[extensionName]._wiAppliedPresetIndices =
-          otherApplied;
+        extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
-          `已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`,
-        );
+        toastr.success(`已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`);
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
@@ -7322,7 +7154,7 @@ jQuery(async () => {
       // 边界检测
       if (menuLeft < 8) menuLeft = 8;
       if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
-      menu.css({ top: menuTop + "px", left: menuLeft + "px" });
+      menu.css({ top: menuTop + 'px', left: menuLeft + 'px' });
 
       menu
         .find(".cfm-wi-preset-bind-menu-item")
@@ -7344,17 +7176,13 @@ jQuery(async () => {
             if (preset.scope === "global") setWiPresetScope(idx, "bound");
             bindWiPresetToPreset(idx, currentPresetName);
             await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
-            );
+            toastr.success(`已将分组「${preset.name}」绑定到预设「${currentPresetName}」`);
           } else if (action === "char") {
             if (!currentChar) return;
             if (preset.scope === "global") setWiPresetScope(idx, "bound");
             bindWiPresetToChar(idx, currentChar);
             await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
-            );
+            toastr.success(`已将分组「${preset.name}」绑定到角色「${currentCharName}」`);
           }
           menu.remove();
           overlay.remove();
@@ -7435,16 +7263,13 @@ jQuery(async () => {
           unbindWiPresetFromPreset(idx, bindId);
         }
         // 取消绑定后，检查该分组是否仍满足自动应用条件，不满足则自动取消应用
-        const applied =
-          extension_settings[extensionName]._wiAppliedPresetIndices || [];
+        const applied = extension_settings[extensionName]._wiAppliedPresetIndices || [];
         if (applied.includes(idx)) {
           const { indices: stillAutoIndices } = getAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
             // 不再满足绑定条件，自动取消应用
             const allPresets = getWiActivePresets();
-            const otherApplied = applied.filter(
-              (i) => i !== idx && allPresets[i],
-            );
+            const otherApplied = applied.filter((i) => i !== idx && allPresets[i]);
             const otherBooks = new Set();
             for (const oi of otherApplied) {
               for (const b of allPresets[oi].books) otherBooks.add(b);
@@ -7457,12 +7282,9 @@ jQuery(async () => {
                 removedCount++;
               }
             }
-            extension_settings[extensionName]._wiAppliedPresetIndices =
-              otherApplied;
+            extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
             getContext().saveSettingsDebounced();
-            toastr.info(
-              `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`,
-            );
+            toastr.info(`已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`);
           } else {
             toastr.success(`已取消绑定（分组仍因其他绑定条件匹配而保持应用）`);
           }
@@ -7471,10 +7293,9 @@ jQuery(async () => {
         }
         // 检查是否还有绑定，如果没有了就恢复为全局
         const updated = getWiActivePresets()[idx];
-        const stillHasBindings =
-          updated &&
+        const stillHasBindings = updated &&
           ((updated.bindChars && updated.bindChars.length > 0) ||
-            (updated.bindPresets && updated.bindPresets.length > 0));
+           (updated.bindPresets && updated.bindPresets.length > 0));
         if (!stillHasBindings) {
           if (updated) setWiPresetScope(idx, "global");
           // 最后一个绑定被取消，重建面板
@@ -7484,14 +7305,9 @@ jQuery(async () => {
           // 仍有其他绑定，只刷新当前下拉内容
           entry.remove();
           // 更新 scope 标签和绑定摘要
-          const item = overlay.find(
-            `.cfm-wi-preset-item[data-preset-idx="${idx}"]`,
-          );
+          const item = overlay.find(`.cfm-wi-preset-item[data-preset-idx="${idx}"]`);
           const bindSummary = getWiPresetBindSummary(updated);
-          item
-            .find(".cfm-wi-preset-scope-tag")
-            .text("绑定")
-            .css("color", "#cba6f7");
+          item.find(".cfm-wi-preset-scope-tag").text("绑定").css("color", "#cba6f7");
           // 如果下拉中没有条目了（理论上不会走到这里），也收起
           if (dropdown.find(".cfm-wi-bind-entry").length === 0) {
             dropdown.slideUp(150);
@@ -7561,10 +7377,7 @@ jQuery(async () => {
       .join("");
     // 构建文件夹过滤选项（递归缩进）
     function buildWiFilterOptions() {
-      const opts = [
-        '<option value="__all__">全部</option>',
-        '<option value="__ungrouped__">未归类</option>',
-      ];
+      const opts = ['<option value="__all__">全部</option>', '<option value="__ungrouped__">未归类</option>'];
       function addOpts(parentId, depth) {
         const children = sortResFolders(
           "worldinfo",
@@ -7610,24 +7423,14 @@ jQuery(async () => {
     // 组合过滤函数（文件夹 + 文本搜索）
     function applyEditFilters() {
       const folderVal = overlay.find("#cfm-wi-preset-edit-folder-filter").val();
-      const q = overlay
-        .find("#cfm-wi-preset-edit-filter")
-        .val()
-        .toLowerCase()
-        .trim();
+      const q = overlay.find("#cfm-wi-preset-edit-filter").val().toLowerCase().trim();
       // 预计算选中文件夹下所有递归子文件夹 ID
       let allowedFolders = null;
-      if (
-        folderVal &&
-        folderVal !== "__all__" &&
-        folderVal !== "__ungrouped__"
-      ) {
+      if (folderVal && folderVal !== "__all__" && folderVal !== "__ungrouped__") {
         allowedFolders = new Set();
         function collectChildren(pid) {
           allowedFolders.add(pid);
-          const children = Object.keys(wiTree).filter(
-            (id) => wiTree[id].parentId === pid,
-          );
+          const children = Object.keys(wiTree).filter((id) => wiTree[id].parentId === pid);
           for (const c of children) collectChildren(c);
         }
         collectChildren(folderVal);
@@ -7645,9 +7448,7 @@ jQuery(async () => {
         $(this).toggle(folderMatch && textMatch);
       });
     }
-    overlay
-      .find("#cfm-wi-preset-edit-folder-filter")
-      .on("change", applyEditFilters);
+    overlay.find("#cfm-wi-preset-edit-folder-filter").on("change", applyEditFilters);
     overlay.find("#cfm-wi-preset-edit-filter").on("input", applyEditFilters);
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
@@ -9357,13 +9158,11 @@ jQuery(async () => {
     selectedThemeFolder = null;
     selectedBgFolder = null;
     selectedPersonaFolder = null;
-    selectedChatFolder = null;
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
     themeExpandedNodes.clear();
     bgExpandedNodes.clear();
     personaExpandedNodes.clear();
-    chatExpandedNodes.clear();
     // 如果是"记住上次页面"模式，恢复文件夹选中和展开状态
     if (defaultPage === "last" && lastState.resourceType) {
       const folder = lastState.selectedFolder;
@@ -9386,9 +9185,6 @@ jQuery(async () => {
       } else if (initialTab === "personas") {
         selectedPersonaFolder = folder || null;
         expanded.forEach((id) => personaExpandedNodes.add(id));
-      } else if (initialTab === "chats") {
-        selectedChatFolder = folder || null;
-        expanded.forEach((id) => chatExpandedNodes.add(id));
       }
     }
 
@@ -9501,20 +9297,6 @@ jQuery(async () => {
                     </select>
                     <select id="cfm-persona-search-type" class="cfm-search-select" title="搜索类型">
                         <option value="persona">User</option>
-                        <option value="folder">文件夹</option>
-                    </select>
-                </div>
-                <div class="cfm-global-search-bar" id="cfm-chat-search-bar" style="display:none;">
-                    <div class="cfm-search-input-wrapper">
-                        <input type="text" class="cfm-global-search-input" id="cfm-chat-global-search" placeholder="搜索聊天记录..." />
-                        <button class="cfm-search-clear-btn" id="cfm-chat-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <select id="cfm-chat-search-scope" class="cfm-search-select" title="搜索范围">
-                        <option value="current">当前文件夹</option>
-                        <option value="all">全部文件夹</option>
-                    </select>
-                    <select id="cfm-chat-search-type" class="cfm-search-select" title="搜索类型">
-                        <option value="chat">聊天</option>
                         <option value="folder">文件夹</option>
                     </select>
                 </div>
@@ -9723,35 +9505,6 @@ jQuery(async () => {
                         </div>
                     </div>
                 </div>
-                <div class="cfm-dual-pane" id="cfm-chats-view" style="display:none;">
-                    <div class="cfm-left-pane">
-                        <div class="cfm-left-header">
-                            <span>文件夹</span>
-                            <span class="cfm-left-header-actions">
-                                <div class="cfm-sort-wrapper" id="cfm-chat-left-sort-wrapper">
-                                    <button class="cfm-sort-trigger" id="cfm-chat-left-sort-btn" title="排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
-                                </div>
-                                <button id="cfm-chat-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
-                                <button id="cfm-chat-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
-                            </span>
-                        </div>
-                        <div class="cfm-left-tree" id="cfm-chat-left-tree"></div>
-                    </div>
-                    <div class="cfm-right-pane">
-                        <div class="cfm-right-header">
-                            <span class="cfm-rh-path" id="cfm-chat-rh-path">选择左侧文件夹查看内容</span>
-                            <span class="cfm-rh-count" id="cfm-chat-rh-count"></span>
-                            <button class="cfm-edit-char-btn" id="cfm-chat-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
-                            <div class="cfm-sort-wrapper" id="cfm-chat-right-sort-wrapper">
-                                <button class="cfm-sort-trigger" id="cfm-chat-right-sort-btn" title="聊天排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
-                            </div>
-                            <button class="cfm-multisel-toggle cfm-multisel-toggle-chat" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
-                        </div>
-                        <div class="cfm-right-list" id="cfm-chat-right-list">
-                            <div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>
-                        </div>
-                    </div>
-                </div>
             </div>
         `);
     overlay.append(popup);
@@ -9770,7 +9523,6 @@ jQuery(async () => {
       popup.find("#cfm-themes-view").toggle(initialTab === "themes");
       popup.find("#cfm-backgrounds-view").toggle(initialTab === "backgrounds");
       popup.find("#cfm-personas-view").toggle(initialTab === "personas");
-      popup.find("#cfm-chats-view").toggle(initialTab === "chats");
       // 切换搜索栏
       popup.find("#cfm-global-search-bar").hide();
       popup.find("#cfm-preset-search-bar").toggle(initialTab === "presets");
@@ -9780,7 +9532,6 @@ jQuery(async () => {
       popup.find("#cfm-theme-search-bar").toggle(initialTab === "themes");
       popup.find("#cfm-bg-search-bar").toggle(initialTab === "backgrounds");
       popup.find("#cfm-persona-search-bar").toggle(initialTab === "personas");
-      popup.find("#cfm-chat-search-bar").toggle(initialTab === "chats");
       // 切换header按钮
       const btn = popup.find("#cfm-btn-copymode");
       btn.toggleClass("cfm-copymode-active", resCopyMode);
@@ -9822,7 +9573,6 @@ jQuery(async () => {
       popup.find("#cfm-themes-view").toggle(tab === "themes");
       popup.find("#cfm-backgrounds-view").toggle(tab === "backgrounds");
       popup.find("#cfm-personas-view").toggle(tab === "personas");
-      popup.find("#cfm-chats-view").toggle(tab === "chats");
       // 切换header按钮可见性 - 移动模式对所有标签可见
       if (tab === "chars") {
         popup.find("#cfm-btn-copymode").show();
@@ -9846,13 +9596,11 @@ jQuery(async () => {
       popup.find("#cfm-theme-search-bar").toggle(tab === "themes");
       popup.find("#cfm-bg-search-bar").toggle(tab === "backgrounds");
       popup.find("#cfm-persona-search-bar").toggle(tab === "personas");
-      popup.find("#cfm-chat-search-bar").toggle(tab === "chats");
       if (tab === "presets") renderPresetsView();
       else if (tab === "worldinfo") renderWorldInfoView();
       else if (tab === "themes") renderThemesView();
       else if (tab === "backgrounds") renderBackgroundsView();
       else if (tab === "personas") renderPersonasView();
-      else if (tab === "chats") renderChatsView();
     });
 
     popup.find("#cfm-btn-close-main").on("click touchend", (e) => {
@@ -10120,18 +9868,6 @@ jQuery(async () => {
       e.preventDefault();
       personaExpandedNodes.clear();
       renderPersonasView();
-    });
-
-    // 聊天展开全部/收起全部
-    popup.find("#cfm-chat-expand-all").on("click touchend", (e) => {
-      e.preventDefault();
-      for (const id of getFolderTagIds()) chatExpandedNodes.add(id);
-      renderChatsView();
-    });
-    popup.find("#cfm-chat-collapse-all").on("click touchend", (e) => {
-      e.preventDefault();
-      chatExpandedNodes.clear();
-      renderChatsView();
     });
 
     // 预设左栏排序
@@ -11699,7 +11435,6 @@ jQuery(async () => {
     else if (initialTab === "themes") renderThemesView();
     else if (initialTab === "backgrounds") renderBackgroundsView();
     else if (initialTab === "personas") renderPersonasView();
-    else if (initialTab === "chats") renderChatsView();
 
     // 预加载世界书名称缓存（后台静默加载，切换标签时无需等待）
     getWorldInfoNames();
@@ -11846,135 +11581,6 @@ jQuery(async () => {
       );
       executePersonaSearch();
     });
-
-    // 调用聊天事件绑定
-    bindChatEventHandlers(popup);
-  }
-
-  // 聊天搜索框和排序按钮事件绑定
-  function bindChatEventHandlers(popup) {
-    // 聊天搜索框
-    popup.find("#cfm-chat-global-search").on("input", function () {
-      const hasText = $(this).val().trim().length > 0;
-      $(this)
-        .closest(".cfm-search-input-wrapper")
-        .toggleClass("cfm-has-text", hasText);
-      executeChatSearch();
-    });
-    popup.find("#cfm-chat-search-clear").on("click touchend", function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      $("#cfm-chat-global-search").val("").focus();
-      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
-      renderChatsView();
-    });
-    popup.find("#cfm-chat-search-scope").on("change", function () {
-      executeChatSearch();
-    });
-    popup.find("#cfm-chat-search-type").on("change", function () {
-      const type = $(this).val();
-      $("#cfm-chat-global-search").attr(
-        "placeholder",
-        type === "folder" ? "搜索文件夹..." : "搜索聊天记录...",
-      );
-      executeChatSearch();
-    });
-
-    // 聊天右栏排序
-    popup.find("#cfm-chat-right-sort-btn").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const wrapper = $("#cfm-chat-right-sort-wrapper");
-      $(".cfm-sort-dropdown").remove();
-      const dropdown = $(`<div class="cfm-sort-dropdown cfm-sort-open">
-        <div class="cfm-sort-dropdown-item ${chatRightSortMode === "az" ? "cfm-sort-item-active" : ""}" data-sort="item-az"><i class="fa-solid fa-arrow-down-a-z"></i> 聊天 A→Z</div>
-        <div class="cfm-sort-dropdown-item ${chatRightSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="item-za"><i class="fa-solid fa-arrow-up-z-a"></i> 聊天 Z→A</div>
-        <div class="cfm-sort-dropdown-sep"></div>
-        <div class="cfm-sort-dropdown-item ${chatRightSortMode === null ? "cfm-sort-item-disabled" : ""}" data-sort="revert"><i class="fa-solid fa-rotate-left"></i> 恢复默认</div>
-      </div>`);
-      dropdown.find('[data-sort="item-az"]').on("click touchend", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        chatRightSortMode = "az";
-        renderChatsView();
-        dropdown.remove();
-      });
-      dropdown.find('[data-sort="item-za"]').on("click touchend", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        chatRightSortMode = "za";
-        renderChatsView();
-        dropdown.remove();
-      });
-      dropdown.find('[data-sort="revert"]').on("click touchend", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        chatRightSortMode = null;
-        renderChatsView();
-        dropdown.remove();
-      });
-      wrapper.append(dropdown);
-      setTimeout(() => {
-        $(document).one("click.cfmSortDropdown", (ev) => {
-          if (!$(ev.target).closest(".cfm-sort-dropdown").length)
-            dropdown.remove();
-        });
-      }, 0);
-    });
-
-    // 聊天备注按钮
-    popup.find("#cfm-chat-note-btn").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // 如果多选模式有选中项，批量编辑备注
-      if (cfmMultiSelectMode && cfmMultiSelected.size > 0) {
-        const chatKeys = Array.from(cfmMultiSelected);
-        showChatNotePopup(chatKeys);
-      } else {
-        toastr.warning("请先选择要编辑备注的聊天记录（使用多选模式）");
-      }
-    });
-  }
-
-  // 聊天备注弹窗
-  async function showChatNotePopup(chatKeys) {
-    if (!chatKeys || chatKeys.length === 0) return;
-    let defaultNote = "";
-    if (chatKeys.length === 1) {
-      defaultNote = getChatNote(chatKeys[0]);
-    }
-    const isBatch = chatKeys.length > 1;
-    const title = isBatch
-      ? `批量编辑 ${chatKeys.length} 个聊天的备注`
-      : "编辑聊天备注";
-    const noteInput = await callGenericPopup(
-      `<h3>${title}</h3><textarea id="cfm-chat-note-input" class="text_pole" rows="4" placeholder="输入备注内容...">${escapeHtml(defaultNote)}</textarea>${isBatch ? '<label style="margin-top:8px;display:block;"><input type="checkbox" id="cfm-chat-note-clear"> 清空所有备注</label>' : ""}`,
-      POPUP_TYPE.CONFIRM,
-      "",
-      { okButton: "保存", cancelButton: "取消" },
-    );
-    if (noteInput !== POPUP_RESULT.AFFIRMATIVE) return;
-    const note = $("#cfm-chat-note-input").val() || "";
-    const clear = isBatch && $("#cfm-chat-note-clear").is(":checked");
-    let count = 0;
-    for (const key of chatKeys) {
-      if (clear) {
-        setChatNote(key, "");
-        count++;
-      } else if (note) {
-        setChatNote(key, note);
-        count++;
-      } else if (!isBatch) {
-        setChatNote(key, "");
-        count++;
-      }
-    }
-    if (count > 0) {
-      toastr.success(
-        clear ? `已清空 ${count} 个聊天的备注` : `已更新 ${count} 个聊天的备注`,
-      );
-    }
-    renderChatsView();
   }
 
   // ==================== 模糊搜索辅助 ====================
@@ -12108,12 +11714,23 @@ jQuery(async () => {
           .join(" › ");
         const childCount = countCharsInFolderRecursive(fid);
         const row = $(`
-          <div class="cfm-row cfm-row-folder cfm-search-result" data-folder-id="${fid}">
+          <div class="cfm-row cfm-row-folder cfm-search-result" data-folder-id="${fid}" draggable="true">
             <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
             <div class="cfm-row-name">${escapeHtml(getTagName(fid))}<div class="cfm-row-folder-path">${escapeHtml(folderPath)}</div></div>
             <div class="cfm-row-meta">${childCount} 个角色</div>
           </div>
         `);
+        // PC端拖拽（搜索结果中的文件夹可拖拽到左侧树）
+        row.on("dragstart", (e) => {
+          pcDragStart(e, { type: "folder", id: fid });
+          row.addClass("cfm-dragging");
+        });
+        row.on("dragend", () => {
+          row.removeClass("cfm-dragging");
+          pcDragEnd();
+        });
+        // 移动端触摸拖拽
+        touchDragMgr.bind(row, () => ({ type: "folder", id: fid }));
         row.on("click", (e) => {
           e.preventDefault();
           // 导航到该文件夹
@@ -13282,9 +12899,6 @@ jQuery(async () => {
     } else if (currentResourceType === "personas") {
       folder = selectedPersonaFolder;
       expanded = Array.from(personaExpandedNodes);
-    } else if (currentResourceType === "chats") {
-      folder = selectedChatFolder;
-      expanded = Array.from(chatExpandedNodes);
     }
     extension_settings[extensionName].lastOpenState = {
       resourceType: currentResourceType,
@@ -14335,9 +13949,6 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-personas-view")
             .toggle(tab === "personas");
-          $("#cfm-overlay")
-            .find("#cfm-chats-view")
-            .toggle(tab === "chats");
           if (tab === "chars") {
             $("#cfm-overlay").find("#cfm-btn-copymode").show();
             const btn = $("#cfm-btn-copymode");
@@ -14371,15 +13982,11 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-persona-search-bar")
             .toggle(tab === "personas");
-          $("#cfm-overlay")
-            .find("#cfm-chat-search-bar")
-            .toggle(tab === "chats");
           if (tab === "presets") renderPresetsView();
           else if (tab === "worldinfo") renderWorldInfoView();
           else if (tab === "themes") renderThemesView();
           else if (tab === "backgrounds") renderBackgroundsView();
           else if (tab === "personas") renderPersonasView();
-          else if (tab === "chats") renderChatsView();
         });
       }
       // --- 刷新视图和工具栏 ---
@@ -14402,9 +14009,6 @@ jQuery(async () => {
       $("#cfm-overlay")
         .find("#cfm-personas-view")
         .toggle(currentResourceType === "personas");
-      $("#cfm-overlay")
-        .find("#cfm-chats-view")
-        .toggle(currentResourceType === "chats");
       // 确保正确的搜索栏显示
       $("#cfm-overlay")
         .find("#cfm-global-search-bar")
@@ -14424,9 +14028,6 @@ jQuery(async () => {
       $("#cfm-overlay")
         .find("#cfm-persona-search-bar")
         .toggle(currentResourceType === "personas");
-      $("#cfm-overlay")
-        .find("#cfm-chat-search-bar")
-        .toggle(currentResourceType === "chats");
       renderLeftTree();
       renderRightPane();
       if (currentResourceType === "presets") renderPresetsView();
@@ -14434,7 +14035,6 @@ jQuery(async () => {
       else if (currentResourceType === "themes") renderThemesView();
       else if (currentResourceType === "backgrounds") renderBackgroundsView();
       else if (currentResourceType === "personas") renderPersonasView();
-      else if (currentResourceType === "chats") renderChatsView();
       applyAllToolbarVisibility();
     }
   }
@@ -14923,12 +14523,7 @@ jQuery(async () => {
     // 恢复默认按钮
     section.find(".cfm-layout-reset-btn").on("click touchend", function (e) {
       e.preventDefault();
-      if (
-        !confirm(
-          "确定要恢复默认布局吗？当前的标签页顺序和子功能开关设置将被重置。",
-        )
-      )
-        return;
+      if (!confirm("确定要恢复默认布局吗？当前的标签页顺序和子功能开关设置将被重置。")) return;
       const defaultLayout = {
         tabs: [
           { id: "chars", visible: true },
@@ -15009,57 +14604,6 @@ jQuery(async () => {
       currentResourceType === "personas"
     ) {
       renderResourceConfigBody(body, currentResourceType);
-      return;
-    }
-
-    // ===== 聊天标签页：只渲染通用配置，不显示文件夹管理 =====
-    if (currentResourceType === "chats") {
-      // 0. 按钮位置设置（共享）
-      const currentMode = getButtonMode();
-      const modeSection = $(`
-        <div class="cfm-config-section cfm-mode-section">
-          <label>按钮位置</label>
-          <div class="cfm-mode-toggle">
-            <button class="cfm-mode-btn ${currentMode === "topbar" ? "cfm-mode-active" : ""}" data-mode="topbar"><i class="fa-solid fa-bars"></i> 固定在顶栏</button>
-            <button class="cfm-mode-btn ${currentMode === "float" ? "cfm-mode-active" : ""}" data-mode="float"><i class="fa-solid fa-up-down-left-right"></i> 浮动按钮</button>
-            <button class="cfm-mode-btn ${currentMode === "wand" ? "cfm-mode-active" : ""}" data-mode="wand"><i class="fa-solid fa-magic-wand-sparkles"></i> 魔术棒菜单</button>
-          </div>
-        </div>
-      `);
-      modeSection.find(".cfm-mode-btn").on("click touchend", function (e) {
-        e.preventDefault();
-        const newMode = $(this).data("mode");
-        if (newMode === getButtonMode()) return;
-        switchButtonMode(newMode);
-        const modeLabels = {
-          topbar: "已切换为顶栏按钮",
-          float: "已切换为浮动按钮",
-          wand: "已切换为魔术棒菜单",
-        };
-        toastr.success(modeLabels[newMode] || "已切换");
-        modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
-        $(this).addClass("cfm-mode-active");
-      });
-      body.append(modeSection);
-
-      // 0.5 自定义顶栏图标（共享函数）
-      renderTopbarIconConfigSection(body);
-      // 0.6 默认打开页面（共享函数）
-      renderDefaultPageConfigSection(body);
-      // 0.7 自定义布局（共享函数）
-      renderCustomLayoutSection(body);
-
-      // 提示：聊天文件夹复用角色卡
-      const chatHint = $(`
-        <div class="cfm-config-section">
-          <label>文件夹管理</label>
-          <div style="padding:12px;font-size:12px;opacity:0.7;line-height:1.6;">
-            <i class="fa-solid fa-circle-info"></i> 聊天标签页的文件夹树直接复用角色卡的文件夹结构，无需单独管理。<br>
-            如需新增、删除或重命名文件夹，请切换到「角色」标签页后打开此设置面板进行操作。
-          </div>
-        </div>
-      `);
-      body.append(chatHint);
       return;
     }
 
@@ -21175,669 +20719,6 @@ jQuery(async () => {
     });
   }
 
-  // ==================== 聊天记录视图 ====================
-  async function renderChatsView() {
-    const leftTree = $("#cfm-chat-left-tree");
-    const rightList = $("#cfm-chat-right-list");
-    const pathEl = $("#cfm-chat-rh-path");
-    const countEl = $("#cfm-chat-rh-count");
-
-    // 防止异步竞争
-    if (!renderChatsView._renderId) renderChatsView._renderId = 0;
-    const thisRenderId = ++renderChatsView._renderId;
-
-    const allChats = await getAllChats();
-    if (thisRenderId !== renderChatsView._renderId) return;
-
-    leftTree.empty();
-
-    // 为每个聊天构建 chatKey
-    const chatItems = allChats.map((c) => ({
-      ...c,
-      chatKey: makeChatKey(c),
-    }));
-
-    const groups = getChatGroups();
-    const pins = getChatPins();
-
-    // 清理 groups 中已不存在的聊天映射
-    const existingKeys = new Set(chatItems.map((c) => c.chatKey));
-    let cleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingKeys.has(key)) {
-        delete groups[key];
-        cleaned = true;
-      }
-    }
-    if (cleaned) {
-      console.log("[CFM] 已清理不存在的聊天分组映射");
-      getContext().saveSettingsDebounced();
-    }
-
-    // 分类：属于某文件夹的聊天（复用角色卡文件夹树 config.folders）
-    const folderItems = {};
-    const ungrouped = [];
-    for (const c of chatItems) {
-      const grp = groups[c.chatKey];
-      if (grp && config.folders[grp]) {
-        if (!folderItems[grp]) folderItems[grp] = [];
-        folderItems[grp].push(c);
-      } else {
-        ungrouped.push(c);
-      }
-    }
-
-    // 计算文件夹内聊天数（递归）
-    function countChatsInFolderRec(folderId) {
-      let count = (folderItems[folderId] || []).length;
-      for (const childId of getChildFolders(folderId))
-        count += countChatsInFolderRec(childId);
-      return count;
-    }
-
-    // 置顶入口
-    const pinnedChats = chatItems.filter((c) => pins.includes(c.chatKey));
-    const pinNode = $(`
-      <div class="cfm-tnode cfm-tnode-pinned ${selectedChatFolder === "__pinned__" ? "cfm-tnode-selected" : ""}" data-id="__pinned__" style="padding-left:10px;">
-        <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
-        <span class="cfm-tnode-icon"><i class="fa-solid fa-thumbtack" style="color:#f38ba8;"></i></span>
-        <span class="cfm-tnode-label">置顶</span>
-        <span class="cfm-tnode-count">${pinnedChats.length}</span>
-      </div>
-    `);
-    pinNode.on("click", (e) => {
-      e.preventDefault();
-      selectedChatFolder = "__pinned__";
-      renderChatsView();
-    });
-    leftTree.append(pinNode);
-
-    // 收藏入口
-    const chatFavs = getResFavorites("chats");
-    const chatFavCount = chatItems.filter((c) =>
-      chatFavs.includes(c.chatKey),
-    ).length;
-    const favNode = $(`
-      <div class="cfm-tnode cfm-tnode-favorites ${selectedChatFolder === "__favorites__" ? "cfm-tnode-selected" : ""}" data-id="__favorites__" style="padding-left:10px;">
-        <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
-        <span class="cfm-tnode-icon"><i class="fa-solid fa-star" style="color:#f9e2af;"></i></span>
-        <span class="cfm-tnode-label">收藏</span>
-        <span class="cfm-tnode-count">${chatFavCount}</span>
-      </div>
-    `);
-    favNode.on("click", (e) => {
-      e.preventDefault();
-      selectedChatFolder = "__favorites__";
-      renderChatsView();
-    });
-    leftTree.append(favNode);
-
-    // 递归渲染左侧树节点（复用角色卡文件夹树，只读）
-    function renderChatTreeNode(container, folderId, depth) {
-      const children = sortFolders(getChildFolders(folderId));
-      const hasChildren = children.length > 0;
-      const isExpanded = chatExpandedNodes.has(folderId);
-      const isSelected = selectedChatFolder === folderId;
-      const count = countChatsInFolderRec(folderId);
-      const indent = 10 + depth * 16;
-
-      const node = $(`
-        <div class="cfm-tnode ${isSelected ? "cfm-tnode-selected" : ""}" data-id="${escapeHtml(folderId)}" style="padding-left:${indent}px;">
-          <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
-          <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
-          <span class="cfm-tnode-label">${escapeHtml(getTagName(folderId))}</span>
-          <span class="cfm-tnode-count">${count}</span>
-        </div>
-      `);
-
-      // 点击箭头展开/收起
-      node.find(".cfm-tnode-arrow").on("click", (e) => {
-        e.stopPropagation();
-        if (!hasChildren) return;
-        if (chatExpandedNodes.has(folderId)) chatExpandedNodes.delete(folderId);
-        else chatExpandedNodes.add(folderId);
-        renderChatsView();
-      });
-
-      // 点击选中
-      node.on("click", (e) => {
-        e.preventDefault();
-        selectedChatFolder = folderId;
-        renderChatsView();
-      });
-
-      // 作为拖放目标（聊天项拖入文件夹）
-      node.on("dragover", (e) => {
-        e.preventDefault();
-        node.addClass("cfm-drop-target");
-        e.originalEvent.dataTransfer.dropEffect = "move";
-      });
-      node.on("dragleave", () => node.removeClass("cfm-drop-target"));
-      node.on("drop", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        node.removeClass("cfm-drop-target");
-        const data = pcGetDropData(e);
-        if (!data) return;
-        if (data.type === "chat") {
-          const chatKeys =
-            data.multiSelect && data.selectedIds
-              ? data.selectedIds
-              : [data.chatKey];
-          chatKeys.forEach((k) => setChatGroup(k, folderId));
-          if (data.multiSelect) clearMultiSelect();
-          renderChatsView();
-          toastr.success(
-            chatKeys.length > 1
-              ? `已将 ${chatKeys.length} 个聊天移入「${getTagName(folderId)}」`
-              : `已将聊天移入「${getTagName(folderId)}」`,
-          );
-        }
-      });
-
-      container.append(node);
-
-      if (hasChildren) {
-        const childContainer = $(
-          `<div class="cfm-tnode-children ${isExpanded ? "cfm-children-expanded" : ""}"></div>`,
-        );
-        for (const childId of children)
-          renderChatTreeNode(childContainer, childId, depth + 1);
-        container.append(childContainer);
-      }
-    }
-
-    // 渲染顶级文件夹
-    const topFolders = sortFolders(getTopLevelFolders());
-    for (const fid of topFolders) renderChatTreeNode(leftTree, fid, 0);
-
-    // 未归类入口
-    const uncatNode = $(`
-      <div class="cfm-tnode cfm-tnode-uncategorized ${selectedChatFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;">
-        <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
-        <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
-        <span class="cfm-tnode-label">未归类聊天</span>
-        <span class="cfm-tnode-count">${ungrouped.length}</span>
-      </div>
-    `);
-    uncatNode.on("click", (e) => {
-      e.preventDefault();
-      selectedChatFolder = "__ungrouped__";
-      renderChatsView();
-    });
-    uncatNode.on("dragover", (e) => {
-      e.preventDefault();
-      uncatNode.addClass("cfm-drop-target");
-    });
-    uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
-    uncatNode.on("drop", (e) => {
-      e.preventDefault();
-      uncatNode.removeClass("cfm-drop-target");
-      const d = pcGetDropData(e);
-      if (d && d.type === "chat") {
-        const chatKeys =
-          d.multiSelect && d.selectedIds ? d.selectedIds : [d.chatKey];
-        chatKeys.forEach((k) => setChatGroup(k, null));
-        if (d.multiSelect) clearMultiSelect();
-        renderChatsView();
-        toastr.success(
-          chatKeys.length > 1
-            ? `已将 ${chatKeys.length} 个聊天移出文件夹`
-            : `已将聊天移出文件夹`,
-        );
-      }
-    });
-    leftTree.append(uncatNode);
-
-    if (topFolders.length === 0) {
-      uncatNode.before(
-        '<div class="cfm-right-empty" style="padding:20px;font-size:12px;">还没有配置文件夹<br>聊天标签页复用角色卡的文件夹树</div>',
-      );
-    }
-
-    // 右侧渲染
-    const chatSearchQuery = $("#cfm-chat-global-search").val();
-    if (chatSearchQuery && chatSearchQuery.trim()) {
-      executeChatSearch();
-      return;
-    }
-
-    rightList.empty();
-
-    let displayItems = [];
-    let displayTitle = "选择左侧文件夹查看内容";
-
-    if (selectedChatFolder === "__pinned__") {
-      displayItems = pinnedChats;
-      displayTitle = "📌 置顶";
-    } else if (selectedChatFolder === "__favorites__") {
-      const favs = getResFavorites("chats");
-      displayItems = chatItems.filter((c) => favs.includes(c.chatKey));
-      displayTitle = "⭐ 收藏";
-    } else if (selectedChatFolder === "__ungrouped__") {
-      displayItems = ungrouped;
-      displayTitle = "未归类聊天";
-    } else if (selectedChatFolder && config.folders[selectedChatFolder]) {
-      displayItems = folderItems[selectedChatFolder] || [];
-      const path = getFolderPath(selectedChatFolder)
-        .map((id) => getTagName(id))
-        .join(" › ");
-      displayTitle = path;
-    }
-
-    // 右栏排序
-    if (chatRightSortMode && displayItems.length > 0) {
-      displayItems = [...displayItems].sort((a, b) => {
-        const cmp = (a.char_name || a.file_name || "").localeCompare(
-          b.char_name || b.file_name || "",
-          "zh-CN",
-        );
-        return chatRightSortMode === "az" ? cmp : -cmp;
-      });
-    }
-
-    // 置顶的聊天排在最前面（除了在置顶视图本身）
-    if (selectedChatFolder !== "__pinned__") {
-      const pinSet = new Set(pins);
-      const pinnedItems = displayItems.filter((c) => pinSet.has(c.chatKey));
-      const normalItems = displayItems.filter((c) => !pinSet.has(c.chatKey));
-      displayItems = [...pinnedItems, ...normalItems];
-    }
-
-    pathEl.text(displayTitle);
-    countEl.text(selectedChatFolder ? `${displayItems.length} 个聊天` : "");
-
-    if (!selectedChatFolder) {
-      rightList.html(
-        '<div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>',
-      );
-    } else if (
-      selectedChatFolder === "__pinned__" &&
-      displayItems.length === 0
-    ) {
-      rightList.html(
-        '<div class="cfm-right-empty">还没有置顶任何聊天<br><span style="font-size:12px;opacity:0.5;">点击聊天行的 📌 按钮添加置顶</span></div>',
-      );
-    } else if (
-      selectedChatFolder === "__favorites__" &&
-      displayItems.length === 0
-    ) {
-      rightList.html(
-        '<div class="cfm-right-empty">还没有收藏任何聊天<br><span style="font-size:12px;opacity:0.5;">点击聊天行的 ☆ 按钮添加收藏</span></div>',
-      );
-    } else if (
-      selectedChatFolder === "__ungrouped__" &&
-      displayItems.length === 0
-    ) {
-      rightList.html('<div class="cfm-right-empty">没有未归类的聊天</div>');
-    } else if (displayItems.length === 0) {
-      rightList.html('<div class="cfm-right-empty">此文件夹没有聊天记录</div>');
-    } else {
-      // 渲染聊天项（有分隔线区分置顶和普通）
-      let hasPinSeparator = false;
-      const pinSet = new Set(pins);
-
-      for (const c of displayItems) {
-        const isPinned = pinSet.has(c.chatKey);
-        const fav = isResFavorite("chats", c.chatKey);
-        const chatNote = getChatNote(c.chatKey);
-        const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(c.chatKey);
-
-        // 分隔线：在置顶和非置顶之间插入
-        if (
-          selectedChatFolder !== "__pinned__" &&
-          !isPinned &&
-          !hasPinSeparator &&
-          pinnedChats.length > 0
-        ) {
-          const sepInFolder = displayItems.some((x) => pinSet.has(x.chatKey));
-          if (sepInFolder) {
-            rightList.append(
-              '<div class="cfm-chat-pin-separator"><span>— 以下为非置顶 —</span></div>',
-            );
-          }
-          hasPinSeparator = true;
-        }
-
-        const isGroup = c.is_group || c.group;
-        const displayName = c.char_name || (isGroup ? "群组聊天" : "未知角色");
-        const lastMsg = c.last_mes
-          ? c.last_mes.length > 60
-            ? c.last_mes.substring(0, 60) + "..."
-            : c.last_mes
-          : "";
-        const msgCount = c.chat_items || 0;
-        const fileSize = c.file_size
-          ? (c.file_size / 1024).toFixed(1) + "KB"
-          : "";
-        const noteHtml = chatNote
-          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(chatNote)}">${escapeHtml(chatNote)}</span>`
-          : "";
-
-        const msCheckHtml = cfmMultiSelectMode
-          ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-          : "";
-
-        const row = $(`
-          <div class="cfm-row cfm-row-chat ${isPinned ? "cfm-chat-pinned" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-chat-key="${escapeHtml(c.chatKey)}" data-res-id="${escapeHtml(c.chatKey)}" draggable="true">
-            ${msCheckHtml}
-            <div class="cfm-row-icon cfm-chat-type-icon"><i class="fa-solid fa-${isGroup ? "users" : "comment-dots"}"></i></div>
-            <div class="cfm-row-name">
-              <span class="cfm-chat-char-name">${escapeHtml(displayName)}</span>
-              <span class="cfm-chat-file-name" title="${escapeHtml(c.file_name)}">${escapeHtml(c.file_name)}</span>
-              ${noteHtml}
-              ${lastMsg ? `<span class="cfm-chat-last-msg" title="${escapeHtml(c.last_mes || "")}">${escapeHtml(lastMsg)}</span>` : ""}
-            </div>
-            <div class="cfm-chat-meta">
-              <span class="cfm-chat-msg-count" title="消息数">${msgCount} 条</span>
-              ${fileSize ? `<span class="cfm-chat-file-size">${fileSize}</span>` : ""}
-            </div>
-            <div class="cfm-row-pin ${isPinned ? "cfm-pin-active" : ""}" title="${isPinned ? "取消置顶" : "置顶"}"><i class="fa-solid fa-thumbtack"></i></div>
-            <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
-          </div>
-        `);
-
-        // 置顶按钮
-        row.find(".cfm-row-pin").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const nowPinned = toggleChatPin(c.chatKey);
-          toastr.success(
-            nowPinned
-              ? `已置顶「${displayName}」的聊天`
-              : `已取消置顶「${displayName}」的聊天`,
-          );
-          renderChatsView();
-        });
-
-        // 收藏按钮
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const nowFav = toggleResFavorite("chats", c.chatKey);
-          const starEl = row.find(".cfm-row-star");
-          starEl.toggleClass("cfm-star-active", nowFav);
-          starEl.attr("title", nowFav ? "取消收藏" : "添加收藏");
-          starEl
-            .find("i")
-            .attr("class", `fa-${nowFav ? "solid" : "regular"} fa-star`);
-          // 更新左侧收藏计数
-          const favCountEl = $(
-            "#cfm-chat-left-tree .cfm-tnode-favorites .cfm-tnode-count",
-          );
-          if (favCountEl.length) {
-            const newCount = chatItems.filter((cc) =>
-              getResFavorites("chats").includes(cc.chatKey),
-            ).length;
-            favCountEl.text(newCount);
-          }
-          if (selectedChatFolder === "__favorites__") renderChatsView();
-        });
-
-        // 行点击
-        row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-pin").length) return;
-          if (cfmMultiSelectMode) {
-            toggleMultiSelectItem(c.chatKey, e.shiftKey);
-            renderChatsView();
-            return;
-          }
-          // 点击打开聊天（导航到对应角色/群组并加载聊天）
-          const parsed = parseChatKey(c.chatKey);
-          if (parsed) {
-            toastr.info(`聊天: ${displayName} / ${parsed.fileName}`);
-          }
-        });
-
-        // PC拖拽
-        row.on("dragstart", (e) => {
-          const singleData = {
-            type: "chat",
-            chatKey: c.chatKey,
-            name: displayName,
-          };
-          const dragData = getMultiDragData(singleData);
-          pcDragStart(e, dragData);
-        });
-        row.on("dragend", () => pcDragEnd());
-        touchDragMgr.bind(row, () => {
-          const singleData = {
-            type: "chat",
-            chatKey: c.chatKey,
-            name: displayName,
-          };
-          return getMultiDragData(singleData);
-        });
-
-        rightList.append(row);
-      }
-
-      // 多选工具栏
-      if (cfmMultiSelectMode && selectedChatFolder) {
-        const visible = getVisibleResourceIds();
-        const allSel =
-          visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
-        const toolbar = $(`
-          <div class="cfm-multisel-toolbar">
-            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
-            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
-            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
-          </div>
-        `);
-        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          selectAllVisible();
-          renderChatsView();
-        });
-        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
-          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
-          renderChatsView();
-        });
-        rightList.prepend(toolbar);
-      }
-    }
-
-    // 右侧列表也是拖放目标
-    if (
-      selectedChatFolder &&
-      selectedChatFolder !== "__ungrouped__" &&
-      selectedChatFolder !== "__favorites__" &&
-      selectedChatFolder !== "__pinned__" &&
-      config.folders[selectedChatFolder]
-    ) {
-      const currentFolder = selectedChatFolder;
-      rightList.off("dragover dragleave drop");
-      rightList.on("dragover", (e) => {
-        e.preventDefault();
-        e.originalEvent.dataTransfer.dropEffect = "move";
-        if ($(e.target).closest(".cfm-row").length > 0) return;
-        rightList.addClass("cfm-right-list-drop-target");
-      });
-      rightList.on("dragleave", (e) => {
-        if ($(e.relatedTarget).closest("#cfm-chat-right-list").length === 0) {
-          rightList.removeClass("cfm-right-list-drop-target");
-        }
-      });
-      rightList.on("drop", (e) => {
-        rightList.removeClass("cfm-right-list-drop-target");
-        if ($(e.target).closest(".cfm-row").length > 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const data = pcGetDropData(e);
-        if (!data) return;
-        if (data.type === "chat") {
-          const chatKeys =
-            data.multiSelect && data.selectedIds
-              ? data.selectedIds
-              : [data.chatKey];
-          chatKeys.forEach((k) => setChatGroup(k, currentFolder));
-          if (data.multiSelect) clearMultiSelect();
-          toastr.success(
-            chatKeys.length > 1
-              ? `已将 ${chatKeys.length} 个聊天移入「${getTagName(currentFolder)}」`
-              : `已将聊天移入「${getTagName(currentFolder)}」`,
-          );
-          renderChatsView();
-        }
-      });
-    }
-  }
-
-  // 聊天搜索
-  function executeChatSearch() {
-    const query = $("#cfm-chat-global-search").val();
-    if (!query || !query.trim()) {
-      renderChatsView();
-      return;
-    }
-    const q = query.trim().toLowerCase();
-    const scope = $("#cfm-chat-search-scope").val() || "current";
-    const searchType = $("#cfm-chat-search-type").val() || "chat";
-    const rightList = $("#cfm-chat-right-list");
-    const pathEl = $("#cfm-chat-rh-path");
-    const countEl = $("#cfm-chat-rh-count");
-    rightList.empty();
-
-    if (searchType === "folder") {
-      // 搜索文件夹名
-      const folders = getFolderTagIds();
-      const matchedIds = folders.filter((f) =>
-        getTagName(f).toLowerCase().includes(q),
-      );
-      pathEl.text(`搜索文件夹: "${q}"`);
-      countEl.text(`${matchedIds.length} 个结果`);
-      if (matchedIds.length === 0) {
-        rightList.html('<div class="cfm-right-empty">未找到匹配的文件夹</div>');
-        return;
-      }
-      for (const fname of matchedIds) {
-        const folderPath = getFolderPath(fname)
-          .map((id) => getTagName(id))
-          .join(" › ");
-        const row = $(`
-          <div class="cfm-row cfm-row-folder cfm-search-result">
-            <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
-            <div class="cfm-row-name">${escapeHtml(getTagName(fname))}<div class="cfm-row-folder-path">${escapeHtml(folderPath)}</div></div>
-          </div>
-        `);
-        row.on("click", () => {
-          const path = getFolderPath(fname);
-          for (const pid of path) chatExpandedNodes.add(pid);
-          selectedChatFolder = fname;
-          $("#cfm-chat-global-search").val("");
-          renderChatsView();
-        });
-        rightList.append(row);
-      }
-      return;
-    }
-
-    // 搜索聊天
-    getAllChats().then((allChats) => {
-      const chatItems = allChats.map((c) => ({
-        ...c,
-        chatKey: makeChatKey(c),
-      }));
-      const groups = getChatGroups();
-      let searchPool = [];
-      if (scope === "current" && selectedChatFolder) {
-        if (selectedChatFolder === "__pinned__") {
-          const pins = getChatPins();
-          searchPool = chatItems.filter((c) => pins.includes(c.chatKey));
-        } else if (selectedChatFolder === "__favorites__") {
-          const favs = getResFavorites("chats");
-          searchPool = chatItems.filter((c) => favs.includes(c.chatKey));
-        } else if (selectedChatFolder === "__ungrouped__") {
-          searchPool = chatItems.filter(
-            (c) => !groups[c.chatKey] || !config.folders[groups[c.chatKey]],
-          );
-        } else if (config.folders[selectedChatFolder]) {
-          const collectFolderIds = (pid) => {
-            let r = [pid];
-            for (const ch of getChildFolders(pid))
-              r = r.concat(collectFolderIds(ch));
-            return r;
-          };
-          const allFids = collectFolderIds(selectedChatFolder);
-          const fidSet = new Set(allFids);
-          searchPool = chatItems.filter((c) => fidSet.has(groups[c.chatKey]));
-        }
-      } else {
-        searchPool = chatItems;
-      }
-
-      const matched = searchPool.filter((c) => {
-        const searchFields = [
-          (c.char_name || "").toLowerCase(),
-          (c.file_name || "").toLowerCase(),
-          (c.last_mes || "").toLowerCase(),
-          (getChatNote(c.chatKey) || "").toLowerCase(),
-        ];
-        return searchFields.some((f) => f.includes(q));
-      });
-
-      pathEl.text(`搜索聊天: "${q}"`);
-      countEl.text(`${matched.length} 个结果`);
-      if (matched.length === 0) {
-        rightList.html(
-          '<div class="cfm-right-empty">未找到匹配的聊天记录</div>',
-        );
-        return;
-      }
-
-      for (const c of matched) {
-        const isPinned = isChatPinned(c.chatKey);
-        const fav = isResFavorite("chats", c.chatKey);
-        const isGroup = c.is_group || c.group;
-        const displayName = c.char_name || (isGroup ? "群组聊天" : "未知角色");
-        const chatNote = getChatNote(c.chatKey);
-        const noteHtml = chatNote
-          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(chatNote)}">${escapeHtml(chatNote)}</span>`
-          : "";
-        const lastMsg = c.last_mes
-          ? c.last_mes.length > 60
-            ? c.last_mes.substring(0, 60) + "..."
-            : c.last_mes
-          : "";
-        const msgCount = c.chat_items || 0;
-
-        const row = $(`
-          <div class="cfm-row cfm-row-chat ${isPinned ? "cfm-chat-pinned" : ""}" data-chat-key="${escapeHtml(c.chatKey)}">
-            <div class="cfm-row-icon cfm-chat-type-icon"><i class="fa-solid fa-${isGroup ? "users" : "comment-dots"}"></i></div>
-            <div class="cfm-row-name">
-              <span class="cfm-chat-char-name">${escapeHtml(displayName)}</span>
-              <span class="cfm-chat-file-name">${escapeHtml(c.file_name)}</span>
-              ${noteHtml}
-              ${lastMsg ? `<span class="cfm-chat-last-msg">${escapeHtml(lastMsg)}</span>` : ""}
-            </div>
-            <div class="cfm-chat-meta">
-              <span class="cfm-chat-msg-count">${msgCount} 条</span>
-            </div>
-            <div class="cfm-row-pin ${isPinned ? "cfm-pin-active" : ""}" title="${isPinned ? "取消置顶" : "置顶"}"><i class="fa-solid fa-thumbtack"></i></div>
-            <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
-          </div>
-        `);
-        row.find(".cfm-row-pin").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleChatPin(c.chatKey);
-          executeChatSearch();
-        });
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleResFavorite("chats", c.chatKey);
-          executeChatSearch();
-        });
-        rightList.append(row);
-      }
-    });
-  }
-
   // ==================== 导入导出功能 ====================
   function buildExportData(scope) {
     const data = {
@@ -21980,20 +20861,6 @@ jQuery(async () => {
       };
     }
 
-    if (scope === "all" || scope === "chats") {
-      ensureResourceSettings();
-      data.chats = {
-        groups: JSON.parse(
-          JSON.stringify(extension_settings[extensionName].chatGroups || {}),
-        ),
-        favorites: [...(extension_settings[extensionName].chatFavorites || [])],
-        notes: JSON.parse(
-          JSON.stringify(extension_settings[extensionName].chatNotes || {}),
-        ),
-        pins: [...(extension_settings[extensionName].chatPins || [])],
-      };
-    }
-
     return data;
   }
 
@@ -22017,9 +20884,7 @@ jQuery(async () => {
                 ? "背景"
                 : scope === "personas"
                   ? "User"
-                  : scope === "chats"
-                    ? "聊天"
-                    : "世界书";
+                  : "世界书";
     a.download = `cfm-backup-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
@@ -22036,7 +20901,6 @@ jQuery(async () => {
       themes: { matched: 0, skipped: 0 },
       backgrounds: { matched: 0, skipped: 0 },
       personas: { matched: 0, skipped: 0 },
-      chats: { matched: 0, skipped: 0 },
       foldersCreated: 0,
       favoritesRestored: 0,
     };
@@ -22438,46 +21302,6 @@ jQuery(async () => {
       }
     }
 
-    if (jsonData.chats) {
-      ensureResourceSettings();
-      const { groups, favorites, notes, pins } = jsonData.chats;
-
-      if (groups && typeof groups === "object") {
-        for (const [chatKey, folderId] of Object.entries(groups)) {
-          if (folderId && config.folders[folderId]) {
-            setChatGroup(chatKey, folderId);
-            report.chats.matched++;
-          } else {
-            report.chats.skipped++;
-          }
-        }
-      }
-
-      if (favorites && Array.isArray(favorites)) {
-        for (const chatKey of favorites) {
-          if (!isResFavorite("chats", chatKey)) {
-            toggleResFavorite("chats", chatKey);
-            report.favoritesRestored++;
-          }
-        }
-      }
-
-      if (notes && typeof notes === "object") {
-        for (const [chatKey, note] of Object.entries(notes)) {
-          if (note) setChatNote(chatKey, note);
-        }
-      }
-
-      if (pins && Array.isArray(pins)) {
-        const existingPins = getChatPins();
-        for (const chatKey of pins) {
-          if (!existingPins.includes(chatKey)) {
-            toggleChatPin(chatKey);
-          }
-        }
-      }
-    }
-
     return report;
   }
 
@@ -22497,9 +21321,7 @@ jQuery(async () => {
               ? "背景"
               : currentResourceType === "personas"
                 ? "User"
-                : currentResourceType === "chats"
-                  ? "聊天"
-                  : "世界书";
+                : "世界书";
     const popup = $(`
       <div class="cfm-batch-popup" style="max-width:480px;">
         <div class="cfm-config-header">
@@ -22581,8 +21403,6 @@ jQuery(async () => {
             html += `背景：匹配 ${report.backgrounds.matched} 个，跳过 ${report.backgrounds.skipped} 个<br>`;
           if (jsonData.personas)
             html += `User：匹配 ${report.personas.matched} 个，跳过 ${report.personas.skipped} 个<br>`;
-          if (jsonData.chats)
-            html += `聊天：匹配 ${report.chats.matched} 个，跳过 ${report.chats.skipped} 个<br>`;
           if (report.favoritesRestored > 0)
             html += `恢复了 ${report.favoritesRestored} 个收藏<br>`;
           html += `</div>`;
@@ -22596,7 +21416,6 @@ jQuery(async () => {
           else if (currentResourceType === "backgrounds")
             renderBackgroundsView();
           else if (currentResourceType === "personas") renderPersonasView();
-          else if (currentResourceType === "chats") renderChatsView();
         } catch (err) {
           toastr.error("导入失败：" + err.message);
           console.error("[CFM] Import error:", err);
