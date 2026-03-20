@@ -770,6 +770,9 @@ jQuery(async () => {
     // 当前已应用的世界书分组索引集合（用于自动应用/关闭追踪）
     if (!extension_settings[extensionName]._wiAppliedPresetIndices)
       extension_settings[extensionName]._wiAppliedPresetIndices = [];
+    // 置顶聊天列表：[{ avatar, chatFileName }]
+    if (!Array.isArray(extension_settings[extensionName].pinnedChats))
+      extension_settings[extensionName].pinnedChats = [];
   }
   ensureSettings();
 
@@ -9295,52 +9298,308 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 聊天置顶管理 ====================
+
   /**
-   * 置顶聊天到最近聊天（通过读取后重新保存来更新文件mtime）
-   * 不会关闭弹窗或切换角色
+   * 获取所有置顶聊天列表
+   * @returns {{ avatar: string, chatFileName: string }[]}
+   */
+  function getPinnedChats() {
+    return extension_settings[extensionName].pinnedChats || [];
+  }
+
+  /**
+   * 检查某聊天是否已置顶
+   */
+  function isChatPinned(avatar, chatFileName) {
+    return getPinnedChats().some(
+      (p) => p.avatar === avatar && p.chatFileName === chatFileName,
+    );
+  }
+
+  /**
+   * 切换聊天的置顶状态
    * @param {string} avatar - 角色的 avatar 文件名
    * @param {string} chatFileName - 聊天文件名（不含扩展名）
+   * @returns {boolean} true=已置顶, false=已取消置顶
    */
-  async function pinChatToRecent(avatar, chatFileName) {
-    try {
-      const headers = getContext().getRequestHeaders();
-      // 1. 读取聊天文件内容
-      const getResp = await fetch("/api/chats/get", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          avatar_url: avatar,
-          file_name: chatFileName,
-        }),
-      });
-      if (!getResp.ok) throw new Error("读取聊天文件失败");
-      const chatData = await getResp.json();
-      if (!Array.isArray(chatData) || chatData.length === 0) {
-        throw new Error("聊天数据为空或格式错误");
-      }
-      // 2. 更新最后一条消息的 send_date 为当前时间
-      //    酒馆的"最近聊天"列表按 last_mes（即最后消息的 send_date）排序
-      //    更新 send_date 可以让该聊天排到最前面
-      const lastMsg = chatData[chatData.length - 1];
-      if (lastMsg) {
-        lastMsg.send_date = new Date().toISOString();
-      }
-      // 3. 重新保存以更新文件内容和修改时间
-      const saveResp = await fetch("/api/chats/save", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          avatar_url: avatar,
-          file_name: chatFileName,
-          chat: chatData,
-          force: true,
-        }),
-      });
-      if (!saveResp.ok) throw new Error("保存聊天文件失败");
+  function togglePinChat(avatar, chatFileName) {
+    const pinned = getPinnedChats();
+    const idx = pinned.findIndex(
+      (p) => p.avatar === avatar && p.chatFileName === chatFileName,
+    );
+    if (idx >= 0) {
+      // 取消置顶
+      pinned.splice(idx, 1);
+      extension_settings[extensionName].pinnedChats = pinned;
+      getContext().saveSettingsDebounced();
+      toastr.info("已取消置顶");
+      applyPinnedChatsToWelcomeScreen();
+      return false;
+    } else {
+      // 添加置顶
+      pinned.push({ avatar, chatFileName });
+      extension_settings[extensionName].pinnedChats = pinned;
+      getContext().saveSettingsDebounced();
       toastr.success("已置顶到最近聊天");
-    } catch (e) {
-      console.error("[CFM] 置顶聊天失败:", e);
-      toastr.error("置顶聊天失败");
+      applyPinnedChatsToWelcomeScreen();
+      return true;
+    }
+  }
+
+  /**
+   * 将置顶聊天应用到酒馆的 welcome-screen "最近聊天" 列表
+   * 通过操作 DOM 将置顶项移动/插入到列表最前面
+   */
+  function applyPinnedChatsToWelcomeScreen() {
+    const chatEl = document.getElementById("chat");
+    if (!chatEl) return;
+    const welcomePanel = chatEl.querySelector(".welcomePanel");
+    if (!welcomePanel) return;
+    const recentList = welcomePanel.querySelector(".recentChatList");
+    if (!recentList) return;
+
+    const pinned = getPinnedChats();
+
+    // 先移除所有置顶标记
+    recentList.querySelectorAll(".recentChat").forEach((el) => {
+      el.classList.remove("cfm-pinned-chat");
+      const pinIcon = el.querySelector(".cfm-pin-indicator");
+      if (pinIcon) pinIcon.remove();
+    });
+
+    if (pinned.length === 0) return;
+
+    // 找到 "showMoreChats" 按钮之前的参考点（置顶项应在所有普通项之前）
+    const allChatItems = Array.from(recentList.querySelectorAll(".recentChat"));
+
+    // 将已存在的置顶项移到最前面，按置顶顺序排列
+    const pinnedElements = [];
+    const unpinnedElements = [];
+
+    for (const item of allChatItems) {
+      const itemAvatar = item.getAttribute("data-avatar") || "";
+      const itemFile = item.getAttribute("data-file") || "";
+      const isPinned = pinned.some(
+        (p) => p.avatar === itemAvatar && p.chatFileName === itemFile,
+      );
+      if (isPinned) {
+        pinnedElements.push(item);
+      } else {
+        unpinnedElements.push(item);
+      }
+    }
+
+    // 按置顶列表顺序排序已置顶的元素
+    pinnedElements.sort((a, b) => {
+      const aAvatar = a.getAttribute("data-avatar") || "";
+      const aFile = a.getAttribute("data-file") || "";
+      const bAvatar = b.getAttribute("data-avatar") || "";
+      const bFile = b.getAttribute("data-file") || "";
+      const aIdx = pinned.findIndex(
+        (p) => p.avatar === aAvatar && p.chatFileName === aFile,
+      );
+      const bIdx = pinned.findIndex(
+        (p) => p.avatar === bAvatar && p.chatFileName === bFile,
+      );
+      return aIdx - bIdx;
+    });
+
+    // 为置顶项添加标记样式和图钉图标
+    pinnedElements.forEach((el) => {
+      el.classList.add("cfm-pinned-chat");
+      el.classList.remove("hidden"); // 置顶项始终可见
+      // 在角色名前添加图钉图标
+      if (!el.querySelector(".cfm-pin-indicator")) {
+        const nameEl = el.querySelector(".characterName");
+        if (nameEl) {
+          const pinIcon = document.createElement("i");
+          pinIcon.className = "fa-solid fa-thumbtack cfm-pin-indicator";
+          pinIcon.title = "已置顶";
+          nameEl.parentNode.insertBefore(pinIcon, nameEl);
+        }
+      }
+    });
+
+    // 获取 showMoreChats 按钮（如果有的话）
+    const showMoreBtn = recentList.querySelector("button.showMoreChats");
+    // 获取 noRecentChat 提示（如果有的话）
+    const noRecentChat = recentList.querySelector(".noRecentChat");
+
+    // 重新排列 DOM：先置顶项，再非置顶项
+    // 在 recentList 的最前面插入（在 noRecentChat 之后如果有的话）
+    const insertBefore = noRecentChat
+      ? noRecentChat.nextSibling
+      : recentList.firstChild;
+
+    // 先插入置顶项（按顺序）
+    for (const el of pinnedElements) {
+      recentList.insertBefore(el, insertBefore);
+    }
+    // 再插入非置顶项（保持原有顺序）
+    for (const el of unpinnedElements) {
+      recentList.insertBefore(el, showMoreBtn);
+    }
+
+    // 如果有不在当前列表中的置顶聊天（可能未被后端返回），
+    // 需要通过 API 获取其信息并创建 DOM 元素插入
+    const existingKeys = new Set(
+      allChatItems.map(
+        (el) =>
+          (el.getAttribute("data-avatar") || "") +
+          "::" +
+          (el.getAttribute("data-file") || ""),
+      ),
+    );
+    const missingPinned = pinned.filter(
+      (p) => !existingKeys.has(p.avatar + "::" + p.chatFileName),
+    );
+    if (missingPinned.length > 0) {
+      fetchAndInsertMissingPinnedChats(recentList, missingPinned, insertBefore);
+    }
+  }
+
+  /**
+   * 获取不在当前列表中的置顶聊天的信息并插入到 DOM
+   */
+  async function fetchAndInsertMissingPinnedChats(
+    recentList,
+    missingPinned,
+    insertBefore,
+  ) {
+    const characters = getCharacters();
+    const headers = getContext().getRequestHeaders();
+
+    for (const pin of missingPinned) {
+      try {
+        const char = characters.find((c) => c.avatar === pin.avatar);
+        if (!char) continue; // 角色不存在，跳过
+
+        // 获取聊天文件信息
+        const resp = await fetch("/api/chats/get", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            avatar_url: pin.avatar,
+            file_name: pin.chatFileName,
+          }),
+        });
+        if (!resp.ok) continue;
+        const chatData = await resp.json();
+        if (!Array.isArray(chatData) || chatData.length === 0) continue;
+
+        const lastMsg = chatData[chatData.length - 1];
+        const mes = lastMsg?.mes || "";
+        const sendDate = lastMsg?.send_date || "";
+        const thumbUrl = getThumbnailUrl("avatar", char.avatar);
+
+        // 格式化日期
+        let dateShort = "";
+        let dateLong = "";
+        try {
+          const { timestampToMoment } = getContext();
+          if (timestampToMoment && sendDate) {
+            const m = timestampToMoment(sendDate);
+            dateShort = m.format("l");
+            dateLong = m.format("LL LT");
+          }
+        } catch (_) {}
+
+        // 创建 DOM 元素（模仿 welcomePanel.html 的结构）
+        const chatItem = document.createElement("div");
+        chatItem.className = "recentChat cfm-pinned-chat";
+        chatItem.setAttribute("data-file", pin.chatFileName);
+        chatItem.setAttribute("data-avatar", pin.avatar);
+        chatItem.setAttribute("data-group", "");
+        const eName = escapeHtml(char.name);
+        const eChatFile = escapeHtml(pin.chatFileName);
+        const eAvatar = escapeHtml(pin.avatar);
+        const eMes = escapeHtml(mes.substring(0, 200));
+        const eDateShort = escapeHtml(dateShort);
+        const eDateLong = escapeHtml(dateLong);
+        chatItem.innerHTML = `
+          <div class="avatar" title="[Character] ${eName}&#10;File: ${eAvatar}">
+            <img src="${thumbUrl}" alt="${eName}">
+          </div>
+          <div class="recentChatInfo">
+            <div class="chatNameContainer">
+              <div class="chatName" title="${eChatFile}.jsonl">
+                <i class="fa-solid fa-thumbtack cfm-pin-indicator" title="已置顶"></i>
+                <strong class="characterName">${eName}</strong>
+                <span>&ndash;</span>
+                <span>${eChatFile}</span>
+              </div>
+              <small class="chatDate" title="${eDateLong}">${eDateShort}</small>
+              <div class="chatActions">
+                <button class="menu_button menu_button_icon renameChat" title="Rename chat">
+                  <i class="fa-solid fa-pen-to-square fa-fw"></i>
+                </button>
+                <button class="menu_button menu_button_icon deleteChat" title="Delete chat">
+                  <i class="fa-solid fa-trash fa-fw"></i>
+                </button>
+              </div>
+            </div>
+            <div class="chatMessageContainer">
+              <div class="chatMessage" title="${eMes}">
+                ${eMes}
+              </div>
+              <div class="chatStats">
+                <div class="counterBlock">
+                  <i class="fa-solid fa-comment fa-xs"></i>
+                  <small>${chatData.length}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // 绑定点击事件
+        chatItem.addEventListener("click", () => {
+          openChatFile(pin.avatar, pin.chatFileName);
+        });
+
+        // 在 insertBefore 之前插入（在其他置顶项之后）
+        const existingPinned = recentList.querySelectorAll(".cfm-pinned-chat");
+        const lastPinned = existingPinned[existingPinned.length - 1];
+        if (lastPinned && lastPinned.nextSibling) {
+          recentList.insertBefore(chatItem, lastPinned.nextSibling);
+        } else {
+          recentList.insertBefore(chatItem, insertBefore);
+        }
+      } catch (e) {
+        console.warn("[CFM] 获取置顶聊天信息失败:", pin, e);
+      }
+    }
+  }
+
+  /**
+   * 初始化 welcome-screen 置顶聊天 hook
+   * 使用 MutationObserver 监听 #chat 容器，当 welcomePanel 被插入时自动应用置顶
+   */
+  function initPinnedChatHook() {
+    const chatEl = document.getElementById("chat");
+    if (!chatEl) return;
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node.classList?.contains("welcomePanel") ||
+              node.querySelector?.(".welcomePanel"))
+          ) {
+            // welcomePanel 被插入，延迟一帧应用置顶
+            requestAnimationFrame(() => applyPinnedChatsToWelcomeScreen());
+            return;
+          }
+        }
+      }
+    });
+
+    observer.observe(chatEl, { childList: true, subtree: false });
+    // 如果当前已有 welcomePanel，立即应用
+    if (chatEl.querySelector(".welcomePanel")) {
+      applyPinnedChatsToWelcomeScreen();
     }
   }
 
@@ -9545,7 +9804,7 @@ jQuery(async () => {
             </div>
           </div>
           <div class="cfm-chat-row-actions">
-            <div class="cfm-chat-action-btn cfm-chat-pin-btn" title="置顶到最近聊天"><i class="fa-solid fa-thumbtack"></i></div>
+            <div class="cfm-chat-action-btn cfm-chat-pin-btn${isChatPinned(avatar, chatName) ? " cfm-chat-pinned" : ""}" title="${isChatPinned(avatar, chatName) ? "取消置顶" : "置顶到最近聊天"}"><i class="fa-solid fa-thumbtack"></i></div>
             <div class="cfm-chat-action-btn cfm-chat-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
             <div class="cfm-chat-action-btn cfm-chat-note-btn" title="${note ? "编辑备注" : "添加备注"}"><i class="fa-solid fa-pen-to-square"></i></div>
             <div class="cfm-chat-action-btn cfm-chat-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
@@ -9574,10 +9833,16 @@ jQuery(async () => {
         rerenderCurrentView();
       });
 
-      // 置顶到最近聊天（通过重新保存聊天文件来更新 mtime）
-      chatRow.find(".cfm-chat-pin-btn").on("click", async (e) => {
+      // 置顶/取消置顶到最近聊天
+      chatRow.find(".cfm-chat-pin-btn").on("click", (e) => {
         e.stopPropagation();
-        await pinChatToRecent(avatar, chatName);
+        const nowPinned = togglePinChat(avatar, chatName);
+        const btn = $(e.currentTarget);
+        if (nowPinned) {
+          btn.addClass("cfm-chat-pinned").attr("title", "取消置顶");
+        } else {
+          btn.removeClass("cfm-chat-pinned").attr("title", "置顶到最近聊天");
+        }
       });
 
       // 重命名
@@ -23576,6 +23841,7 @@ jQuery(async () => {
   injectNativeFilterButtons();
   setupCharWorldPopupFilterObserver();
   setupPersonaSelectionPopupEnhancer();
+  initPinnedChatHook(); // 初始化聊天置顶 welcome-screen hook
 
   // 监听角色卡列表重新渲染事件，自动重新应用过滤
   const eventSource = getContext().eventSource;

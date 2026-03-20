@@ -4314,6 +4314,25 @@ option.cfm-nf-hidden {
 .cfm-chat-pin-btn:hover {
   color: #f9e2af;
 }
+/* 已置顶状态 */
+.cfm-chat-pin-btn.cfm-chat-pinned {
+  color: #f9e2af;
+}
+.cfm-chat-pin-btn.cfm-chat-pinned i {
+  transform: rotate(-45deg);
+}
+
+/* welcome-screen 置顶聊天项标记 */
+.recentChat.cfm-pinned-chat {
+  border-left: 3px solid #f9e2af;
+  background: rgba(249, 226, 175, 0.06);
+}
+.recentChat.cfm-pinned-chat .cfm-pin-indicator {
+  color: #f9e2af;
+  font-size: 0.75em;
+  margin-right: 4px;
+  transform: rotate(-45deg);
+}
 .cfm-chat-rename-btn:hover {
   color: #89b4fa;
 }
