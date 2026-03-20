@@ -10582,28 +10582,47 @@ jQuery(async () => {
     themeExpandedNodes.clear();
     bgExpandedNodes.clear();
     personaExpandedNodes.clear();
-    // 如果是"记住上次页面"模式，恢复文件夹选中和展开状态
+    // 如果是"记住上次页面"模式，恢复文件夹选中状态（但不恢复展开状态，默认全部收起）
     if (defaultPage === "last" && lastState.resourceType) {
       const folder = lastState.selectedFolder;
-      const expanded = lastState.expandedNodes || [];
       if (initialTab === "chars") {
         selectedTreeNode = folder || null;
-        expanded.forEach((id) => expandedNodes.add(id));
+        // 仅展开到选中文件夹的路径，使选中状态可见
+        if (selectedTreeNode) {
+          const fullPath = getFolderPath(selectedTreeNode);
+          // 排除最后一个（即选中节点本身），只展开其祖先
+          for (let i = 0; i < fullPath.length - 1; i++) expandedNodes.add(fullPath[i]);
+        }
       } else if (initialTab === "presets") {
         selectedPresetFolder = folder || null;
-        expanded.forEach((id) => presetExpandedNodes.add(id));
+        if (selectedPresetFolder) {
+          const fullPath = getResFolderPath("presets", selectedPresetFolder);
+          for (let i = 0; i < fullPath.length - 1; i++) presetExpandedNodes.add(fullPath[i]);
+        }
       } else if (initialTab === "worldinfo") {
         selectedWorldInfoFolder = folder || null;
-        expanded.forEach((id) => worldInfoExpandedNodes.add(id));
+        if (selectedWorldInfoFolder) {
+          const fullPath = getResFolderPath("worldinfo", selectedWorldInfoFolder);
+          for (let i = 0; i < fullPath.length - 1; i++) worldInfoExpandedNodes.add(fullPath[i]);
+        }
       } else if (initialTab === "themes") {
         selectedThemeFolder = folder || null;
-        expanded.forEach((id) => themeExpandedNodes.add(id));
+        if (selectedThemeFolder) {
+          const fullPath = getResFolderPath("themes", selectedThemeFolder);
+          for (let i = 0; i < fullPath.length - 1; i++) themeExpandedNodes.add(fullPath[i]);
+        }
       } else if (initialTab === "backgrounds") {
         selectedBgFolder = folder || null;
-        expanded.forEach((id) => bgExpandedNodes.add(id));
+        if (selectedBgFolder) {
+          const fullPath = getResFolderPath("backgrounds", selectedBgFolder);
+          for (let i = 0; i < fullPath.length - 1; i++) bgExpandedNodes.add(fullPath[i]);
+        }
       } else if (initialTab === "personas") {
         selectedPersonaFolder = folder || null;
-        expanded.forEach((id) => personaExpandedNodes.add(id));
+        if (selectedPersonaFolder) {
+          const fullPath = getResFolderPath("personas", selectedPersonaFolder);
+          for (let i = 0; i < fullPath.length - 1; i++) personaExpandedNodes.add(fullPath[i]);
+        }
       }
     }
 
@@ -22270,7 +22289,7 @@ jQuery(async () => {
   // ==================== 正则视图渲染（统一左右分栏布局） ====================
   // 正则标签页状态
   let selectedRegexNode = "rx-global"; // 当前选中的树节点
-  let regexExpandedNodes = new Set(["rx-global", "rx-preset", "rx-scoped"]); // 展开的树节点ID集合（默认展开三个顶层）
+  let regexExpandedNodes = new Set(); // 展开的树节点ID集合（默认全部收起）
   let regexAllNodeIds = []; // 所有可展开节点ID（用于展开/收起全部）
 
   // --- 正则数据扫描 ---

@@ -4720,13 +4720,16 @@ option.cfm-nf-hidden {
   border-radius: 6px;
   margin: 4px 6px;
   padding: 8px 10px;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 .cfm-regex-script-card:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(137, 180, 250, 0.3);
 }
-.cfm-regex-disabled {
+.cfm-regex-disabled .cfm-row-name,
+.cfm-regex-disabled .cfm-row-edit-btn {
   opacity: 0.5;
 }
 
@@ -4799,7 +4802,9 @@ option.cfm-nf-hidden {
   font-size: 12px;
   opacity: 0.5;
   border-radius: 3px;
-  transition: opacity 0.12s, background 0.12s;
+  transition:
+    opacity 0.12s,
+    background 0.12s;
 }
 .cfm-regex-card-btn:hover {
   opacity: 1;
@@ -4825,7 +4830,7 @@ option.cfm-nf-hidden {
   background: rgba(255, 255, 255, 0.06);
   padding: 1px 4px;
   border-radius: 3px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   font-size: 11px;
   color: var(--SmartThemeBodyColor, #cdd6f4);
 }
