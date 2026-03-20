@@ -9229,6 +9229,15 @@ jQuery(async () => {
     }
     renderLeftTree();
     renderRightPane();
+    // 自动滚动到目标角色卡行
+    requestAnimationFrame(() => {
+      const targetRow = document.querySelector(
+        "#cfm-right-list .cfm-regex-target-row",
+      );
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
   }
 
   function exitCharRegexMode() {
@@ -9275,6 +9284,15 @@ jQuery(async () => {
       cfmPresetRegexExpandedNames.add(cfmPresetRegexTargetName);
     }
     renderPresetsView();
+    // 自动滚动到目标预设行
+    requestAnimationFrame(() => {
+      const targetRow = document.querySelector(
+        "#cfm-preset-right-list .cfm-regex-target-row",
+      );
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
   }
 
   function exitPresetRegexMode() {
