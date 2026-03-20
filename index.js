@@ -762,7 +762,13 @@ jQuery(async () => {
   function getVisibleTabs() {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabs) return CFM_TAB_META.map((t) => t.id);
-    return layout.tabs.filter((t) => t.visible !== false).map((t) => t.id);
+    // 自动补充新增标签页（防止已有用户的保存数据缺少新标签）
+    const existing = new Set(layout.tabs.map((t) => t.id));
+    const allTabs = [...layout.tabs];
+    for (const meta of CFM_TAB_META) {
+      if (!existing.has(meta.id)) allTabs.push({ id: meta.id, visible: true });
+    }
+    return allTabs.filter((t) => t.visible !== false).map((t) => t.id);
   }
 
   /** 获取当前生效的标签页列表（已排序，含不可见） */
@@ -21926,9 +21932,13 @@ jQuery(async () => {
     if (scope === "all" || scope === "chats") {
       ensureResourceSettings();
       data.chats = {
-        groups: JSON.parse(JSON.stringify(extension_settings[extensionName].chatGroups || {})),
+        groups: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].chatGroups || {}),
+        ),
         favorites: [...(extension_settings[extensionName].chatFavorites || [])],
-        notes: JSON.parse(JSON.stringify(extension_settings[extensionName].chatNotes || {})),
+        notes: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].chatNotes || {}),
+        ),
         pins: [...(extension_settings[extensionName].chatPins || [])],
       };
     }
