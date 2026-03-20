@@ -22332,14 +22332,14 @@ jQuery(async () => {
     const badgeHtml = typeBadge
       ? `<span class="cfm-regex-card-badge cfm-regex-badge-${scriptType}">${typeBadge}</span>`
       : "";
+    // 使用与世界书相同的 cfm-wi-toggle 样式
+    const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
     return `
       <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
            data-script-id="${escapeHtml(script.id || "")}"
            data-script-type="${scriptType}"
            data-owner="${escapeHtml(ownerLabel || "")}">
-        <div class="cfm-row-icon cfm-regex-card-toggle" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}">
-          <i class="fa-solid ${isDisabled ? "fa-toggle-off" : "fa-toggle-on"}"></i>
-        </div>
+        ${toggleHtml}
         <div class="cfm-row-name">
           <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
           ${badgeHtml}
