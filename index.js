@@ -713,6 +713,7 @@ jQuery(async () => {
         tabActions: {
           chars: [
             { id: "import", visible: true },
+            { id: "chatmode", visible: true },
             { id: "quickedit", visible: true },
             { id: "export", visible: true },
             { id: "delete", visible: true },
@@ -783,6 +784,7 @@ jQuery(async () => {
   ];
   const CFM_ACTION_META = {
     import: { label: "导入", icon: "fa-file-import" },
+    chatmode: { label: "显示聊天记录", icon: "fa-comments" },
     quickedit: { label: "快速编辑", icon: "fa-pen-to-square" },
     note: { label: "编辑备注", icon: "fa-pen-to-square" },
     rename: { label: "重命名", icon: "fa-i-cursor" },
@@ -827,7 +829,7 @@ jQuery(async () => {
       const existingIds = new Set(saved.map((a) => a.id));
       // 默认顺序参考表
       const defaultOrder = {
-        chars: ["import", "quickedit", "export", "delete"],
+        chars: ["import", "chatmode", "quickedit", "export", "delete"],
         worldinfo: ["import", "note", "rename", "export", "delete"],
         presets: ["import", "note", "rename", "export", "delete"],
         themes: ["import", "note", "rename", "export", "delete"],
@@ -878,6 +880,7 @@ jQuery(async () => {
   const CFM_ACTION_BTN_MAP = {
     chars: {
       import: "#cfm-import-char-btn",
+      chatmode: "#cfm-chat-mode-btn",
       quickedit: "#cfm-edit-char-btn",
       export: "#cfm-export-char-btn",
       delete: "#cfm-res-delete-char-btn",
@@ -15217,6 +15220,7 @@ jQuery(async () => {
         tabActions: {
           chars: [
             { id: "import", visible: true },
+            { id: "chatmode", visible: true },
             { id: "quickedit", visible: true },
             { id: "export", visible: true },
             { id: "delete", visible: true },

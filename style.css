@@ -4083,11 +4083,31 @@ option.cfm-nf-hidden {
 
 /* ==================== 聊天记录管理模式 ==================== */
 
+/* 聊天模式按钮基础样式 */
+.cfm-chat-mode-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  opacity: 0.6 !important;
+  transition: opacity 0.15s, background-color 0.15s, color 0.15s !important;
+  flex-shrink: 0;
+}
+.cfm-chat-mode-btn:hover {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #89b4fa !important;
+}
+
 /* 聊天模式按钮高亮 */
 .cfm-chat-mode-active {
   color: #89b4fa !important;
   border-color: #89b4fa !important;
   background-color: rgba(137, 180, 250, 0.15) !important;
+  opacity: 1 !important;
 }
 
 /* 小三角展开按钮 */
