@@ -3772,6 +3772,16 @@ option.cfm-nf-hidden {
 .cfm-wi-toggle.cfm-wi-toggle-locked.cfm-wi-toggle-on {
   color: rgba(255, 200, 50, 0.7);
 }
+/* 只读toggle（非当前角色/预设的正则，不可点击） */
+.cfm-wi-toggle.cfm-toggle-readonly {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.cfm-wi-toggle.cfm-toggle-readonly.cfm-wi-toggle-on {
+  color: #a6e3a1;
+  opacity: 0.4;
+}
 
 /* ==================== 世界书激活分组预设 ==================== */
 /* 统一分组面板 */

@@ -9298,8 +9298,15 @@ jQuery(async () => {
    * @param {string} avatar - 角色的 avatar
    * @param {Array} scripts - 正则脚本列表
    * @param {string} charName - 角色名称
+   * @param {boolean} [isTarget=true] - 是否为当前目标角色（只有目标角色可激活/取消激活正则）
    */
-  function renderCharRegexSubList(charRow, avatar, scripts, charName) {
+  function renderCharRegexSubList(
+    charRow,
+    avatar,
+    scripts,
+    charName,
+    isTarget = true,
+  ) {
     charRow.next(".cfm-regex-sublist").remove();
     const subList = $('<div class="cfm-regex-sublist"></div>');
     if (!scripts || scripts.length === 0) {
@@ -9309,7 +9316,9 @@ jQuery(async () => {
     } else {
       for (const script of scripts) {
         const isDisabled = !!script.disabled;
-        const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+        const toggleHtml = isTarget
+          ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
+          : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前角色，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
@@ -9322,44 +9331,46 @@ jQuery(async () => {
             <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
           </div>
         `);
-        // toggle 点击
-        row.find(".cfm-wi-toggle").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          script.disabled = !script.disabled;
-          try {
-            const chars = getCharacters();
-            const ch = chars.find((c) => c.avatar === avatar);
-            if (ch) {
-              const headers = getContext().getRequestHeaders();
-              await fetch("/api/characters/merge-attributes", {
-                method: "POST",
-                headers: headers,
-                body: JSON.stringify({
-                  avatar: ch.avatar,
-                  data: { extensions: { regex_scripts: scripts } },
-                }),
-              });
-            }
-          } catch (err) {
-            console.error("[CFM] 正则toggle保存失败:", err);
-            toastr.error("保存失败: " + err.message);
+        // toggle 点击（只有目标角色可操作，readonly的不绑定事件）
+        row
+          .find(".cfm-wi-toggle:not(.cfm-toggle-readonly)")
+          .on("click", async function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             script.disabled = !script.disabled;
-            return;
-          }
-          const isNowDisabled = !!script.disabled;
-          const el = $(this);
-          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
-          el.find("i").attr(
-            "class",
-            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
-          );
-          el.attr(
-            "title",
-            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
-          );
-          row.toggleClass("cfm-regex-disabled", isNowDisabled);
-        });
+            try {
+              const chars = getCharacters();
+              const ch = chars.find((c) => c.avatar === avatar);
+              if (ch) {
+                const headers = getContext().getRequestHeaders();
+                await fetch("/api/characters/merge-attributes", {
+                  method: "POST",
+                  headers: headers,
+                  body: JSON.stringify({
+                    avatar: ch.avatar,
+                    data: { extensions: { regex_scripts: scripts } },
+                  }),
+                });
+              }
+            } catch (err) {
+              console.error("[CFM] 正则toggle保存失败:", err);
+              toastr.error("保存失败: " + err.message);
+              script.disabled = !script.disabled;
+              return;
+            }
+            const isNowDisabled = !!script.disabled;
+            const el = $(this);
+            el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+            el.find("i").attr(
+              "class",
+              `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+            );
+            el.attr(
+              "title",
+              isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+            );
+            row.toggleClass("cfm-regex-disabled", isNowDisabled);
+          });
         subList.append(row);
       }
     }
@@ -9371,8 +9382,14 @@ jQuery(async () => {
    * @param {jQuery} presetRow - 预设行的 jQuery 对象
    * @param {string} presetName - 预设名称
    * @param {Array} scripts - 正则脚本列表
+   * @param {boolean} [isTarget=true] - 是否为当前目标预设（只有目标预设可激活/取消激活正则）
    */
-  function renderPresetRegexSubList(presetRow, presetName, scripts) {
+  function renderPresetRegexSubList(
+    presetRow,
+    presetName,
+    scripts,
+    isTarget = true,
+  ) {
     presetRow.next(".cfm-regex-sublist").remove();
     const subList = $('<div class="cfm-regex-sublist"></div>');
     if (!scripts || scripts.length === 0) {
@@ -9382,7 +9399,9 @@ jQuery(async () => {
     } else {
       for (const script of scripts) {
         const isDisabled = !!script.disabled;
-        const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+        const toggleHtml = isTarget
+          ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
+          : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
@@ -9395,38 +9414,40 @@ jQuery(async () => {
             <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
           </div>
         `);
-        // toggle 点击
-        row.find(".cfm-wi-toggle").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          script.disabled = !script.disabled;
-          try {
-            const pm = getContext().getPresetManager();
-            if (pm) {
-              await pm.writePresetExtensionField({
-                path: "regex_scripts",
-                value: scripts,
-              });
-            }
-          } catch (err) {
-            console.error("[CFM] 正则toggle保存失败:", err);
-            toastr.error("保存失败: " + err.message);
+        // toggle 点击（只有目标预设可操作，readonly的不绑定事件）
+        row
+          .find(".cfm-wi-toggle:not(.cfm-toggle-readonly)")
+          .on("click", async function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             script.disabled = !script.disabled;
-            return;
-          }
-          const isNowDisabled = !!script.disabled;
-          const el = $(this);
-          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
-          el.find("i").attr(
-            "class",
-            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
-          );
-          el.attr(
-            "title",
-            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
-          );
-          row.toggleClass("cfm-regex-disabled", isNowDisabled);
-        });
+            try {
+              const pm = getContext().getPresetManager();
+              if (pm) {
+                await pm.writePresetExtensionField({
+                  path: "regex_scripts",
+                  value: scripts,
+                });
+              }
+            } catch (err) {
+              console.error("[CFM] 正则toggle保存失败:", err);
+              toastr.error("保存失败: " + err.message);
+              script.disabled = !script.disabled;
+              return;
+            }
+            const isNowDisabled = !!script.disabled;
+            const el = $(this);
+            el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+            el.find("i").attr(
+              "class",
+              `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+            );
+            el.attr(
+              "title",
+              isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+            );
+            row.toggleClass("cfm-regex-disabled", isNowDisabled);
+          });
         subList.append(row);
       }
     }
@@ -15547,11 +15568,11 @@ jQuery(async () => {
     const chatToggleHtml = showChatToggle
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
-    // 正则模式下的小三角按钮（只对当前目标角色显示）
+    // 正则模式下的小三角按钮（对所有有正则脚本的角色显示）
     const isRegexTarget =
       cfmCharRegexMode && cfmCharRegexTargetAvatar === char.avatar;
     let showRegexToggle = false;
-    if (isRegexTarget) {
+    if (cfmCharRegexMode) {
       const scripts = char?.data?.extensions?.regex_scripts;
       showRegexToggle = Array.isArray(scripts) && scripts.length > 0;
     }
@@ -15647,7 +15668,7 @@ jQuery(async () => {
           .removeClass("fa-caret-right")
           .addClass("fa-caret-down");
         const scripts = char?.data?.extensions?.regex_scripts || [];
-        renderCharRegexSubList(row, avatar, scripts, char.name);
+        renderCharRegexSubList(row, avatar, scripts, char.name, isRegexTarget);
         row.next(".cfm-regex-sublist").hide().slideDown(150);
       }
     });
@@ -15723,7 +15744,13 @@ jQuery(async () => {
     if (showRegexToggle && cfmCharRegexExpandedAvatars.has(char.avatar)) {
       const scripts = char?.data?.extensions?.regex_scripts || [];
       if (scripts.length > 0) {
-        renderCharRegexSubList(row, char.avatar, scripts, char.name);
+        renderCharRegexSubList(
+          row,
+          char.avatar,
+          scripts,
+          char.name,
+          isRegexTarget,
+        );
       }
     }
   }
@@ -18664,12 +18691,12 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
-        // 正则模式下的小三角按钮（只对当前目标预设显示）
+        // 正则模式下的小三角按钮（对所有有正则脚本的预设显示）
         const isPresetRegexTarget =
           cfmPresetRegexMode && cfmPresetRegexTargetName === p.name;
         let showPresetRegexToggle = false;
         let presetRegexScripts = null;
-        if (isPresetRegexTarget) {
+        if (cfmPresetRegexMode) {
           try {
             const pm = getContext().getPresetManager();
             if (pm) {
@@ -18760,7 +18787,7 @@ jQuery(async () => {
               .removeClass("fa-caret-right")
               .addClass("fa-caret-down");
             const scripts = presetRegexScripts || [];
-            renderPresetRegexSubList(row, name, scripts);
+            renderPresetRegexSubList(row, name, scripts, isPresetRegexTarget);
             row.next(".cfm-regex-sublist").hide().slideDown(150);
           }
         });
@@ -18818,7 +18845,7 @@ jQuery(async () => {
         if (showPresetRegexToggle && cfmPresetRegexExpandedNames.has(p.name)) {
           const scripts = presetRegexScripts || [];
           if (scripts.length > 0) {
-            renderPresetRegexSubList(row, p.name, scripts);
+            renderPresetRegexSubList(row, p.name, scripts, isPresetRegexTarget);
           }
         }
       }
