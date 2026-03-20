@@ -9952,8 +9952,13 @@ jQuery(async () => {
       try {
         const formData = new FormData();
         formData.append("avatar_url", avatar);
-        formData.append("file", file);
-        formData.append("file_type", "jsonl");
+        formData.append("avatar", file); // multer 按 "avatar" 字段名提取上传文件
+        formData.append(
+          "file_type",
+          file.name.match(/\.jsonl$/i) ? "jsonl" : "json",
+        );
+        formData.append("character_name", char.name || "");
+        formData.append("user_name", ctx.name1 || "User");
         if (importCharacterChatFunc) {
           const result = await importCharacterChatFunc(formData, {
             refresh: false,
@@ -9971,7 +9976,12 @@ jQuery(async () => {
             headers: ctx.getRequestHeaders({ omitContentType: true }),
           });
           if (response.ok) {
-            successCount++;
+            const data = await response.json();
+            if (data.res) {
+              successCount++;
+            } else {
+              failCount++;
+            }
           } else {
             failCount++;
           }
@@ -10012,7 +10022,7 @@ jQuery(async () => {
     const chatToolbar = $(`
       <div class="cfm-chat-toolbar">
         <button class="cfm-btn cfm-btn-sm cfm-chat-import-btn" title="导入聊天记录"><i class="fa-solid fa-file-import"></i> 导入</button>
-        <input type="file" class="cfm-chat-import-file" multiple accept=".jsonl" style="display:none;">
+        <input type="file" class="cfm-chat-import-file" multiple accept=".json,.jsonl" style="display:none;">
         <button class="cfm-btn cfm-btn-sm cfm-chat-batch-toggle ${cfmChatBatchMode ? "cfm-chat-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmChatBatchMode ? "退出批量" : "批量操作"}</button>
       </div>
     `);
@@ -10088,9 +10098,60 @@ jQuery(async () => {
           toastr.warning("请先选择要导出的聊天记录");
           return;
         }
-        for (const key of toExport) {
-          const fn = key.split("::")[1];
+        if (toExport.length === 1) {
+          // 单个直接导出
+          const fn = toExport[0].split("::")[1];
           await exportChatFile(avatar, fn, "jsonl");
+        } else {
+          // 多个打包为 zip
+          try {
+            if (!window.JSZip) {
+              await import("../../../../lib/jszip.min.js");
+            }
+            const zip = new JSZip();
+            let success = 0;
+            const ctx = getContext();
+            for (const key of toExport) {
+              const fn = key.split("::")[1];
+              try {
+                const body = {
+                  is_group: false,
+                  avatar_url: avatar,
+                  file: `${fn}.jsonl`,
+                  exportfilename: `${fn}.jsonl`,
+                  format: "jsonl",
+                };
+                const response = await fetch("/api/chats/export", {
+                  method: "POST",
+                  body: JSON.stringify(body),
+                  headers: ctx.getRequestHeaders(),
+                });
+                if (response.ok) {
+                  const data = await response.json();
+                  zip.file(`${fn}.jsonl`, data.result);
+                  success++;
+                }
+              } catch (err) {
+                console.warn("[CFM] 导出聊天记录失败:", fn, err);
+              }
+            }
+            if (success === 0) {
+              toastr.error("没有成功导出任何聊天记录");
+              return;
+            }
+            const content = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(content);
+            a.download = "聊天记录.zip";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            toastr.success(`已导出 ${success} 条聊天记录到 聊天记录.zip`);
+          } catch (err) {
+            console.error("[CFM] 批量导出聊天记录失败:", err);
+            toastr.error(`批量导出失败: ${err.message}`);
+          }
         }
       });
       batchToolbar.find(".cfm-chat-batch-delete").on("click", async (e) => {
