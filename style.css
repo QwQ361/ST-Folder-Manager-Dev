@@ -4414,3 +4414,427 @@ option.cfm-nf-hidden {
   line-height: 1.4;
   max-width: 100%;
 }
+
+/* ==================== 正则标签页样式 ==================== */
+
+/* 正则视图容器 */
+.cfm-regex-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 正则加载提示 */
+.cfm-regex-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+/* 正则区域 */
+.cfm-regex-section {
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 区域标题栏 */
+.cfm-regex-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.cfm-regex-section-header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 折叠箭头 */
+.cfm-regex-section-toggle {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.7;
+  width: 14px;
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+/* 区域图标 */
+.cfm-regex-section-icon {
+  font-size: 14px;
+  color: var(--SmartThemeBodyColor, #89b4fa);
+  opacity: 0.85;
+}
+
+/* 区域标题 */
+.cfm-regex-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+}
+
+/* 区域计数 */
+.cfm-regex-section-count {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.6;
+}
+
+/* 区域操作按钮容器 */
+.cfm-regex-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* 区域操作按钮 */
+.cfm-regex-action-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 13px;
+  opacity: 0.7;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+.cfm-regex-action-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--SmartThemeBorderColor, #45475a);
+}
+
+/* 区域内容体 */
+.cfm-regex-section-body {
+  border-top: 1px solid var(--SmartThemeBorderColor, #45475a);
+}
+
+/* 区域双栏布局 */
+.cfm-regex-dual-pane {
+  display: flex;
+  min-height: 180px;
+  max-height: 400px;
+}
+
+/* 正则左栏 */
+.cfm-regex-left-pane {
+  width: 240px;
+  min-width: 180px;
+  border-right: 1px solid var(--SmartThemeBorderColor, #45475a);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* 正则左栏树 */
+.cfm-regex-left-tree {
+  padding: 6px;
+}
+
+/* 正则右栏 */
+.cfm-regex-right-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 正则右栏标题 */
+.cfm-regex-right-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
+  min-height: 36px;
+}
+
+/* 正则右栏路径 */
+.cfm-regex-rh-path {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 正则右栏计数 */
+.cfm-regex-rh-count {
+  font-size: 11px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.5;
+  margin-left: auto;
+}
+
+/* 正则右栏列表 */
+.cfm-regex-right-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+/* 空白提示 */
+.cfm-regex-tree-empty,
+.cfm-regex-right-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 80px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.4;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* ===== 左栏树节点 ===== */
+.cfm-regex-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+  transition: background 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-regex-tree-node:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.cfm-regex-tree-selected {
+  background: rgba(137, 180, 250, 0.15) !important;
+  border-left: 2px solid var(--SmartThemeQuoteColor, #89b4fa);
+}
+
+/* 树节点箭头 */
+.cfm-regex-tree-arrow {
+  font-size: 10px;
+  width: 14px;
+  text-align: center;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.6;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.cfm-regex-tree-arrow:hover {
+  opacity: 1;
+}
+.cfm-regex-tree-arrow-placeholder {
+  width: 14px;
+  flex-shrink: 0;
+}
+
+/* 树节点图标 */
+.cfm-regex-tree-icon {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.7;
+}
+
+/* 树节点标签 */
+.cfm-regex-tree-label {
+  font-size: 13px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 树节点计数 */
+.cfm-regex-tree-count {
+  font-size: 11px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.5;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 同步文件夹（预设/角色区域的只读镜像文件夹） */
+.cfm-regex-synced-folder .cfm-regex-tree-icon {
+  opacity: 0.5;
+}
+.cfm-regex-synced-folder .cfm-regex-tree-label {
+  opacity: 0.75;
+}
+
+/* 项目节点（预设/角色的叶子节点） */
+.cfm-regex-item-node .cfm-regex-tree-icon {
+  color: var(--SmartThemeQuoteColor, #89b4fa);
+  opacity: 0.85;
+}
+
+/* ===== 右栏分组标题 ===== */
+.cfm-regex-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 4px;
+}
+.cfm-regex-group-header:first-child {
+  margin-top: 0;
+}
+.cfm-regex-group-header i {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ===== 脚本卡片 ===== */
+.cfm-regex-script-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 6px;
+  margin: 4px 6px;
+  padding: 8px 10px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.cfm-regex-script-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(137, 180, 250, 0.3);
+}
+.cfm-regex-disabled {
+  opacity: 0.5;
+}
+
+/* 卡片头部 */
+.cfm-regex-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 启用/禁用切换 */
+.cfm-regex-card-toggle {
+  cursor: pointer;
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.cfm-regex-card-toggle .fa-toggle-on {
+  color: #a6e3a1;
+}
+.cfm-regex-card-toggle .fa-toggle-off {
+  color: #f38ba8;
+}
+
+/* 脚本名称 */
+.cfm-regex-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 类型徽章 */
+.cfm-regex-card-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.cfm-regex-badge-0 {
+  background: rgba(137, 180, 250, 0.2);
+  color: #89b4fa;
+}
+.cfm-regex-badge-1 {
+  background: rgba(166, 227, 161, 0.2);
+  color: #a6e3a1;
+}
+.cfm-regex-badge-2 {
+  background: rgba(249, 226, 175, 0.2);
+  color: #f9e2af;
+}
+
+/* 卡片操作按钮 */
+.cfm-regex-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.cfm-regex-card-btn {
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 12px;
+  opacity: 0.5;
+  border-radius: 3px;
+  transition: opacity 0.12s, background 0.12s;
+}
+.cfm-regex-card-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 卡片内容体 */
+.cfm-regex-card-body {
+  margin-top: 4px;
+  padding-left: 28px;
+}
+
+/* 正则表达式展示 */
+.cfm-regex-card-pattern {
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfm-regex-card-pattern code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+}
+.cfm-regex-label {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* 卡片元信息 */
+.cfm-regex-card-meta {
+  font-size: 11px;
+  color: var(--SmartThemeBodyColor, #a6adc8);
+  opacity: 0.5;
+  margin-top: 2px;
+}
