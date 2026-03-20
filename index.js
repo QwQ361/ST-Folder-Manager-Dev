@@ -14523,6 +14523,7 @@ jQuery(async () => {
     // 恢复默认按钮
     section.find(".cfm-layout-reset-btn").on("click touchend", function (e) {
       e.preventDefault();
+      if (!confirm("确定要恢复默认布局吗？当前的标签页顺序和子功能开关设置将被重置。")) return;
       const defaultLayout = {
         tabs: [
           { id: "chars", visible: true },
