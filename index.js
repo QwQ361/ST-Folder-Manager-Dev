@@ -2446,21 +2446,18 @@ jQuery(async () => {
       );
       if (!neighborIcon) continue;
       // 跳过处于打开状态的邻居按钮图标
-      // 打开面板时 drawer-icon 会从 closedIcon 变为 openIcon，
-      // 美化主题可能对两种状态设置了不同的 background-image，
-      // 此时读取到的是 openIcon 的图标，不应用于 CFM 按钮
       if (
         cls === ".drawer-icon" &&
         neighborIcon.classList.contains("openIcon")
       ) {
         continue;
       }
+      // 先检测元素本身的 background-image
       const computed = window.getComputedStyle(neighborIcon);
       const bgImage = computed.backgroundImage;
       if (bgImage && bgImage !== "none" && bgImage !== "") {
         const extraStyles = {};
         if (cls === ".drawer-toggle") {
-          // 从 .drawer-toggle 复制关键样式属性
           const w = computed.width;
           const h = computed.height;
           const bgSize = computed.backgroundSize;
@@ -2477,6 +2474,24 @@ jQuery(async () => {
           if (color) extraStyles.color = color;
         }
         return { cssUrl: bgImage, target: cls, styles: extraStyles };
+      }
+      // 再检测 ::before 伪元素的 background-image
+      // 某些美化主题通过 .drawer-icon::before 设置图标
+      const beforeComputed = window.getComputedStyle(neighborIcon, "::before");
+      const beforeBgImage = beforeComputed.backgroundImage;
+      if (beforeBgImage && beforeBgImage !== "none" && beforeBgImage !== "") {
+        const extraStyles = {};
+        const w = beforeComputed.width;
+        const h = beforeComputed.height;
+        const bgSize = beforeComputed.backgroundSize;
+        const bgRepeat = beforeComputed.backgroundRepeat;
+        const bgPos = beforeComputed.backgroundPosition;
+        if (w) extraStyles.width = w;
+        if (h) extraStyles.height = h;
+        if (bgSize) extraStyles.backgroundSize = bgSize;
+        if (bgRepeat) extraStyles.backgroundRepeat = bgRepeat;
+        if (bgPos) extraStyles.backgroundPosition = bgPos;
+        return { cssUrl: beforeBgImage, target: cls + "::before", styles: extraStyles };
       }
     }
     return null;
@@ -2508,9 +2523,10 @@ jQuery(async () => {
           )
             continue;
           // 放宽匹配：任何包含 #xxx 和 .drawer-icon 或 .drawer-toggle 的选择器
+          // 同时支持 ::before 伪元素（某些美化主题通过 ::before 设置图标）
           // 支持逗号分隔的多选择器（matchAll 全局匹配）
           const matches = rule.selectorText.matchAll(
-            /#([\w-]+)(?:\s+|.*?)(?:\.drawer-icon|\.drawer-toggle)/g,
+            /#([\w-]+)(?:\s+|.*?)(?:\.drawer-icon|\.drawer-toggle)(?:::before)?/g,
           );
           for (const match of matches) {
             iconMap[match[1]] = rule.style.backgroundImage;
@@ -2538,10 +2554,18 @@ jQuery(async () => {
         if (cls === ".drawer-icon" && iconEl.classList.contains("openIcon")) {
           continue;
         }
+        // 先检测元素本身
         const computed = window.getComputedStyle(iconEl);
         const bgImage = computed.backgroundImage;
         if (bgImage && bgImage !== "none" && bgImage !== "") {
           iconMap[btnId] = bgImage;
+          break;
+        }
+        // 再检测 ::before 伪元素
+        const beforeComputed = window.getComputedStyle(iconEl, "::before");
+        const beforeBgImage = beforeComputed.backgroundImage;
+        if (beforeBgImage && beforeBgImage !== "none" && beforeBgImage !== "") {
+          iconMap[btnId] = beforeBgImage;
           break;
         }
       }
@@ -2571,28 +2595,64 @@ jQuery(async () => {
   /**
    * 应用自定义图标到顶栏按钮
    * @param {string} cssUrl - CSS url() 格式的图标链接
-   * @param {string} [targetCls] - 图标来源元素类名（".drawer-icon" 或 ".drawer-toggle"）
+   * @param {string} [targetCls] - 图标来源元素类名（".drawer-icon"、".drawer-toggle" 或含 "::before" 的伪元素标识）
    * @param {Object} [extraStyles] - 需要额外复制的样式属性
    */
   function applyCustomIcon(cssUrl, targetCls, extraStyles) {
     const icon = $("#cfm-topbar-button .drawer-icon");
     if (icon.length === 0) return;
     icon.addClass("cfm-custom-icon");
-    icon.css("background-image", cssUrl);
-    // 如果图标来源是 .drawer-toggle，还需要将样式复制到插件的 .drawer-toggle
-    if (targetCls === ".drawer-toggle" && extraStyles) {
-      const toggle = $("#cfm-topbar-button .drawer-toggle");
-      if (toggle.length > 0) {
-        toggle.addClass("cfm-custom-toggle-icon");
-        toggle.css({
-          "background-image": cssUrl,
-          "background-repeat": extraStyles.backgroundRepeat || "no-repeat",
-          "background-position": extraStyles.backgroundPosition || "center",
-          "background-size": extraStyles.backgroundSize || "contain",
-          width: extraStyles.width || "27px",
-          height: extraStyles.height || "27px",
-          color: "transparent",
-        });
+
+    // 检测是否是 ::before 伪元素模式
+    const isPseudoBefore = targetCls && targetCls.includes("::before");
+
+    if (isPseudoBefore) {
+      // ::before 伪元素模式：通过动态 <style> 注入伪元素样式
+      // JS 无法直接操作伪元素，需通过样式表
+      icon.addClass("cfm-custom-icon-before");
+      icon.css("background-image", ""); // 确保元素本身无背景图
+      // 移除旧的动态样式
+      $("#cfm-dynamic-icon-style").remove();
+      const w = (extraStyles && extraStyles.width) || "40px";
+      const h = (extraStyles && extraStyles.height) || "40px";
+      const bgSize = (extraStyles && extraStyles.backgroundSize) || "contain";
+      const bgRepeat = (extraStyles && extraStyles.backgroundRepeat) || "no-repeat";
+      const bgPos = (extraStyles && extraStyles.backgroundPosition) || "center";
+      const styleEl = $(
+        `<style id="cfm-dynamic-icon-style">
+          #cfm-topbar-button .drawer-icon.cfm-custom-icon-before::before {
+            content: '' !important;
+            display: block !important;
+            width: ${w} !important;
+            height: ${h} !important;
+            background-image: ${cssUrl} !important;
+            background-size: ${bgSize} !important;
+            background-repeat: ${bgRepeat} !important;
+            background-position: ${bgPos} !important;
+          }
+        </style>`,
+      );
+      $("head").append(styleEl);
+    } else {
+      // 元素本身模式：直接设置 background-image
+      icon.removeClass("cfm-custom-icon-before");
+      $("#cfm-dynamic-icon-style").remove();
+      icon.css("background-image", cssUrl);
+      // 如果图标来源是 .drawer-toggle，还需要将样式复制到插件的 .drawer-toggle
+      if (targetCls === ".drawer-toggle" && extraStyles) {
+        const toggle = $("#cfm-topbar-button .drawer-toggle");
+        if (toggle.length > 0) {
+          toggle.addClass("cfm-custom-toggle-icon");
+          toggle.css({
+            "background-image": cssUrl,
+            "background-repeat": extraStyles.backgroundRepeat || "no-repeat",
+            "background-position": extraStyles.backgroundPosition || "center",
+            "background-size": extraStyles.backgroundSize || "contain",
+            width: extraStyles.width || "27px",
+            height: extraStyles.height || "27px",
+            color: "transparent",
+          });
+        }
       }
     }
   }
@@ -2603,8 +2663,10 @@ jQuery(async () => {
   function clearCustomIcon() {
     const icon = $("#cfm-topbar-button .drawer-icon");
     if (icon.length === 0) return;
-    icon.removeClass("cfm-custom-icon");
+    icon.removeClass("cfm-custom-icon cfm-custom-icon-before");
     icon.css("background-image", "");
+    // 移除动态注入的 ::before 样式
+    $("#cfm-dynamic-icon-style").remove();
     // 清除 .drawer-toggle 上的自定义样式
     const toggle = $("#cfm-topbar-button .drawer-toggle");
     if (toggle.length > 0) {
