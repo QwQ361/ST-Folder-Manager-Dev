@@ -1510,7 +1510,7 @@ jQuery(async () => {
           if (mgr.active) return;
           if (
             e.target.closest(
-              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn, .cfm-wi-toggle",
+              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow",
             )
           )
             return;
@@ -1545,7 +1545,9 @@ jQuery(async () => {
                         ? "🎨 "
                         : data.type === "background"
                           ? "🖼️ "
-                          : "👤 ") + (data.name || "");
+                          : data.type === "quickreply"
+                            ? "💬 "
+                            : "👤 ") + (data.name || "");
             }
             g.style.left = sx + "px";
             g.style.top = sy - 50 + "px";
@@ -1847,6 +1849,7 @@ jQuery(async () => {
           else if (resType === "themes") renderThemesView();
           else if (resType === "backgrounds") renderBackgroundsView();
           else if (resType === "personas") renderPersonasView();
+          else if (resType === "quickreply") renderQRView();
         } else if (!target && rightList) {
           const selFolder =
             resType === "presets"
@@ -1878,6 +1881,7 @@ jQuery(async () => {
               else if (resType === "themes") renderThemesView();
               else if (resType === "backgrounds") renderBackgroundsView();
               else if (resType === "personas") renderPersonasView();
+              else if (resType === "quickreply") renderQRView();
             }
           }
         }
@@ -2073,6 +2077,46 @@ jQuery(async () => {
               ? `已将 ${names.length} 个User移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`,
           );
+        }
+      } else if (d.type === "quickreply") {
+        const qrNames =
+          d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
+        const qrCount = qrNames.length;
+        if (uncatNode) {
+          qrNames.forEach((n) => setItemGroup("quickreply", n, null));
+          toastr.success(
+            qrCount > 1
+              ? `已将 ${qrCount} 个快速回复集移出文件夹`
+              : `已将「${d.name}」移出文件夹`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderQRView();
+        } else if (targetId) {
+          qrNames.forEach((n) => setItemGroup("quickreply", n, targetId));
+          toastr.success(
+            qrCount > 1
+              ? `已将 ${qrCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", targetId)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("quickreply", targetId)}」`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderQRView();
+        } else if (
+          !target &&
+          rightList &&
+          selectedQrFolder &&
+          selectedQrFolder !== "__ungrouped__" &&
+          selectedQrFolder !== "__favorites__"
+        ) {
+          qrNames.forEach((n) =>
+            setItemGroup("quickreply", n, selectedQrFolder),
+          );
+          toastr.success(
+            qrCount > 1
+              ? `已将 ${qrCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", selectedQrFolder)}」`
+              : `已将「${d.name}」移入「${getResFolderDisplayName("quickreply", selectedQrFolder)}」`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderQRView();
         }
       }
     },
