@@ -12950,7 +12950,7 @@ jQuery(async () => {
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-regex-search-bar" style="display:none;">
                     <div class="cfm-search-input-wrapper">
-                        <input type="text" class="cfm-global-search-input" id="cfm-regex-global-search" placeholder="搜索正则脚本..." />
+                        <input type="text" class="cfm-global-search-input" id="cfm-regex-global-search" placeholder="搜索..." />
                         <button class="cfm-search-clear-btn" id="cfm-regex-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <select id="cfm-regex-search-scope" class="cfm-search-select" title="搜索范围">
@@ -12964,7 +12964,7 @@ jQuery(async () => {
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-qr-search-bar" style="display:none;">
                     <div class="cfm-search-input-wrapper">
-                        <input type="text" class="cfm-global-search-input" id="cfm-qr-global-search" placeholder="搜索快速回复集..." />
+                        <input type="text" class="cfm-global-search-input" id="cfm-qr-global-search" placeholder="搜索..." />
                         <button class="cfm-search-clear-btn" id="cfm-qr-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <select id="cfm-qr-search-scope" class="cfm-search-select" title="搜索范围">
@@ -15732,7 +15732,7 @@ jQuery(async () => {
       const type = $(this).val();
       $("#cfm-qr-global-search").attr(
         "placeholder",
-        type === "folder" ? "搜索文件夹..." : "搜索快速回复集...",
+        type === "folder" ? "搜索文件夹..." : "搜索...",
       );
       executeQrSearch();
     });
@@ -15817,7 +15817,7 @@ jQuery(async () => {
       const type = $(this).val();
       $("#cfm-regex-global-search").attr(
         "placeholder",
-        type === "folder" ? "搜索文件夹..." : "搜索正则脚本...",
+        type === "folder" ? "搜索文件夹..." : "搜索...",
       );
       executeRegexSearch();
     });
@@ -26674,7 +26674,7 @@ jQuery(async () => {
             <label>包含的快速回复集</label>
             <div class="cfm-wi-preset-edit-search">
               <select class="cfm-edit-input" id="cfm-qr-preset-edit-folder-filter">${buildQrFilterOptions()}</select>
-              <input type="text" class="cfm-edit-input" id="cfm-qr-preset-edit-filter" placeholder="搜索快速回复集...">
+              <input type="text" class="cfm-edit-input" id="cfm-qr-preset-edit-filter" placeholder="搜索...">
             </div>
             <div class="cfm-wi-preset-edit-list">${setsHtml}</div>
           </div>
@@ -28462,7 +28462,7 @@ jQuery(async () => {
             <label>包含的正则脚本</label>
             <div class="cfm-wi-preset-edit-search">
               <select class="cfm-edit-input" id="cfm-regex-preset-edit-folder-filter">${buildRegexFilterOptions()}</select>
-              <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-filter" placeholder="搜索正则脚本...">
+              <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-filter" placeholder="搜索...">
             </div>
             <div class="cfm-wi-preset-edit-list">${scriptsHtml}</div>
           </div>
