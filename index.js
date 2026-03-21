@@ -9192,6 +9192,12 @@ jQuery(async () => {
   let cfmPresetRegexTargetName = null; // 当前正则查看目标预设名
   let cfmPresetRegexHighlightPath = []; // 当前目标预设到达路径（文件夹ID列表）
 
+  // 正则批量操作状态
+  let cfmRegexBatchMode = false; // 正则批量操作模式
+  let cfmRegexBatchSelected = new Set(); // 批量选中的正则脚本ID集合
+  let cfmRegexBatchRangeMode = false; // 正则框选模式
+  let cfmRegexBatchLastClicked = null; // 正则框选锚点
+
   function enterCharRegexMode() {
     // 互斥：如果聊天模式开启，先退出
     if (cfmChatMode) exitChatMode();
@@ -9324,6 +9330,23 @@ jQuery(async () => {
   }
 
   /**
+   * 保存角色正则脚本到服务器
+   * @param {string} avatar - 角色的 avatar
+   * @param {Array} scripts - 正则脚本列表
+   */
+  async function saveCharRegexScripts(avatar, scripts) {
+    const headers = getContext().getRequestHeaders();
+    await fetch("/api/characters/merge-attributes", {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify({
+        avatar: avatar,
+        data: { extensions: { regex_scripts: scripts } },
+      }),
+    });
+  }
+
+  /**
    * 渲染角色的正则脚本子列表
    * @param {jQuery} charRow - 角色卡行的 jQuery 对象
    * @param {string} avatar - 角色的 avatar
@@ -9340,28 +9363,222 @@ jQuery(async () => {
   ) {
     charRow.next(".cfm-regex-sublist").remove();
     const subList = $('<div class="cfm-regex-sublist"></div>');
+
+    // === 工具栏（仅对目标角色显示） ===
+    if (isTarget) {
+      const regexToolbar = $(`
+        <div class="cfm-regex-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
+          <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
+          <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
+        </div>
+      `);
+      // 导入按钮
+      regexToolbar.find(".cfm-regex-import-btn").on("click", (e) => {
+        e.stopPropagation();
+        regexToolbar.find(".cfm-regex-import-file").val("").trigger("click");
+      });
+      regexToolbar.find(".cfm-regex-import-file").on("change", async (e) => {
+        e.stopPropagation();
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        try {
+          for (const file of files) {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const toImport = Array.isArray(parsed) ? parsed : [parsed];
+            for (const regexScript of toImport) {
+              if (!regexScript.scriptName) {
+                toastr.warning("跳过无名称的正则脚本");
+                continue;
+              }
+              regexScript.id = getContext().uuidv4();
+              scripts.push(regexScript);
+            }
+          }
+          await saveCharRegexScripts(avatar, scripts);
+          toastr.success("正则脚本导入成功");
+          rerenderCurrentView();
+        } catch (err) {
+          console.error("[CFM] 正则导入失败:", err);
+          toastr.error("导入失败: " + err.message);
+        }
+      });
+      // 批量操作切换
+      regexToolbar.find(".cfm-regex-batch-toggle").on("click", (e) => {
+        e.stopPropagation();
+        cfmRegexBatchMode = !cfmRegexBatchMode;
+        cfmRegexBatchSelected.clear();
+        cfmRegexBatchRangeMode = false;
+        cfmRegexBatchLastClicked = null;
+        rerenderCurrentView();
+      });
+      subList.append(regexToolbar);
+
+      // === 批量操作工具栏 ===
+      if (cfmRegexBatchMode && scripts && scripts.length > 0) {
+        const allSel = scripts.every((s) => cfmRegexBatchSelected.has(s.id));
+        const selCount = scripts.filter((s) =>
+          cfmRegexBatchSelected.has(s.id),
+        ).length;
+        const batchToolbar = $(`
+          <div class="cfm-regex-batch-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-selall" title="全选/全不选">
+              <i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}
+            </button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-range ${cfmRegexBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
+              <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
+            </button>
+            <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-delete" title="批量删除"><i class="fa-solid fa-trash-can"></i> 删除</button>
+          </div>
+        `);
+        // 全选/全不选
+        batchToolbar.find(".cfm-regex-batch-selall").on("click", (e) => {
+          e.stopPropagation();
+          if (allSel) {
+            scripts.forEach((s) => cfmRegexBatchSelected.delete(s.id));
+          } else {
+            scripts.forEach((s) => {
+              if (s.id) cfmRegexBatchSelected.add(s.id);
+            });
+          }
+          rerenderCurrentView();
+        });
+        // 框选模式
+        batchToolbar.find(".cfm-regex-batch-range").on("click", (e) => {
+          e.stopPropagation();
+          cfmRegexBatchRangeMode = !cfmRegexBatchRangeMode;
+          if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
+          rerenderCurrentView();
+        });
+        // 批量导出（JSON格式，与酒馆保持一致）
+        batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
+          e.stopPropagation();
+          const toExport = scripts.filter((s) =>
+            cfmRegexBatchSelected.has(s.id),
+          );
+          if (toExport.length === 0) {
+            toastr.warning("请先选择要导出的正则脚本");
+            return;
+          }
+          try {
+            const download = (await import("../../../utils.js")).download;
+            if (toExport.length === 1) {
+              const fileName = `regex-${(toExport[0].scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
+              download(
+                JSON.stringify(toExport[0], null, 4),
+                fileName,
+                "application/json",
+              );
+            } else {
+              const fileName = `regex-${new Date().toISOString()}.json`;
+              download(
+                JSON.stringify(toExport, null, 4),
+                fileName,
+                "application/json",
+              );
+            }
+            toastr.success(`已导出 ${toExport.length} 个正则脚本`);
+          } catch (err) {
+            console.error("[CFM] 批量导出正则失败:", err);
+            toastr.error("导出失败: " + err.message);
+          }
+        });
+        // 批量删除
+        batchToolbar.find(".cfm-regex-batch-delete").on("click", async (e) => {
+          e.stopPropagation();
+          const toDeleteIds = scripts
+            .filter((s) => cfmRegexBatchSelected.has(s.id))
+            .map((s) => s.id);
+          if (toDeleteIds.length === 0) {
+            toastr.warning("请先选择要删除的正则脚本");
+            return;
+          }
+          if (
+            !confirm(
+              `确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`,
+            )
+          )
+            return;
+          try {
+            for (const id of toDeleteIds) {
+              const idx = scripts.findIndex((s) => s.id === id);
+              if (idx !== -1) scripts.splice(idx, 1);
+            }
+            await saveCharRegexScripts(avatar, scripts);
+            cfmRegexBatchSelected.clear();
+            toastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 批量删除正则失败:", err);
+            toastr.error("删除失败: " + err.message);
+          }
+        });
+        subList.append(batchToolbar);
+      }
+    }
+
     if (!scripts || scripts.length === 0) {
       subList.append(
         '<div class="cfm-right-empty" style="padding:8px 16px;font-size:12px;">该角色没有绑定正则脚本</div>',
       );
     } else {
-      for (const script of scripts) {
+      for (let i = 0; i < scripts.length; i++) {
+        const script = scripts[i];
         const isDisabled = !!script.disabled;
+        const isBatchSel =
+          cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
         const toggleHtml = isTarget
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前角色，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
+               data-script-idx="${i}"
                data-script-type="1"
                data-owner="${escapeHtml(charName || "")}">
+            ${cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             ${toggleHtml}
             <div class="cfm-row-name">
               <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
             </div>
-            <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="cfm-regex-row-actions">
+              <div class="cfm-regex-action-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+              ${
+                isTarget
+                  ? `
+              <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
+              `
+                  : ""
+              }
+            </div>
           </div>
         `);
+
+        // 批量模式：行点击切换选中
+        if (cfmRegexBatchMode) {
+          row.on("click", (e) => {
+            if (
+              $(e.target).closest(
+                ".cfm-regex-row-actions, .cfm-regex-batch-check",
+              ).length
+            )
+              return;
+            toggleRegexBatchItem(script.id, e.shiftKey, scripts);
+            rerenderCurrentView();
+          });
+          row.find(".cfm-regex-batch-check").on("click", (e) => {
+            e.stopPropagation();
+            toggleRegexBatchItem(script.id, e.shiftKey, scripts);
+            rerenderCurrentView();
+          });
+        }
+
         // toggle 点击（只有目标角色可操作，readonly的不绑定事件）
         row
           .find(".cfm-wi-toggle:not(.cfm-toggle-readonly)")
@@ -9370,19 +9587,7 @@ jQuery(async () => {
             e.stopPropagation();
             script.disabled = !script.disabled;
             try {
-              const chars = getCharacters();
-              const ch = chars.find((c) => c.avatar === avatar);
-              if (ch) {
-                const headers = getContext().getRequestHeaders();
-                await fetch("/api/characters/merge-attributes", {
-                  method: "POST",
-                  headers: headers,
-                  body: JSON.stringify({
-                    avatar: ch.avatar,
-                    data: { extensions: { regex_scripts: scripts } },
-                  }),
-                });
-              }
+              await saveCharRegexScripts(avatar, scripts);
             } catch (err) {
               console.error("[CFM] 正则toggle保存失败:", err);
               toastr.error("保存失败: " + err.message);
@@ -9415,10 +9620,110 @@ jQuery(async () => {
             toastr.warning("非当前角色的正则脚本，无法编辑");
           }
         });
+        // 重命名按钮
+        row.find(".cfm-regex-rename-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const oldName = script.scriptName || "";
+          const newName = await showRegexRenamePopup(oldName);
+          if (!newName || newName === oldName) return;
+          try {
+            script.scriptName = newName;
+            await saveCharRegexScripts(avatar, scripts);
+            toastr.success(`已重命名: ${oldName} → ${newName}`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则重命名失败:", err);
+            script.scriptName = oldName;
+            toastr.error("重命名失败: " + err.message);
+          }
+        });
+        // 导出按钮（单个导出，JSON格式）
+        row.find(".cfm-regex-export-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            const download = (await import("../../../utils.js")).download;
+            const fileName = `regex-${(script.scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
+            download(
+              JSON.stringify(script, null, 4),
+              fileName,
+              "application/json",
+            );
+            toastr.success(`已导出: ${script.scriptName}`);
+          } catch (err) {
+            console.error("[CFM] 导出正则失败:", err);
+            toastr.error("导出失败: " + err.message);
+          }
+        });
+        // 删除按钮
+        row.find(".cfm-regex-delete-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (
+            !confirm(
+              `确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`,
+            )
+          )
+            return;
+          try {
+            const idx = scripts.findIndex((s) => s.id === script.id);
+            if (idx !== -1) scripts.splice(idx, 1);
+            await saveCharRegexScripts(avatar, scripts);
+            toastr.success(`已删除: ${script.scriptName || "(未命名)"}`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 删除正则失败:", err);
+            toastr.error("删除失败: " + err.message);
+          }
+        });
         subList.append(row);
       }
     }
     charRow.after(subList);
+  }
+
+  /**
+   * 正则批量选择切换（支持框选/Shift多选）
+   * @param {string} scriptId - 脚本ID
+   * @param {boolean} shiftKey - 是否按住了 Shift 键
+   * @param {Array} scripts - 当前脚本列表
+   */
+  function toggleRegexBatchItem(scriptId, shiftKey, scripts) {
+    if (cfmRegexBatchRangeMode && shiftKey && cfmRegexBatchLastClicked) {
+      // 框选：从上次点击到当前点击的范围
+      const ids = scripts.map((s) => s.id);
+      const lastIdx = ids.indexOf(cfmRegexBatchLastClicked);
+      const curIdx = ids.indexOf(scriptId);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        for (let i = start; i <= end; i++) {
+          if (ids[i]) cfmRegexBatchSelected.add(ids[i]);
+        }
+      }
+    } else {
+      if (cfmRegexBatchSelected.has(scriptId)) {
+        cfmRegexBatchSelected.delete(scriptId);
+      } else {
+        cfmRegexBatchSelected.add(scriptId);
+      }
+    }
+    cfmRegexBatchLastClicked = scriptId;
+  }
+
+  /**
+   * 保存预设正则脚本
+   * @param {Array} scripts - 正则脚本列表
+   */
+  async function savePresetRegexScripts(scripts) {
+    const pm = getContext().getPresetManager();
+    if (pm) {
+      await pm.writePresetExtensionField({
+        path: "regex_scripts",
+        value: scripts,
+      });
+    }
   }
 
   /**
@@ -9436,28 +9741,191 @@ jQuery(async () => {
   ) {
     presetRow.next(".cfm-regex-sublist").remove();
     const subList = $('<div class="cfm-regex-sublist"></div>');
+
+    // === 工具栏（仅对目标预设显示） ===
+    if (isTarget) {
+      const regexToolbar = $(`
+        <div class="cfm-regex-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
+          <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
+          <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
+        </div>
+      `);
+      // 导入按钮
+      regexToolbar.find(".cfm-regex-import-btn").on("click", (e) => {
+        e.stopPropagation();
+        regexToolbar.find(".cfm-regex-import-file").val("").trigger("click");
+      });
+      regexToolbar.find(".cfm-regex-import-file").on("change", async (e) => {
+        e.stopPropagation();
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        try {
+          for (const file of files) {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const toImport = Array.isArray(parsed) ? parsed : [parsed];
+            for (const regexScript of toImport) {
+              if (!regexScript.scriptName) {
+                toastr.warning("跳过无名称的正则脚本");
+                continue;
+              }
+              regexScript.id = getContext().uuidv4();
+              scripts.push(regexScript);
+            }
+          }
+          await savePresetRegexScripts(scripts);
+          toastr.success("正则脚本导入成功");
+          rerenderCurrentView();
+        } catch (err) {
+          console.error("[CFM] 正则导入失败:", err);
+          toastr.error("导入失败: " + err.message);
+        }
+      });
+      // 批量操作切换
+      regexToolbar.find(".cfm-regex-batch-toggle").on("click", (e) => {
+        e.stopPropagation();
+        cfmRegexBatchMode = !cfmRegexBatchMode;
+        cfmRegexBatchSelected.clear();
+        cfmRegexBatchRangeMode = false;
+        cfmRegexBatchLastClicked = null;
+        rerenderCurrentView();
+      });
+      subList.append(regexToolbar);
+
+      // === 批量操作工具栏 ===
+      if (cfmRegexBatchMode && scripts && scripts.length > 0) {
+        const allSel = scripts.every((s) => cfmRegexBatchSelected.has(s.id));
+        const selCount = scripts.filter((s) => cfmRegexBatchSelected.has(s.id)).length;
+        const batchToolbar = $(`
+          <div class="cfm-regex-batch-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-selall" title="全选/全不选">
+              <i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}
+            </button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-range ${cfmRegexBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
+              <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
+            </button>
+            <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-delete" title="批量删除"><i class="fa-solid fa-trash-can"></i> 删除</button>
+          </div>
+        `);
+        // 全选/全不选
+        batchToolbar.find(".cfm-regex-batch-selall").on("click", (e) => {
+          e.stopPropagation();
+          if (allSel) {
+            scripts.forEach((s) => cfmRegexBatchSelected.delete(s.id));
+          } else {
+            scripts.forEach((s) => { if (s.id) cfmRegexBatchSelected.add(s.id); });
+          }
+          rerenderCurrentView();
+        });
+        // 框选模式
+        batchToolbar.find(".cfm-regex-batch-range").on("click", (e) => {
+          e.stopPropagation();
+          cfmRegexBatchRangeMode = !cfmRegexBatchRangeMode;
+          if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
+          rerenderCurrentView();
+        });
+        // 批量导出（JSON格式，与酒馆保持一致）
+        batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
+          e.stopPropagation();
+          const toExport = scripts.filter((s) => cfmRegexBatchSelected.has(s.id));
+          if (toExport.length === 0) {
+            toastr.warning("请先选择要导出的正则脚本");
+            return;
+          }
+          try {
+            const download = (await import("../../../utils.js")).download;
+            if (toExport.length === 1) {
+              const fileName = `regex-${(toExport[0].scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
+              download(JSON.stringify(toExport[0], null, 4), fileName, "application/json");
+            } else {
+              const fileName = `regex-${new Date().toISOString()}.json`;
+              download(JSON.stringify(toExport, null, 4), fileName, "application/json");
+            }
+            toastr.success(`已导出 ${toExport.length} 个正则脚本`);
+          } catch (err) {
+            console.error("[CFM] 批量导出正则失败:", err);
+            toastr.error("导出失败: " + err.message);
+          }
+        });
+        // 批量删除
+        batchToolbar.find(".cfm-regex-batch-delete").on("click", async (e) => {
+          e.stopPropagation();
+          const toDeleteIds = scripts.filter((s) => cfmRegexBatchSelected.has(s.id)).map((s) => s.id);
+          if (toDeleteIds.length === 0) {
+            toastr.warning("请先选择要删除的正则脚本");
+            return;
+          }
+          if (!confirm(`确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`)) return;
+          try {
+            for (const id of toDeleteIds) {
+              const idx = scripts.findIndex((s) => s.id === id);
+              if (idx !== -1) scripts.splice(idx, 1);
+            }
+            await savePresetRegexScripts(scripts);
+            cfmRegexBatchSelected.clear();
+            toastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 批量删除正则失败:", err);
+            toastr.error("删除失败: " + err.message);
+          }
+        });
+        subList.append(batchToolbar);
+      }
+    }
+
     if (!scripts || scripts.length === 0) {
       subList.append(
         '<div class="cfm-right-empty" style="padding:8px 16px;font-size:12px;">该预设没有绑定正则脚本</div>',
       );
     } else {
-      for (const script of scripts) {
+      for (let i = 0; i < scripts.length; i++) {
+        const script = scripts[i];
         const isDisabled = !!script.disabled;
+        const isBatchSel = cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
         const toggleHtml = isTarget
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
+               data-script-idx="${i}"
                data-script-type="2"
                data-owner="${escapeHtml(presetName || "")}">
+            ${cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             ${toggleHtml}
             <div class="cfm-row-name">
               <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
             </div>
-            <div class="cfm-row-edit-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="cfm-regex-row-actions">
+              <div class="cfm-regex-action-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
+              ${isTarget ? `
+              <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
+              ` : ""}
+            </div>
           </div>
         `);
+
+        // 批量模式：行点击切换选中
+        if (cfmRegexBatchMode) {
+          row.on("click", (e) => {
+            if ($(e.target).closest(".cfm-regex-row-actions, .cfm-regex-batch-check").length) return;
+            toggleRegexBatchItem(script.id, e.shiftKey, scripts);
+            rerenderCurrentView();
+          });
+          row.find(".cfm-regex-batch-check").on("click", (e) => {
+            e.stopPropagation();
+            toggleRegexBatchItem(script.id, e.shiftKey, scripts);
+            rerenderCurrentView();
+          });
+        }
+
         // toggle 点击（只有目标预设可操作，readonly的不绑定事件）
         row
           .find(".cfm-wi-toggle:not(.cfm-toggle-readonly)")
@@ -9466,13 +9934,7 @@ jQuery(async () => {
             e.stopPropagation();
             script.disabled = !script.disabled;
             try {
-              const pm = getContext().getPresetManager();
-              if (pm) {
-                await pm.writePresetExtensionField({
-                  path: "regex_scripts",
-                  value: scripts,
-                });
-              }
+              await savePresetRegexScripts(scripts);
             } catch (err) {
               console.error("[CFM] 正则toggle保存失败:", err);
               toastr.error("保存失败: " + err.message);
@@ -9503,6 +9965,54 @@ jQuery(async () => {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
             toastr.warning("非当前预设的正则脚本，无法编辑");
+          }
+        });
+        // 重命名按钮
+        row.find(".cfm-regex-rename-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const oldName = script.scriptName || "";
+          const newName = await showRegexRenamePopup(oldName);
+          if (!newName || newName === oldName) return;
+          try {
+            script.scriptName = newName;
+            await savePresetRegexScripts(scripts);
+            toastr.success(`已重命名: ${oldName} → ${newName}`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则重命名失败:", err);
+            script.scriptName = oldName;
+            toastr.error("重命名失败: " + err.message);
+          }
+        });
+        // 导出按钮（单个导出，JSON格式）
+        row.find(".cfm-regex-export-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            const download = (await import("../../../utils.js")).download;
+            const fileName = `regex-${(script.scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
+            download(JSON.stringify(script, null, 4), fileName, "application/json");
+            toastr.success(`已导出: ${script.scriptName}`);
+          } catch (err) {
+            console.error("[CFM] 导出正则失败:", err);
+            toastr.error("导出失败: " + err.message);
+          }
+        });
+        // 删除按钮
+        row.find(".cfm-regex-delete-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!confirm(`确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`)) return;
+          try {
+            const idx = scripts.findIndex((s) => s.id === script.id);
+            if (idx !== -1) scripts.splice(idx, 1);
+            await savePresetRegexScripts(scripts);
+            toastr.success(`已删除: ${script.scriptName || "(未命名)"}`);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 删除正则失败:", err);
+            toastr.error("删除失败: " + err.message);
           }
         });
         subList.append(row);
@@ -9575,6 +10085,58 @@ jQuery(async () => {
     cfmChatCache.delete(avatar);
     // 立即重新加载缓存，避免后续 rerenderCurrentView 时三角箭头消失
     await getCharChats(avatar);
+  }
+
+  /**
+   * 正则脚本重命名弹窗（cfm-edit-popup 风格）
+   * @param {string} currentName - 当前脚本名称
+   * @returns {Promise<string|null>} 新名称或 null（取消时）
+   */
+  function showRegexRenamePopup(currentName) {
+    return new Promise((resolve) => {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">重命名正则脚本</div>
+            <div class="cfm-edit-popup-names"><span class="cfm-edit-popup-name-tag">${escapeHtml(currentName)}</span></div>
+            <div class="cfm-edit-popup-field">
+              <label>新名称</label>
+              <input type="text" class="cfm-edit-input" id="cfm-regex-rename-input" value="${escapeHtml(currentName)}" placeholder="输入新名称">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>`;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-regex-rename-input").trigger("focus").select();
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const newName = overlay.find("#cfm-regex-rename-input").val().trim();
+        overlay.remove();
+        resolve(newName || null);
+      });
+      overlay.find("#cfm-regex-rename-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
   }
 
   /**

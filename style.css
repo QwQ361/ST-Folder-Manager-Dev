@@ -4211,8 +4211,118 @@ option.cfm-nf-hidden {
   font-size: 13px;
 }
 .cfm-regex-script-row .cfm-regex-edit-btn {
+  flex-shrink: 0;
+}
+
+/* 正则操作工具栏 */
+.cfm-regex-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-regex-toolbar .cfm-btn-sm,
+.cfm-regex-batch-toolbar .cfm-btn-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cfm-regex-toolbar .cfm-btn-sm:hover,
+.cfm-regex-batch-toolbar .cfm-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+.cfm-regex-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: auto;
+}
+.cfm-regex-batch-active {
+  background: rgba(249, 226, 175, 0.15) !important;
+  border-color: rgba(249, 226, 175, 0.4) !important;
+  color: #f9e2af !important;
+}
+
+/* 正则批量操作工具栏 */
+.cfm-regex-batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background-color: rgba(249, 226, 175, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-regex-batch-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: auto;
+}
+
+/* 正则批量选中 */
+.cfm-regex-batch-selected {
+  background-color: rgba(249, 226, 175, 0.12);
+}
+.cfm-regex-batch-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+.cfm-regex-batch-check:hover {
+  color: #f9e2af;
+}
+
+/* 正则行操作按钮容器 */
+.cfm-regex-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.cfm-regex-script-row:hover .cfm-regex-row-actions {
+  opacity: 1;
+}
+/* 正则行操作按钮 */
+.cfm-regex-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.cfm-regex-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+.cfm-regex-delete-btn:hover {
+  color: #f38ba8 !important;
+  background: rgba(243, 139, 168, 0.15) !important;
+}
+.cfm-regex-export-btn:hover {
+  color: #a6e3a1 !important;
+  background: rgba(166, 227, 161, 0.15) !important;
+}
+.cfm-regex-rename-btn:hover {
+  color: #89b4fa !important;
+  background: rgba(137, 180, 250, 0.15) !important;
 }
 
 /* 正则查看模式：目标角色/预设行高亮 */
