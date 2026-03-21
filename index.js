@@ -9186,6 +9186,7 @@ jQuery(async () => {
   let cfmCharRegexExpandedAvatars = new Set(); // 当前展开正则的角色avatar集合
   let cfmCharRegexTargetAvatar = null; // 当前正则查看目标角色avatar
   let cfmCharRegexHighlightPath = []; // 当前目标角色到达路径（文件夹ID列表）
+  let cfmCharRegexPrevSelectedTreeNode = undefined; // 进入正则模式前的selectedTreeNode（用于退出时恢复）
   let cfmPresetRegexMode = false; // 预设正则展示模式
   let cfmPresetRegexExpandedNames = new Set(); // 当前展开正则的预设name集合
   let cfmPresetRegexTargetName = null; // 当前正则查看目标预设名
@@ -9198,6 +9199,8 @@ jQuery(async () => {
     cfmCharRegexExpandedAvatars.clear();
     cfmCharRegexTargetAvatar = getCurrentCharAvatar();
     cfmCharRegexHighlightPath = [];
+    // 保存当前 selectedTreeNode，退出正则模式时恢复
+    cfmCharRegexPrevSelectedTreeNode = selectedTreeNode;
     $("#cfm-char-regex-mode-btn").addClass("cfm-chat-mode-active");
     $("#cfm-char-regex-mode-btn").attr("title", "关闭正则查看");
 
@@ -9249,8 +9252,14 @@ jQuery(async () => {
     cfmCharRegexExpandedAvatars.clear();
     cfmCharRegexTargetAvatar = null;
     cfmCharRegexHighlightPath = [];
+    // 恢复进入正则模式前的 selectedTreeNode
+    if (cfmCharRegexPrevSelectedTreeNode !== undefined) {
+      selectedTreeNode = cfmCharRegexPrevSelectedTreeNode;
+      cfmCharRegexPrevSelectedTreeNode = undefined;
+    }
     $("#cfm-char-regex-mode-btn").removeClass("cfm-chat-mode-active");
     $("#cfm-char-regex-mode-btn").attr("title", "查看角色正则");
+    renderLeftTree();
     rerenderCurrentView();
   }
 
@@ -9511,7 +9520,10 @@ jQuery(async () => {
     if (cfmChatCache.has(avatar)) return cfmChatCache.get(avatar);
     const characters = getCharacters();
     const charIdx = characters.findIndex((c) => c.avatar === avatar);
-    if (charIdx < 0) return [];
+    if (charIdx < 0) {
+      cfmChatCache.set(avatar, []);
+      return [];
+    }
     if (!getPastCharacterChatsFunc) {
       // 回退：通过 getContext 获取
       const ctx = getContext();
@@ -9522,9 +9534,15 @@ jQuery(async () => {
             body: JSON.stringify({ avatar_url: avatar }),
             headers: ctx.getRequestHeaders(),
           });
-          if (!response.ok) return [];
+          if (!response.ok) {
+            cfmChatCache.set(avatar, []);
+            return [];
+          }
           const data = await response.json();
-          if (typeof data === "object" && data.error === true) return [];
+          if (typeof data === "object" && data.error === true) {
+            cfmChatCache.set(avatar, []);
+            return [];
+          }
           const chats = Object.values(data)
             .sort((a, b) => a["file_name"].localeCompare(b["file_name"]))
             .reverse();
@@ -9532,9 +9550,11 @@ jQuery(async () => {
           return chats;
         } catch (e) {
           console.error("[CFM] 获取聊天记录失败:", e);
+          cfmChatCache.set(avatar, []);
           return [];
         }
       }
+      cfmChatCache.set(avatar, []);
       return [];
     }
     try {
@@ -9543,6 +9563,7 @@ jQuery(async () => {
       return chats;
     } catch (e) {
       console.error("[CFM] 获取聊天记录失败:", e);
+      cfmChatCache.set(avatar, []);
       return [];
     }
   }
