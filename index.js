@@ -9330,11 +9330,76 @@ jQuery(async () => {
   }
 
   /**
+   * 同步原生正则引擎状态：清除缓存并刷新原生正则UI面板
+   */
+  async function syncNativeRegexState() {
+    try {
+      const engine = await import("../../extensions/regex/engine.js");
+      // 清除正则引擎缓存，确保下次执行时使用最新数据
+      engine.RegexProvider.instance.clear();
+      // 就地更新原生正则UI面板（保留原生事件绑定）
+      const containers = [
+        {
+          sel: "#saved_scoped_scripts",
+          type: engine.SCRIPT_TYPES.SCOPED,
+        },
+        {
+          sel: "#saved_preset_scripts",
+          type: engine.SCRIPT_TYPES.PRESET,
+        },
+      ];
+      for (const { sel, type } of containers) {
+        const container = $(sel);
+        if (!container.length) continue;
+        const scripts = engine.getScriptsByType(type);
+        const scriptIds = new Set(scripts.map((s) => s.id));
+        // 移除已删除的脚本行
+        container.children().each(function () {
+          const id = $(this).attr("id");
+          if (id && !scriptIds.has(id)) $(this).remove();
+        });
+        // 更新现有脚本行的状态并按新顺序排列
+        for (const script of scripts) {
+          if (!script.id) continue;
+          const row = container.children(
+            "#" + $.escapeSelector(script.id),
+          );
+          if (row.length) {
+            // 更新名称
+            row
+              .find(".regex_script_name")
+              .text(script.scriptName)
+              .attr("title", script.scriptName);
+            // 更新禁用状态
+            row
+              .find(".disable_regex")
+              .prop("checked", script.disabled ?? false);
+            // 移动到容器末尾以保持正确顺序
+            container.append(row);
+          }
+        }
+      }
+    } catch (e) {
+      // 静默失败：原生正则UI可能未加载
+      console.debug("[CFM] syncNativeRegexState:", e);
+    }
+  }
+
+  /**
    * 保存角色正则脚本到服务器
    * @param {string} avatar - 角色的 avatar
    * @param {Array} scripts - 正则脚本列表
    */
   async function saveCharRegexScripts(avatar, scripts) {
+    // 1. 同步更新内存中的角色数据
+    const chars = getCharacters();
+    const ch = chars.find((c) => c.avatar === avatar);
+    if (ch) {
+      if (!ch.data) ch.data = {};
+      if (!ch.data.extensions) ch.data.extensions = {};
+      ch.data.extensions.regex_scripts = scripts;
+    }
+    // 2. 持久化到服务器
     const headers = getContext().getRequestHeaders();
     await fetch("/api/characters/merge-attributes", {
       method: "POST",
@@ -9344,6 +9409,8 @@ jQuery(async () => {
         data: { extensions: { regex_scripts: scripts } },
       }),
     });
+    // 3. 清除原生正则引擎缓存 & 刷新原生正则UI
+    await syncNativeRegexState();
   }
 
   /**
@@ -9801,6 +9868,8 @@ jQuery(async () => {
         value: scripts,
       });
     }
+    // 清除原生正则引擎缓存 & 刷新原生正则UI
+    await syncNativeRegexState();
   }
 
   /**
@@ -23994,6 +24063,9 @@ jQuery(async () => {
             script.disabled = !script.disabled;
             return;
           }
+
+          // 同步原生正则引擎状态
+          await syncNativeRegexState();
 
           // 更新 toggle 按钮外观
           const isNowDisabled = !!script.disabled;
