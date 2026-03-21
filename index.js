@@ -9334,7 +9334,7 @@ jQuery(async () => {
    */
   async function syncNativeRegexState() {
     try {
-      const engine = await import("../../extensions/regex/engine.js");
+      const engine = await import("../../regex/engine.js");
       // 清除正则引擎缓存，确保下次执行时使用最新数据
       engine.RegexProvider.instance.clear();
       // 就地更新原生正则UI面板（保留原生事件绑定）
