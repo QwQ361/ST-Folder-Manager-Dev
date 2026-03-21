@@ -9399,7 +9399,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("未找到对应的正则脚本编辑器");
+            toastr.warning("非当前角色的正则脚本，无法编辑");
           }
         });
         subList.append(row);
@@ -9489,7 +9489,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("未找到对应的正则脚本编辑器");
+            toastr.warning("非当前预设的正则脚本，无法编辑");
           }
         });
         subList.append(row);
@@ -23249,7 +23249,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("未找到对应的正则脚本编辑器");
+            toastr.warning("未找到对应的正则脚本编辑器，请确认脚本是否存在");
           }
         },
       );
