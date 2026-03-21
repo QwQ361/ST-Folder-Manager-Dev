@@ -24510,13 +24510,43 @@ jQuery(async () => {
       const row = $(`
         <div class="cfm-sort-row ${isDisabled ? "cfm-sort-row-disabled" : ""}" data-script-id="${escapeHtml(s.id || "")}">
           <span class="cfm-sort-handle" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
+          <button class="cfm-sort-arrow-btn cfm-sort-arrow-up" title="上移"><i class="fa-solid fa-chevron-up"></i></button>
+          <button class="cfm-sort-arrow-btn cfm-sort-arrow-down" title="下移"><i class="fa-solid fa-chevron-down"></i></button>
           <span class="cfm-sort-row-name">${escapeHtml(s.scriptName || "(未命名)")}</span>
           <span class="cfm-sort-row-folder">${escapeHtml(folderName)}</span>
           ${isDisabled ? '<span class="cfm-sort-row-badge cfm-sort-badge-disabled">已禁用</span>' : '<span class="cfm-sort-row-badge cfm-sort-badge-enabled">已启用</span>'}
         </div>
       `);
+      // 上移按钮
+      row.find(".cfm-sort-arrow-up").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const prev = row.prev(".cfm-sort-row");
+        if (prev.length) { row.insertBefore(prev); updateArrowStates(); }
+      });
+      // 下移按钮
+      row.find(".cfm-sort-arrow-down").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = row.next(".cfm-sort-row");
+        if (next.length) { row.insertAfter(next); updateArrowStates(); }
+      });
       sortList.append(row);
     }
+
+    // 更新所有箭头按钮的禁用状态（首行上箭头 & 末行下箭头置灰不可点）
+    function updateArrowStates() {
+      const rows = sortList.find(".cfm-sort-row");
+      rows.each(function (i) {
+        const isFirst = i === 0;
+        const isLast = i === rows.length - 1;
+        $(this).find(".cfm-sort-arrow-up").prop("disabled", isFirst).toggleClass("cfm-sort-arrow-disabled", isFirst);
+        $(this).find(".cfm-sort-arrow-down").prop("disabled", isLast).toggleClass("cfm-sort-arrow-disabled", isLast);
+      });
+    }
+
+    // 初始化箭头状态
+    updateArrowStates();
 
     // 启用拖拽
     sortList.sortable({
@@ -24525,6 +24555,7 @@ jQuery(async () => {
       tolerance: "pointer",
       placeholder: "cfm-sort-placeholder",
       forcePlaceholderSize: true,
+      stop: () => updateArrowStates(),
     });
     sortList.disableSelection();
 
@@ -24865,7 +24896,11 @@ jQuery(async () => {
 
     const totalItems = childFolders.length + displayScripts.length;
     rhPath.text(displayTitle);
-    rhCount.text(totalItems > 0 ? `(${totalItems})` : "");
+    if (childFolders.length === 0) {
+      rhCount.text(displayScripts.length > 0 ? `${displayScripts.length} 个正则` : "");
+    } else {
+      rhCount.text(totalItems > 0 ? `${totalItems} 项` : "");
+    }
 
     if (!selectedRegexNode) {
       rightList.html(

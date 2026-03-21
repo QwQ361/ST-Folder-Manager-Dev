@@ -2579,6 +2579,41 @@ l/* ========== 浮动按钮 ========== */
   cursor: grabbing;
 }
 
+/* 上下箭头按钮（移动端友好） */
+.cfm-sort-arrow-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0.45;
+  font-size: 11px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    opacity 0.1s,
+    background 0.1s;
+  touch-action: manipulation;
+}
+.cfm-sort-arrow-btn:hover {
+  opacity: 1;
+  background: rgba(137, 180, 250, 0.12);
+  border-color: rgba(137, 180, 250, 0.4);
+}
+.cfm-sort-arrow-btn:active {
+  background: rgba(137, 180, 250, 0.22);
+}
+.cfm-sort-arrow-btn.cfm-sort-arrow-disabled {
+  opacity: 0.15;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* 排序行名称 */
 .cfm-sort-row-name {
   flex: 1;
