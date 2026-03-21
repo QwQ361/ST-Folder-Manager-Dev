@@ -13213,8 +13213,12 @@ jQuery(async () => {
       popup.find("#cfm-regex-search-bar").toggle(initialTab === "regex");
       popup.find("#cfm-qr-search-bar").toggle(initialTab === "quickreply");
       // 切换header按钮
-      if (initialTab === "regex" || initialTab === "quickreply") {
-        popup.find("#cfm-btn-copymode").hide();
+      if (initialTab === "chars") {
+        const btn = popup.find("#cfm-btn-copymode");
+        btn.toggleClass("cfm-copymode-active", cfmCopyMode);
+        btn.html(
+          `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
+        );
       } else {
         const btn = popup.find("#cfm-btn-copymode");
         btn.toggleClass("cfm-copymode-active", resCopyMode);
@@ -13261,10 +13265,8 @@ jQuery(async () => {
       popup.find("#cfm-personas-view").toggle(tab === "personas");
       popup.find("#cfm-regex-view").toggle(tab === "regex");
       popup.find("#cfm-qr-view").toggle(tab === "quickreply");
-      // 切换header按钮可见性 - 正则/QR标签页隐藏移动/复制按钮
-      if (tab === "regex" || tab === "quickreply") {
-        popup.find("#cfm-btn-copymode").hide();
-      } else if (tab === "chars") {
+      // 切换header按钮可见性
+      if (tab === "chars") {
         popup.find("#cfm-btn-copymode").show();
         const btn = $("#cfm-btn-copymode");
         btn.toggleClass("cfm-copymode-active", cfmCopyMode);
@@ -18259,9 +18261,7 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-qr-view")
             .toggle(tab === "quickreply");
-          if (tab === "regex" || tab === "quickreply") {
-            $("#cfm-overlay").find("#cfm-btn-copymode").hide();
-          } else if (tab === "chars") {
+          if (tab === "chars") {
             $("#cfm-overlay").find("#cfm-btn-copymode").show();
             const btn = $("#cfm-btn-copymode");
             btn.toggleClass("cfm-copymode-active", cfmCopyMode);
