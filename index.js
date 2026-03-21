@@ -12240,7 +12240,7 @@ jQuery(async () => {
                     <div class="cfm-right-pane">
                         <div class="cfm-right-header">
                             <button class="cfm-edit-char-btn" id="cfm-regex-preset-btn" title="正则激活分组"><i class="fa-solid fa-layer-group"></i></button>
-                            <span class="cfm-rh-path" id="cfm-regex-rh-path">选择左侧项目查看内容</span>
+                            <span class="cfm-rh-path" id="cfm-regex-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-regex-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-regex-btn" title="导入正则"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-regex-file" accept=".json" multiple style="display:none;">
@@ -25408,7 +25408,7 @@ jQuery(async () => {
 
     if (!selectedRegexNode) {
       // 初始状态：未选中任何节点
-      displayTitle = "";
+      displayTitle = "选择左侧文件夹查看内容";
     } else if (selectedRegexNode === "__favorites__") {
       displayScripts = globalScripts.filter(
         (s) => s.id && regexFavs.includes(s.id),
@@ -25427,7 +25427,7 @@ jQuery(async () => {
     } else {
       // 无效节点，重置为未选中
       selectedRegexNode = null;
-      displayTitle = "";
+      displayTitle = "选择左侧文件夹查看内容";
     }
 
     const totalItems = childFolders.length + displayScripts.length;
