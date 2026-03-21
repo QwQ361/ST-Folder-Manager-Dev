@@ -3005,6 +3005,7 @@ jQuery(async () => {
   let themeConfigExpandedNodes = new Set();
   let bgConfigExpandedNodes = new Set();
   let personaConfigExpandedNodes = new Set();
+  let regexConfigExpandedNodes = new Set();
 
   // 预设/世界书/主题/背景的收藏管理
   function ensureResFavorites() {
@@ -9361,9 +9362,7 @@ jQuery(async () => {
         // 更新现有脚本行的状态并按新顺序排列
         for (const script of scripts) {
           if (!script.id) continue;
-          const row = container.children(
-            "#" + $.escapeSelector(script.id),
-          );
+          const row = container.children("#" + $.escapeSelector(script.id));
           if (row.length) {
             // 更新名称
             row
@@ -17441,6 +17440,10 @@ jQuery(async () => {
       renderResourceConfigBody(body, currentResourceType);
       return;
     }
+    if (currentResourceType === "regex") {
+      renderRegexConfigBody(body);
+      return;
+    }
 
     // ===== 以下为角色卡（chars）配置 =====
 
@@ -18171,6 +18174,514 @@ jQuery(async () => {
         renderResConfigTreeItem(treeContainer, fid, 0);
     }
   }
+
+// ==================== 正则配置面板渲染 ====================
+function renderRegexConfigBody(body) {
+  ensureResourceSettings();
+  const folderTree = extension_settings[extensionName].regexFolderTree;
+  const globalGroups = extension_settings[extensionName].regexGlobalGroups;
+  const allFolderIds = Object.keys(folderTree);
+  const expandedSet = regexConfigExpandedNodes;
+  function getRegexTopLvlConf() {
+    return Object.keys(folderTree).filter((id) => !folderTree[id].parentId);
+  }
+  function getRegexChildConf(parentId) {
+    return Object.keys(folderTree).filter(
+      (id) => folderTree[id].parentId === parentId,
+    );
+  }
+  function sortRegexConf(ids) {
+    return [...ids].sort((a, b) => {
+      const oa = folderTree[a]?.sortOrder ?? 0;
+      const ob = folderTree[b]?.sortOrder ?? 0;
+      if (oa !== ob) return oa - ob;
+      return (folderTree[a]?.displayName || a).localeCompare(
+        folderTree[b]?.displayName || b,
+        "zh-CN",
+      );
+    });
+  }
+  function getRegexDispName(id) {
+    return folderTree[id]?.displayName || id;
+  }
+  function countRegexInFolder(fid) {
+    const sc = extension_settings.regex ?? [];
+    let c = sc.filter((s) => globalGroups[s.id] === fid).length;
+    for (const ch of getRegexChildConf(fid)) c += countRegexInFolder(ch);
+    return c;
+  }
+  function addRegexFolderConf(name, parentId, displayName) {
+    if (folderTree[name]) return false;
+    const siblings = getRegexChildConf(parentId || null);
+    const maxOrder = siblings.reduce(
+      (m, id) => Math.max(m, folderTree[id]?.sortOrder ?? 0),
+      0,
+    );
+    const entry = { parentId: parentId || null, sortOrder: maxOrder + 1 };
+    if (displayName && displayName !== name) entry.displayName = displayName;
+    folderTree[name] = entry;
+    getContext().saveSettingsDebounced();
+    return true;
+  }
+  function removeRegexFolderConf(fid) {
+    const pid = folderTree[fid]?.parentId || null;
+    for (const ch of getRegexChildConf(fid)) folderTree[ch].parentId = pid;
+    for (const k of Object.keys(globalGroups)) {
+      if (globalGroups[k] === fid) delete globalGroups[k];
+    }
+    delete folderTree[fid];
+    getContext().saveSettingsDebounced();
+  }
+  function getRegexPathConf(fid) {
+    const p = [];
+    let c = fid;
+    const v = new Set();
+    while (c && folderTree[c]) {
+      if (v.has(c)) break;
+      v.add(c);
+      p.unshift(c);
+      c = folderTree[c].parentId;
+    }
+    return p;
+  }
+  function getRegexFlatConf() {
+    const r = [];
+    function w(pid) {
+      for (const id of sortRegexConf(getRegexChildConf(pid))) {
+        r.push(id);
+        w(id);
+      }
+    }
+    w(null);
+    return r;
+  }
+
+  // 0. 共享设置
+  const currentMode = getButtonMode();
+  const modeSection = $(
+    `<div class="cfm-config-section cfm-mode-section"><label>按钮位置</label><div class="cfm-mode-toggle"><button class="cfm-mode-btn ${currentMode === "topbar" ? "cfm-mode-active" : ""}" data-mode="topbar"><i class="fa-solid fa-bars"></i> 固定在顶栏</button><button class="cfm-mode-btn ${currentMode === "float" ? "cfm-mode-active" : ""}" data-mode="float"><i class="fa-solid fa-up-down-left-right"></i> 浮动按钮</button><button class="cfm-mode-btn ${currentMode === "wand" ? "cfm-mode-active" : ""}" data-mode="wand"><i class="fa-solid fa-magic-wand-sparkles"></i> 魔术棒菜单</button></div></div>`,
+  );
+  modeSection.find(".cfm-mode-btn").on("click touchend", function (e) {
+    e.preventDefault();
+    const newMode = $(this).data("mode");
+    if (newMode === getButtonMode()) return;
+    switchButtonMode(newMode);
+    toastr.success(
+      {
+        topbar: "已切换为顶栏按钮",
+        float: "已切换为浮动按钮",
+        wand: "已切换为魔术棒菜单",
+      }[newMode] || "已切换",
+    );
+    modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
+    $(this).addClass("cfm-mode-active");
+  });
+  body.append(modeSection);
+  renderTopbarIconConfigSection(body);
+  renderDefaultPageConfigSection(body);
+  renderCustomLayoutSection(body);
+
+  // 1. 创建新文件夹
+  const resSelectedHintText =
+    resConfigSelectedFolderIds.size > 0
+      ? "当前将添加到「" +
+        Array.from(resConfigSelectedFolderIds)
+          .map((id) => escapeHtml(getRegexDispName(id)))
+          .join("、") +
+        "」下。"
+      : "当前将添加为顶级文件夹。";
+  const createSection = $(
+    `<div class="cfm-config-section"><label>创建新文件夹</label><div class="cfm-create-tag-row"><input type="text" id="cfm-res-create-input" placeholder="a b c（空格分隔，添加到选中文件夹下）" /><button id="cfm-res-create-btn"><i class="fa-solid fa-plus"></i> 创建</button></div><div class="cfm-create-tag-hint">${resSelectedHintText} 空格分隔可批量创建同级文件夹。点击下方树形视图中的文件夹可选中/取消选中目标父级。</div></div>`,
+  );
+  createSection.find("#cfm-res-create-btn").on("click touchend", (e) => {
+    e.preventDefault();
+    const input = createSection.find("#cfm-res-create-input").val().trim();
+    if (!input) {
+      toastr.warning("请输入文件夹名称");
+      return;
+    }
+    const parentIds =
+      resConfigSelectedFolderIds.size > 0
+        ? Array.from(resConfigSelectedFolderIds)
+        : [null];
+    const names = input.split(/\s+/).filter((s) => s.length > 0);
+    let totalCreated = 0,
+      totalSkipped = 0;
+    for (const parentId of parentIds) {
+      for (const name of names) {
+        let folderName = name;
+        if (parentId) folderName = parentId + "-" + name;
+        if (addRegexFolderConf(folderName, parentId, parentId ? name : null))
+          totalCreated++;
+        else totalSkipped++;
+      }
+    }
+    if (totalCreated > 0) toastr.success(`已创建 ${totalCreated} 个文件夹`);
+    if (totalSkipped > 0)
+      toastr.warning(`${totalSkipped} 个文件夹已存在（跳过）`);
+    createSection.find("#cfm-res-create-input").val("");
+    renderRegexConfigBody(body.empty());
+  });
+  createSection.find("#cfm-res-create-input").on("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      createSection.find("#cfm-res-create-btn").trigger("click");
+    }
+  });
+  body.append(createSection);
+
+  // 2. 批量创建 & 删除
+  const batchSection = $(
+    `<div class="cfm-config-section"><label>批量创建文件夹结构</label><div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;"><button id="cfm-regex-batch-create-btn" class="cfm-btn"><i class="fa-solid fa-layer-group"></i> 打开批量创建</button><button id="cfm-regex-batch-delete-btn" class="cfm-btn ${resConfigDeleteMode ? "cfm-btn-danger" : ""}" style="${resConfigDeleteMode ? "border-color:rgba(237,66,69,0.5);color:#ed4245;" : ""}"><i class="fa-solid fa-trash-can"></i> ${resConfigDeleteMode ? "退出删除模式" : "删除文件夹"}</button></div><div class="cfm-create-tag-hint">支持多行缩进格式，一次性创建完整的文件夹树。</div></div>`,
+  );
+  batchSection.find("#cfm-regex-batch-create-btn").on("click touchend", (e) => {
+    e.preventDefault();
+    showRegexBatchCreatePopup();
+  });
+  batchSection.find("#cfm-regex-batch-delete-btn").on("click touchend", (e) => {
+    e.preventDefault();
+    resConfigDeleteMode = !resConfigDeleteMode;
+    resConfigDeleteSelected.clear();
+    resConfigDeleteCascade = false;
+    resConfigDeleteLastClickedId = null;
+    resConfigDeleteRangeMode = false;
+    renderRegexConfigBody(body.empty());
+  });
+  body.append(batchSection);
+
+  // 删除模式操作栏
+  if (resConfigDeleteMode) {
+    const allSelected =
+      allFolderIds.length > 0 &&
+      allFolderIds.every((f) => resConfigDeleteSelected.has(f));
+    const deleteBar = $(
+      `<div class="cfm-delete-bar cfm-delete-bar-controls"><div class="cfm-delete-bar-top"><div class="cfm-delete-bar-left"><button class="cfm-btn cfm-btn-sm" id="cfm-regex-select-all"><i class="fa-solid fa-${allSelected ? "square-minus" : "square-check"}"></i> ${allSelected ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-cascade-btn ${resConfigDeleteCascade ? "cfm-cascade-active" : ""}" id="cfm-regex-cascade-toggle"><i class="fa-solid fa-sitemap"></i> 级联${resConfigDeleteCascade ? "(开)" : "(关)"}</button><button class="cfm-btn cfm-btn-sm cfm-range-btn ${resConfigDeleteRangeMode ? "cfm-range-active" : ""}" id="cfm-regex-range-toggle"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${resConfigDeleteRangeMode ? "(开)" : ""}</button></div></div><div class="cfm-delete-bar-row2"><div class="cfm-delete-bar-left"><button class="cfm-btn cfm-btn-sm" id="cfm-regex-invert-select"><i class="fa-solid fa-right-left"></i> 反选</button></div><span class="cfm-delete-bar-hint">${resConfigDeleteRangeMode ? "🎯 框选模式已开启" : "Shift+点击可范围选择"}</span></div>${resConfigDeleteSelected.size > 0 ? `<div class="cfm-delete-bar-bottom"><span>已选中 ${resConfigDeleteSelected.size} 个文件夹</span><button class="cfm-btn cfm-btn-danger" id="cfm-regex-confirm-delete" style="padding:4px 14px;"><i class="fa-solid fa-trash-can"></i> 确认删除</button></div>` : ""}</div>`,
+    );
+    deleteBar.find("#cfm-regex-select-all").on("click touchend", (e) => {
+      e.preventDefault();
+      if (allSelected) resConfigDeleteSelected.clear();
+      else allFolderIds.forEach((f) => resConfigDeleteSelected.add(f));
+      renderRegexConfigBody(body.empty());
+    });
+    deleteBar.find("#cfm-regex-cascade-toggle").on("click touchend", (e) => {
+      e.preventDefault();
+      resConfigDeleteCascade = !resConfigDeleteCascade;
+      renderRegexConfigBody(body.empty());
+    });
+    deleteBar.find("#cfm-regex-range-toggle").on("click touchend", (e) => {
+      e.preventDefault();
+      resConfigDeleteRangeMode = !resConfigDeleteRangeMode;
+      if (resConfigDeleteRangeMode) resConfigDeleteLastClickedId = null;
+      renderRegexConfigBody(body.empty());
+    });
+    deleteBar.find("#cfm-regex-invert-select").on("click touchend", (e) => {
+      e.preventDefault();
+      for (const id of allFolderIds) {
+        if (resConfigDeleteSelected.has(id)) resConfigDeleteSelected.delete(id);
+        else {
+          resConfigDeleteSelected.add(id);
+          if (resConfigDeleteCascade) {
+            const addDesc = (pid) => {
+              for (const cid of getRegexChildConf(pid)) {
+                resConfigDeleteSelected.add(cid);
+                addDesc(cid);
+              }
+            };
+            addDesc(id);
+          }
+        }
+      }
+      renderRegexConfigBody(body.empty());
+    });
+    deleteBar.find("#cfm-regex-confirm-delete").on("click touchend", (e) => {
+      e.preventDefault();
+      if (resConfigDeleteSelected.size === 0) return;
+      const toDelete = Array.from(resConfigDeleteSelected);
+      const sorted = [...toDelete].sort(
+        (a, b) => getRegexPathConf(b).length - getRegexPathConf(a).length,
+      );
+      for (const fid of sorted) {
+        if (folderTree[fid]) removeRegexFolderConf(fid);
+      }
+      resConfigDeleteSelected.clear();
+      resConfigDeleteMode = false;
+      toastr.success(`已删除 ${toDelete.length} 个正则文件夹`);
+      renderRegexConfigBody(body.empty());
+    });
+    body.append(deleteBar);
+  }
+
+  // 3. 当前文件夹树形结构
+  const treeSection = $(
+    `<div class="cfm-config-section"><label>当前文件夹结构 <span style="font-size:11px;opacity:0.5;">(${allFolderIds.length} 个)</span> <span style="font-size:11px;opacity:0.5;color:#57f287;">点击选中为目标父级</span></label><div class="cfm-config-tree-actions"><button id="cfm-regex-config-expand-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-down"></i> 展开</button><button id="cfm-regex-config-collapse-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-up"></i> 收起</button></div><div class="cfm-tree" id="cfm-regex-folder-tree"></div></div>`,
+  );
+  body.append(treeSection);
+  treeSection.find("#cfm-regex-config-expand-all").on("click touchend", (e) => {
+    e.preventDefault();
+    for (const id of allFolderIds) expandedSet.add(id);
+    renderRegexConfigBody(body.empty());
+  });
+  treeSection
+    .find("#cfm-regex-config-collapse-all")
+    .on("click touchend", (e) => {
+      e.preventDefault();
+      expandedSet.clear();
+      renderRegexConfigBody(body.empty());
+    });
+  const treeContainer = treeSection.find("#cfm-regex-folder-tree");
+  if (resConfigSelectedFolderIds.size > 0) {
+    const selectedNames = Array.from(resConfigSelectedFolderIds)
+      .map((id) => escapeHtml(getRegexDispName(id)))
+      .join("、");
+    const selectedHint = $(
+      `<div class="cfm-selected-hint"><i class="fa-solid fa-crosshairs"></i> 已选中 ${resConfigSelectedFolderIds.size} 个：<strong>${selectedNames}</strong><button class="cfm-btn-deselect" title="全部取消选中"><i class="fa-solid fa-xmark"></i></button></div>`,
+    );
+    selectedHint.find(".cfm-btn-deselect").on("click touchend", (e) => {
+      e.preventDefault();
+      resConfigSelectedFolderIds.clear();
+      renderRegexConfigBody(body.empty());
+    });
+    treeContainer.append(selectedHint);
+  }
+  const topFolders = sortRegexConf(getRegexTopLvlConf());
+  if (topFolders.length === 0) {
+    treeContainer.append(
+      '<div class="cfm-empty" style="padding:16px;">还没有创建任何文件夹</div>',
+    );
+  } else {
+    function renderRegexConfigTreeItem(container, folderId, depth) {
+      const children = sortRegexConf(getRegexChildConf(folderId));
+      const hasChildren = children.length > 0;
+      const isExpanded = expandedSet.has(folderId);
+      const count = countRegexInFolder(folderId);
+      const isDelChecked = resConfigDeleteSelected.has(folderId);
+      const indent = 10 + depth * 24;
+      let checkboxHtml = "";
+      if (resConfigDeleteMode) {
+        checkboxHtml = `<span class="cfm-del-checkbox ${isDelChecked ? "cfm-del-checked" : ""}"><i class="fa-${isDelChecked ? "solid" : "regular"} fa-square${isDelChecked ? "-check" : ""}"></i></span>`;
+      }
+      const arrowHtml = `<span class="cfm-tnode-arrow cfm-config-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>`;
+      const isResSelected = resConfigSelectedFolderIds.has(folderId);
+      const item = $(
+        `<div class="cfm-tree-item ${isResSelected ? "cfm-tree-selected" : ""}" data-folder-name="${escapeHtml(folderId)}" style="padding-left:${indent}px;">${checkboxHtml}${arrowHtml}<span class="cfm-tree-icon"><i class="fa-solid fa-folder${isResSelected ? "-open" : ""}"></i></span><span class="cfm-tree-name">${escapeHtml(getRegexDispName(folderId))}</span><span class="cfm-tnode-count" style="margin-left:auto;margin-right:8px;">${count}</span>${resConfigDeleteMode ? "" : `<span class="cfm-tree-actions"><button class="cfm-btn-danger cfm-regex-remove-folder" data-fname="${escapeHtml(folderId)}" title="删除此文件夹"><i class="fa-solid fa-trash-can"></i></button></span>`}</div>`,
+      );
+      item.find(".cfm-config-arrow").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!hasChildren) return;
+        if (expandedSet.has(folderId)) expandedSet.delete(folderId);
+        else expandedSet.add(folderId);
+        renderRegexConfigBody(body.empty());
+      });
+      if (resConfigDeleteMode) {
+        const toggleFn = (id, forceState) => {
+          const shouldSelect =
+            forceState !== undefined
+              ? forceState
+              : !resConfigDeleteSelected.has(id);
+          if (shouldSelect) resConfigDeleteSelected.add(id);
+          else resConfigDeleteSelected.delete(id);
+          if (resConfigDeleteCascade) {
+            const toggleDesc = (pid) => {
+              for (const cid of getRegexChildConf(pid)) {
+                if (shouldSelect) resConfigDeleteSelected.add(cid);
+                else resConfigDeleteSelected.delete(cid);
+                toggleDesc(cid);
+              }
+            };
+            toggleDesc(id);
+          }
+        };
+        item.on("click touchend", (e) => {
+          if ($(e.target).closest(".cfm-config-arrow").length) return;
+          e.preventDefault();
+          if (
+            (e.shiftKey || resConfigDeleteRangeMode) &&
+            resConfigDeleteLastClickedId
+          ) {
+            const flatList = getRegexFlatConf();
+            const lastIdx = flatList.indexOf(resConfigDeleteLastClickedId);
+            const curIdx = flatList.indexOf(folderId);
+            if (lastIdx >= 0 && curIdx >= 0) {
+              const start = Math.min(lastIdx, curIdx);
+              const end = Math.max(lastIdx, curIdx);
+              for (let i = start; i <= end; i++)
+                resConfigDeleteSelected.add(flatList[i]);
+            }
+          } else {
+            toggleFn(folderId);
+          }
+          resConfigDeleteLastClickedId = folderId;
+          renderRegexConfigBody(body.empty());
+        });
+      } else {
+        item.on("click", (e) => {
+          if (
+            $(e.target).closest(".cfm-regex-remove-folder, .cfm-config-arrow")
+              .length
+          )
+            return;
+          e.preventDefault();
+          if (resConfigSelectedFolderIds.has(folderId))
+            resConfigSelectedFolderIds.delete(folderId);
+          else resConfigSelectedFolderIds.add(folderId);
+          renderRegexConfigBody(body.empty());
+        });
+        item.find(".cfm-regex-remove-folder").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (
+            !confirm(
+              `确定删除文件夹「${getRegexDispName(folderId)}」吗？\n子文件夹将提升到上级，脚本将变为未归类。`,
+            )
+          )
+            return;
+          removeRegexFolderConf(folderId);
+          resConfigSelectedFolderIds.delete(folderId);
+          toastr.success(`已删除正则文件夹「${getRegexDispName(folderId)}」`);
+          renderRegexConfigBody(body.empty());
+        });
+      }
+      container.append(item);
+      if (hasChildren) {
+        const childContainer = $(
+          `<div class="cfm-config-children ${isExpanded ? "cfm-children-expanded" : ""}"></div>`,
+        );
+        for (const childId of children)
+          renderRegexConfigTreeItem(childContainer, childId, depth + 1);
+        container.append(childContainer);
+      }
+    }
+    for (const fid of topFolders)
+      renderRegexConfigTreeItem(treeContainer, fid, 0);
+  }
+
+  // --- 批量创建弹窗 ---
+  function showRegexBatchCreatePopup() {
+    if ($("#cfm-regex-batch-overlay").length > 0) return;
+    let smartIndentChildMode = false;
+    const batchOverlay = $(
+      '<div id="cfm-regex-batch-overlay" class="cfm-batch-overlay"></div>',
+    );
+    const batchPopup = $(
+      `<div class="cfm-batch-popup"><div class="cfm-config-header"><h3>📋 批量创建正则文件夹结构</h3><button class="cfm-btn-close" id="cfm-regex-batch-close">&times;</button></div><div style="padding:16px;overflow-y:auto;flex:1;min-height:0;"><div class="cfm-create-tag-hint" style="margin-bottom:10px;">每行一个文件夹名，用缩进表示层级（每2个空格深入一层）。</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button id="cfm-regex-smart-indent-child" class="cfm-btn" style="font-size:12px;padding:3px 10px;"><i class="fa-solid fa-indent"></i> 添加子级</button><span style="font-size:11px;opacity:0.5;">Enter 智能缩进 · Backspace 回退层级</span></div><textarea id="cfm-regex-batch-textarea" rows="12" style="width:100%;font-family:monospace;font-size:13px;background:#23272a;color:#f2f3f5;border:1px solid #4e5058;border-radius:6px;padding:10px;resize:vertical;tab-size:2;" placeholder="在此输入文件夹结构..."></textarea><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px;"><button id="cfm-regex-batch-preview" class="cfm-btn" style="background:#5865f2;">预览</button><button id="cfm-regex-batch-confirm" class="cfm-btn" style="background:#57f287;color:#000;">确认创建</button></div><div id="cfm-regex-batch-preview-area" style="margin-top:12px;"></div></div></div>`,
+    );
+    batchOverlay.append(batchPopup);
+    $("body").append(batchOverlay);
+    batchPopup.find("#cfm-regex-batch-close").on("click touchend", (e) => {
+      e.preventDefault();
+      batchOverlay.remove();
+    });
+    const childBtn = batchPopup.find("#cfm-regex-smart-indent-child");
+    childBtn.on("click touchend", (e) => {
+      e.preventDefault();
+      smartIndentChildMode = !smartIndentChildMode;
+      childBtn.toggleClass("cfm-smart-indent-active", smartIndentChildMode);
+    });
+    batchPopup.find("#cfm-regex-batch-textarea").on("keydown", function (e) {
+      const ta = this;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const pos = ta.selectionStart;
+        const val = ta.value;
+        const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+        const lineText = val.substring(lineStart, pos);
+        const indentMatch = lineText.match(/^(\s*)/);
+        const currentIndent = indentMatch ? indentMatch[1] : "";
+        const newIndent = smartIndentChildMode
+          ? currentIndent + "  "
+          : currentIndent;
+        const insert = "\n" + newIndent;
+        ta.value = val.substring(0, pos) + insert + val.substring(pos);
+        ta.selectionStart = ta.selectionEnd = pos + insert.length;
+      } else if (e.key === "Backspace") {
+        const pos = ta.selectionStart;
+        const val = ta.value;
+        if (pos === ta.selectionEnd && pos > 0) {
+          const lineStart = val.lastIndexOf("\n", pos - 1) + 1;
+          const beforeCursor = val.substring(lineStart, pos);
+          if (/^\s+$/.test(beforeCursor) && beforeCursor.length >= 2) {
+            e.preventDefault();
+            ta.value = val.substring(0, pos - 2) + val.substring(pos);
+            ta.selectionStart = ta.selectionEnd = pos - 2;
+          }
+        }
+      }
+    });
+    batchPopup.find("#cfm-regex-batch-preview").on("click touchend", (e) => {
+      e.preventDefault();
+      const text = batchPopup.find("#cfm-regex-batch-textarea").val();
+      const treeData = parseBatchText(text);
+      const area = batchPopup.find("#cfm-regex-batch-preview-area");
+      area.empty();
+      if (treeData.length === 0) {
+        area.html('<div style="color:#ed4245;">无法解析，请检查格式。</div>');
+        return;
+      }
+      const existingIds = new Set(allFolderIds);
+      area.html(
+        '<div style="color:#57f287;margin-bottom:6px;">预览结构：</div>',
+      );
+      function renderPreview(container, nodes, depth) {
+        for (const node of nodes) {
+          const exists = existingIds.has(node.name);
+          container.append(
+            `<div style="padding-left:${depth * 20}px;font-size:13px;line-height:1.8;${exists ? "color:#ed4245;text-decoration:line-through;" : ""}">📁 ${escapeHtml(node.name)}${exists ? " (已存在，跳过)" : ""}</div>`,
+          );
+          if (node.children.length > 0)
+            renderPreview(container, node.children, depth + 1);
+        }
+      }
+      renderPreview(area, treeData, 0);
+    });
+    batchPopup.find("#cfm-regex-batch-confirm").on("click touchend", (e) => {
+      e.preventDefault();
+      const text = batchPopup.find("#cfm-regex-batch-textarea").val();
+      const treeData = parseBatchText(text);
+      if (treeData.length === 0) {
+        toastr.warning("无法解析，请检查格式");
+        return;
+      }
+      let created = 0,
+        skipped = 0;
+      function processNode(node, parentId) {
+        let folderName = node.name;
+        if (parentId) folderName = parentId + "-" + node.name;
+        if (
+          folderTree[folderName] &&
+          folderTree[folderName].parentId === (parentId || null)
+        ) {
+          skipped++;
+          for (const child of node.children) processNode(child, folderName);
+          return;
+        }
+        if (folderTree[folderName]) {
+          let base = folderName;
+          let counter = 2;
+          while (folderTree[folderName]) {
+            folderName = base + "_" + counter++;
+          }
+        }
+        const displayName = parentId ? node.name : null;
+        if (addRegexFolderConf(folderName, parentId, displayName)) created++;
+        else skipped++;
+        for (const child of node.children) processNode(child, folderName);
+      }
+      const batchParentIds =
+        resConfigSelectedFolderIds.size > 0
+          ? Array.from(resConfigSelectedFolderIds)
+          : [null];
+      for (const batchParentId of batchParentIds) {
+        for (const node of treeData) processNode(node, batchParentId);
+      }
+      batchOverlay.remove();
+      toastr.success(
+        `已创建 ${created} 个文件夹${skipped > 0 ? `，${skipped} 个跳过` : ""}`,
+      );
+      renderRegexConfigBody(body.empty());
+    });
+  }
+}
 
   // ==================== 资源删除确认弹窗（与角色卡风格一致） ====================
   function showResDeleteConfirmDialog(type, folderIds, onConfirm) {
