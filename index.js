@@ -9530,7 +9530,7 @@ jQuery(async () => {
         const script = scripts[i];
         const isDisabled = !!script.disabled;
         const isBatchSel =
-          cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
+          isTarget && cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
         const toggleHtml = isTarget
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前角色，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
@@ -9540,7 +9540,7 @@ jQuery(async () => {
                data-script-idx="${i}"
                data-script-type="1"
                data-owner="${escapeHtml(charName || "")}">
-            ${cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+            ${isTarget && cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             ${toggleHtml}
             <div class="cfm-row-name">
               <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
@@ -9560,8 +9560,8 @@ jQuery(async () => {
           </div>
         `);
 
-        // 批量模式：行点击切换选中
-        if (cfmRegexBatchMode) {
+        // 批量模式：行点击切换选中（仅目标角色）
+        if (isTarget && cfmRegexBatchMode) {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
@@ -9908,7 +9908,7 @@ jQuery(async () => {
         const script = scripts[i];
         const isDisabled = !!script.disabled;
         const isBatchSel =
-          cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
+          isTarget && cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
         const toggleHtml = isTarget
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
@@ -9918,7 +9918,7 @@ jQuery(async () => {
                data-script-idx="${i}"
                data-script-type="2"
                data-owner="${escapeHtml(presetName || "")}">
-            ${cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+            ${isTarget && cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             ${toggleHtml}
             <div class="cfm-row-name">
               <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
@@ -9938,8 +9938,8 @@ jQuery(async () => {
           </div>
         `);
 
-        // 批量模式：行点击切换选中
-        if (cfmRegexBatchMode) {
+        // 批量模式：行点击切换选中（仅目标预设）
+        if (isTarget && cfmRegexBatchMode) {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
