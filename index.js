@@ -9138,6 +9138,8 @@ jQuery(async () => {
   }
 
   function enterChatMode() {
+    // 互斥：如果正则模式开启，先退出
+    if (cfmCharRegexMode) exitCharRegexMode();
     cfmChatMode = true;
     cfmChatExpandedAvatars.clear();
     cfmChatCache.clear();
@@ -9190,6 +9192,8 @@ jQuery(async () => {
   let cfmPresetRegexHighlightPath = []; // 当前目标预设到达路径（文件夹ID列表）
 
   function enterCharRegexMode() {
+    // 互斥：如果聊天模式开启，先退出
+    if (cfmChatMode) exitChatMode();
     cfmCharRegexMode = true;
     cfmCharRegexExpandedAvatars.clear();
     cfmCharRegexTargetAvatar = getCurrentCharAvatar();
