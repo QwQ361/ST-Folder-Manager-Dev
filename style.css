@@ -47,6 +47,9 @@
   font-size: 0px !important;
   color: transparent !important;
   background-image: none !important;
+  overflow: visible !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
 }
 /* 当主题对 .drawer-toggle 设置了自定义图标时，确保可点击 */
 #cfm-topbar-button .drawer-toggle.cfm-custom-toggle-icon {

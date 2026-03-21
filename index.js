@@ -2609,26 +2609,18 @@ jQuery(async () => {
     if (isPseudoBefore) {
       // ::before 伪元素模式：通过动态 <style> 注入伪元素样式
       // JS 无法直接操作伪元素，需通过样式表
+      // 美化主题的通用规则 .drawer-icon::before 已为所有 .drawer-icon 设置了尺寸等样式，
+      // 我们只需要设置 background-image 即可，其他属性让美化主题的规则自然生效
       icon.addClass("cfm-custom-icon-before");
       icon.css("background-image", ""); // 确保元素本身无背景图
       // 移除旧的动态样式
       $("#cfm-dynamic-icon-style").remove();
-      const w = (extraStyles && extraStyles.width) || "40px";
-      const h = (extraStyles && extraStyles.height) || "40px";
-      const bgSize = (extraStyles && extraStyles.backgroundSize) || "contain";
-      const bgRepeat = (extraStyles && extraStyles.backgroundRepeat) || "no-repeat";
-      const bgPos = (extraStyles && extraStyles.backgroundPosition) || "center";
       const styleEl = $(
         `<style id="cfm-dynamic-icon-style">
           #cfm-topbar-button .drawer-icon.cfm-custom-icon-before::before {
             content: '' !important;
             display: block !important;
-            width: ${w} !important;
-            height: ${h} !important;
             background-image: ${cssUrl} !important;
-            background-size: ${bgSize} !important;
-            background-repeat: ${bgRepeat} !important;
-            background-position: ${bgPos} !important;
           }
         </style>`,
       );
