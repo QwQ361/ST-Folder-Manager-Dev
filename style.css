@@ -4344,6 +4344,84 @@ option.cfm-nf-hidden {
   white-space: nowrap;
 }
 
+/* ==================== 快速回复展开箭头与子项 ==================== */
+.cfm-qr-expand-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.4);
+  transition:
+    transform 0.2s ease,
+    color 0.15s;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.cfm-qr-expand-arrow:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+.cfm-qr-expand-arrow i {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+.cfm-qr-expand-arrow.cfm-qr-arrow-expanded i {
+  transform: rotate(90deg);
+}
+
+/* QR 集内的单个快速回复项 */
+.cfm-qr-item-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px 3px 32px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  gap: 6px;
+  min-height: 26px;
+  background: rgba(0, 0, 0, 0.08);
+}
+.cfm-qr-item-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+}
+.cfm-qr-item-row .cfm-qr-item-icon {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+.cfm-qr-item-row .cfm-qr-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.cfm-qr-item-row .cfm-qr-item-msg {
+  flex: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 11px;
+}
+.cfm-qr-item-row .cfm-qr-item-hidden {
+  font-size: 10px;
+  color: rgba(255, 200, 50, 0.5);
+  flex-shrink: 0;
+}
+
+/* QR 备注模式 */
+.cfm-popup.cfm-qr-note-mode .cfm-right-list .cfm-item-row {
+  cursor: pointer;
+}
+.cfm-popup.cfm-qr-note-mode .cfm-right-list .cfm-item-row:hover {
+  background: rgba(137, 180, 250, 0.08);
+}
+
 /* ==================== 聊天记录管理模式 ==================== */
 
 /* 聊天模式按钮基础样式 */

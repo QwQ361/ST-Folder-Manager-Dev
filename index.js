@@ -78,6 +78,22 @@ jQuery(async () => {
       extension_settings[extensionName].regexFolderTree = {};
     if (!extension_settings[extensionName].regexGlobalGroups)
       extension_settings[extensionName].regexGlobalGroups = {};
+    // 快速回复标签页
+    if (!extension_settings[extensionName].qrGroups)
+      extension_settings[extensionName].qrGroups = {};
+    if (!extension_settings[extensionName].qrNotes)
+      extension_settings[extensionName].qrNotes = {};
+    if (!extension_settings[extensionName].resourceFolderTree.quickreply)
+      extension_settings[extensionName].resourceFolderTree.quickreply = {};
+    // QR激活分组预设：[{name, sets, scope, bindChars, bindPresets}]
+    if (!extension_settings[extensionName].qrActivePresets)
+      extension_settings[extensionName].qrActivePresets = [];
+    // 迁移旧格式
+    for (const p of extension_settings[extensionName].qrActivePresets) {
+      if (!p.scope) p.scope = "global";
+      if (!Array.isArray(p.bindChars)) p.bindChars = [];
+      if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+    }
   }
 
   // ==================== 资源文件夹树模型 ====================
@@ -260,7 +276,9 @@ jQuery(async () => {
           ? extension_settings[extensionName].bgGroups
           : type === "personas"
             ? extension_settings[extensionName].personaGroups
-            : extension_settings[extensionName].worldInfoGroups;
+            : type === "quickreply"
+              ? extension_settings[extensionName].qrGroups
+              : extension_settings[extensionName].worldInfoGroups;
   }
   function setItemGroup(type, itemName, folderName) {
     const groups = getResourceGroups(type);
@@ -798,6 +816,7 @@ jQuery(async () => {
     { id: "backgrounds", label: "背景", icon: "fa-panorama" },
     { id: "personas", label: "User", icon: "fa-user-pen" },
     { id: "regex", label: "正则", icon: "fa-code" },
+    { id: "quickreply", label: "QR", icon: "fa-reply-all" },
   ];
   const CFM_ACTION_META = {
     import: { label: "导入", icon: "fa-file-import" },
@@ -962,6 +981,11 @@ jQuery(async () => {
       export: "#cfm-export-regex-btn",
       delete: "#cfm-res-delete-regex-btn",
       sort: "#cfm-regex-sort-btn",
+    },
+    quickreply: {
+      note: "#cfm-qr-note-btn",
+      export: "#cfm-export-qr-btn",
+      delete: "#cfm-res-delete-qr-btn",
     },
   };
 
@@ -1832,7 +1856,9 @@ jQuery(async () => {
                     ? selectedBgFolder
                     : resType === "personas"
                       ? selectedPersonaFolder
-                      : null;
+                      : resType === "quickreply"
+                        ? selectedQrFolder
+                        : null;
           if (
             selFolder &&
             selFolder !== "__ungrouped__" &&
@@ -3014,12 +3040,16 @@ jQuery(async () => {
   let themeExpandedNodes = new Set();
   let bgExpandedNodes = new Set();
   let personaExpandedNodes = new Set();
+  let selectedQrFolder = null;
+  let qrExpandedNodes = new Set();
+  let qrItemExpandedSets = new Set(); // 右侧展开的QR集名称
   let presetConfigExpandedNodes = new Set();
   let worldInfoConfigExpandedNodes = new Set();
   let themeConfigExpandedNodes = new Set();
   let bgConfigExpandedNodes = new Set();
   let personaConfigExpandedNodes = new Set();
   let regexConfigExpandedNodes = new Set();
+  let qrConfigExpandedNodes = new Set();
 
   // 预设/世界书/主题/背景的收藏管理
   function ensureResFavorites() {
@@ -3035,6 +3065,8 @@ jQuery(async () => {
       extension_settings[extensionName].personaFavorites = [];
     if (!extension_settings[extensionName].regexFavorites)
       extension_settings[extensionName].regexFavorites = [];
+    if (!extension_settings[extensionName].qrFavorites)
+      extension_settings[extensionName].qrFavorites = [];
   }
   function getResFavorites(type) {
     ensureResFavorites();
@@ -3048,7 +3080,9 @@ jQuery(async () => {
             ? extension_settings[extensionName].personaFavorites
             : type === "regex"
               ? extension_settings[extensionName].regexFavorites
-              : extension_settings[extensionName].worldInfoFavorites;
+              : type === "quickreply"
+                ? extension_settings[extensionName].qrFavorites
+                : extension_settings[extensionName].worldInfoFavorites;
   }
   function isResFavorite(type, name) {
     return getResFavorites(type).includes(name);
@@ -3081,6 +3115,9 @@ jQuery(async () => {
   let themeSortSnapshot = null;
   let bgSortSnapshot = null;
   let personaSortSnapshot = null;
+  let qrLeftSortMode = null;
+  let qrRightSortMode = null;
+  let qrSortSnapshot = null;
   let presetSortDirty = false;
   let worldInfoSortDirty = false;
   let themeSortDirty = false;
@@ -3266,7 +3303,9 @@ jQuery(async () => {
               ? "#cfm-bg-right-list"
               : currentResourceType === "personas"
                 ? "#cfm-persona-right-list"
-                : "#cfm-worldinfo-right-list";
+                : currentResourceType === "quickreply"
+                  ? "#cfm-qr-right-list"
+                  : "#cfm-worldinfo-right-list";
     $(container)
       .find(".cfm-row-char[data-res-id]")
       .each(function () {
@@ -3355,6 +3394,8 @@ jQuery(async () => {
       return new Set(cfmWorldInfoNoteSelected);
     if (cfmWorldInfoRenameMode && cfmWorldInfoRenameSelected.size > 0)
       return new Set(cfmWorldInfoRenameSelected);
+    if (cfmQrNoteMode && cfmQrNoteSelected.size > 0)
+      return new Set(cfmQrNoteSelected);
     if (cfmPersonaNoteMode && cfmPersonaNoteSelected.size > 0)
       return new Set(cfmPersonaNoteSelected);
     if (cfmMultiSelectMode && cfmMultiSelected.size > 0)
@@ -3390,6 +3431,7 @@ jQuery(async () => {
         if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
         if ($(this).attr("id") === "cfm-export-persona-btn") return "导出User";
         if ($(this).attr("id") === "cfm-export-regex-btn") return "导出正则";
+        if ($(this).attr("id") === "cfm-export-qr-btn") return "导出快速回复集";
         return "导出世界书";
       });
       $(".cfm-popup").removeClass("cfm-export-mode");
@@ -3417,6 +3459,8 @@ jQuery(async () => {
           return "删除User";
         if ($(this).attr("id") === "cfm-res-delete-regex-btn")
           return "删除正则";
+        if ($(this).attr("id") === "cfm-res-delete-qr-btn")
+          return "删除快速回复集";
         return "删除世界书";
       });
       $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -3496,6 +3540,20 @@ jQuery(async () => {
       $("#cfm-worldinfo-note-btn").attr("title", "编辑备注");
       $(".cfm-popup").removeClass("cfm-worldinfo-note-mode");
     }
+    // 快速回复备注模式
+    if (cfmQrNoteMode) {
+      cfmQrNoteMode = false;
+      cfmQrNoteSelected.clear();
+      cfmQrNoteRangeMode = false;
+      cfmQrNoteLastClicked = null;
+      $("#cfm-qr-note-btn").removeClass("cfm-edit-active");
+      $("#cfm-qr-note-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-pen-to-square");
+      $("#cfm-qr-note-btn").attr("title", "编辑备注");
+      $(".cfm-popup").removeClass("cfm-qr-note-mode");
+    }
     // 预设备注模式
     if (cfmPresetNoteMode) {
       cfmPresetNoteMode = false;
@@ -3562,6 +3620,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
       if ($(this).attr("id") === "cfm-export-persona-btn") return "导出User";
       if ($(this).attr("id") === "cfm-export-regex-btn") return "导出正则";
+      if ($(this).attr("id") === "cfm-export-qr-btn") return "导出快速回复集";
       return "导出世界书";
     });
     $(".cfm-popup").removeClass("cfm-export-mode");
@@ -3592,6 +3651,7 @@ jQuery(async () => {
     else if (currentResourceType === "backgrounds") renderBackgroundsView();
     else if (currentResourceType === "personas") renderPersonasView();
     else if (currentResourceType === "regex") renderRegexView();
+    else if (currentResourceType === "quickreply") renderQRView();
     else renderWorldInfoView();
   }
 
@@ -3659,6 +3719,8 @@ jQuery(async () => {
         await exportPersonas(selected, headers);
       } else if (currentResourceType === "regex") {
         await exportRegexScripts(selected);
+      } else if (currentResourceType === "quickreply") {
+        await exportQuickReplySets(selected);
       } else {
         await exportWorldInfos(selected, headers);
       }
@@ -3803,6 +3865,70 @@ jQuery(async () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
       toastr.success(`已导出 ${success} 个预设`);
+    }
+  }
+
+  // 快速回复集导出
+  async function exportQuickReplySets(setNames) {
+    const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+    const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+
+    function getSetData(name) {
+      // 优先使用 API
+      if (api && api.getSetByName) {
+        const set = api.getSetByName(name);
+        if (set) return JSON.parse(JSON.stringify(set));
+      }
+      // 后备：QuickReplySet.list
+      if (QRS && QRS.list) {
+        const set = QRS.list.find((s) => s.name === name);
+        if (set) return JSON.parse(JSON.stringify(set));
+      }
+      return null;
+    }
+
+    if (setNames.length === 1) {
+      const data = getSetData(setNames[0]);
+      if (!data) throw new Error(`无法获取快速回复集: ${setNames[0]}`);
+      const jsonStr = JSON.stringify(data, null, 4);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${setNames[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success("快速回复集已导出");
+    } else {
+      if (!window.JSZip) {
+        await import("../../../../lib/jszip.min.js");
+      }
+      const zip = new JSZip();
+      let success = 0;
+      toastr.info(`正在导出 ${setNames.length} 个快速回复集...`);
+      for (const name of setNames) {
+        try {
+          const data = getSetData(name);
+          if (data) {
+            const jsonStr = JSON.stringify(data, null, 4);
+            zip.file(`${name}.json`, jsonStr);
+            success++;
+          }
+        } catch (e) {
+          console.warn(`[CFM] 导出快速回复集 ${name} 失败`, e);
+        }
+      }
+      if (success === 0) throw new Error("没有成功导出任何快速回复集");
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "快速回复集.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toastr.success(`已导出 ${success} 个快速回复集`);
     }
   }
 
@@ -4240,6 +4366,7 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-res-delete-persona-btn")
         return "删除User";
       if ($(this).attr("id") === "cfm-res-delete-regex-btn") return "删除正则";
+      if ($(this).attr("id") === "cfm-res-delete-qr-btn") return "删除快速回复集";
       return "删除世界书";
     });
     $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -4324,7 +4451,9 @@ jQuery(async () => {
                 ? "User"
                 : currentResourceType === "regex"
                   ? "正则脚本"
-                  : "世界书";
+                  : currentResourceType === "quickreply"
+                    ? "快速回复集"
+                    : "世界书";
 
     // 确认弹窗
     const confirmed = confirm(
@@ -4581,6 +4710,54 @@ jQuery(async () => {
           }
           // 保存正则设置
           getContext().saveSettingsDebounced();
+        }
+      } else if (currentResourceType === "quickreply") {
+        // 删除快速回复集
+        for (const name of selected) {
+          try {
+            const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+            const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+            let deleted = false;
+            // 优先使用 QuickReplySet 实例的 delete 方法
+            if (QRS && QRS.list) {
+              const set = QRS.list.find((s) => s.name === name);
+              if (set && typeof set.delete === "function") {
+                await set.delete();
+                deleted = true;
+              }
+            }
+            // 后备：直接调用 API
+            if (!deleted) {
+              const resp = await fetch("/api/quick-replies/delete", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({ name: name }),
+              });
+              if (resp.ok) deleted = true;
+            }
+            if (deleted) {
+              // 清理文件夹分配
+              const groups = extension_settings[extensionName].qrGroups;
+              if (groups && groups[name]) delete groups[name];
+              // 清理备注
+              const notes = extension_settings[extensionName].qrNotes;
+              if (notes && notes[name]) delete notes[name];
+              // 清理收藏
+              const favs = extension_settings[extensionName].qrFavorites;
+              if (Array.isArray(favs)) {
+                const fi = favs.indexOf(name);
+                if (fi !== -1) favs.splice(fi, 1);
+              }
+              // 清理展开状态
+              if (qrItemExpandedSets) qrItemExpandedSets.delete(name);
+              success++;
+            } else {
+              fail++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 删除快速回复集 ${name} 失败`, e);
+            fail++;
+          }
         }
       } else {
         for (const name of selected) {
@@ -7916,6 +8093,201 @@ jQuery(async () => {
     if (count > 0) {
       toastr.success(`已更新 ${count} 个世界书的备注`);
       renderWorldInfoView();
+    }
+  }
+
+  // ==================== 快速回复备注编辑模式 ====================
+  let cfmQrNoteMode = false;
+  let cfmQrNoteSelected = new Set();
+  let cfmQrNoteRangeMode = false;
+  let cfmQrNoteLastClicked = null;
+
+  function enterQrNoteMode() {
+    const prev = collectCurrentSelection();
+    clearAllExclusiveModes();
+    cfmQrNoteMode = true;
+    cfmQrNoteSelected = prev || new Set();
+    cfmQrNoteRangeMode = false;
+    cfmQrNoteLastClicked = null;
+    $("#cfm-qr-note-btn").addClass("cfm-edit-active");
+    $("#cfm-qr-note-btn")
+      .find("i")
+      .removeClass("fa-pen-to-square")
+      .addClass("fa-check");
+    $("#cfm-qr-note-btn").attr("title", "确认编辑备注");
+    $(".cfm-popup").addClass("cfm-qr-note-mode");
+    renderQRView();
+  }
+
+  function exitQrNoteMode() {
+    cfmQrNoteMode = false;
+    cfmQrNoteSelected.clear();
+    cfmQrNoteRangeMode = false;
+    cfmQrNoteLastClicked = null;
+    $("#cfm-qr-note-btn").removeClass("cfm-edit-active");
+    $("#cfm-qr-note-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-pen-to-square");
+    $("#cfm-qr-note-btn").attr("title", "编辑备注");
+    $(".cfm-popup").removeClass("cfm-qr-note-mode");
+    renderQRView();
+  }
+
+  function toggleQrNoteItem(id, shiftKey) {
+    if ((shiftKey || cfmQrNoteRangeMode) && cfmQrNoteLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmQrNoteLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmQrNoteSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmQrNoteSelected.has(id)) cfmQrNoteSelected.delete(id);
+      else cfmQrNoteSelected.add(id);
+    }
+    cfmQrNoteLastClicked = id;
+  }
+
+  function prependQrNoteToolbar(listContainer, renderFn) {
+    if (!cfmQrNoteMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmQrNoteSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmQrNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmQrNoteRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmQrNoteSelected.size > 0 ? `已选 ${cfmQrNoteSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmQrNoteSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmQrNoteSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmQrNoteRangeMode = !cfmQrNoteRangeMode;
+      if (cfmQrNoteRangeMode) cfmQrNoteLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitQrNoteMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  async function showQrNotePopup(qrNames) {
+    if (!qrNames || qrNames.length === 0) return;
+    let defaultNote = "";
+    if (qrNames.length === 1) {
+      defaultNote = getQrNote(qrNames[0]);
+    }
+    const nameListHtml =
+      qrNames.length <= 5
+        ? qrNames
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : qrNames
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${qrNames.length} 个快速回复集</div>`;
+
+    const popupHtml = `
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">编辑快速回复集备注</div>
+          <div class="cfm-edit-popup-names">${nameListHtml}</div>
+          <div class="cfm-edit-popup-field">
+            <label>备注</label>
+            <input type="text" class="cfm-edit-input" id="cfm-qr-note-input" value="${escapeHtml(defaultNote)}" placeholder="${qrNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${qrNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const overlay = $(popupHtml);
+    $("body").append(overlay);
+    overlay.find("#cfm-qr-note-input").focus();
+
+    return new Promise((resolve) => {
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          overlay.remove();
+          resolve(null);
+        }
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        overlay.remove();
+        resolve({ note: "", clear: true });
+      });
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        const note = overlay.find("#cfm-qr-note-input").val().trim();
+        overlay.remove();
+        resolve({ note, clear: false });
+      });
+      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+        if (e.key === "Escape") {
+          overlay.find(".cfm-edit-popup-cancel").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function executeQrNoteEdit(names) {
+    const result = await showQrNotePopup(names);
+    if (!result) return;
+    const { note, clear } = result;
+    const isBatch = names.length > 1;
+    if (isBatch && !note && !clear) {
+      toastr.warning("请输入备注内容");
+      return;
+    }
+    let count = 0;
+    for (const name of names) {
+      if (clear) {
+        setQrNote(name, "");
+        count++;
+      } else if (note) {
+        setQrNote(name, note);
+        count++;
+      } else if (!isBatch) {
+        setQrNote(name, "");
+        count++;
+      }
+    }
+    if (count > 0) {
+      toastr.success(`已更新 ${count} 个快速回复集的备注`);
+      renderQRView();
     }
   }
 
@@ -11823,12 +12195,14 @@ jQuery(async () => {
     selectedBgFolder = null;
     selectedPersonaFolder = null;
     selectedRegexNode = null;
+    selectedQrFolder = null;
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
     themeExpandedNodes.clear();
     bgExpandedNodes.clear();
     personaExpandedNodes.clear();
     regexExpandedNodes.clear();
+    qrExpandedNodes.clear();
     // 如果是"记住上次页面"模式，恢复文件夹选中状态（但不恢复展开状态，默认全部收起）
     if (defaultPage === "last" && lastState.resourceType) {
       const folder = lastState.selectedFolder;
@@ -11896,6 +12270,13 @@ jQuery(async () => {
           }
           for (let i = 0; i < path.length - 1; i++)
             regexExpandedNodes.add(path[i]);
+        }
+      } else if (initialTab === "quickreply") {
+        selectedQrFolder = folder || null;
+        if (selectedQrFolder) {
+          const fullPath = getResFolderPath("quickreply", selectedQrFolder);
+          for (let i = 0; i < fullPath.length - 1; i++)
+            qrExpandedNodes.add(fullPath[i]);
         }
       }
     }
@@ -12023,6 +12404,20 @@ jQuery(async () => {
                     </select>
                     <select id="cfm-regex-search-type" class="cfm-search-select" title="搜索类型">
                         <option value="script">正则脚本</option>
+                        <option value="folder">文件夹</option>
+                    </select>
+                </div>
+                <div class="cfm-global-search-bar" id="cfm-qr-search-bar" style="display:none;">
+                    <div class="cfm-search-input-wrapper">
+                        <input type="text" class="cfm-global-search-input" id="cfm-qr-global-search" placeholder="搜索快速回复集..." />
+                        <button class="cfm-search-clear-btn" id="cfm-qr-search-clear" title="清空搜索"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <select id="cfm-qr-search-scope" class="cfm-search-select" title="搜索范围">
+                        <option value="current">当前文件夹</option>
+                        <option value="all">全部文件夹</option>
+                    </select>
+                    <select id="cfm-qr-search-type" class="cfm-search-select" title="搜索类型">
+                        <option value="set">快速回复集</option>
                         <option value="folder">文件夹</option>
                     </select>
                 </div>
@@ -12262,6 +12657,38 @@ jQuery(async () => {
                         </div>
                     </div>
                 </div>
+                <div class="cfm-dual-pane" id="cfm-qr-view" style="display:none;">
+                    <div class="cfm-left-pane">
+                        <div class="cfm-left-header">
+                            <span>快速回复分类</span>
+                            <span class="cfm-left-header-actions">
+                                <div class="cfm-sort-wrapper" id="cfm-qr-left-sort-wrapper">
+                                    <button class="cfm-sort-trigger" id="cfm-qr-left-sort-btn" title="排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+                                </div>
+                                <button id="cfm-qr-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
+                                <button id="cfm-qr-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
+                            </span>
+                        </div>
+                        <div class="cfm-left-tree" id="cfm-qr-left-tree"></div>
+                    </div>
+                    <div class="cfm-right-pane">
+                        <div class="cfm-right-header">
+                            <button class="cfm-edit-char-btn" id="cfm-qr-preset-btn" title="快速回复激活分组"><i class="fa-solid fa-layer-group"></i></button>
+                            <span class="cfm-rh-path" id="cfm-qr-rh-path">选择左侧文件夹查看内容</span>
+                            <span class="cfm-rh-count" id="cfm-qr-rh-count"></span>
+                            <button class="cfm-edit-char-btn" id="cfm-qr-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-export-btn" id="cfm-export-qr-btn" title="导出快速回复集"><i class="fa-solid fa-file-export"></i></button>
+                            <button class="cfm-res-delete-btn" id="cfm-res-delete-qr-btn" title="删除快速回复集"><i class="fa-solid fa-trash-can"></i></button>
+                            <div class="cfm-sort-wrapper" id="cfm-qr-right-sort-wrapper">
+                                <button class="cfm-sort-trigger" id="cfm-qr-right-sort-btn" title="快速回复集排序"><i class="fa-solid fa-arrow-down-short-wide"></i></button>
+                            </div>
+                            <button class="cfm-multisel-toggle cfm-multisel-toggle-qr" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
+                        </div>
+                        <div class="cfm-right-list" id="cfm-qr-right-list">
+                            <div class="cfm-right-empty">← 点击左侧文件夹查看快速回复集</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `);
     overlay.append(popup);
@@ -12281,6 +12708,7 @@ jQuery(async () => {
       popup.find("#cfm-backgrounds-view").toggle(initialTab === "backgrounds");
       popup.find("#cfm-personas-view").toggle(initialTab === "personas");
       popup.find("#cfm-regex-view").toggle(initialTab === "regex");
+      popup.find("#cfm-qr-view").toggle(initialTab === "quickreply");
       // 切换搜索栏
       popup.find("#cfm-global-search-bar").hide();
       popup.find("#cfm-preset-search-bar").toggle(initialTab === "presets");
@@ -12291,8 +12719,9 @@ jQuery(async () => {
       popup.find("#cfm-bg-search-bar").toggle(initialTab === "backgrounds");
       popup.find("#cfm-persona-search-bar").toggle(initialTab === "personas");
       popup.find("#cfm-regex-search-bar").toggle(initialTab === "regex");
+      popup.find("#cfm-qr-search-bar").toggle(initialTab === "quickreply");
       // 切换header按钮
-      if (initialTab === "regex") {
+      if (initialTab === "regex" || initialTab === "quickreply") {
         popup.find("#cfm-btn-copymode").hide();
       } else {
         const btn = popup.find("#cfm-btn-copymode");
@@ -12326,6 +12755,7 @@ jQuery(async () => {
       if (cfmBgNoteMode) exitBgNoteMode();
       if (cfmPresetNoteMode) exitPresetNoteMode();
       if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+      if (cfmQrNoteMode) exitQrNoteMode();
       if (cfmPersonaNoteMode) exitPersonaNoteMode();
       if (cfmPresetRenameMode) exitPresetRenameMode();
       if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
@@ -12337,8 +12767,9 @@ jQuery(async () => {
       popup.find("#cfm-backgrounds-view").toggle(tab === "backgrounds");
       popup.find("#cfm-personas-view").toggle(tab === "personas");
       popup.find("#cfm-regex-view").toggle(tab === "regex");
-      // 切换header按钮可见性 - 正则标签页隐藏移动/复制按钮
-      if (tab === "regex") {
+      popup.find("#cfm-qr-view").toggle(tab === "quickreply");
+      // 切换header按钮可见性 - 正则/QR标签页隐藏移动/复制按钮
+      if (tab === "regex" || tab === "quickreply") {
         popup.find("#cfm-btn-copymode").hide();
       } else if (tab === "chars") {
         popup.find("#cfm-btn-copymode").show();
@@ -12363,12 +12794,14 @@ jQuery(async () => {
       popup.find("#cfm-bg-search-bar").toggle(tab === "backgrounds");
       popup.find("#cfm-persona-search-bar").toggle(tab === "personas");
       popup.find("#cfm-regex-search-bar").toggle(tab === "regex");
+      popup.find("#cfm-qr-search-bar").toggle(tab === "quickreply");
       if (tab === "presets") renderPresetsView();
       else if (tab === "worldinfo") renderWorldInfoView();
       else if (tab === "themes") renderThemesView();
       else if (tab === "backgrounds") renderBackgroundsView();
       else if (tab === "personas") renderPersonasView();
       else if (tab === "regex") renderRegexView();
+      else if (tab === "quickreply") renderQRView();
     });
 
     popup.find("#cfm-btn-close-main").on("click touchend", (e) => {
@@ -12650,6 +13083,19 @@ jQuery(async () => {
       renderRegexView();
     });
 
+    // 快速回复展开全部
+    popup.find("#cfm-qr-expand-all").on("click touchend", (e) => {
+      e.preventDefault();
+      for (const id of getResFolderIds("quickreply")) qrExpandedNodes.add(id);
+      renderQRView();
+    });
+    // 快速回复收起全部
+    popup.find("#cfm-qr-collapse-all").on("click touchend", (e) => {
+      e.preventDefault();
+      qrExpandedNodes.clear();
+      renderQRView();
+    });
+
     // 预设左栏排序
     popup.find("#cfm-preset-left-sort-btn").on("click touchend", (e) => {
       e.preventDefault();
@@ -12866,6 +13312,119 @@ jQuery(async () => {
           toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderWorldInfoView();
+        dropdown.remove();
+      });
+      wrapper.append(dropdown);
+      setTimeout(() => {
+        $(document).one("click.cfmSortDropdown", (ev) => {
+          if (!$(ev.target).closest(".cfm-sort-dropdown").length)
+            dropdown.remove();
+        });
+      }, 0);
+    });
+    // 快速回复左栏排序
+    popup.find("#cfm-qr-left-sort-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = $("#cfm-qr-left-sort-wrapper");
+      const topFolders = getResTopLevelFolders("quickreply");
+      $(".cfm-sort-dropdown").remove();
+      const dropdown = createResSortDropdown(
+        "quickreply",
+        qrLeftSortMode,
+        qrSortSnapshot,
+        (mode) => {
+          if (mode === "revert") {
+            revertResSort("quickreply");
+            qrLeftSortMode = null;
+          } else {
+            applyResSortToFolders("quickreply", topFolders, mode);
+            qrLeftSortMode = mode;
+          }
+          renderQRView();
+          dropdown.remove();
+        },
+      );
+      wrapper.append(dropdown);
+      setTimeout(() => {
+        $(document).one("click.cfmSortDropdown", (ev) => {
+          if (!$(ev.target).closest(".cfm-sort-dropdown").length)
+            dropdown.remove();
+        });
+      }, 0);
+    });
+    // 快速回复右栏排序
+    popup.find("#cfm-qr-right-sort-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = $("#cfm-qr-right-sort-wrapper");
+      const currentFolder = selectedQrFolder;
+      const childFolders =
+        currentFolder &&
+        currentFolder !== "__ungrouped__" &&
+        currentFolder !== "__favorites__"
+          ? getResChildFolders("quickreply", currentFolder)
+          : [];
+      $(".cfm-sort-dropdown").remove();
+      const dropdown = $(`
+        <div class="cfm-sort-dropdown cfm-sort-open">
+          <div class="cfm-sort-dropdown-item ${qrRightSortMode === "az" ? "cfm-sort-item-active" : ""}" data-sort="item-az"><i class="fa-solid fa-arrow-down-a-z"></i> 快速回复集 A → Z</div>
+          <div class="cfm-sort-dropdown-item ${qrRightSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="item-za"><i class="fa-solid fa-arrow-up-z-a"></i> 快速回复集 Z → A</div>
+          ${
+            childFolders.length > 0
+              ? `<div class="cfm-sort-dropdown-sep"></div>
+          <div class="cfm-sort-dropdown-item" data-sort="folder-az"><i class="fa-solid fa-folder"></i> 子文件夹 A → Z</div>
+          <div class="cfm-sort-dropdown-item" data-sort="folder-za"><i class="fa-solid fa-folder"></i> 子文件夹 Z → A</div>`
+              : ""
+          }
+          <div class="cfm-sort-dropdown-sep"></div>
+          <div class="cfm-sort-dropdown-item ${qrRightSortMode === null && !qrSortSnapshot ? "cfm-sort-item-disabled" : ""}" data-sort="revert"><i class="fa-solid fa-rotate-left"></i> 恢复默认</div>
+        </div>
+      `);
+      dropdown.find('[data-sort="item-az"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        qrRightSortMode = "az";
+        renderQRView();
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="item-za"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        qrRightSortMode = "za";
+        renderQRView();
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="folder-az"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (childFolders.length > 0) {
+          applyResSortToFolders("quickreply", childFolders, "az");
+          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          renderQRView();
+        }
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="folder-za"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (childFolders.length > 0) {
+          applyResSortToFolders("quickreply", childFolders, "za");
+          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          renderQRView();
+        }
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="revert"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (qrRightSortMode === null && !qrSortSnapshot) return;
+        qrRightSortMode = null;
+        if (qrSortSnapshot) {
+          revertResSort("quickreply");
+          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+        }
+        renderQRView();
         dropdown.remove();
       });
       wrapper.append(dropdown);
@@ -13217,6 +13776,7 @@ jQuery(async () => {
         cfmBgRenameMode ||
         cfmPresetNoteMode ||
         cfmWorldInfoNoteMode ||
+        cfmQrNoteMode ||
         cfmThemeNoteMode ||
         cfmBgNoteMode ||
         cfmPersonaNoteMode;
@@ -13246,6 +13806,7 @@ jQuery(async () => {
       else if (currentResourceType === "backgrounds") renderBackgroundsView();
       else if (currentResourceType === "personas") renderPersonasView();
       else if (currentResourceType === "regex") renderRegexView();
+      else if (currentResourceType === "quickreply") renderQRView();
       else renderWorldInfoView();
     });
 
@@ -13631,6 +14192,22 @@ jQuery(async () => {
         executeWorldInfoNoteEdit(names).then(() => exitWorldInfoNoteMode());
       } else {
         enterWorldInfoNoteMode();
+      }
+    });
+
+    // 快速回复备注编辑按钮
+    popup.find("#cfm-qr-note-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmQrNoteMode) {
+        if (cfmQrNoteSelected.size === 0) {
+          toastr.warning("请先选择要编辑备注的快速回复集");
+          return;
+        }
+        const names = Array.from(cfmQrNoteSelected);
+        executeQrNoteEdit(names).then(() => exitQrNoteMode());
+      } else {
+        enterQrNoteMode();
       }
     });
 
@@ -14083,6 +14660,13 @@ jQuery(async () => {
       showWiPresetPanel();
     });
 
+    // 快速回复激活分组按钮
+    popup.find("#cfm-qr-preset-btn").on("click touchend", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showQrPresetPanel();
+    });
+
     // 世界书导入按钮
     popup.find("#cfm-import-worldinfo-btn").on("click touchend", function (e) {
       e.preventDefault();
@@ -14363,6 +14947,33 @@ jQuery(async () => {
         type === "folder" ? "搜索文件夹..." : "搜索世界书...",
       );
       executeWorldInfoSearch();
+    });
+
+    // 快速回复搜索框事件绑定
+    popup.find("#cfm-qr-global-search").on("input", function () {
+      const hasText = $(this).val().trim().length > 0;
+      $(this)
+        .closest(".cfm-search-input-wrapper")
+        .toggleClass("cfm-has-text", hasText);
+      executeQrSearch();
+    });
+    popup.find("#cfm-qr-search-clear").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-qr-global-search").val("").focus();
+      $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
+      renderQRView();
+    });
+    popup.find("#cfm-qr-search-scope").on("change", function () {
+      executeQrSearch();
+    });
+    popup.find("#cfm-qr-search-type").on("change", function () {
+      const type = $(this).val();
+      $("#cfm-qr-global-search").attr(
+        "placeholder",
+        type === "folder" ? "搜索文件夹..." : "搜索快速回复集...",
+      );
+      executeQrSearch();
     });
 
     // 主题搜索框事件绑定
@@ -15759,6 +16370,9 @@ jQuery(async () => {
     } else if (currentResourceType === "regex") {
       folder = selectedRegexNode;
       expanded = Array.from(regexExpandedNodes);
+    } else if (currentResourceType === "quickreply") {
+      folder = selectedQrFolder;
+      expanded = Array.from(qrExpandedNodes);
     }
     extension_settings[extensionName].lastOpenState = {
       resourceType: currentResourceType,
@@ -16907,6 +17521,7 @@ jQuery(async () => {
           if (cfmBgNoteMode) exitBgNoteMode();
           if (cfmPresetNoteMode) exitPresetNoteMode();
           if (cfmWorldInfoNoteMode) exitWorldInfoNoteMode();
+          if (cfmQrNoteMode) exitQrNoteMode();
           if (cfmPersonaNoteMode) exitPersonaNoteMode();
           if (cfmPresetRenameMode) exitPresetRenameMode();
           if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
@@ -16931,7 +17546,10 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-regex-view")
             .toggle(tab === "regex");
-          if (tab === "regex") {
+          $("#cfm-overlay")
+            .find("#cfm-qr-view")
+            .toggle(tab === "quickreply");
+          if (tab === "regex" || tab === "quickreply") {
             $("#cfm-overlay").find("#cfm-btn-copymode").hide();
           } else if (tab === "chars") {
             $("#cfm-overlay").find("#cfm-btn-copymode").show();
@@ -16969,12 +17587,16 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-regex-search-bar")
             .toggle(tab === "regex");
+          $("#cfm-overlay")
+            .find("#cfm-qr-search-bar")
+            .toggle(tab === "quickreply");
           if (tab === "presets") renderPresetsView();
           else if (tab === "worldinfo") renderWorldInfoView();
           else if (tab === "themes") renderThemesView();
           else if (tab === "backgrounds") renderBackgroundsView();
           else if (tab === "personas") renderPersonasView();
           else if (tab === "regex") renderRegexView();
+          else if (tab === "quickreply") renderQRView();
         });
       }
       // --- 刷新视图和工具栏 ---
@@ -17000,6 +17622,9 @@ jQuery(async () => {
       $("#cfm-overlay")
         .find("#cfm-regex-view")
         .toggle(currentResourceType === "regex");
+      $("#cfm-overlay")
+        .find("#cfm-qr-view")
+        .toggle(currentResourceType === "quickreply");
       // 确保正确的搜索栏显示
       $("#cfm-overlay")
         .find("#cfm-global-search-bar")
@@ -17022,6 +17647,9 @@ jQuery(async () => {
       $("#cfm-overlay")
         .find("#cfm-regex-search-bar")
         .toggle(currentResourceType === "regex");
+      $("#cfm-overlay")
+        .find("#cfm-qr-search-bar")
+        .toggle(currentResourceType === "quickreply");
       renderLeftTree();
       renderRightPane();
       if (currentResourceType === "presets") renderPresetsView();
@@ -17030,6 +17658,7 @@ jQuery(async () => {
       else if (currentResourceType === "backgrounds") renderBackgroundsView();
       else if (currentResourceType === "personas") renderPersonasView();
       else if (currentResourceType === "regex") renderRegexView();
+      else if (currentResourceType === "quickreply") renderQRView();
       applyAllToolbarVisibility();
     }
   }
@@ -17602,7 +18231,8 @@ jQuery(async () => {
       currentResourceType === "worldinfo" ||
       currentResourceType === "themes" ||
       currentResourceType === "backgrounds" ||
-      currentResourceType === "personas"
+      currentResourceType === "personas" ||
+      currentResourceType === "quickreply"
     ) {
       renderResourceConfigBody(body, currentResourceType);
       return;
@@ -17936,7 +18566,9 @@ jQuery(async () => {
             ? "背景"
             : type === "personas"
               ? "User"
-              : "世界书";
+              : type === "quickreply"
+                ? "快速回复"
+                : "世界书";
     const tree = getResFolderTree(type);
     const allFolderIds = getResFolderIds(type);
     const expandedSet =
@@ -17948,7 +18580,9 @@ jQuery(async () => {
             ? bgConfigExpandedNodes
             : type === "personas"
               ? personaConfigExpandedNodes
-              : worldInfoConfigExpandedNodes;
+              : type === "quickreply"
+                ? qrConfigExpandedNodes
+                : worldInfoConfigExpandedNodes;
 
     // 0. 按钮位置设置（共享）
     const currentMode = getButtonMode();
@@ -23233,6 +23867,1993 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 快速回复激活状态管理 ====================
+  /**
+   * 获取所有快速回复集名称
+   */
+  function getQrSetNames() {
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) return [];
+      const QuickReplySet = api.listSets
+        ? null
+        : globalThis.QuickReplySet || null;
+      // 尝试通过 api.listSets() 获取
+      if (api.listSets) {
+        return api.listSets().map((s) => (typeof s === "string" ? s : s.name));
+      }
+      // 尝试通过 QuickReplySet.list
+      if (QuickReplySet && QuickReplySet.list) {
+        return QuickReplySet.list.map((s) => s.name);
+      }
+      // 从 DOM 读取
+      const domNames = [];
+      $('#qr--settings [id^="qr--set-"]').each(function () {
+        const n = $(this).find(".qr--set-name").text().trim();
+        if (n) domNames.push(n);
+      });
+      if (domNames.length > 0) return domNames;
+      // 从酒馆原生设置面板的 select 中读取
+      const selectNames = [];
+      $("#qr--set-selector option").each(function () {
+        const v = $(this).val();
+        if (v) selectNames.push($(this).text().trim() || v);
+      });
+      return selectNames;
+    } catch (e) {
+      console.warn("[CFM] 获取快速回复集列表失败", e);
+      return [];
+    }
+  }
+
+  /**
+   * 获取当前激活的快速回复集名称集合（全局 + 聊天级）
+   */
+  function getActiveQrSets() {
+    const active = new Set();
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) return active;
+      // 从 api.settings 读取
+      if (api.settings) {
+        const cfg = api.settings.config;
+        const chatCfg = api.settings.chatConfig;
+        if (cfg && cfg.setList) {
+          for (const entry of cfg.setList) {
+            if (entry.set && entry.set.name) active.add(entry.set.name);
+          }
+        }
+        if (chatCfg && chatCfg.setList) {
+          for (const entry of chatCfg.setList) {
+            if (entry.set && entry.set.name) active.add(entry.set.name);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 获取激活快速回复集失败", e);
+    }
+    return active;
+  }
+
+  /**
+   * 切换快速回复集的全局激活状态
+   */
+  async function toggleQrSetActivation(name, activate) {
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) {
+        toastr.error("快速回复 API 不可用");
+        return;
+      }
+      if (activate) {
+        if (api.addGlobalSet) await api.addGlobalSet(name);
+        else if (api.globalSetList && api.globalSetList.addSet)
+          await api.globalSetList.addSet(name);
+      } else {
+        if (api.removeGlobalSet) await api.removeGlobalSet(name);
+        else if (api.globalSetList && api.globalSetList.removeSet)
+          await api.globalSetList.removeSet(name);
+      }
+    } catch (e) {
+      console.error("[CFM] 切换快速回复集激活状态失败", e);
+      toastr.error("切换快速回复集激活失败");
+    }
+  }
+
+  /**
+   * 批量设置快速回复集激活状态（用于加载分组预设）
+   */
+  async function applyQrPreset(setNames) {
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) return;
+      const currentActive = getActiveQrSets();
+      const targetSet = new Set(setNames);
+      // 取消不在目标列表中的
+      for (const name of currentActive) {
+        if (!targetSet.has(name)) {
+          await toggleQrSetActivation(name, false);
+        }
+      }
+      // 激活目标列表中未激活的
+      for (const name of setNames) {
+        if (!currentActive.has(name)) {
+          await toggleQrSetActivation(name, true);
+        }
+      }
+    } catch (e) {
+      console.error("[CFM] 应用快速回复分组预设失败", e);
+    }
+  }
+
+  // ==================== 快速回复备注管理 ====================
+  function getQrNote(name) {
+    return (extension_settings[extensionName].qrNotes || {})[name] || "";
+  }
+  function setQrNote(name, note) {
+    if (!extension_settings[extensionName].qrNotes)
+      extension_settings[extensionName].qrNotes = {};
+    if (note) extension_settings[extensionName].qrNotes[name] = note;
+    else delete extension_settings[extensionName].qrNotes[name];
+    getContext().saveSettingsDebounced();
+  }
+
+  /**
+   * 获取快速回复集中的各个快速回复项
+   */
+  function getQrSetItems(setName) {
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) return [];
+      // 尝试 api.getSetByName
+      if (api.getSetByName) {
+        const set = api.getSetByName(setName);
+        if (set && set.qrList) return set.qrList;
+      }
+      // 尝试 QuickReplySet.list
+      const QRS = globalThis.QuickReplySet;
+      if (QRS && QRS.list) {
+        const set = QRS.list.find((s) => s.name === setName);
+        if (set && set.qrList) return set.qrList;
+      }
+      // 尝试 api.listQuickReplies
+      if (api.listQuickReplies) {
+        return api.listQuickReplies(setName) || [];
+      }
+    } catch (e) {
+      console.warn("[CFM] 获取快速回复集内容失败", e);
+    }
+    return [];
+  }
+
+  // ==================== 快速回复搜索 ====================
+  function executeQrSearch() {
+    const q = $("#cfm-qr-global-search").val().toLowerCase().trim();
+    const scope = $("#cfm-qr-search-scope").val();
+    const searchType = $("#cfm-qr-search-type").val();
+    const rightList = $("#cfm-qr-right-list");
+    const pathEl = $("#cfm-qr-rh-path");
+    const countEl = $("#cfm-qr-rh-count");
+    if (!q) {
+      renderQRView();
+      return;
+    }
+    rightList.empty();
+    const names = getQrSetNames();
+    const groups = getResourceGroups("quickreply");
+    const tree = getResFolderTree("quickreply");
+
+    if (searchType === "folder") {
+      // 搜索文件夹
+      const allFolderIds = getResFolderIds("quickreply");
+      const matched = allFolderIds.filter((fid) => {
+        const dn = getResFolderDisplayName("quickreply", fid).toLowerCase();
+        return dn.includes(q);
+      });
+      pathEl.text(`搜索文件夹: "${q}"`);
+      countEl.text(`${matched.length} 个结果`);
+      if (matched.length === 0) {
+        rightList.html('<div class="cfm-right-empty">没有匹配的文件夹</div>');
+        return;
+      }
+      for (const fid of matched) {
+        const row = $(`
+          <div class="cfm-row cfm-row-folder cfm-search-result" data-folder-id="${escapeHtml(fid)}">
+            <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
+            <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("quickreply", fid))}</div>
+            <div class="cfm-row-meta">${countResItemsRecursive("quickreply", fid)} 个快速回复集</div>
+          </div>
+        `);
+        row.on("click", () => {
+          const fname = fid;
+          const path = getResFolderPath("quickreply", fname);
+          for (let i = 0; i < path.length - 1; i++)
+            qrExpandedNodes.add(path[i]);
+          selectedQrFolder = fname;
+          $("#cfm-qr-global-search").val("");
+          renderQRView();
+        });
+        rightList.append(row);
+      }
+      return;
+    }
+
+    // 搜索快速回复集
+    let searchPool = names;
+    if (
+      scope === "current" &&
+      selectedQrFolder &&
+      selectedQrFolder !== "__favorites__" &&
+      selectedQrFolder !== "__ungrouped__"
+    ) {
+      searchPool = names.filter((n) => groups[n] === selectedQrFolder);
+    }
+    const matched = searchPool.filter((n) => n.toLowerCase().includes(q));
+    pathEl.text(`搜索: "${q}"`);
+    countEl.text(`${matched.length} 个结果`);
+    if (matched.length === 0) {
+      rightList.html('<div class="cfm-right-empty">没有匹配的快速回复集</div>');
+      return;
+    }
+    const qrActiveSet = getActiveQrSets();
+    for (const n of matched) {
+      const fav = isResFavorite("quickreply", n);
+      const qrIsActive = qrActiveSet.has(n);
+      const toggleHtml = `<div class="cfm-wi-toggle ${qrIsActive ? "cfm-wi-toggle-on" : ""}" title="${qrIsActive ? "点击取消激活" : "点击激活"}" data-qr-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${qrIsActive ? "on" : "off"}"></i></div>`;
+      const grpLabel = groups[n]
+        ? `<span class="cfm-theme-note">${escapeHtml(getResFolderDisplayName("quickreply", groups[n]))}</span>`
+        : "";
+      const row = $(`
+        <div class="cfm-row cfm-row-char cfm-search-result" data-res-id="${escapeHtml(n)}">
+          ${toggleHtml}
+          <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
+          <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${grpLabel}</div>
+          <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
+        </div>
+      `);
+      row.find(".cfm-wi-toggle").on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const newState = !qrActiveSet.has(n);
+        toggleQrSetActivation(n, newState).then(() => {
+          if (newState) qrActiveSet.add(n);
+          else qrActiveSet.delete(n);
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", newState);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${newState ? "on" : "off"}`,
+          );
+          el.attr("title", newState ? "点击取消激活" : "点击激活");
+        });
+      });
+      row.find(".cfm-row-star").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleResFavorite("quickreply", n);
+        executeQrSearch();
+      });
+      row.on("click", (e) => {
+        if ($(e.target).closest(".cfm-row-star, .cfm-wi-toggle").length) return;
+        // 定位到该快速回复集所在文件夹
+        const folder = groups[n];
+        if (folder) {
+          const path = getResFolderPath("quickreply", folder);
+          for (let i = 0; i < path.length - 1; i++)
+            qrExpandedNodes.add(path[i]);
+          selectedQrFolder = folder;
+        } else {
+          selectedQrFolder = "__ungrouped__";
+        }
+        $("#cfm-qr-global-search").val("");
+        renderQRView();
+      });
+      rightList.append(row);
+    }
+  }
+
+  // ==================== 快速回复视图渲染（双栏 + 树形嵌套） ====================
+  async function renderQRView() {
+    const leftTree = $("#cfm-qr-left-tree");
+    const rightList = $("#cfm-qr-right-list");
+    const pathEl = $("#cfm-qr-rh-path");
+    const countEl = $("#cfm-qr-rh-count");
+
+    const names = getQrSetNames();
+    if (names.length === 0) {
+      leftTree.empty();
+      rightList.html(
+        '<div class="cfm-right-empty"><i class="fa-solid fa-circle-info"></i> 没有找到快速回复集<br><span style="font-size:12px;opacity:0.5;">请确保已安装并启用快速回复扩展</span></div>',
+      );
+      return;
+    }
+
+    // 获取快速回复激活状态
+    const qrActiveSet = getActiveQrSets();
+
+    leftTree.empty();
+    const tree = getResFolderTree("quickreply");
+    const allFolderIds = getResFolderIds("quickreply");
+    const groups = getResourceGroups("quickreply");
+
+    // 清理 groups 中已不存在的快速回复集映射
+    const existingQrNames = new Set(names);
+    let qrGroupsCleaned = false;
+    for (const key of Object.keys(groups)) {
+      if (!existingQrNames.has(key)) {
+        delete groups[key];
+        qrGroupsCleaned = true;
+      }
+    }
+    if (qrGroupsCleaned) {
+      console.log("[CFM] 已清理不存在的快速回复集分组映射");
+      getContext().saveSettingsDebounced();
+    }
+
+    // 分类
+    const folderItems = {};
+    const ungrouped = [];
+    for (const n of names) {
+      const grp = groups[n];
+      if (grp && tree[grp]) {
+        if (!folderItems[grp]) folderItems[grp] = [];
+        folderItems[grp].push(n);
+      } else {
+        ungrouped.push(n);
+      }
+    }
+
+    leftTree.empty();
+
+    // 递归渲染左侧树节点
+    function renderQrTreeNode(container, folderId, depth) {
+      const children = sortResFolders(
+        "quickreply",
+        getResChildFolders("quickreply", folderId),
+      );
+      const hasChildren = children.length > 0;
+      const isExpanded = qrExpandedNodes.has(folderId);
+      const isSelected = selectedQrFolder === folderId;
+      const count = countResItemsRecursive("quickreply", folderId);
+      const indent = 10 + depth * 16;
+
+      const node = $(`
+        <div class="cfm-tnode ${isSelected ? "cfm-tnode-selected" : ""}" data-id="${escapeHtml(folderId)}" style="padding-left:${indent}px;" draggable="true">
+          <span class="cfm-tnode-arrow ${hasChildren ? (isExpanded ? "cfm-arrow-expanded" : "") : "cfm-arrow-hidden"}"><i class="fa-solid fa-caret-right"></i></span>
+          <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
+          <span class="cfm-tnode-label">${escapeHtml(getResFolderDisplayName("quickreply", folderId))}</span>
+          <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
+          <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
+          <span class="cfm-tnode-count">${count}</span>
+        </div>
+      `);
+
+      node.find(".cfm-tnode-target").on("click", (e) => {
+        e.stopPropagation();
+        handleFolderTargetMove(
+          (items) =>
+            items.forEach((n) => setItemGroup("quickreply", n, folderId)),
+          () => renderQRView(),
+          (count, first) =>
+            toastr.success(
+              count > 1
+                ? `已将 ${count} 个快速回复集移入「${getResFolderDisplayName("quickreply", folderId)}」`
+                : `已将「${first}」移入「${getResFolderDisplayName("quickreply", folderId)}」`,
+            ),
+        );
+      });
+
+      node.find(".cfm-tnode-rename").on("click", (e) => {
+        e.stopPropagation();
+        promptRenameFolder("quickreply", folderId, () => renderQRView());
+      });
+
+      node.find(".cfm-tnode-arrow").on("click", (e) => {
+        e.stopPropagation();
+        if (!hasChildren) return;
+        if (qrExpandedNodes.has(folderId)) qrExpandedNodes.delete(folderId);
+        else qrExpandedNodes.add(folderId);
+        renderQRView();
+      });
+
+      node.on("click", (e) => {
+        e.preventDefault();
+        selectedQrFolder = folderId;
+        renderQRView();
+      });
+
+      // PC拖拽
+      node.on("dragstart", (e) => {
+        pcDragStart(e, {
+          type: "res-folder",
+          resType: "quickreply",
+          id: folderId,
+        });
+        node.addClass("cfm-dragging");
+      });
+      node.on("dragend", () => {
+        node.removeClass("cfm-dragging");
+        pcDragEnd();
+        $(".cfm-tnode").removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+      });
+
+      // 拖放目标（三区域）
+      node.on("dragover", (e) => {
+        e.preventDefault();
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+        const rect = node[0].getBoundingClientRect();
+        const relY = (e.originalEvent.clientY - rect.top) / rect.height;
+        let zone = relY < 0.25 ? "before" : relY > 0.75 ? "after" : "into";
+        node.data("dropZone", zone);
+        const data = _pcDragData || {};
+        if (data.type === "res-folder" && data.resType === "quickreply") {
+          if (data.id === folderId) {
+            node.addClass("cfm-drop-forbidden");
+            return;
+          }
+          if (
+            zone === "into" &&
+            wouldCreateResCycle("quickreply", data.id, folderId)
+          ) {
+            node.addClass("cfm-drop-forbidden");
+            return;
+          }
+        }
+        if (zone === "before") node.addClass("cfm-drop-before");
+        else if (zone === "after") node.addClass("cfm-drop-after");
+        else node.addClass("cfm-drop-target");
+      });
+      node.on("dragleave", () =>
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        ),
+      );
+      node.on("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        $(".cfm-right-list-drop-target").removeClass(
+          "cfm-right-list-drop-target",
+        );
+        const zone = node.data("dropZone") || "into";
+        node.removeClass(
+          "cfm-drop-target cfm-drop-forbidden cfm-drop-before cfm-drop-after",
+        );
+        const data = pcGetDropData(e);
+        if (!data) return;
+        if (
+          data.type === "res-folder" &&
+          data.resType === "quickreply" &&
+          data.id !== folderId
+        ) {
+          if (zone === "into") {
+            if (wouldCreateResCycle("quickreply", data.id, folderId)) {
+              toastr.error("循环嵌套，已阻止");
+              return;
+            }
+            reorderResFolder("quickreply", data.id, folderId, null);
+            toastr.success(
+              `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", folderId)}」`,
+            );
+          } else {
+            const pId = tree[folderId]?.parentId || null;
+            if (wouldCreateResCycle("quickreply", data.id, pId)) {
+              toastr.error("循环嵌套，已阻止");
+              return;
+            }
+            if (zone === "before") {
+              reorderResFolder("quickreply", data.id, pId, folderId);
+            } else {
+              const sibs = sortResFolders(
+                "quickreply",
+                getResChildFolders("quickreply", pId),
+              );
+              const ci = sibs.indexOf(folderId);
+              reorderResFolder(
+                "quickreply",
+                data.id,
+                pId,
+                ci < sibs.length - 1 ? sibs[ci + 1] : null,
+              );
+            }
+            toastr.success(`「${data.id}」已排序`);
+          }
+          renderQRView();
+        } else if (data.type === "quickreply") {
+          const qrNames =
+            data.multiSelect && data.selectedIds
+              ? data.selectedIds
+              : [data.name];
+          const wCount = qrNames.length;
+          qrNames.forEach((n) => setItemGroup("quickreply", n, folderId));
+          if (data.multiSelect) clearMultiSelect();
+          renderQRView();
+          toastr.success(
+            wCount > 1
+              ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", folderId)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", folderId)}」`,
+          );
+        }
+      });
+
+      touchDragMgr.bind(node, () => ({
+        type: "res-folder",
+        resType: "quickreply",
+        id: folderId,
+        name: folderId,
+      }));
+
+      container.append(node);
+
+      if (hasChildren) {
+        const childContainer = $(
+          `<div class="cfm-tnode-children ${isExpanded ? "cfm-children-expanded" : ""}"></div>`,
+        );
+        for (const childId of children)
+          renderQrTreeNode(childContainer, childId, depth + 1);
+        container.append(childContainer);
+      }
+    }
+
+    // 收藏入口
+    const qrFavs = getResFavorites("quickreply");
+    const qrFavCount = names.filter((n) => qrFavs.includes(n)).length;
+    const qrFavNode = $(`
+      <div class="cfm-tnode cfm-tnode-favorites ${selectedQrFolder === "__favorites__" ? "cfm-tnode-selected" : ""}" data-id="__favorites__" style="padding-left:10px;">
+        <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
+        <span class="cfm-tnode-icon"><i class="fa-solid fa-star" style="color:#f9e2af;"></i></span>
+        <span class="cfm-tnode-label">收藏</span>
+        <span class="cfm-tnode-count">${qrFavCount}</span>
+      </div>
+    `);
+    qrFavNode.on("click", (e) => {
+      e.preventDefault();
+      selectedQrFolder = "__favorites__";
+      renderQRView();
+    });
+    leftTree.append(qrFavNode);
+
+    const topFolders = sortResFolders(
+      "quickreply",
+      getResTopLevelFolders("quickreply"),
+    );
+    for (const fid of topFolders) renderQrTreeNode(leftTree, fid, 0);
+
+    // 未归类入口
+    const uncatNode = $(`
+      <div class="cfm-tnode cfm-tnode-uncategorized ${selectedQrFolder === "__ungrouped__" ? "cfm-tnode-selected" : ""}" data-id="__ungrouped__" style="padding-left:10px;">
+        <span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span>
+        <span class="cfm-tnode-icon"><i class="fa-solid fa-box-open"></i></span>
+        <span class="cfm-tnode-label">未归类快速回复集</span>
+        <span class="cfm-tnode-target" title="移出所有文件夹"><i class="fa-solid fa-crosshairs"></i></span>
+        <span class="cfm-tnode-count">${ungrouped.length}</span>
+      </div>
+    `);
+    uncatNode.find(".cfm-tnode-target").on("click", (e) => {
+      e.stopPropagation();
+      handleFolderTargetMove(
+        (items) => items.forEach((n) => setItemGroup("quickreply", n, null)),
+        () => renderQRView(),
+        (count, first) =>
+          toastr.success(
+            count > 1
+              ? `已将 ${count} 个快速回复集移出文件夹`
+              : `已将「${first}」移出文件夹`,
+          ),
+      );
+    });
+    uncatNode.on("click", (e) => {
+      e.preventDefault();
+      selectedQrFolder = "__ungrouped__";
+      renderQRView();
+    });
+    uncatNode.on("dragover", (e) => {
+      e.preventDefault();
+      uncatNode.addClass("cfm-drop-target");
+    });
+    uncatNode.on("dragleave", () => uncatNode.removeClass("cfm-drop-target"));
+    uncatNode.on("drop", (e) => {
+      e.preventDefault();
+      $(".cfm-right-list-drop-target").removeClass(
+        "cfm-right-list-drop-target",
+      );
+      uncatNode.removeClass("cfm-drop-target");
+      const d = pcGetDropData(e);
+      if (d && d.type === "quickreply") {
+        const qrNames =
+          d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
+        const wCount = qrNames.length;
+        qrNames.forEach((n) => setItemGroup("quickreply", n, null));
+        if (d.multiSelect) clearMultiSelect();
+        renderQRView();
+        toastr.success(
+          wCount > 1
+            ? `已将 ${wCount} 个快速回复集移出文件夹`
+            : `已将「${d.name}」移出文件夹`,
+        );
+      }
+    });
+    leftTree.append(uncatNode);
+
+    if (topFolders.length === 0) {
+      uncatNode.before(
+        '<div class="cfm-right-empty" style="padding:20px;font-size:12px;">还没有配置文件夹<br>点击右上角 ⚙ 进行配置</div>',
+      );
+    }
+
+    // 右侧渲染
+    // 如果搜索栏有内容，保持搜索模式
+    const qrSearchQuery = $("#cfm-qr-global-search").val();
+    if (qrSearchQuery && qrSearchQuery.trim()) {
+      executeQrSearch();
+      return;
+    }
+
+    rightList.empty();
+
+    let displayItems = [];
+    let displayTitle = "选择左侧文件夹查看内容";
+    let childFolders = [];
+
+    if (selectedQrFolder === "__favorites__") {
+      const favs = getResFavorites("quickreply");
+      displayItems = names.filter((n) => favs.includes(n));
+      displayTitle = "⭐ 收藏";
+    } else if (selectedQrFolder === "__ungrouped__") {
+      displayItems = ungrouped;
+      displayTitle = "未归类快速回复集";
+    } else if (selectedQrFolder && tree[selectedQrFolder]) {
+      displayItems = folderItems[selectedQrFolder] || [];
+      childFolders = sortResFolders(
+        "quickreply",
+        getResChildFolders("quickreply", selectedQrFolder),
+      );
+      const path = getResFolderPath("quickreply", selectedQrFolder)
+        .map((id) => getResFolderDisplayName("quickreply", id))
+        .join(" › ");
+      displayTitle = path;
+    }
+
+    // 应用右栏排序
+    if (qrRightSortMode && displayItems.length > 0) {
+      displayItems = sortResItems(displayItems, qrRightSortMode, (n) => n);
+    }
+
+    pathEl.text(displayTitle);
+    const totalItems = childFolders.length + displayItems.length;
+    if (
+      selectedQrFolder === "__favorites__" ||
+      selectedQrFolder === "__ungrouped__"
+    ) {
+      countEl.text(`${displayItems.length} 个快速回复集`);
+    } else {
+      countEl.text(selectedQrFolder ? `${totalItems} 项` : "");
+    }
+
+    if (!selectedQrFolder) {
+      rightList.html(
+        '<div class="cfm-right-empty">← 点击左侧文件夹查看快速回复集</div>',
+      );
+    } else if (selectedQrFolder === "__favorites__" && totalItems === 0) {
+      rightList.html(
+        '<div class="cfm-right-empty">还没有收藏任何快速回复集<br><span style="font-size:12px;opacity:0.5;">点击快速回复集行右侧的 ☆ 按钮添加收藏</span></div>',
+      );
+    } else if (selectedQrFolder === "__ungrouped__" && totalItems === 0) {
+      rightList.html(
+        '<div class="cfm-right-empty">没有未归类的快速回复集</div>',
+      );
+    } else if (totalItems === 0) {
+      rightList.html('<div class="cfm-right-empty">此文件夹为空</div>');
+    } else {
+      // 子文件夹行
+      for (const childId of childFolders) {
+        const childCount = countResItemsRecursive("quickreply", childId);
+        const row = $(`
+          <div class="cfm-row cfm-row-folder" data-folder-id="${escapeHtml(childId)}" draggable="true">
+            <div class="cfm-row-icon"><i class="fa-solid fa-folder"></i></div>
+            <div class="cfm-row-name">${escapeHtml(getResFolderDisplayName("quickreply", childId))}</div>
+            <div class="cfm-row-target-btn" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></div>
+            <div class="cfm-row-rename-btn" title="重命名文件夹"><i class="fa-solid fa-pen"></i></div>
+            <div class="cfm-row-meta">${childCount} 个快速回复集</div>
+          </div>
+        `);
+        row.find(".cfm-row-target-btn").on("click", (e) => {
+          e.stopPropagation();
+          handleFolderTargetMove(
+            (items) =>
+              items.forEach((n) => setItemGroup("quickreply", n, childId)),
+            () => renderQRView(),
+            (count, first) =>
+              toastr.success(
+                count > 1
+                  ? `已将 ${count} 个快速回复集移入「${getResFolderDisplayName("quickreply", childId)}」`
+                  : `已将「${first}」移入「${getResFolderDisplayName("quickreply", childId)}」`,
+              ),
+          );
+        });
+        row.find(".cfm-row-rename-btn").on("click", (e) => {
+          e.stopPropagation();
+          promptRenameFolder("quickreply", childId, () => renderQRView());
+        });
+        row.on("click", (e) => {
+          e.preventDefault();
+          const path = getResFolderPath("quickreply", childId);
+          for (const pid of path) qrExpandedNodes.add(pid);
+          selectedQrFolder = childId;
+          renderQRView();
+        });
+        row.on("dragstart", (e) => {
+          pcDragStart(e, {
+            type: "res-folder",
+            resType: "quickreply",
+            id: childId,
+          });
+          row.addClass("cfm-dragging");
+        });
+        row.on("dragend", () => {
+          row.removeClass("cfm-dragging");
+          pcDragEnd();
+          $(".cfm-row").removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+        });
+        // 右侧子文件夹行拖放目标
+        row.on("dragover", (e) => {
+          e.preventDefault();
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+          const rect = row[0].getBoundingClientRect();
+          const relY = (e.originalEvent.clientY - rect.top) / rect.height;
+          let zone = relY < 0.25 ? "before" : relY > 0.75 ? "after" : "into";
+          row.data("dropZone", zone);
+          const data = _pcDragData || {};
+          if (data.type === "res-folder" && data.resType === "quickreply") {
+            if (data.id === childId) {
+              row.addClass("cfm-drop-forbidden");
+              return;
+            }
+            if (
+              zone === "into" &&
+              wouldCreateResCycle("quickreply", data.id, childId)
+            ) {
+              row.addClass("cfm-drop-forbidden");
+              return;
+            }
+          }
+          if (zone === "before") row.addClass("cfm-drop-before");
+          else if (zone === "after") row.addClass("cfm-drop-after");
+          else row.addClass("cfm-drop-target");
+          e.originalEvent.dataTransfer.dropEffect = "move";
+        });
+        row.on("dragleave", () =>
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          ),
+        );
+        row.on("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          $(".cfm-right-list-drop-target").removeClass(
+            "cfm-right-list-drop-target",
+          );
+          const zone = row.data("dropZone") || "into";
+          row.removeClass(
+            "cfm-drop-target cfm-drop-before cfm-drop-after cfm-drop-forbidden",
+          );
+          const data = pcGetDropData(e);
+          if (!data) return;
+          if (
+            data.type === "res-folder" &&
+            data.resType === "quickreply" &&
+            data.id !== childId
+          ) {
+            if (zone === "into") {
+              if (wouldCreateResCycle("quickreply", data.id, childId)) {
+                toastr.error("循环嵌套，已阻止");
+                return;
+              }
+              reorderResFolder("quickreply", data.id, childId, null);
+              toastr.success(
+                `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", childId)}」`,
+              );
+            } else {
+              const pId = tree[childId]?.parentId || null;
+              if (wouldCreateResCycle("quickreply", data.id, pId)) {
+                toastr.error("循环嵌套，已阻止");
+                return;
+              }
+              if (zone === "before") {
+                reorderResFolder("quickreply", data.id, pId, childId);
+              } else {
+                const sibs = sortResFolders(
+                  "quickreply",
+                  getResChildFolders("quickreply", pId),
+                );
+                const ci = sibs.indexOf(childId);
+                reorderResFolder(
+                  "quickreply",
+                  data.id,
+                  pId,
+                  ci < sibs.length - 1 ? sibs[ci + 1] : null,
+                );
+              }
+              toastr.success(`「${data.id}」已排序`);
+            }
+            renderQRView();
+          } else if (data.type === "quickreply") {
+            const qrNames =
+              data.multiSelect && data.selectedIds
+                ? data.selectedIds
+                : [data.name];
+            const wCount = qrNames.length;
+            qrNames.forEach((n) => setItemGroup("quickreply", n, childId));
+            if (data.multiSelect) clearMultiSelect();
+            toastr.success(
+              wCount > 1
+                ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", childId)}」`
+                : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", childId)}」`,
+            );
+            renderQRView();
+          }
+        });
+        touchDragMgr.bind(row, () => ({
+          type: "res-folder",
+          resType: "quickreply",
+          id: childId,
+          name: getResFolderDisplayName("quickreply", childId),
+        }));
+        rightList.append(row);
+      }
+
+      // 快速回复集行（带星标 + 激活开关 + 展开三角 + 备注）
+      for (const n of displayItems) {
+        const fav = isResFavorite("quickreply", n);
+        const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
+        const isExpSel = cfmExportMode && cfmExportSelected.has(n);
+        const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+        const msCheckHtml = cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : "";
+
+        // 备注信息
+        const qrNote = getQrNote(n);
+        const noteHtml = qrNote
+          ? `<span class="cfm-theme-note" title="备注: ${escapeHtml(qrNote)}">${escapeHtml(qrNote)}</span>`
+          : "";
+
+        // 激活开关
+        const qrIsActive = qrActiveSet.has(n);
+        const toggleTitle = qrIsActive ? "点击取消激活" : "点击激活";
+        const toggleHtml = `<div class="cfm-wi-toggle ${qrIsActive ? "cfm-wi-toggle-on" : ""}" title="${toggleTitle}" data-qr-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${qrIsActive ? "on" : "off"}"></i></div>`;
+
+        // 展开三角
+        const isSetExpanded = qrItemExpandedSets.has(n);
+        const expandArrowHtml = `<div class="cfm-qr-expand-arrow ${isSetExpanded ? "cfm-qr-arrow-expanded" : ""}" title="${isSetExpanded ? "收起快速回复" : "展开快速回复"}" data-qr-set="${escapeHtml(n)}"><i class="fa-solid fa-caret-right"></i></div>`;
+
+        // 非模式状态下显示备注编辑按钮
+        const noModeActive =
+          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode;
+        const singleNoteBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : "";
+
+        const row = $(`
+          <div class="cfm-row cfm-row-char cfm-qr-set-row ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
+            ${msCheckHtml}
+            ${expandArrowHtml}
+            ${toggleHtml}
+            <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
+            <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
+            ${singleNoteBtn}
+            <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
+          </div>
+        `);
+
+        // 展开三角事件
+        row.find(".cfm-qr-expand-arrow").on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (qrItemExpandedSets.has(n)) {
+            qrItemExpandedSets.delete(n);
+          } else {
+            qrItemExpandedSets.add(n);
+          }
+          renderQRView();
+        });
+
+        // 激活开关事件
+        row.find(".cfm-wi-toggle").on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const newState = !qrActiveSet.has(n);
+          toggleQrSetActivation(n, newState).then(() => {
+            if (newState) qrActiveSet.add(n);
+            else qrActiveSet.delete(n);
+            const el = $(this);
+            el.toggleClass("cfm-wi-toggle-on", newState);
+            el.find("i").attr(
+              "class",
+              `fa-solid fa-toggle-${newState ? "on" : "off"}`,
+            );
+            el.attr("title", newState ? "点击取消激活" : "点击激活");
+          });
+        });
+
+        // 星标事件
+        row.find(".cfm-row-star").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const nowFav = toggleResFavorite("quickreply", n);
+          const starEl = row.find(".cfm-row-star");
+          starEl.toggleClass("cfm-star-active", nowFav);
+          starEl.attr("title", nowFav ? "取消收藏" : "添加收藏");
+          starEl
+            .find("i")
+            .attr("class", `fa-${nowFav ? "solid" : "regular"} fa-star`);
+          const favCountEl = $(
+            "#cfm-qr-left-tree .cfm-tnode-favorites .cfm-tnode-count",
+          );
+          if (favCountEl.length) {
+            const newCount = names.filter((nn) =>
+              getResFavorites("quickreply").includes(nn),
+            ).length;
+            favCountEl.text(newCount);
+          }
+          if (selectedQrFolder === "__favorites__") renderQRView();
+        });
+
+        // 备注编辑按钮
+        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const currentNote = getQrNote(n);
+          const newNote = prompt("请输入备注:", currentNote);
+          if (newNote !== null) {
+            setQrNote(n, newNote);
+            renderQRView();
+          }
+        });
+
+        // 行点击事件
+        row.on("click", (e) => {
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow",
+            ).length
+          )
+            return;
+          if (cfmResDeleteMode) {
+            toggleResDeleteItem(n, e.shiftKey);
+            renderQRView();
+            return;
+          }
+          if (cfmExportMode) {
+            toggleExportItem(n, e.shiftKey);
+            renderQRView();
+            return;
+          }
+          if (cfmMultiSelectMode) {
+            toggleMultiSelectItem(n, e.shiftKey);
+            renderQRView();
+            return;
+          }
+          // 默认点击：打开酒馆快速回复编辑器
+          openQrSetEditor(n);
+        });
+
+        // 拖拽
+        row.on("dragstart", (e) => {
+          const singleData = { type: "quickreply", name: n };
+          const dragData = getMultiDragData(singleData);
+          pcDragStart(e, dragData);
+        });
+        row.on("dragend", () => pcDragEnd());
+        touchDragMgr.bind(row, () => {
+          const singleData = { type: "quickreply", name: n };
+          return getMultiDragData(singleData);
+        });
+
+        rightList.append(row);
+
+        // 如果该 QR 集展开了，渲染其包含的快速回复项
+        if (isSetExpanded) {
+          const qrItems = getQrSetItems(n);
+          if (qrItems.length > 0) {
+            const subContainer = $('<div class="cfm-qr-sub-items"></div>');
+            for (const qr of qrItems) {
+              const label = qr.label || qr.title || "(未命名)";
+              const msg = qr.message || "";
+              const msgPreview =
+                msg.length > 80 ? msg.substring(0, 80) + "..." : msg;
+              const isHidden = qr.isHidden || qr.hidden || false;
+              const subRow = $(`
+                <div class="cfm-qr-sub-item ${isHidden ? "cfm-qr-sub-hidden" : ""}">
+                  <span class="cfm-qr-sub-icon"><i class="fa-solid fa-comment${isHidden ? "-slash" : ""}" style="color:${isHidden ? "#6c7086" : "#a6e3a1"};"></i></span>
+                  <span class="cfm-qr-sub-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+                  <span class="cfm-qr-sub-preview" title="${escapeHtml(msg)}">${escapeHtml(msgPreview)}</span>
+                </div>
+              `);
+              subContainer.append(subRow);
+            }
+            rightList.append(subContainer);
+          } else {
+            rightList.append(
+              '<div class="cfm-qr-sub-items"><div class="cfm-qr-sub-empty">此集合中没有快速回复</div></div>',
+            );
+          }
+        }
+      }
+
+      // 删除工具栏
+      prependResDeleteToolbar(rightList, renderQRView);
+      // 导出工具栏
+      prependExportToolbar(rightList, renderQRView);
+      // 多选工具栏
+      if (cfmMultiSelectMode && selectedQrFolder) {
+        const visible = getVisibleResourceIds();
+        const allSel =
+          visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectAllVisible();
+          renderQRView();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          renderQRView();
+        });
+        rightList.prepend(toolbar);
+      }
+    }
+
+    // 右侧列表本身也是拖放目标
+    if (
+      selectedQrFolder &&
+      selectedQrFolder !== "__ungrouped__" &&
+      selectedQrFolder !== "__favorites__" &&
+      tree[selectedQrFolder]
+    ) {
+      const currentFolder = selectedQrFolder;
+      rightList.off("dragover dragleave drop");
+      rightList.on("dragover", (e) => {
+        e.preventDefault();
+        e.originalEvent.dataTransfer.dropEffect = "move";
+        if ($(e.target).closest(".cfm-row").length > 0) return;
+        rightList.addClass("cfm-right-list-drop-target");
+      });
+      rightList.on("dragleave", (e) => {
+        if ($(e.relatedTarget).closest("#cfm-qr-right-list").length === 0) {
+          rightList.removeClass("cfm-right-list-drop-target");
+        }
+      });
+      rightList.on("drop", (e) => {
+        rightList.removeClass("cfm-right-list-drop-target");
+        if ($(e.target).closest(".cfm-row").length > 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const data = pcGetDropData(e);
+        if (!data) return;
+        if (
+          data.type === "res-folder" &&
+          data.resType === "quickreply" &&
+          data.id !== currentFolder
+        ) {
+          if (wouldCreateResCycle("quickreply", data.id, currentFolder)) {
+            toastr.error("循环嵌套，已阻止");
+            return;
+          }
+          reorderResFolder("quickreply", data.id, currentFolder, null);
+          toastr.success(
+            `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", currentFolder)}」`,
+          );
+          renderQRView();
+        } else if (data.type === "quickreply") {
+          const qrNames =
+            data.multiSelect && data.selectedIds
+              ? data.selectedIds
+              : [data.name];
+          const wCount = qrNames.length;
+          qrNames.forEach((n) => setItemGroup("quickreply", n, currentFolder));
+          if (data.multiSelect) clearMultiSelect();
+          toastr.success(
+            wCount > 1
+              ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", currentFolder)}」`
+              : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", currentFolder)}」`,
+          );
+          renderQRView();
+        }
+      });
+    }
+  }
+
+  /**
+   * 打开酒馆快速回复集编辑器
+   */
+  function openQrSetEditor(setName) {
+    try {
+      // 尝试通过快速回复 API 打开编辑器
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (api && api.getSetByName) {
+        const set = api.getSetByName(setName);
+        if (set && typeof set.select === "function") {
+          set.select();
+          // 打开快速回复设置面板
+          const qrSettingsBtn = $("#qr--settings-toggle, #qr--settings");
+          if (qrSettingsBtn.length && !$("#qr--settings").is(":visible")) {
+            qrSettingsBtn.trigger("click");
+          }
+          return;
+        }
+      }
+      // fallback: 尝试点击对应的 DOM 元素
+      const setEl = $(`#qr--set-${CSS.escape(setName)}`);
+      if (setEl.length) {
+        setEl.trigger("click");
+        return;
+      }
+      toastr.info(`快速回复集「${setName}」`);
+    } catch (e) {
+      console.warn("[CFM] 打开快速回复集编辑器失败", e);
+      toastr.info(`快速回复集「${setName}」`);
+    }
+  }
+
+  // ==================== 快速回复分组预设管理 ====================
+  function getQrActivePresets() {
+    return extension_settings[extensionName].qrActivePresets || [];
+  }
+  function saveQrActivePreset(name, sets, scope, bindChars, bindPresets) {
+    const presets = getQrActivePresets();
+    const existing = presets.find((p) => p.name === name);
+    if (existing) {
+      existing.sets = sets;
+      if (scope !== undefined) existing.scope = scope;
+      if (bindChars !== undefined) existing.bindChars = bindChars;
+      if (bindPresets !== undefined) existing.bindPresets = bindPresets;
+    } else {
+      presets.push({
+        name,
+        sets,
+        scope: scope || "global",
+        bindChars: bindChars || [],
+        bindPresets: bindPresets || [],
+      });
+    }
+    extension_settings[extensionName].qrActivePresets = presets;
+    getContext().saveSettingsDebounced();
+  }
+  function deleteQrActivePreset(name) {
+    const presets = getQrActivePresets();
+    extension_settings[extensionName].qrActivePresets = presets.filter(
+      (p) => p.name !== name,
+    );
+    getContext().saveSettingsDebounced();
+  }
+  function renameQrActivePreset(oldName, newName) {
+    const presets = getQrActivePresets();
+    const p = presets.find((p) => p.name === oldName);
+    if (p) {
+      p.name = newName;
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  // ==================== 快速回复分组绑定与自动应用 ====================
+  function setQrPresetScope(presetIdx, scope) {
+    const presets = getQrActivePresets();
+    if (presets[presetIdx]) {
+      presets[presetIdx].scope = scope;
+      if (scope === "global") {
+        presets[presetIdx].bindChars = [];
+        presets[presetIdx].bindPresets = [];
+      }
+      getContext().saveSettingsDebounced();
+    }
+  }
+  function bindQrPresetToChar(presetIdx, charAvatar) {
+    const presets = getQrActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindChars)) p.bindChars = [];
+    if (!p.bindChars.includes(charAvatar)) {
+      p.bindChars.push(charAvatar);
+      getContext().saveSettingsDebounced();
+    }
+  }
+  function bindQrPresetToPreset(presetIdx, presetName) {
+    const presets = getQrActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+    if (!p.bindPresets.includes(presetName)) {
+      p.bindPresets.push(presetName);
+      getContext().saveSettingsDebounced();
+    }
+  }
+  function unbindQrPresetFromChar(presetIdx, charAvatar) {
+    const presets = getQrActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindChars)) return;
+    const idx = p.bindChars.indexOf(charAvatar);
+    if (idx !== -1) {
+      p.bindChars.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+  function unbindQrPresetFromPreset(presetIdx, presetName) {
+    const presets = getQrActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindPresets)) return;
+    const idx = p.bindPresets.indexOf(presetName);
+    if (idx !== -1) {
+      p.bindPresets.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function getQrAutoApplyPresetIndices() {
+    const presets = getQrActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentPreset = getCurrentPresetName();
+    const indices = [];
+    const details = {};
+    for (let i = 0; i < presets.length; i++) {
+      const p = presets[i];
+      if (p.scope === "global") continue;
+      const hasBindings =
+        (p.bindChars && p.bindChars.length > 0) ||
+        (p.bindPresets && p.bindPresets.length > 0);
+      if (!hasBindings) continue;
+      const charMatch = !!(
+        currentChar &&
+        p.bindChars &&
+        p.bindChars.includes(currentChar)
+      );
+      const presetMatch = !!(
+        currentPreset &&
+        p.bindPresets &&
+        p.bindPresets.includes(currentPreset)
+      );
+      if (charMatch || presetMatch) {
+        indices.push(i);
+        details[i] = { charMatch, presetMatch };
+      }
+    }
+    return { indices, details };
+  }
+
+  async function autoApplyQrPresets() {
+    try {
+      const presets = getQrActivePresets();
+      const { indices: shouldApply, details } = getQrAutoApplyPresetIndices();
+      const prevApplied =
+        extension_settings[extensionName]._qrAppliedPresetIndices || [];
+      const currentCharName = getCurrentCharName();
+      const currentPresetName = getCurrentPresetName();
+      const toDeactivate = prevApplied.filter((i) => !shouldApply.includes(i));
+      const toActivate = shouldApply.filter((i) => !prevApplied.includes(i));
+      const stillApplied = shouldApply.filter((i) => prevApplied.includes(i));
+      if (
+        toDeactivate.length === 0 &&
+        toActivate.length === 0 &&
+        stillApplied.length === 0
+      )
+        return;
+
+      // 收集需要关闭的QR集
+      const setsToDeactivate = new Set();
+      for (const idx of toDeactivate) {
+        if (presets[idx]) {
+          for (const s of presets[idx].sets) setsToDeactivate.add(s);
+        }
+      }
+      const setsToActivate = new Set();
+      for (const idx of shouldApply) {
+        if (presets[idx]) {
+          for (const s of presets[idx].sets) setsToActivate.add(s);
+        }
+      }
+      for (const s of setsToActivate) setsToDeactivate.delete(s);
+
+      for (const s of setsToDeactivate) await toggleQrSetActivation(s, false);
+      for (const s of setsToActivate) await toggleQrSetActivation(s, true);
+
+      extension_settings[extensionName]._qrAppliedPresetIndices = [
+        ...shouldApply,
+      ];
+
+      const msgParts = [];
+      function describeMatchReason(idx) {
+        const d = details[idx];
+        if (!d) return "";
+        const reasons = [];
+        if (d.charMatch && currentCharName)
+          reasons.push(`角色「${currentCharName}」`);
+        if (d.presetMatch && currentPresetName)
+          reasons.push(`预设「${currentPresetName}」`);
+        return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
+      }
+      for (const idx of toActivate) {
+        const name = presets[idx]?.name;
+        if (name)
+          msgParts.push(`✅ 已开启「${name}」${describeMatchReason(idx)}`);
+      }
+      for (const idx of toDeactivate) {
+        const name = presets[idx]?.name;
+        if (name) {
+          const p = presets[idx];
+          const reasons = [];
+          if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
+          if (p.bindPresets && p.bindPresets.length > 0)
+            reasons.push("预设不匹配");
+          msgParts.push(`❌ 已关闭「${name}」（${reasons.join("且")}）`);
+        }
+      }
+      if (
+        (toActivate.length > 0 || toDeactivate.length > 0) &&
+        stillApplied.length > 0
+      ) {
+        for (const idx of stillApplied) {
+          const name = presets[idx]?.name;
+          if (name)
+            msgParts.push(`🔄 「${name}」保持开启${describeMatchReason(idx)}`);
+        }
+      }
+      if (msgParts.length > 0) {
+        toastr.info(msgParts.join("<br>"), "快速回复分组", {
+          timeOut: 4000,
+          escapeHtml: false,
+        });
+      }
+    } catch (e) {
+      console.error("[CFM] 自动应用快速回复分组失败", e);
+    }
+  }
+
+  function getQrPresetBindSummary(preset) {
+    if (preset.scope === "global") return "全局";
+    const parts = [];
+    if (preset.bindChars && preset.bindChars.length > 0) {
+      const chars = getCharacters();
+      const names = preset.bindChars.map((av) => {
+        const ch = chars.find((c) => c.avatar === av);
+        return ch ? ch.name : av;
+      });
+      parts.push(`角色: ${names.join(", ")}`);
+    }
+    if (preset.bindPresets && preset.bindPresets.length > 0) {
+      parts.push(`预设: ${preset.bindPresets.join(", ")}`);
+    }
+    return parts.length > 0 ? parts.join(" | ") : "未绑定";
+  }
+
+  // ==================== 快速回复激活分组面板 ====================
+  async function showQrPresetPanel() {
+    if ($("#cfm-qr-preset-panel-overlay").length > 0) return;
+    const qrActiveSet = getActiveQrSets();
+    const savableSets = [...qrActiveSet];
+    const presets = getQrActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentCharName = getCurrentCharName();
+    const currentPresetName = getCurrentPresetName();
+
+    // 检测当前激活组合是否与某个已有分组完全相同
+    const savableSet = new Set(savableSets);
+    let matchedPresetName = null;
+    for (const p of presets) {
+      if (
+        p.sets.length === savableSets.length &&
+        p.sets.every((s) => savableSet.has(s))
+      ) {
+        matchedPresetName = p.name;
+        break;
+      }
+    }
+
+    const scopeLabels = { global: "全局", bound: "已绑定" };
+    const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
+
+    const presetsHtml =
+      presets.length === 0
+        ? '<div class="cfm-wi-preset-empty">暂无已保存的分组</div>'
+        : presets
+            .map((p, idx) => {
+              const scope = p.scope || "global";
+              const hasBindings =
+                (p.bindChars && p.bindChars.length > 0) ||
+                (p.bindPresets && p.bindPresets.length > 0);
+              return `
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+          <div class="cfm-wi-preset-item-left">
+            <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+            <span class="cfm-wi-preset-scope-tag" style="color:${scopeColors[scope]};border-color:${scopeColors[scope]}40;background:${scopeColors[scope]}15;">${scopeLabels[scope]}</span>
+            <span class="cfm-wi-preset-item-count">${p.sets.length} 个</span>
+            ${hasBindings ? '<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>' : ""}
+          </div>
+          <span class="cfm-wi-preset-item-actions">
+            <i class="fa-solid fa-play cfm-qr-preset-apply" title="应用到全局"></i>
+            <i class="fa-solid fa-stop cfm-qr-preset-unapply" title="取消应用"></i>
+            <i class="fa-solid fa-link cfm-qr-preset-bind" title="绑定管理"></i>
+            <i class="fa-solid fa-pen cfm-qr-preset-edit" title="编辑"></i>
+            <i class="fa-solid fa-trash cfm-qr-preset-del" title="删除"></i>
+          </span>
+          ${hasBindings ? '<div class="cfm-wi-preset-bind-dropdown" style="display:none;"></div>' : ""}
+        </div>
+      `;
+            })
+            .join("");
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-qr-preset-panel-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-panel">
+          <div class="cfm-edit-popup-title"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>快速回复激活分组</div>
+          <div class="cfm-wi-preset-save-section">
+            <div class="cfm-wi-preset-save-row">
+              <input type="text" class="cfm-edit-input" id="cfm-qr-preset-name-input" placeholder="输入分组名称，保存当前激活的 ${savableSets.length} 个快速回复集">
+              <button class="cfm-edit-popup-confirm" id="cfm-qr-preset-save-confirm" ${savableSets.length === 0 ? "disabled" : ""}><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+            </div>
+            ${savableSets.length === 0 ? '<div class="cfm-wi-preset-save-hint">当前没有激活的快速回复集可保存</div>' : ""}
+            ${matchedPresetName ? `<div class="cfm-wi-preset-save-hint" style="color:#f9e2af;">当前激活组合与已有分组「${escapeHtml(matchedPresetName)}」相同</div>` : ""}
+          </div>
+          <div class="cfm-wi-preset-divider"></div>
+          <div class="cfm-wi-preset-list-section">
+            <div class="cfm-wi-preset-list-title">已保存的分组</div>
+            <div class="cfm-wi-preset-list">${presetsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">关闭</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    overlay.find("#cfm-qr-preset-name-input").focus();
+
+    // 关闭
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+
+    // 保存当前分组
+    overlay.find("#cfm-qr-preset-name-input").on("keydown", (e) => {
+      if (e.key === "Enter")
+        overlay.find("#cfm-qr-preset-save-confirm").trigger("click");
+      if (e.key === "Escape") overlay.remove();
+    });
+    overlay.find("#cfm-qr-preset-save-confirm").on("click", () => {
+      if (savableSets.length === 0) return;
+      const name = overlay.find("#cfm-qr-preset-name-input").val().trim();
+      if (!name) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existing = getQrActivePresets().find((p) => p.name === name);
+      if (existing) {
+        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+      }
+      saveQrActivePreset(name, savableSets);
+      toastr.success(
+        `已保存激活分组「${name}」（${savableSets.length} 个快速回复集）`,
+      );
+      overlay.remove();
+    });
+
+    // 应用分组
+    overlay.find(".cfm-qr-preset-apply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getQrActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied =
+          extension_settings[extensionName]._qrAppliedPresetIndices || [];
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+        let mode = "stack";
+        if (otherApplied.length > 0) {
+          const otherNames = otherApplied
+            .map((i) => currentPresets[i].name)
+            .join("、");
+          const choice = await new Promise((resolve) => {
+            const confirmOverlay = $(`
+              <div class="cfm-edit-popup-overlay" style="z-index:100001;">
+                <div class="cfm-edit-popup" style="max-width:380px;">
+                  <div class="cfm-edit-popup-title">应用方式</div>
+                  <div class="cfm-edit-field" style="font-size:13px;line-height:1.6;">
+                    当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：
+                  </div>
+                  <div class="cfm-edit-popup-actions" style="gap:8px;">
+                    <button class="cfm-edit-popup-cancel" data-choice="cancel">取消</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="replace" style="background:#f38ba8;">替换</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="stack">叠加</button>
+                  </div>
+                </div>
+              </div>
+            `);
+            $("body").append(confirmOverlay);
+            confirmOverlay.find("[data-choice]").on("click", function () {
+              resolve($(this).attr("data-choice"));
+              confirmOverlay.remove();
+            });
+            confirmOverlay.on("click", function (ev) {
+              if ($(ev.target).is(confirmOverlay)) {
+                resolve("cancel");
+                confirmOverlay.remove();
+              }
+            });
+          });
+          if (choice === "cancel") return;
+          mode = choice;
+        }
+        if (mode === "replace") {
+          const keepSets = new Set(preset.sets);
+          for (const oi of otherApplied) {
+            if (currentPresets[oi]) {
+              for (const s of currentPresets[oi].sets) {
+                if (!keepSets.has(s)) await toggleQrSetActivation(s, false);
+              }
+            }
+          }
+        }
+        for (const s of preset.sets) await toggleQrSetActivation(s, true);
+        const newApplied =
+          mode === "replace"
+            ? [idx]
+            : [...otherApplied.filter((i) => i !== idx), idx];
+        extension_settings[extensionName]._qrAppliedPresetIndices = newApplied;
+        getContext().saveSettingsDebounced();
+        toastr.success(
+          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
+        );
+        overlay.remove();
+        renderQRView();
+      } catch (err) {
+        console.error("[CFM] 应用QR分组失败", err);
+        toastr.error("应用分组失败");
+      }
+    });
+
+    // 取消应用分组
+    overlay.find(".cfm-qr-preset-unapply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getQrActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied =
+          extension_settings[extensionName]._qrAppliedPresetIndices || [];
+        if (!applied.includes(idx)) {
+          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          return;
+        }
+        const { indices: autoIndices, details: autoDetails } =
+          getQrAutoApplyPresetIndices();
+        if (autoIndices.includes(idx)) {
+          const detail = autoDetails[idx];
+          const reasons = [];
+          if (detail.charMatch)
+            reasons.push(
+              `角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`,
+            );
+          if (detail.presetMatch)
+            reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
+          toastr.warning(
+            `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
+            "无法取消应用",
+            { timeOut: 5000 },
+          );
+          return;
+        }
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+        const otherSets = new Set();
+        for (const oi of otherApplied) {
+          for (const s of currentPresets[oi].sets) otherSets.add(s);
+        }
+        let removedCount = 0;
+        for (const s of preset.sets) {
+          if (!otherSets.has(s)) {
+            await toggleQrSetActivation(s, false);
+            removedCount++;
+          }
+        }
+        extension_settings[extensionName]._qrAppliedPresetIndices =
+          otherApplied;
+        getContext().saveSettingsDebounced();
+        toastr.success(
+          `已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占快速回复集）`,
+        );
+        overlay.remove();
+        renderQRView();
+      } catch (err) {
+        console.error("[CFM] 取消应用QR分组失败", err);
+        toastr.error("取消应用分组失败");
+      }
+    });
+
+    // 绑定管理
+    overlay.find(".cfm-qr-preset-bind").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const btn = $(this);
+      const item = btn.closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      $(".cfm-wi-preset-bind-menu").remove();
+      const menu = $(`
+        <div class="cfm-wi-preset-bind-menu">
+          <div class="cfm-wi-preset-bind-menu-title">应用方式</div>
+          <div class="cfm-wi-preset-bind-menu-item" data-action="global"><i class="fa-solid fa-globe" style="color:#a6e3a1;"></i> 应用到全局</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentPresetName ? "cfm-disabled" : ""}" data-action="preset"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定到当前预设${currentPresetName ? "「" + escapeHtml(currentPresetName) + "」" : "（无预设）"}</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</div>
+        </div>
+      `);
+      overlay.append(menu);
+      const btnRect = btn[0].getBoundingClientRect();
+      let menuTop = btnRect.bottom + 4;
+      let menuLeft = btnRect.right - 240;
+      if (menuLeft < 8) menuLeft = 8;
+      if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
+      menu.css({ top: menuTop + "px", left: menuLeft + "px" });
+
+      menu
+        .find(".cfm-wi-preset-bind-menu-item")
+        .on("click", async function (ev) {
+          ev.stopPropagation();
+          if ($(this).hasClass("cfm-disabled")) return;
+          const action = $(this).data("action");
+          const allPresets = getQrActivePresets();
+          const preset = allPresets[idx];
+          if (!preset) return;
+          if (action === "global") {
+            setQrPresetScope(idx, "global");
+            await applyQrPreset(preset.sets);
+            toastr.success(`已将分组「${preset.name}」设为全局应用`);
+          } else if (action === "preset") {
+            if (!currentPresetName) return;
+            if (preset.scope === "global") setQrPresetScope(idx, "bound");
+            bindQrPresetToPreset(idx, currentPresetName);
+            await applyQrPreset(preset.sets);
+            toastr.success(
+              `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
+            );
+          } else if (action === "char") {
+            if (!currentChar) return;
+            if (preset.scope === "global") setQrPresetScope(idx, "bound");
+            bindQrPresetToChar(idx, currentChar);
+            await applyQrPreset(preset.sets);
+            toastr.success(
+              `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
+            );
+          }
+          menu.remove();
+          overlay.remove();
+          showQrPresetPanel();
+        });
+      setTimeout(() => {
+        $(document).one("click", () => menu.remove());
+      }, 10);
+    });
+
+    // 绑定三角下拉
+    overlay.find(".cfm-wi-preset-bind-toggle").on("click", function (e) {
+      e.stopPropagation();
+      const item = $(this).closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      const dropdown = item.find(".cfm-wi-preset-bind-dropdown");
+      const icon = $(this).find("i");
+      if (dropdown.is(":visible")) {
+        dropdown.slideUp(150);
+        icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+        return;
+      }
+      const allPresets = getQrActivePresets();
+      const preset = allPresets[idx];
+      if (!preset) return;
+      let html = "";
+      if (preset.bindChars && preset.bindChars.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定的角色卡</div>';
+        for (const av of preset.bindChars) {
+          const ch = chars.find((c) => c.avatar === av);
+          const name = ch ? ch.name : av;
+          html += `<div class="cfm-wi-bind-entry" data-bind-type="char" data-bind-id="${escapeHtml(av)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
+      if (preset.bindPresets && preset.bindPresets.length > 0) {
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
+        for (const pn of preset.bindPresets) {
+          html += `<div class="cfm-wi-bind-entry" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
+      if (!html) html = '<div class="cfm-wi-bind-empty">无绑定</div>';
+      dropdown.html(html);
+      dropdown.slideDown(150);
+      icon.removeClass("fa-caret-down").addClass("fa-caret-up");
+
+      dropdown.find(".cfm-wi-bind-remove").on("click", async function (ev) {
+        ev.stopPropagation();
+        const entry = $(this).closest(".cfm-wi-bind-entry");
+        const bindType = entry.data("bind-type");
+        const bindId = entry.data("bind-id");
+        const displayName = entry.find(".cfm-wi-bind-entry-name").text();
+        if (
+          !confirm(
+            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : "预设"}「${displayName}」的绑定？`,
+          )
+        )
+          return;
+        if (bindType === "char") unbindQrPresetFromChar(idx, bindId);
+        else unbindQrPresetFromPreset(idx, bindId);
+
+        const applied =
+          extension_settings[extensionName]._qrAppliedPresetIndices || [];
+        if (applied.includes(idx)) {
+          const { indices: stillAutoIndices } = getQrAutoApplyPresetIndices();
+          if (!stillAutoIndices.includes(idx)) {
+            const allPresets = getQrActivePresets();
+            const otherApplied = applied.filter(
+              (i) => i !== idx && allPresets[i],
+            );
+            const otherSets = new Set();
+            for (const oi of otherApplied) {
+              for (const s of allPresets[oi].sets) otherSets.add(s);
+            }
+            let removedCount = 0;
+            for (const s of preset.sets) {
+              if (!otherSets.has(s)) {
+                await toggleQrSetActivation(s, false);
+                removedCount++;
+              }
+            }
+            extension_settings[extensionName]._qrAppliedPresetIndices =
+              otherApplied;
+            getContext().saveSettingsDebounced();
+            toastr.info(
+              `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个快速回复集）`,
+            );
+          } else {
+            toastr.success("已取消绑定（分组仍因其他绑定条件匹配而保持应用）");
+          }
+        } else {
+          toastr.success("已取消绑定");
+        }
+        const updated = getQrActivePresets()[idx];
+        const stillHasBindings =
+          updated &&
+          ((updated.bindChars && updated.bindChars.length > 0) ||
+            (updated.bindPresets && updated.bindPresets.length > 0));
+        if (!stillHasBindings) {
+          if (updated) setQrPresetScope(idx, "global");
+          overlay.remove();
+          showQrPresetPanel();
+        } else {
+          entry.remove();
+          if (dropdown.find(".cfm-wi-bind-entry").length === 0) {
+            dropdown.slideUp(150);
+            icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+          }
+        }
+      });
+    });
+
+    // 编辑分组
+    overlay.find(".cfm-qr-preset-edit").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getQrActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      overlay.remove();
+      showQrPresetEditPopup(preset);
+    });
+
+    // 删除分组
+    overlay.find(".cfm-qr-preset-del").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getQrActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      deleteQrActivePreset(preset.name);
+      toastr.success(`已删除激活分组「${preset.name}」`);
+      overlay.remove();
+      showQrPresetPanel();
+    });
+  }
+
+  /**
+   * 显示编辑快速回复激活分组的弹窗
+   */
+  async function showQrPresetEditPopup(preset) {
+    if ($("#cfm-qr-preset-edit-overlay").length > 0) return;
+    const allNames = getQrSetNames();
+    const setSet = new Set(preset.sets);
+    const qrGroups = getResourceGroups("quickreply");
+    const qrTree = getResFolderTree("quickreply");
+    const setsHtml = allNames
+      .map((n) => {
+        const checked = setSet.has(n) ? "checked" : "";
+        const folder = qrGroups[n] || "";
+        return `<label class="cfm-wi-preset-edit-item" data-folder="${escapeHtml(folder)}">
+        <input type="checkbox" value="${escapeHtml(n)}" ${checked}>
+        <i class="fa-solid fa-reply-all" style="color:#89b4fa;"></i>
+        <span>${escapeHtml(n)}</span>
+      </label>`;
+      })
+      .join("");
+
+    function buildQrFilterOptions() {
+      const opts = [
+        '<option value="__all__">全部</option>',
+        '<option value="__ungrouped__">未归类</option>',
+      ];
+      function addOpts(parentId, depth) {
+        const children = sortResFolders(
+          "quickreply",
+          Object.keys(qrTree).filter(
+            (id) => qrTree[id].parentId === (parentId || null),
+          ),
+        );
+        for (const id of children) {
+          const indent = "&nbsp;".repeat(depth * 3);
+          opts.push(
+            `<option value="${escapeHtml(id)}">${indent}📁 ${escapeHtml(getResFolderDisplayName("quickreply", id))}</option>`,
+          );
+          addOpts(id, depth + 1);
+        }
+      }
+      addOpts(null, 0);
+      return opts.join("");
+    }
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-qr-preset-edit-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
+          <div class="cfm-edit-popup-title">编辑激活分组</div>
+          <div class="cfm-edit-field">
+            <label>分组名称</label>
+            <input type="text" class="cfm-edit-input" id="cfm-qr-preset-edit-name" value="${escapeHtml(preset.name)}">
+          </div>
+          <div class="cfm-edit-field">
+            <label>包含的快速回复集</label>
+            <div class="cfm-wi-preset-edit-search">
+              <select class="cfm-edit-input" id="cfm-qr-preset-edit-folder-filter">${buildQrFilterOptions()}</select>
+              <input type="text" class="cfm-edit-input" id="cfm-qr-preset-edit-filter" placeholder="搜索快速回复集...">
+            </div>
+            <div class="cfm-wi-preset-edit-list">${setsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">取消</button>
+            <button class="cfm-edit-popup-confirm">保存</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+
+    function applyEditFilters() {
+      const folderVal = overlay.find("#cfm-qr-preset-edit-folder-filter").val();
+      const q = overlay
+        .find("#cfm-qr-preset-edit-filter")
+        .val()
+        .toLowerCase()
+        .trim();
+      let allowedFolders = null;
+      if (
+        folderVal &&
+        folderVal !== "__all__" &&
+        folderVal !== "__ungrouped__"
+      ) {
+        allowedFolders = new Set();
+        function collectChildren(pid) {
+          allowedFolders.add(pid);
+          const children = Object.keys(qrTree).filter(
+            (id) => qrTree[id].parentId === pid,
+          );
+          for (const c of children) collectChildren(c);
+        }
+        collectChildren(folderVal);
+      }
+      overlay.find(".cfm-wi-preset-edit-item").each(function () {
+        const name = $(this).find("span").text().toLowerCase();
+        const folder = $(this).attr("data-folder") || "";
+        let folderMatch = true;
+        if (folderVal === "__ungrouped__") {
+          folderMatch = !folder || !qrTree[folder];
+        } else if (allowedFolders) {
+          folderMatch = allowedFolders.has(folder);
+        }
+        const textMatch = !q || name.includes(q);
+        $(this).toggle(folderMatch && textMatch);
+      });
+    }
+    overlay
+      .find("#cfm-qr-preset-edit-folder-filter")
+      .on("change", applyEditFilters);
+    overlay.find("#cfm-qr-preset-edit-filter").on("input", applyEditFilters);
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+    overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+      const newName = overlay.find("#cfm-qr-preset-edit-name").val().trim();
+      if (!newName) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existingOther = getQrActivePresets().find(
+        (p) => p.name === newName && p.name !== preset.name,
+      );
+      if (existingOther) {
+        toastr.warning(`分组名称「${newName}」已被使用`);
+        return;
+      }
+      const newSets = [];
+      overlay.find(".cfm-wi-preset-edit-item input:checked").each(function () {
+        newSets.push($(this).val());
+      });
+      if (newSets.length === 0) {
+        toastr.warning("请至少选择一个快速回复集");
+        return;
+      }
+      if (newName !== preset.name) renameQrActivePreset(preset.name, newName);
+      saveQrActivePreset(newName, newSets);
+      toastr.success(
+        `已更新激活分组「${newName}」（${newSets.length} 个快速回复集）`,
+      );
+      overlay.remove();
+    });
+  }
+
   // ==================== User视图渲染（双栏 + 树形嵌套） ====================
   // 获取当前 persona 列表
   async function getCurrentPersonas() {
@@ -26759,6 +29380,7 @@ jQuery(async () => {
             renderBackgroundsView();
           else if (currentResourceType === "personas") renderPersonasView();
           else if (currentResourceType === "regex") renderRegexView();
+          else if (currentResourceType === "quickreply") renderQRView();
         } catch (err) {
           toastr.error("导入失败：" + err.message);
           console.error("[CFM] Import error:", err);
@@ -28235,22 +30857,25 @@ jQuery(async () => {
         }
       });
     }
-    // 角色/聊天切换时自动应用/关闭世界书分组
+    // 角色/聊天切换时自动应用/关闭世界书分组和快速回复分组
     if (event_types.CHAT_CHANGED) {
       eventSource.on(event_types.CHAT_CHANGED, () => {
         // 延迟执行，确保角色信息已更新
         setTimeout(() => autoApplyWiPresets(), 300);
+        setTimeout(() => autoApplyQrPresets(), 350);
       });
     }
-    // 预设切换时自动应用/关闭世界书分组
+    // 预设切换时自动应用/关闭世界书分组和快速回复分组
     if (event_types.OAI_PRESET_CHANGED_AFTER) {
       eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
         setTimeout(() => autoApplyWiPresets(), 300);
+        setTimeout(() => autoApplyQrPresets(), 350);
       });
     }
     if (event_types.PRESET_CHANGED) {
       eventSource.on(event_types.PRESET_CHANGED, () => {
         setTimeout(() => autoApplyWiPresets(), 300);
+        setTimeout(() => autoApplyQrPresets(), 350);
       });
     }
   }
