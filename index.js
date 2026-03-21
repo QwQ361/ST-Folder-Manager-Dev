@@ -777,6 +777,12 @@ jQuery(async () => {
     // 当前已应用的世界书分组索引集合（用于自动应用/关闭追踪）
     if (!extension_settings[extensionName]._wiAppliedPresetIndices)
       extension_settings[extensionName]._wiAppliedPresetIndices = [];
+    // 正则激活分组预设：[{name, scripts}]  scripts 为脚本ID数组
+    if (!extension_settings[extensionName].regexActivePresets)
+      extension_settings[extensionName].regexActivePresets = [];
+    // 当前已应用的正则分组索引集合（用于应用/取消追踪）
+    if (!extension_settings[extensionName]._regexAppliedPresetIndices)
+      extension_settings[extensionName]._regexAppliedPresetIndices = [];
     // 置顶聊天列表：[{ avatar, chatFileName }]
     if (!Array.isArray(extension_settings[extensionName].pinnedChats))
       extension_settings[extensionName].pinnedChats = [];
@@ -12233,6 +12239,7 @@ jQuery(async () => {
                     </div>
                     <div class="cfm-right-pane">
                         <div class="cfm-right-header">
+                            <button class="cfm-edit-char-btn" id="cfm-regex-preset-btn" title="正则激活分组"><i class="fa-solid fa-layer-group"></i></button>
                             <span class="cfm-rh-path" id="cfm-regex-rh-path">选择左侧项目查看内容</span>
                             <span class="cfm-rh-count" id="cfm-regex-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-regex-btn" title="导入正则"><i class="fa-solid fa-file-import"></i></button>
@@ -13669,6 +13676,15 @@ jQuery(async () => {
       if (currentResourceType !== "regex") return;
       await openRegexSortDialog();
     });
+
+    // 正则激活分组按钮
+    popup
+      .find("#cfm-regex-preset-btn")
+      .on("click touchend", async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        await showRegexPresetPanel();
+      });
 
     // User备注编辑按钮
     popup.find("#cfm-persona-note-btn").on("click touchend", function (e) {
@@ -24466,6 +24482,515 @@ jQuery(async () => {
     return markedFolders;
   }
 
+  // ==================== 正则激活分组管理 ====================
+  function getRegexActivePresets() {
+    return extension_settings[extensionName].regexActivePresets || [];
+  }
+  function saveRegexActivePreset(name, scriptIds) {
+    const presets = getRegexActivePresets();
+    const existing = presets.find((p) => p.name === name);
+    if (existing) {
+      existing.scripts = scriptIds;
+    } else {
+      presets.push({ name, scripts: scriptIds });
+    }
+    extension_settings[extensionName].regexActivePresets = presets;
+    getContext().saveSettingsDebounced();
+  }
+  function deleteRegexActivePreset(name) {
+    const presets = getRegexActivePresets();
+    extension_settings[extensionName].regexActivePresets = presets.filter(
+      (p) => p.name !== name,
+    );
+    getContext().saveSettingsDebounced();
+  }
+  function renameRegexActivePreset(oldName, newName) {
+    const presets = getRegexActivePresets();
+    const p = presets.find((p) => p.name === oldName);
+    if (p) {
+      p.name = newName;
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 获取当前已启用的全局正则脚本ID集合
+   */
+  function getEnabledRegexScriptIds() {
+    const globalScripts = extension_settings.regex ?? [];
+    return globalScripts.filter((s) => !s.disabled && s.id).map((s) => s.id);
+  }
+
+  /**
+   * 切换全局正则脚本的启用/禁用状态
+   * @param {string} scriptId - 脚本ID
+   * @param {boolean} enable - true=启用, false=禁用
+   */
+  function toggleRegexScriptActivation(scriptId, enable) {
+    const globalScripts = extension_settings.regex ?? [];
+    const script = globalScripts.find((s) => s.id === scriptId);
+    if (script) {
+      script.disabled = !enable;
+    }
+  }
+
+  /**
+   * 显示正则激活分组面板（保存 + 已有分组列表）
+   */
+  async function showRegexPresetPanel() {
+    if ($("#cfm-regex-preset-panel-overlay").length > 0) return;
+    const globalScripts = extension_settings.regex ?? [];
+    const enabledIds = getEnabledRegexScriptIds();
+    const presets = getRegexActivePresets();
+
+    // 检测当前启用组合是否与某个已有分组完全相同
+    const enabledSet = new Set(enabledIds);
+    let matchedPresetName = null;
+    for (const p of presets) {
+      if (
+        p.scripts.length === enabledIds.length &&
+        p.scripts.every((id) => enabledSet.has(id))
+      ) {
+        matchedPresetName = p.name;
+        break;
+      }
+    }
+
+    // 构建已有分组列表
+    const presetsHtml =
+      presets.length === 0
+        ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
+        : presets
+            .map((p, idx) => {
+              return `
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+          <div class="cfm-wi-preset-item-left">
+            <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+            <span class="cfm-wi-preset-item-count">${p.scripts.length} 个</span>
+          </div>
+          <span class="cfm-wi-preset-item-actions">
+            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用分组"></i>
+            <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
+            <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
+            <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
+          </span>
+        </div>
+      `;
+            })
+            .join("");
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-regex-preset-panel-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-panel">
+          <div class="cfm-edit-popup-title"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>正则激活分组</div>
+          <div class="cfm-wi-preset-save-section">
+            <div class="cfm-wi-preset-save-row">
+              <input type="text" class="cfm-edit-input" id="cfm-regex-preset-name-input" placeholder="输入分组名称，保存当前启用的 ${enabledIds.length} 个正则脚本">
+              <button class="cfm-edit-popup-confirm" id="cfm-regex-preset-save-confirm" ${enabledIds.length === 0 ? "disabled" : ""}><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+            </div>
+            ${enabledIds.length === 0 ? '<div class="cfm-wi-preset-save-hint">当前没有启用的全局正则脚本可保存</div>' : ""}
+            ${matchedPresetName ? `<div class="cfm-wi-preset-save-hint" style="color:#f9e2af;">当前启用组合与已有分组「${escapeHtml(matchedPresetName)}」相同</div>` : ""}
+          </div>
+          <div class="cfm-wi-preset-divider"></div>
+          <div class="cfm-wi-preset-list-section">
+            <div class="cfm-wi-preset-list-title">已保存的分组</div>
+            <div class="cfm-wi-preset-list">${presetsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">关闭</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    overlay.find("#cfm-regex-preset-name-input").focus();
+
+    // 关闭
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+
+    // 保存当前分组
+    overlay.find("#cfm-regex-preset-name-input").on("keydown", (e) => {
+      if (e.key === "Enter")
+        overlay.find("#cfm-regex-preset-save-confirm").trigger("click");
+      if (e.key === "Escape") overlay.remove();
+    });
+    overlay.find("#cfm-regex-preset-save-confirm").on("click", () => {
+      if (enabledIds.length === 0) return;
+      const name = overlay.find("#cfm-regex-preset-name-input").val().trim();
+      if (!name) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existing = getRegexActivePresets().find((p) => p.name === name);
+      if (existing) {
+        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+      }
+      saveRegexActivePreset(name, enabledIds);
+      toastr.success(
+        `已保存激活分组「${name}」（${enabledIds.length} 个正则脚本）`,
+      );
+      overlay.remove();
+    });
+
+    // 应用分组
+    overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getRegexActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied =
+          extension_settings[extensionName]._regexAppliedPresetIndices || [];
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+
+        let mode = "stack"; // 默认叠加
+        if (otherApplied.length > 0) {
+          const otherNames = otherApplied
+            .map((i) => currentPresets[i].name)
+            .join("、");
+          const choice = await new Promise((resolve) => {
+            const confirmOverlay = $(`
+              <div class="cfm-edit-popup-overlay" style="z-index:100001;">
+                <div class="cfm-edit-popup" style="max-width:380px;">
+                  <div class="cfm-edit-popup-title">应用方式</div>
+                  <div class="cfm-edit-field" style="font-size:13px;line-height:1.6;">
+                    当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：
+                  </div>
+                  <div class="cfm-edit-popup-actions" style="gap:8px;">
+                    <button class="cfm-edit-popup-cancel" data-choice="cancel">取消</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="replace" style="background:#f38ba8;">替换</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="stack">叠加</button>
+                  </div>
+                </div>
+              </div>
+            `);
+            $("body").append(confirmOverlay);
+            confirmOverlay.find("[data-choice]").on("click", function () {
+              resolve($(this).attr("data-choice"));
+              confirmOverlay.remove();
+            });
+            confirmOverlay.on("click", function (ev) {
+              if ($(ev.target).is(confirmOverlay)) {
+                resolve("cancel");
+                confirmOverlay.remove();
+              }
+            });
+          });
+          if (choice === "cancel") return;
+          mode = choice;
+        }
+
+        if (mode === "replace") {
+          // 替换模式：先禁用其他已应用分组的独占脚本
+          const keepScripts = new Set(preset.scripts);
+          for (const oi of otherApplied) {
+            if (currentPresets[oi]) {
+              for (const sid of currentPresets[oi].scripts) {
+                if (!keepScripts.has(sid)) {
+                  toggleRegexScriptActivation(sid, false);
+                }
+              }
+            }
+          }
+        }
+
+        // 启用当前分组的脚本
+        for (const sid of preset.scripts) {
+          toggleRegexScriptActivation(sid, true);
+        }
+
+        // 保存设置
+        getContext().saveSettingsDebounced();
+        // 同步原生正则引擎
+        await syncNativeRegexState();
+
+        // 更新追踪
+        const newApplied =
+          mode === "replace"
+            ? [idx]
+            : [...otherApplied.filter((i) => i !== idx), idx];
+        extension_settings[extensionName]._regexAppliedPresetIndices =
+          newApplied;
+        getContext().saveSettingsDebounced();
+
+        toastr.success(
+          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
+        );
+        overlay.remove();
+        renderRegexView();
+      } catch (err) {
+        console.error("[CFM] 应用正则分组失败", err);
+        toastr.error("应用分组失败");
+      }
+    });
+
+    // 取消应用分组
+    overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getRegexActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied =
+          extension_settings[extensionName]._regexAppliedPresetIndices || [];
+        if (!applied.includes(idx)) {
+          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          return;
+        }
+        // 计算其他已应用分组覆盖的脚本
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+        const otherScripts = new Set();
+        for (const oi of otherApplied) {
+          for (const sid of currentPresets[oi].scripts) otherScripts.add(sid);
+        }
+        // 只禁用该分组独占的脚本
+        let removedCount = 0;
+        for (const sid of preset.scripts) {
+          if (!otherScripts.has(sid)) {
+            toggleRegexScriptActivation(sid, false);
+            removedCount++;
+          }
+        }
+        // 保存设置
+        getContext().saveSettingsDebounced();
+        // 同步原生正则引擎
+        await syncNativeRegexState();
+        // 从追踪中移除
+        extension_settings[extensionName]._regexAppliedPresetIndices =
+          otherApplied;
+        getContext().saveSettingsDebounced();
+
+        toastr.success(
+          `已取消应用分组「${preset.name}」（禁用 ${removedCount} 个独占脚本）`,
+        );
+        overlay.remove();
+        renderRegexView();
+      } catch (err) {
+        console.error("[CFM] 取消应用正则分组失败", err);
+        toastr.error("取消应用分组失败");
+      }
+    });
+
+    // 编辑分组
+    overlay.find(".cfm-wi-preset-edit").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getRegexActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      overlay.remove();
+      showRegexPresetEditPopup(preset);
+    });
+
+    // 删除分组
+    overlay.find(".cfm-wi-preset-del").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getRegexActivePresets();
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      // 如果该分组正在应用中，从追踪中移除
+      const applied =
+        extension_settings[extensionName]._regexAppliedPresetIndices || [];
+      if (applied.includes(idx)) {
+        extension_settings[extensionName]._regexAppliedPresetIndices =
+          applied.filter((i) => i !== idx);
+      }
+      deleteRegexActivePreset(preset.name);
+      toastr.success(`已删除激活分组「${preset.name}」`);
+      overlay.remove();
+      showRegexPresetPanel();
+    });
+  }
+
+  /**
+   * 显示编辑正则激活分组的弹窗（可修改名称和包含的脚本）
+   * @param {Object} preset - {name: string, scripts: string[]}
+   */
+  function showRegexPresetEditPopup(preset) {
+    if ($("#cfm-regex-preset-edit-overlay").length > 0) return;
+    const globalScripts = extension_settings.regex ?? [];
+    const scriptSet = new Set(preset.scripts);
+    const globalGroups =
+      extension_settings[extensionName].regexGlobalGroups || {};
+    const folderTree = extension_settings[extensionName].regexFolderTree || {};
+
+    const scriptsHtml = globalScripts
+      .filter((s) => s.id)
+      .map((s) => {
+        const checked = scriptSet.has(s.id) ? "checked" : "";
+        const folder = globalGroups[s.id] || "";
+        return `<label class="cfm-wi-preset-edit-item" data-folder="${escapeHtml(folder)}">
+          <input type="checkbox" value="${escapeHtml(s.id)}" ${checked}>
+          <i class="fa-solid fa-code" style="color:#a6e3a1;"></i>
+          <span>${escapeHtml(s.scriptName || "(未命名)")}</span>
+        </label>`;
+      })
+      .join("");
+
+    // 构建文件夹过滤选项
+    function buildRegexFilterOptions() {
+      const opts = [
+        '<option value="__all__">全部</option>',
+        '<option value="__ungrouped__">未归类</option>',
+      ];
+      function addOpts(parentId, depth) {
+        const children = Object.keys(folderTree)
+          .filter((id) => folderTree[id].parentId === (parentId || null))
+          .sort((a, b) =>
+            (folderTree[a]?.displayName || a).localeCompare(
+              folderTree[b]?.displayName || b,
+              "zh-CN",
+            ),
+          );
+        for (const id of children) {
+          const indent = "&nbsp;".repeat(depth * 3);
+          opts.push(
+            `<option value="${escapeHtml(id)}">${indent}📁 ${escapeHtml(folderTree[id]?.displayName || id)}</option>`,
+          );
+          addOpts(id, depth + 1);
+        }
+      }
+      addOpts(null, 0);
+      return opts.join("");
+    }
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-regex-preset-edit-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
+          <div class="cfm-edit-popup-title">编辑正则激活分组</div>
+          <div class="cfm-edit-field">
+            <label>分组名称</label>
+            <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-name" value="${escapeHtml(preset.name)}">
+          </div>
+          <div class="cfm-edit-field">
+            <label>包含的正则脚本</label>
+            <div class="cfm-wi-preset-edit-search">
+              <select class="cfm-edit-input" id="cfm-regex-preset-edit-folder-filter">${buildRegexFilterOptions()}</select>
+              <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-filter" placeholder="搜索正则脚本...">
+            </div>
+            <div class="cfm-wi-preset-edit-list">${scriptsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">取消</button>
+            <button class="cfm-edit-popup-confirm">保存</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+
+    // 组合过滤函数
+    function applyEditFilters() {
+      const folderVal = overlay
+        .find("#cfm-regex-preset-edit-folder-filter")
+        .val();
+      const q = overlay
+        .find("#cfm-regex-preset-edit-filter")
+        .val()
+        .toLowerCase()
+        .trim();
+      let allowedFolders = null;
+      if (
+        folderVal &&
+        folderVal !== "__all__" &&
+        folderVal !== "__ungrouped__"
+      ) {
+        allowedFolders = new Set();
+        function collectChildren(pid) {
+          allowedFolders.add(pid);
+          const children = Object.keys(folderTree).filter(
+            (id) => folderTree[id].parentId === pid,
+          );
+          for (const c of children) collectChildren(c);
+        }
+        collectChildren(folderVal);
+      }
+      overlay.find(".cfm-wi-preset-edit-item").each(function () {
+        const name = $(this).find("span").text().toLowerCase();
+        const folder = $(this).attr("data-folder") || "";
+        let folderMatch = true;
+        if (folderVal === "__ungrouped__") {
+          folderMatch = !folder || !folderTree[folder];
+        } else if (allowedFolders) {
+          folderMatch = allowedFolders.has(folder);
+        }
+        const textMatch = !q || name.includes(q);
+        $(this).toggle(folderMatch && textMatch);
+      });
+    }
+    overlay
+      .find("#cfm-regex-preset-edit-folder-filter")
+      .on("change", applyEditFilters);
+    overlay.find("#cfm-regex-preset-edit-filter").on("input", applyEditFilters);
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+    overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+      const newName = overlay.find("#cfm-regex-preset-edit-name").val().trim();
+      if (!newName) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existingOther = getRegexActivePresets().find(
+        (p) => p.name === newName && p.name !== preset.name,
+      );
+      if (existingOther) {
+        toastr.warning(`分组名称「${newName}」已被使用`);
+        return;
+      }
+      const newScripts = [];
+      overlay.find(".cfm-wi-preset-edit-item input:checked").each(function () {
+        newScripts.push($(this).val());
+      });
+      if (newScripts.length === 0) {
+        toastr.warning("请至少选择一个正则脚本");
+        return;
+      }
+      if (newName !== preset.name) {
+        renameRegexActivePreset(preset.name, newName);
+      }
+      saveRegexActivePreset(newName, newScripts);
+      toastr.success(
+        `已更新激活分组「${newName}」（${newScripts.length} 个正则脚本）`,
+      );
+      overlay.remove();
+    });
+  }
+
   // ==================== 正则脚本排序弹窗 ====================
   async function openRegexSortDialog() {
     ensureResourceSettings();
@@ -24521,14 +25046,20 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         const prev = row.prev(".cfm-sort-row");
-        if (prev.length) { row.insertBefore(prev); updateArrowStates(); }
+        if (prev.length) {
+          row.insertBefore(prev);
+          updateArrowStates();
+        }
       });
       // 下移按钮
       row.find(".cfm-sort-arrow-down").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
         const next = row.next(".cfm-sort-row");
-        if (next.length) { row.insertAfter(next); updateArrowStates(); }
+        if (next.length) {
+          row.insertAfter(next);
+          updateArrowStates();
+        }
       });
       sortList.append(row);
     }
@@ -24539,8 +25070,14 @@ jQuery(async () => {
       rows.each(function (i) {
         const isFirst = i === 0;
         const isLast = i === rows.length - 1;
-        $(this).find(".cfm-sort-arrow-up").prop("disabled", isFirst).toggleClass("cfm-sort-arrow-disabled", isFirst);
-        $(this).find(".cfm-sort-arrow-down").prop("disabled", isLast).toggleClass("cfm-sort-arrow-disabled", isLast);
+        $(this)
+          .find(".cfm-sort-arrow-up")
+          .prop("disabled", isFirst)
+          .toggleClass("cfm-sort-arrow-disabled", isFirst);
+        $(this)
+          .find(".cfm-sort-arrow-down")
+          .prop("disabled", isLast)
+          .toggleClass("cfm-sort-arrow-disabled", isLast);
       });
     }
 
@@ -24896,7 +25433,9 @@ jQuery(async () => {
     const totalItems = childFolders.length + displayScripts.length;
     rhPath.text(displayTitle);
     if (childFolders.length === 0) {
-      rhCount.text(displayScripts.length > 0 ? `${displayScripts.length} 个正则` : "");
+      rhCount.text(
+        displayScripts.length > 0 ? `${displayScripts.length} 个正则` : "",
+      );
     } else {
       rhCount.text(totalItems > 0 ? `${totalItems} 项` : "");
     }
