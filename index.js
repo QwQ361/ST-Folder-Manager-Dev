@@ -896,6 +896,7 @@ jQuery(async () => {
         ],
         personas: ["import", "note", "export", "delete"],
         regex: ["import", "export", "delete", "sort"],
+        quickreply: ["import", "note", "rename", "export", "delete"],
       };
       const refOrder = defaultOrder[tabId] || Object.keys(knownIds);
       for (const actionId of Object.keys(knownIds)) {
@@ -983,7 +984,9 @@ jQuery(async () => {
       sort: "#cfm-regex-sort-btn",
     },
     quickreply: {
+      import: "#cfm-import-qr-btn",
       note: "#cfm-qr-note-btn",
+      rename: "#cfm-qr-rename-btn",
       export: "#cfm-export-qr-btn",
       delete: "#cfm-res-delete-qr-btn",
     },
@@ -3396,6 +3399,8 @@ jQuery(async () => {
       return new Set(cfmWorldInfoRenameSelected);
     if (cfmQrNoteMode && cfmQrNoteSelected.size > 0)
       return new Set(cfmQrNoteSelected);
+    if (cfmQrRenameMode && cfmQrRenameSelected.size > 0)
+      return new Set(cfmQrRenameSelected);
     if (cfmPersonaNoteMode && cfmPersonaNoteSelected.size > 0)
       return new Set(cfmPersonaNoteSelected);
     if (cfmMultiSelectMode && cfmMultiSelected.size > 0)
@@ -3470,6 +3475,7 @@ jQuery(async () => {
     // 重命名模式
     if (cfmPresetRenameMode) exitPresetRenameMode();
     if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+    if (cfmQrRenameMode) exitQrRenameMode();
     // 主题备注模式
     if (cfmThemeNoteMode) {
       cfmThemeNoteMode = false;
@@ -4366,7 +4372,8 @@ jQuery(async () => {
       if ($(this).attr("id") === "cfm-res-delete-persona-btn")
         return "删除User";
       if ($(this).attr("id") === "cfm-res-delete-regex-btn") return "删除正则";
-      if ($(this).attr("id") === "cfm-res-delete-qr-btn") return "删除快速回复集";
+      if ($(this).attr("id") === "cfm-res-delete-qr-btn")
+        return "删除快速回复集";
       return "删除世界书";
     });
     $(".cfm-popup").removeClass("cfm-res-delete-mode");
@@ -4715,8 +4722,10 @@ jQuery(async () => {
         // 删除快速回复集
         for (const name of selected) {
           try {
-            const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
-            const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+            const api =
+              typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+            const QRS =
+              typeof globalThis !== "undefined" && globalThis.QuickReplySet;
             let deleted = false;
             // 优先使用 QuickReplySet 实例的 delete 方法
             if (QRS && QRS.list) {
@@ -8291,6 +8300,472 @@ jQuery(async () => {
     }
   }
 
+  // ==================== 快速回复重命名模式 ====================
+  let cfmQrRenameMode = false;
+  let cfmQrRenameSelected = new Set();
+  let cfmQrRenameRangeMode = false;
+  let cfmQrRenameLastClicked = null;
+
+  function enterQrRenameMode() {
+    const prev = collectCurrentSelection();
+    clearAllExclusiveModes();
+    cfmQrRenameMode = true;
+    cfmQrRenameSelected = prev || new Set();
+    cfmQrRenameRangeMode = false;
+    cfmQrRenameLastClicked = null;
+    $("#cfm-qr-rename-btn").addClass("cfm-edit-active");
+    $("#cfm-qr-rename-btn")
+      .find("i")
+      .removeClass("fa-i-cursor")
+      .addClass("fa-check");
+    $("#cfm-qr-rename-btn").attr("title", "确认重命名");
+    $(".cfm-popup").addClass("cfm-qr-rename-mode");
+    renderQRView();
+  }
+
+  function exitQrRenameMode() {
+    cfmQrRenameMode = false;
+    cfmQrRenameSelected.clear();
+    cfmQrRenameRangeMode = false;
+    cfmQrRenameLastClicked = null;
+    $("#cfm-qr-rename-btn").removeClass("cfm-edit-active");
+    $("#cfm-qr-rename-btn")
+      .find("i")
+      .removeClass("fa-check")
+      .addClass("fa-i-cursor");
+    $("#cfm-qr-rename-btn").attr("title", "重命名快速回复集");
+    $(".cfm-popup").removeClass("cfm-qr-rename-mode");
+    renderQRView();
+  }
+
+  function toggleQrRenameItem(id, shiftKey) {
+    if ((shiftKey || cfmQrRenameRangeMode) && cfmQrRenameLastClicked) {
+      const visible = getVisibleResourceIds();
+      const lastIdx = visible.indexOf(cfmQrRenameLastClicked);
+      const curIdx = visible.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] =
+          lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        for (let i = start; i <= end; i++) cfmQrRenameSelected.add(visible[i]);
+      }
+    } else {
+      if (cfmQrRenameSelected.has(id)) cfmQrRenameSelected.delete(id);
+      else cfmQrRenameSelected.add(id);
+    }
+    cfmQrRenameLastClicked = id;
+  }
+
+  function prependQrRenameToolbar(listContainer, renderFn) {
+    if (!cfmQrRenameMode) return;
+    const visible = getVisibleResourceIds();
+    const allSel =
+      visible.length > 0 && visible.every((id) => cfmQrRenameSelected.has(id));
+    const toolbar = $(`
+      <div class="cfm-edit-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmQrRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmQrRenameRangeMode ? "(开)" : ""}</button>
+        <span class="cfm-edit-count">${cfmQrRenameSelected.size > 0 ? `已选 ${cfmQrRenameSelected.size} 项` : ""}</span>
+        <button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+      </div>
+    `);
+    toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (allSel) {
+        visible.forEach((id) => cfmQrRenameSelected.delete(id));
+      } else {
+        visible.forEach((id) => cfmQrRenameSelected.add(id));
+      }
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-range").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmQrRenameRangeMode = !cfmQrRenameRangeMode;
+      if (cfmQrRenameRangeMode) cfmQrRenameLastClicked = null;
+      renderFn();
+    });
+    toolbar.find(".cfm-edit-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      exitQrRenameMode();
+    });
+    listContainer.prepend(toolbar);
+  }
+
+  // 显示快速回复集重命名弹窗（复用世界书重命名弹窗的结构）
+  async function showQrRenamePopup(names) {
+    if (!names || names.length === 0) return;
+    const isSingle = names.length === 1;
+    const nameListHtml =
+      names.length <= 5
+        ? names
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("")
+        : names
+            .slice(0, 5)
+            .map(
+              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+            )
+            .join("") +
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个快速回复集</div>`;
+
+    if (isSingle) {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">重命名快速回复集</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>新名称</label>
+              <input type="text" class="cfm-edit-input" id="cfm-qr-rename-input" value="${escapeHtml(names[0])}" placeholder="输入新名称">
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+      overlay.find("#cfm-qr-rename-input").focus().select();
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const newName = overlay.find("#cfm-qr-rename-input").val().trim();
+          overlay.remove();
+          resolve({ mode: "single", newName });
+        });
+        overlay.find(".cfm-edit-input").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    } else {
+      const popupHtml = `
+        <div class="cfm-edit-popup-overlay">
+          <div class="cfm-edit-popup">
+            <div class="cfm-edit-popup-title">批量重命名快速回复集</div>
+            <div class="cfm-edit-popup-names">${nameListHtml}</div>
+            <div class="cfm-edit-popup-field">
+              <label>操作类型</label>
+              <select class="cfm-edit-input" id="cfm-qr-rename-action">
+                <option value="add-prefix">增加前缀</option>
+                <option value="add-suffix">增加后缀</option>
+                <option value="del-prefix">删除前缀</option>
+                <option value="del-suffix">删除后缀</option>
+              </select>
+            </div>
+            <div class="cfm-edit-popup-field">
+              <label id="cfm-qr-rename-text-label">前缀内容</label>
+              <input type="text" class="cfm-edit-input" id="cfm-qr-rename-text" placeholder="输入前缀内容">
+            </div>
+            <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
+              <label>自动检测到的公共前/后缀</label>
+              <div id="cfm-qr-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-edit-popup-actions">
+              <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+              <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const overlay = $(popupHtml);
+      $("body").append(overlay);
+
+      function updateRenameUI() {
+        const action = overlay.find("#cfm-qr-rename-action").val();
+        const textLabel = overlay.find("#cfm-qr-rename-text-label");
+        const textInput = overlay.find("#cfm-qr-rename-text");
+        const autoDetect = overlay.find(".cfm-rename-auto-detect");
+        const detected = overlay.find("#cfm-qr-rename-detected");
+        if (action === "add-prefix") {
+          textLabel.text("前缀内容");
+          textInput.attr("placeholder", "输入要添加的前缀");
+          autoDetect.hide();
+        } else if (action === "add-suffix") {
+          textLabel.text("后缀内容");
+          textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "del-prefix") {
+          textLabel.text("要删除的前缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
+          const commonPrefix = findCommonPrefix(names);
+          if (commonPrefix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            );
+            autoDetect.show();
+          }
+        } else if (action === "del-suffix") {
+          textLabel.text("要删除的后缀");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
+          const commonSuffix = findCommonSuffix(names);
+          if (commonSuffix) {
+            detected.html(
+              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+            );
+            autoDetect.show();
+          } else {
+            detected.html(
+              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+            );
+            autoDetect.show();
+          }
+        }
+      }
+      updateRenameUI();
+      overlay.find("#cfm-qr-rename-action").on("change", updateRenameUI);
+      overlay.on("click", ".cfm-rename-detect-item", function () {
+        overlay.find("#cfm-qr-rename-text").val($(this).data("value"));
+      });
+      overlay.find("#cfm-qr-rename-text").focus();
+
+      return new Promise((resolve) => {
+        overlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          overlay.remove();
+          resolve(null);
+        });
+        overlay.find(".cfm-edit-popup-overlay").on("click", (e) => {
+          if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+            overlay.remove();
+            resolve(null);
+          }
+        });
+        overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+          const action = overlay.find("#cfm-qr-rename-action").val();
+          const text = overlay.find("#cfm-qr-rename-text").val().trim();
+          overlay.remove();
+          resolve({ mode: "batch", action, text });
+        });
+        overlay.find("#cfm-qr-rename-text").on("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            overlay.find(".cfm-edit-popup-confirm").trigger("click");
+          }
+          if (e.key === "Escape") {
+            overlay.find(".cfm-edit-popup-cancel").trigger("click");
+          }
+        });
+      });
+    }
+  }
+
+  // 执行快速回复集重命名
+  async function executeQrRename(names) {
+    const result = await showQrRenamePopup(names);
+    if (!result) return;
+
+    const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+    const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+
+    if (result.mode === "single") {
+      const oldName = names[0];
+      const newName = result.newName;
+      if (!newName) {
+        toastr.warning("请输入新名称");
+        return;
+      }
+      if (newName === oldName) {
+        toastr.info("名称未变更");
+        return;
+      }
+      try {
+        // 获取 QR Set 对象
+        let set = null;
+        if (api && api.getSetByName) {
+          set = api.getSetByName(oldName);
+        }
+        if (!set && QRS && QRS.list) {
+          set = QRS.list.find((s) => s.name === oldName);
+        }
+        if (!set) throw new Error("未找到快速回复集");
+
+        // 获取 JSON 数据
+        const setData = set.toJSON
+          ? set.toJSON()
+          : { name: oldName, qrList: set.qrList || [] };
+
+        // 用新名字保存
+        setData.name = newName;
+        const saveResp = await fetch("/api/quick-replies/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(setData),
+        });
+        if (!saveResp.ok) throw new Error("保存新名称失败");
+
+        // 删除旧的
+        await fetch("/api/quick-replies/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: oldName }),
+        });
+
+        // 更新本地 QuickReplySet 列表
+        if (QRS && QRS.list) {
+          const idx = QRS.list.findIndex((s) => s.name === oldName);
+          if (idx !== -1) {
+            QRS.list[idx].name = newName;
+          }
+        }
+
+        // 更新插件设置（分组、备注、收藏等）
+        updateSettingsAfterRename("quickreply", oldName, newName);
+
+        // 更新全局/聊天 QR 引用
+        await updateQrGlobalChatRefs(oldName, newName);
+
+        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+      } catch (e) {
+        console.error("[CFM] 快速回复集重命名失败", e);
+        toastr.error(`重命名失败: ${e.message}`);
+        return;
+      }
+    } else if (result.mode === "batch") {
+      const { action, text } = result;
+      if (!text) {
+        toastr.warning("请输入内容");
+        return;
+      }
+      let success = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      toastr.info(`正在批量重命名 ${names.length} 个快速回复集...`);
+
+      for (const oldName of names) {
+        let newName;
+        if (action === "add-prefix") {
+          newName = text + oldName;
+        } else if (action === "add-suffix") {
+          newName = oldName + text;
+        } else if (action === "del-prefix") {
+          if (!oldName.startsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(text.length);
+        } else if (action === "del-suffix") {
+          if (!oldName.endsWith(text)) {
+            skipped++;
+            continue;
+          }
+          newName = oldName.substring(0, oldName.length - text.length);
+        }
+        if (!newName || newName === oldName) {
+          skipped++;
+          continue;
+        }
+        try {
+          let set = null;
+          if (api && api.getSetByName) {
+            set = api.getSetByName(oldName);
+          }
+          if (!set && QRS && QRS.list) {
+            set = QRS.list.find((s) => s.name === oldName);
+          }
+          if (!set) {
+            failed++;
+            continue;
+          }
+          const setData = set.toJSON
+            ? set.toJSON()
+            : { name: oldName, qrList: set.qrList || [] };
+          setData.name = newName;
+          const saveResp = await fetch("/api/quick-replies/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(setData),
+          });
+          if (!saveResp.ok) {
+            failed++;
+            continue;
+          }
+          await fetch("/api/quick-replies/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: oldName }),
+          });
+          if (QRS && QRS.list) {
+            const idx = QRS.list.findIndex((s) => s.name === oldName);
+            if (idx !== -1) {
+              QRS.list[idx].name = newName;
+            }
+          }
+          updateSettingsAfterRename("quickreply", oldName, newName);
+          await updateQrGlobalChatRefs(oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名快速回复集 ${oldName} 失败`, e);
+          failed++;
+        }
+      }
+      let msg = `已重命名 ${success} 个快速回复集`;
+      if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      if (success > 0) toastr.success(msg);
+      else toastr.warning(msg);
+    }
+
+    renderQRView();
+  }
+
+  // 更新全局/聊天 QR 集引用
+  async function updateQrGlobalChatRefs(oldName, newName) {
+    try {
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      if (!api) return;
+      // 更新全局 QR 集引用
+      if (api.listGlobalSets) {
+        const globalSets = api.listGlobalSets();
+        if (globalSets && globalSets.includes(oldName)) {
+          if (api.removeGlobalSet) await api.removeGlobalSet(oldName);
+          if (api.addGlobalSet) await api.addGlobalSet(newName);
+        }
+      }
+      // 更新聊天 QR 集引用
+      if (api.listChatSets) {
+        const chatSets = api.listChatSets();
+        if (chatSets && chatSets.includes(oldName)) {
+          if (api.removeChatSet) await api.removeChatSet(oldName);
+          if (api.addChatSet) await api.addChatSet(newName);
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 更新全局/聊天QR引用失败", e);
+    }
+  }
+
   // ==================== 预设重命名模式 ====================
   let cfmPresetRenameMode = false;
   let cfmPresetRenameSelected = new Set();
@@ -8915,6 +9390,20 @@ jQuery(async () => {
       if (bindings && bindings[oldName]) {
         bindings[newName] = bindings[oldName];
         delete bindings[oldName];
+      }
+    } else if (resType === "quickreply") {
+      const notes = extension_settings[extensionName].qrNotes;
+      if (notes && notes[oldName]) {
+        notes[newName] = notes[oldName];
+        delete notes[oldName];
+      }
+      // 同步 QR 激活分组中的快速回复集名称
+      const qrPresets = getQrActivePresets ? getQrActivePresets() : [];
+      for (const qp of qrPresets) {
+        if (Array.isArray(qp.sets)) {
+          const idx = qp.sets.indexOf(oldName);
+          if (idx !== -1) qp.sets[idx] = newName;
+        }
       }
     } else if (resType === "backgrounds") {
       const notes = extension_settings[extensionName].bgNotes;
@@ -12676,7 +13165,10 @@ jQuery(async () => {
                             <button class="cfm-edit-char-btn" id="cfm-qr-preset-btn" title="快速回复激活分组"><i class="fa-solid fa-layer-group"></i></button>
                             <span class="cfm-rh-path" id="cfm-qr-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-qr-rh-count"></span>
+                            <button class="cfm-import-btn" id="cfm-import-qr-btn" title="导入快速回复集"><i class="fa-solid fa-file-import"></i></button>
+                            <input type="file" id="cfm-import-qr-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-edit-char-btn" id="cfm-qr-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-qr-rename-btn" title="重命名快速回复集"><i class="fa-solid fa-i-cursor"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-qr-btn" title="导出快速回复集"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-qr-btn" title="删除快速回复集"><i class="fa-solid fa-trash-can"></i></button>
                             <div class="cfm-sort-wrapper" id="cfm-qr-right-sort-wrapper">
@@ -12759,6 +13251,7 @@ jQuery(async () => {
       if (cfmPersonaNoteMode) exitPersonaNoteMode();
       if (cfmPresetRenameMode) exitPresetRenameMode();
       if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+      if (cfmQrRenameMode) exitQrRenameMode();
       // 切换视图
       popup.find("#cfm-chars-view").toggle(tab === "chars");
       popup.find("#cfm-presets-view").toggle(tab === "presets");
@@ -14208,6 +14701,192 @@ jQuery(async () => {
         executeQrNoteEdit(names).then(() => exitQrNoteMode());
       } else {
         enterQrNoteMode();
+      }
+    });
+
+    // 快速回复导入按钮
+    popup.find("#cfm-import-qr-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      $("#cfm-import-qr-file").val("").trigger("click");
+    });
+
+    popup.find("#cfm-import-qr-file").on("change", async function (e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const targetFolder =
+        selectedQrFolder &&
+        selectedQrFolder !== "__ungrouped__" &&
+        selectedQrFolder !== "__favorites__"
+          ? selectedQrFolder
+          : null;
+
+      const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+      const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+
+      // 获取现有快速回复集名称
+      let existingNames = new Set();
+      if (api && api.listSets) {
+        try {
+          const sets = api.listSets();
+          if (Array.isArray(sets)) {
+            sets.forEach((s) => existingNames.add(typeof s === "string" ? s : s.name));
+          }
+        } catch (err) {
+          console.warn("[CFM] 获取QR集列表失败", err);
+        }
+      }
+      if (existingNames.size === 0 && QRS && QRS.list) {
+        QRS.list.forEach((s) => existingNames.add(s.name));
+      }
+
+      // 预处理文件
+      const validFiles = [];
+      for (const file of files) {
+        if (!file.name.endsWith(".json")) continue;
+        try {
+          const text = await file.text();
+          const json = JSON.parse(text);
+          // QR集 JSON 应含 name 和 qrList
+          const setName = json.name || file.name.replace(/\.json$/i, "");
+          validFiles.push({ file, json, setName });
+        } catch (parseErr) {
+          console.warn(`[CFM] 解析QR文件 ${file.name} 失败`, parseErr);
+        }
+      }
+
+      if (validFiles.length === 0) {
+        toastr.warning("没有可导入的有效快速回复集文件");
+        e.target.value = null;
+        return;
+      }
+
+      // 检测重名
+      const duplicateNames = validFiles
+        .filter((f) => existingNames.has(f.setName))
+        .map((f) => f.setName);
+      let dupAction = null;
+      if (duplicateNames.length > 0) {
+        dupAction = await showDuplicateImportDialog(
+          duplicateNames,
+          validFiles.length,
+          "快速回复集",
+        );
+        if (dupAction === "cancel") {
+          toastr.info("已取消导入");
+          e.target.value = null;
+          return;
+        }
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      let skipCount = 0;
+
+      for (const { file, json, setName } of validFiles) {
+        const isDuplicate = existingNames.has(setName);
+
+        if (isDuplicate && dupAction === "skip") {
+          skipCount++;
+          continue;
+        }
+
+        try {
+          let finalName = setName;
+
+          // 覆盖模式：先删除旧的
+          if (isDuplicate && dupAction === "overwrite") {
+            await fetch("/api/quick-replies/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: setName }),
+            });
+            // 从本地列表中移除
+            if (QRS && QRS.list) {
+              const idx = QRS.list.findIndex((s) => s.name === setName);
+              if (idx !== -1) QRS.list.splice(idx, 1);
+            }
+          }
+
+          // 重命名模式
+          if (isDuplicate && dupAction === "rename") {
+            finalName = getUniqueImportName(setName, existingNames);
+          }
+
+          // 保存到服务器
+          const saveData = { ...json, name: finalName };
+          const saveResp = await fetch("/api/quick-replies/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(saveData),
+          });
+
+          if (!saveResp.ok) {
+            throw new Error(`保存失败: ${saveResp.statusText}`);
+          }
+
+          existingNames.add(finalName);
+
+          // 更新本地 QuickReplySet 列表
+          if (QRS && QRS.list) {
+            // 检查是否已存在（覆盖情况），如不存在则手动添加
+            const existing = QRS.list.find((s) => s.name === finalName);
+            if (!existing) {
+              try {
+                // 尝试通过 QRS.get 加载新保存的集
+                if (QRS.get) {
+                  await QRS.get(finalName);
+                }
+              } catch (loadErr) {
+                console.warn("[CFM] 加载新导入QR集到本地失败", loadErr);
+              }
+            }
+          }
+
+          // 分配到文件夹
+          if (targetFolder) {
+            setItemGroup("quickreply", finalName, targetFolder);
+          }
+          successCount++;
+        } catch (error) {
+          console.error(`导入快速回复集失败: ${file.name}`, error);
+          failCount++;
+        }
+      }
+
+      // 刷新视图
+      renderQRView();
+
+      const folderHint = targetFolder ? `到「${targetFolder}」` : "（未归类）";
+      const parts = [];
+      if (successCount > 0)
+        parts.push(`成功导入 ${successCount} 个快速回复集${folderHint}`);
+      if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
+      if (failCount > 0) parts.push(`${failCount} 个失败`);
+      if (successCount > 0) {
+        toastr.success(parts.join("，"));
+      } else if (skipCount > 0 && failCount === 0) {
+        toastr.info(parts.join("，"));
+      } else if (failCount > 0) {
+        toastr.error(parts.join("，"));
+      }
+
+      e.target.value = null;
+    });
+
+    // 快速回复重命名按钮
+    popup.find("#cfm-qr-rename-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (cfmQrRenameMode) {
+        if (cfmQrRenameSelected.size === 0) {
+          toastr.warning("请先选择要重命名的快速回复集");
+          return;
+        }
+        const names = Array.from(cfmQrRenameSelected);
+        executeQrRename(names).then(() => exitQrRenameMode());
+      } else {
+        enterQrRenameMode();
       }
     });
 
@@ -17526,6 +18205,7 @@ jQuery(async () => {
           if (cfmPersonaNoteMode) exitPersonaNoteMode();
           if (cfmPresetRenameMode) exitPresetRenameMode();
           if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
+          if (cfmQrRenameMode) exitQrRenameMode();
           $("#cfm-overlay")
             .find("#cfm-chars-view")
             .toggle(tab === "chars");
@@ -24073,8 +24753,10 @@ jQuery(async () => {
       const newMsg = editorPopup.find(".cfm-qr-editor-textarea").val();
       try {
         // 获取 QR Set 对象并修改
-        const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
-        const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+        const api =
+          typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+        const QRS =
+          typeof globalThis !== "undefined" && globalThis.QuickReplySet;
         let set = null;
         if (api && api.getSetByName) {
           set = api.getSetByName(setName);
@@ -24094,7 +24776,11 @@ jQuery(async () => {
             const response = await fetch("/api/quick-replies/save", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(set.toJSON ? set.toJSON() : { name: setName, qrList: set.qrList }),
+              body: JSON.stringify(
+                set.toJSON
+                  ? set.toJSON()
+                  : { name: setName, qrList: set.qrList },
+              ),
             });
             if (!response.ok) throw new Error("保存失败");
           }
@@ -24817,13 +25503,19 @@ jQuery(async () => {
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
         const isExpSel = cfmExportMode && cfmExportSelected.has(n);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(n);
+        const isNoteSel = cfmQrNoteMode && cfmQrNoteSelected.has(n);
+        const isRenameSel = cfmQrRenameMode && cfmQrRenameSelected.has(n);
         const msCheckHtml = cfmResDeleteMode
           ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
           : cfmExportMode
             ? `<div class="cfm-export-checkbox ${isExpSel ? "cfm-export-checked" : ""}"><i class="fa-${isExpSel ? "solid" : "regular"} fa-square${isExpSel ? "-check" : ""}"></i></div>`
             : cfmMultiSelectMode
               ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
-              : "";
+              : cfmQrNoteMode
+                ? `<div class="cfm-edit-checkbox ${isNoteSel ? "cfm-edit-checked" : ""}"><i class="fa-${isNoteSel ? "solid" : "regular"} fa-square${isNoteSel ? "-check" : ""}"></i></div>`
+                : cfmQrRenameMode
+                  ? `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
+                  : "";
 
         // 备注信息
         const qrNote = getQrNote(n);
@@ -24840,21 +25532,25 @@ jQuery(async () => {
         const isSetExpanded = qrItemExpandedSets.has(n);
         const expandArrowHtml = `<div class="cfm-qr-expand-arrow ${isSetExpanded ? "cfm-qr-arrow-expanded" : ""}" title="${isSetExpanded ? "收起快速回复" : "展开快速回复"}" data-qr-set="${escapeHtml(n)}"><i class="fa-solid fa-caret-right"></i></div>`;
 
-        // 非模式状态下显示备注编辑按钮
+        // 非模式状态下显示备注编辑按钮和重命名按钮
         const noModeActive =
-          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode;
+          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode && !cfmQrNoteMode && !cfmQrRenameMode;
         const singleNoteBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
           : "";
+        const singleRenameBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
+          : "";
 
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-qr-set-row ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
+          <div class="cfm-row cfm-row-char cfm-qr-set-row ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
             ${expandArrowHtml}
             ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
             <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
             ${singleNoteBtn}
+            ${singleRenameBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
@@ -24925,10 +25621,17 @@ jQuery(async () => {
         });
 
         // 行点击事件
+        // 重命名按钮事件
+        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          executeQrRename([n]);
+        });
+
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow",
             ).length
           )
             return;
@@ -24944,6 +25647,16 @@ jQuery(async () => {
           }
           if (cfmMultiSelectMode) {
             toggleMultiSelectItem(n, e.shiftKey);
+            renderQRView();
+            return;
+          }
+          if (cfmQrNoteMode) {
+            toggleQrNoteItem(n, e.shiftKey);
+            renderQRView();
+            return;
+          }
+          if (cfmQrRenameMode) {
+            toggleQrRenameItem(n, e.shiftKey);
             renderQRView();
             return;
           }
@@ -24986,11 +25699,13 @@ jQuery(async () => {
                 </div>
               `);
               // 编辑按钮：打开内容编辑弹窗
-              subRow.find(".cfm-qr-sub-edit-btn").on("click touchend", function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                openQrItemEditor(n, qrIdx, qr);
-              });
+              subRow
+                .find(".cfm-qr-sub-edit-btn")
+                .on("click touchend", function (e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openQrItemEditor(n, qrIdx, qr);
+                });
               subContainer.append(subRow);
             }
             rightList.append(subContainer);
@@ -25006,6 +25721,10 @@ jQuery(async () => {
       prependResDeleteToolbar(rightList, renderQRView);
       // 导出工具栏
       prependExportToolbar(rightList, renderQRView);
+      // 备注工具栏
+      prependQrNoteToolbar(rightList, renderQRView);
+      // 重命名工具栏
+      prependQrRenameToolbar(rightList, renderQRView);
       // 多选工具栏
       if (cfmMultiSelectMode && selectedQrFolder) {
         const visible = getVisibleResourceIds();
@@ -28244,6 +28963,7 @@ jQuery(async () => {
           <span class="cfm-tnode-icon"><i class="fa-solid fa-folder${isSelected ? "-open" : ""}"></i></span>
           <span class="cfm-tnode-label">${escapeHtml(displayName)}</span>
           <span class="cfm-tnode-target" title="移入此文件夹"><i class="fa-solid fa-crosshairs"></i></span>
+          <span class="cfm-tnode-rename" title="重命名文件夹"><i class="fa-solid fa-pen"></i></span>
           <span class="cfm-tnode-count">${count}</span>
         </div>
       `);
@@ -28258,6 +28978,16 @@ jQuery(async () => {
       node.find(".cfm-tnode-target").on("click", (e) => {
         e.stopPropagation();
         moveSelectedRegexToFolder(folderId);
+      });
+      node.find(".cfm-tnode-rename").on("click", (e) => {
+        e.stopPropagation();
+        const currentName = folderTree[folderId]?.displayName || folderId;
+        const newName = prompt("重命名文件夹", currentName);
+        if (!newName || !newName.trim() || newName.trim() === currentName) return;
+        folderTree[folderId].displayName = newName.trim();
+        getContext().saveSettingsDebounced();
+        toastr.success(`文件夹已重命名为「${newName.trim()}」`);
+        renderRegexView();
       });
       node.on("click", (e) => {
         e.preventDefault();
