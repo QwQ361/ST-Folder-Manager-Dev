@@ -11758,11 +11758,13 @@ jQuery(async () => {
     selectedThemeFolder = null;
     selectedBgFolder = null;
     selectedPersonaFolder = null;
+    selectedRegexNode = null;
     presetExpandedNodes.clear();
     worldInfoExpandedNodes.clear();
     themeExpandedNodes.clear();
     bgExpandedNodes.clear();
     personaExpandedNodes.clear();
+    regexExpandedNodes.clear();
     // 如果是"记住上次页面"模式，恢复文件夹选中状态（但不恢复展开状态，默认全部收起）
     if (defaultPage === "last" && lastState.resourceType) {
       const folder = lastState.selectedFolder;
@@ -11812,6 +11814,19 @@ jQuery(async () => {
           const fullPath = getResFolderPath("personas", selectedPersonaFolder);
           for (let i = 0; i < fullPath.length - 1; i++)
             personaExpandedNodes.add(fullPath[i]);
+        }
+      } else if (initialTab === "regex") {
+        selectedRegexNode = folder || null;
+        if (selectedRegexNode && selectedRegexNode !== "__favorites__" && selectedRegexNode !== "__ungrouped__") {
+          const folderTree = extension_settings[extensionName].regexFolderTree || {};
+          const path = [];
+          let cur = selectedRegexNode;
+          while (cur && folderTree[cur]) {
+            path.unshift(cur);
+            cur = folderTree[cur].parentId;
+          }
+          for (let i = 0; i < path.length - 1; i++)
+            regexExpandedNodes.add(path[i]);
         }
       }
     }
@@ -15592,6 +15607,9 @@ jQuery(async () => {
     } else if (currentResourceType === "personas") {
       folder = selectedPersonaFolder;
       expanded = Array.from(personaExpandedNodes);
+    } else if (currentResourceType === "regex") {
+      folder = selectedRegexNode;
+      expanded = Array.from(regexExpandedNodes);
     }
     extension_settings[extensionName].lastOpenState = {
       resourceType: currentResourceType,
@@ -24135,7 +24153,7 @@ function renderRegexConfigBody(body) {
 
   // ==================== 正则视图渲染（统一左右分栏布局） ====================
   // 正则标签页状态
-  let selectedRegexNode = "__ungrouped__"; // 当前选中的树节点（默认未归类）
+  let selectedRegexNode = null; // 当前选中的树节点（null=未选中，显示空提示）
   let regexExpandedNodes = new Set(); // 展开的树节点ID集合（默认全部收起）
   let regexAllNodeIds = []; // 所有可展开节点ID（用于展开/收起全部）
 
@@ -24405,7 +24423,10 @@ function renderRegexConfigBody(body) {
     let displayTitle = "";
     let childFolders = [];
 
-    if (selectedRegexNode === "__favorites__") {
+    if (!selectedRegexNode) {
+      // 初始状态：未选中任何节点
+      displayTitle = "";
+    } else if (selectedRegexNode === "__favorites__") {
       displayScripts = globalScripts.filter(
         (s) => s.id && regexFavs.includes(s.id),
       );
@@ -24421,16 +24442,20 @@ function renderRegexConfigBody(body) {
         .map((id) => folderTree[id]?.displayName || id)
         .join(" › ");
     } else {
-      selectedRegexNode = "__ungrouped__";
-      displayScripts = ungroupedScripts;
-      displayTitle = "未归类";
+      // 无效节点，重置为未选中
+      selectedRegexNode = null;
+      displayTitle = "";
     }
 
     const totalItems = childFolders.length + displayScripts.length;
     rhPath.text(displayTitle);
     rhCount.text(totalItems > 0 ? `(${totalItems})` : "");
 
-    if (selectedRegexNode === "__favorites__" && totalItems === 0) {
+    if (!selectedRegexNode) {
+      rightList.html(
+        '<div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>',
+      );
+    } else if (selectedRegexNode === "__favorites__" && totalItems === 0) {
       rightList.html(
         '<div class="cfm-right-empty">还没有收藏任何正则脚本<br><span style="font-size:12px;opacity:0.5;">点击脚本行右侧的 ☆ 按钮添加收藏</span></div>',
       );
