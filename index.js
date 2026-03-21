@@ -9389,6 +9389,19 @@ jQuery(async () => {
             );
             row.toggleClass("cfm-regex-disabled", isNowDisabled);
           });
+        // 编辑按钮点击
+        row.find(".cfm-regex-edit-btn").on("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const scriptId = row.data("script-id");
+          if (!scriptId) return;
+          const nativeEl = $("#" + $.escapeSelector(String(scriptId)));
+          if (nativeEl.length) {
+            nativeEl.find(".edit_existing_regex").trigger("click");
+          } else {
+            toastr.warning("未找到对应的正则脚本编辑器");
+          }
+        });
         subList.append(row);
       }
     }
@@ -9466,6 +9479,19 @@ jQuery(async () => {
             );
             row.toggleClass("cfm-regex-disabled", isNowDisabled);
           });
+        // 编辑按钮点击
+        row.find(".cfm-regex-edit-btn").on("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const scriptId = row.data("script-id");
+          if (!scriptId) return;
+          const nativeEl = $("#" + $.escapeSelector(String(scriptId)));
+          if (nativeEl.length) {
+            nativeEl.find(".edit_existing_regex").trigger("click");
+          } else {
+            toastr.warning("未找到对应的正则脚本编辑器");
+          }
+        });
         subList.append(row);
       }
     }
@@ -23203,6 +23229,28 @@ jQuery(async () => {
           );
           // 更新行的禁用样式
           row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        },
+      );
+
+    // --- 绑定正则脚本编辑按钮点击事件 ---
+    rightList
+      .off("click.rxedit")
+      .on(
+        "click.rxedit",
+        ".cfm-regex-script-row .cfm-regex-edit-btn",
+        function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const row = $(this).closest(".cfm-regex-script-row");
+          const scriptId = row.data("script-id");
+          if (!scriptId) return;
+          // 触发SillyTavern原生正则编辑器的编辑按钮
+          const nativeEl = $("#" + $.escapeSelector(String(scriptId)));
+          if (nativeEl.length) {
+            nativeEl.find(".edit_existing_regex").trigger("click");
+          } else {
+            toastr.warning("未找到对应的正则脚本编辑器");
+          }
         },
       );
   }
