@@ -9550,6 +9550,8 @@ jQuery(async () => {
               ${
                 isTarget
                   ? `
+              <div class="cfm-regex-action-btn cfm-regex-move-up-btn${i === 0 ? " cfm-regex-move-disabled" : ""}" title="上移"><i class="fa-solid fa-arrow-up"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-move-down-btn${i === scripts.length - 1 ? " cfm-regex-move-disabled" : ""}" title="下移"><i class="fa-solid fa-arrow-down"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
@@ -9618,6 +9620,36 @@ jQuery(async () => {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
             toastr.warning("非当前角色的正则脚本，无法编辑");
+          }
+        });
+        // 上移按钮
+        row.find(".cfm-regex-move-up-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (i <= 0) return;
+          [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
+          try {
+            await saveCharRegexScripts(avatar, scripts);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则上移失败:", err);
+            [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
+            toastr.error("上移失败: " + err.message);
+          }
+        });
+        // 下移按钮
+        row.find(".cfm-regex-move-down-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (i >= scripts.length - 1) return;
+          [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
+          try {
+            await saveCharRegexScripts(avatar, scripts);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则下移失败:", err);
+            [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
+            toastr.error("下移失败: " + err.message);
           }
         });
         // 重命名按钮
@@ -9928,6 +9960,8 @@ jQuery(async () => {
               ${
                 isTarget
                   ? `
+              <div class="cfm-regex-action-btn cfm-regex-move-up-btn${i === 0 ? " cfm-regex-move-disabled" : ""}" title="上移"><i class="fa-solid fa-arrow-up"></i></div>
+              <div class="cfm-regex-action-btn cfm-regex-move-down-btn${i === scripts.length - 1 ? " cfm-regex-move-disabled" : ""}" title="下移"><i class="fa-solid fa-arrow-down"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
@@ -9996,6 +10030,36 @@ jQuery(async () => {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
             toastr.warning("非当前预设的正则脚本，无法编辑");
+          }
+        });
+        // 上移按钮
+        row.find(".cfm-regex-move-up-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (i <= 0) return;
+          [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
+          try {
+            await savePresetRegexScripts(scripts);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则上移失败:", err);
+            [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
+            toastr.error("上移失败: " + err.message);
+          }
+        });
+        // 下移按钮
+        row.find(".cfm-regex-move-down-btn").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (i >= scripts.length - 1) return;
+          [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
+          try {
+            await savePresetRegexScripts(scripts);
+            rerenderCurrentView();
+          } catch (err) {
+            console.error("[CFM] 正则下移失败:", err);
+            [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
+            toastr.error("下移失败: " + err.message);
           }
         });
         // 重命名按钮
