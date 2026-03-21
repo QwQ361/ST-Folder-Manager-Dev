@@ -2601,6 +2601,29 @@ jQuery(async () => {
   function applyCustomIcon(cssUrl, targetCls, extraStyles) {
     const icon = $("#cfm-topbar-button .drawer-icon");
     if (icon.length === 0) return;
+
+    // ★ 先统一清理所有旧模式的残留状态，再应用新模式
+    // 清理 ::before 模式残留
+    icon.removeClass("cfm-custom-icon-before");
+    $("#cfm-dynamic-icon-style").remove();
+    // 清理元素本身 background-image 残留
+    icon.css("background-image", "");
+    // 清理 .drawer-toggle 模式残留
+    const toggle = $("#cfm-topbar-button .drawer-toggle");
+    if (toggle.length > 0) {
+      toggle.removeClass("cfm-custom-toggle-icon");
+      toggle.css({
+        "background-image": "",
+        "background-repeat": "",
+        "background-position": "",
+        "background-size": "",
+        width: "",
+        height: "",
+        color: "",
+      });
+    }
+
+    // 标记为自定义图标模式
     icon.addClass("cfm-custom-icon");
 
     // 检测是否是 ::before 伪元素模式
@@ -2608,13 +2631,9 @@ jQuery(async () => {
 
     if (isPseudoBefore) {
       // ::before 伪元素模式：通过动态 <style> 注入伪元素样式
-      // JS 无法直接操作伪元素，需通过样式表
       // 美化主题的通用规则 .drawer-icon::before 已为所有 .drawer-icon 设置了尺寸等样式，
       // 我们只需要设置 background-image 即可，其他属性让美化主题的规则自然生效
       icon.addClass("cfm-custom-icon-before");
-      icon.css("background-image", ""); // 确保元素本身无背景图
-      // 移除旧的动态样式
-      $("#cfm-dynamic-icon-style").remove();
       const styleEl = $(
         `<style id="cfm-dynamic-icon-style">
           #cfm-topbar-button .drawer-icon.cfm-custom-icon-before::before {
@@ -2625,27 +2644,23 @@ jQuery(async () => {
         </style>`,
       );
       $("head").append(styleEl);
-    } else {
-      // 元素本身模式：直接设置 background-image
-      icon.removeClass("cfm-custom-icon-before");
-      $("#cfm-dynamic-icon-style").remove();
-      icon.css("background-image", cssUrl);
-      // 如果图标来源是 .drawer-toggle，还需要将样式复制到插件的 .drawer-toggle
-      if (targetCls === ".drawer-toggle" && extraStyles) {
-        const toggle = $("#cfm-topbar-button .drawer-toggle");
-        if (toggle.length > 0) {
-          toggle.addClass("cfm-custom-toggle-icon");
-          toggle.css({
-            "background-image": cssUrl,
-            "background-repeat": extraStyles.backgroundRepeat || "no-repeat",
-            "background-position": extraStyles.backgroundPosition || "center",
-            "background-size": extraStyles.backgroundSize || "contain",
-            width: extraStyles.width || "27px",
-            height: extraStyles.height || "27px",
-            color: "transparent",
-          });
-        }
+    } else if (targetCls === ".drawer-toggle" && extraStyles) {
+      // .drawer-toggle 模式：将图标应用到 .drawer-toggle 元素
+      if (toggle.length > 0) {
+        toggle.addClass("cfm-custom-toggle-icon");
+        toggle.css({
+          "background-image": cssUrl,
+          "background-repeat": extraStyles.backgroundRepeat || "no-repeat",
+          "background-position": extraStyles.backgroundPosition || "center",
+          "background-size": extraStyles.backgroundSize || "contain",
+          width: extraStyles.width || "27px",
+          height: extraStyles.height || "27px",
+          color: "transparent",
+        });
       }
+    } else {
+      // .drawer-icon 元素本身模式：直接设置 background-image
+      icon.css("background-image", cssUrl);
     }
   }
 
