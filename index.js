@@ -3099,9 +3099,6 @@ jQuery(async () => {
     return idx < 0;
   }
 
-  // 预设/世界书的移动/复制模式
-  let resCopyMode = false;
-
   // 预设/世界书/主题/背景排序状态
   let presetLeftSortMode = null;
   let presetRightSortMode = null; // 右栏项目排序: null | 'az' | 'za'
@@ -13215,16 +13212,13 @@ jQuery(async () => {
       // 切换header按钮
       if (initialTab === "chars") {
         const btn = popup.find("#cfm-btn-copymode");
+        btn.show();
         btn.toggleClass("cfm-copymode-active", cfmCopyMode);
         btn.html(
           `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
         );
       } else {
-        const btn = popup.find("#cfm-btn-copymode");
-        btn.toggleClass("cfm-copymode-active", resCopyMode);
-        btn.html(
-          `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
-        );
+        popup.find("#cfm-btn-copymode").hide();
       }
     }
 
@@ -13274,12 +13268,7 @@ jQuery(async () => {
           `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
         );
       } else {
-        popup.find("#cfm-btn-copymode").show();
-        const btn = $("#cfm-btn-copymode");
-        btn.toggleClass("cfm-copymode-active", resCopyMode);
-        btn.html(
-          `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
-        );
+        popup.find("#cfm-btn-copymode").hide();
       }
       // 切换搜索栏
       popup.find("#cfm-global-search-bar").toggle(tab === "chars");
@@ -13482,17 +13471,6 @@ jQuery(async () => {
           `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
         );
         toastr.info(cfmCopyMode ? "已切换为复制模式" : "已切换为移动模式", "", {
-          timeOut: 1500,
-        });
-      } else {
-        resCopyMode = !resCopyMode;
-        const btn = $("#cfm-btn-copymode");
-        btn.toggleClass("cfm-copymode-active", resCopyMode);
-        btn.attr("title", resCopyMode ? "当前：复制模式" : "当前：移动模式");
-        btn.html(
-          `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
-        );
-        toastr.info(resCopyMode ? "已切换为复制模式" : "已切换为移动模式", "", {
           timeOut: 1500,
         });
       }
@@ -14804,7 +14782,10 @@ jQuery(async () => {
               try {
                 await api.deleteSet(setName);
               } catch (delErr) {
-                console.warn(`[CFM] api.deleteSet 失败，回退到直接删除`, delErr);
+                console.warn(
+                  `[CFM] api.deleteSet 失败，回退到直接删除`,
+                  delErr,
+                );
                 await fetch("/api/quick-replies/delete", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -18269,12 +18250,7 @@ jQuery(async () => {
               `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
             );
           } else {
-            $("#cfm-overlay").find("#cfm-btn-copymode").show();
-            const btn = $("#cfm-btn-copymode");
-            btn.toggleClass("cfm-copymode-active", resCopyMode);
-            btn.html(
-              `<i class="fa-solid fa-${resCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${resCopyMode ? "复制" : "移动"}`,
-            );
+            $("#cfm-overlay").find("#cfm-btn-copymode").hide();
           }
           $("#cfm-overlay")
             .find("#cfm-global-search-bar")
