@@ -14860,6 +14860,7 @@ jQuery(async () => {
     else if (initialTab === "backgrounds") renderBackgroundsView();
     else if (initialTab === "personas") renderPersonasView();
     else if (initialTab === "regex") renderRegexView();
+    else if (initialTab === "quickreply") renderQRView();
 
     // 预加载世界书名称缓存（后台静默加载，切换标签时无需等待）
     getWorldInfoNames();
