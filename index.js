@@ -22807,7 +22807,7 @@ jQuery(async () => {
   // 构建正则脚本行HTML（cfm-row模式，与其他标签页一致，不直接展示正则内容）
   function buildRegexScriptRowHtml(script, scriptType, ownerLabel) {
     const isDisabled = !!script.disabled;
-    const typeBadge = { 0: "全局", 1: "角色", 2: "预设" }[scriptType] ?? "";
+    const typeBadge = { 1: "角色", 2: "预设" }[scriptType] ?? "";
     const badgeHtml = typeBadge
       ? `<span class="cfm-regex-card-badge cfm-regex-badge-${scriptType}">${typeBadge}</span>`
       : "";
