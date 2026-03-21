@@ -24027,6 +24027,107 @@ jQuery(async () => {
     return [];
   }
 
+  /**
+   * 打开快速回复内容编辑弹窗（聊天记录行风格）
+   * @param {string} setName - QR 集名称
+   * @param {number} qrIndex - QR 在集合中的索引
+   * @param {object} qrItem - 快速回复对象
+   */
+  function openQrItemEditor(setName, qrIndex, qrItem) {
+    const label = qrItem.label || qrItem.title || "(未命名)";
+    const msg = qrItem.message || "";
+
+    const overlay = $('<div class="cfm-qr-editor-overlay"></div>');
+    const editorPopup = $(`
+      <div class="cfm-qr-editor-popup">
+        <div class="cfm-qr-editor-header">
+          <h4><i class="fa-solid fa-comment"></i> ${escapeHtml(label)}</h4>
+          <span class="cfm-qr-editor-set-info">${escapeHtml(setName)}</span>
+          <button class="cfm-qr-editor-close">&times;</button>
+        </div>
+        <div class="cfm-qr-editor-body">
+          <textarea class="cfm-qr-editor-textarea" spellcheck="false">${escapeHtml(msg)}</textarea>
+        </div>
+        <div class="cfm-qr-editor-footer">
+          <button class="cfm-btn cfm-qr-editor-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+          <button class="cfm-btn cfm-qr-editor-save"><i class="fa-solid fa-check"></i> 保存</button>
+        </div>
+      </div>
+    `);
+
+    overlay.append(editorPopup);
+    $("body").append(overlay);
+
+    // 关闭
+    function closeEditor() {
+      overlay.remove();
+    }
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) closeEditor();
+    });
+    editorPopup.find(".cfm-qr-editor-close").on("click", closeEditor);
+    editorPopup.find(".cfm-qr-editor-cancel").on("click", closeEditor);
+
+    // 保存
+    editorPopup.find(".cfm-qr-editor-save").on("click", async () => {
+      const newMsg = editorPopup.find(".cfm-qr-editor-textarea").val();
+      try {
+        // 获取 QR Set 对象并修改
+        const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
+        const QRS = typeof globalThis !== "undefined" && globalThis.QuickReplySet;
+        let set = null;
+        if (api && api.getSetByName) {
+          set = api.getSetByName(setName);
+        }
+        if (!set && QRS && QRS.list) {
+          set = QRS.list.find((s) => s.name === setName);
+        }
+        if (set && set.qrList && set.qrList[qrIndex]) {
+          set.qrList[qrIndex].message = newMsg;
+          // 保存到服务器
+          if (typeof set.save === "function") {
+            await set.save();
+          } else if (typeof set.performSave === "function") {
+            await set.performSave();
+          } else {
+            // 直接调用 API
+            const response = await fetch("/api/quick-replies/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(set.toJSON ? set.toJSON() : { name: setName, qrList: set.qrList }),
+            });
+            if (!response.ok) throw new Error("保存失败");
+          }
+          toastr.success(`快速回复 "${label}" 已保存`);
+        } else {
+          toastr.error("无法找到目标快速回复对象");
+        }
+      } catch (err) {
+        console.error("[CFM] 保存快速回复失败", err);
+        toastr.error("保存失败: " + err.message);
+      }
+      closeEditor();
+    });
+
+    // ESC 关闭
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
+        closeEditor();
+        $(document).off("keydown", escHandler);
+      }
+    };
+    $(document).on("keydown", escHandler);
+
+    // 聚焦到末尾
+    setTimeout(() => {
+      const ta = editorPopup.find(".cfm-qr-editor-textarea")[0];
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+      }
+    }, 100);
+  }
+
   // ==================== 快速回复搜索 ====================
   function executeQrSearch() {
     const q = $("#cfm-qr-global-search").val().toLowerCase().trim();
@@ -24864,24 +24965,32 @@ jQuery(async () => {
 
         rightList.append(row);
 
-        // 如果该 QR 集展开了，渲染其包含的快速回复项
+        // 如果该 QR 集展开了，渲染其包含的快速回复项（聊天记录行风格）
         if (isSetExpanded) {
           const qrItems = getQrSetItems(n);
           if (qrItems.length > 0) {
             const subContainer = $('<div class="cfm-qr-sub-items"></div>');
-            for (const qr of qrItems) {
+            for (let qrIdx = 0; qrIdx < qrItems.length; qrIdx++) {
+              const qr = qrItems[qrIdx];
               const label = qr.label || qr.title || "(未命名)";
-              const msg = qr.message || "";
-              const msgPreview =
-                msg.length > 80 ? msg.substring(0, 80) + "..." : msg;
               const isHidden = qr.isHidden || qr.hidden || false;
               const subRow = $(`
-                <div class="cfm-qr-sub-item ${isHidden ? "cfm-qr-sub-hidden" : ""}">
-                  <span class="cfm-qr-sub-icon"><i class="fa-solid fa-comment${isHidden ? "-slash" : ""}" style="color:${isHidden ? "#6c7086" : "#a6e3a1"};"></i></span>
-                  <span class="cfm-qr-sub-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
-                  <span class="cfm-qr-sub-preview" title="${escapeHtml(msg)}">${escapeHtml(msgPreview)}</span>
+                <div class="cfm-qr-sub-item ${isHidden ? "cfm-qr-sub-hidden" : ""}" data-qr-set="${escapeHtml(n)}" data-qr-index="${qrIdx}">
+                  <div class="cfm-qr-sub-icon"><i class="fa-solid fa-comment${isHidden ? "-slash" : ""}" style="color:${isHidden ? "#6c7086" : "#a6e3a1"};"></i></div>
+                  <div class="cfm-qr-sub-info">
+                    <div class="cfm-qr-sub-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+                  </div>
+                  <div class="cfm-qr-sub-actions">
+                    <div class="cfm-qr-sub-edit-btn" title="查看/编辑内容"><i class="fa-solid fa-pen-to-square"></i></div>
+                  </div>
                 </div>
               `);
+              // 编辑按钮：打开内容编辑弹窗
+              subRow.find(".cfm-qr-sub-edit-btn").on("click touchend", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openQrItemEditor(n, qrIdx, qr);
+              });
               subContainer.append(subRow);
             }
             rightList.append(subContainer);
