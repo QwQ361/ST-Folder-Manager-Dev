@@ -9690,7 +9690,7 @@ jQuery(async () => {
    * @param {Array} scripts - 当前脚本列表
    */
   function toggleRegexBatchItem(scriptId, shiftKey, scripts) {
-    if (cfmRegexBatchRangeMode && shiftKey && cfmRegexBatchLastClicked) {
+    if ((shiftKey || cfmRegexBatchRangeMode) && cfmRegexBatchLastClicked) {
       // 框选：从上次点击到当前点击的范围
       const ids = scripts.map((s) => s.id);
       const lastIdx = ids.indexOf(cfmRegexBatchLastClicked);
@@ -9797,7 +9797,9 @@ jQuery(async () => {
       // === 批量操作工具栏 ===
       if (cfmRegexBatchMode && scripts && scripts.length > 0) {
         const allSel = scripts.every((s) => cfmRegexBatchSelected.has(s.id));
-        const selCount = scripts.filter((s) => cfmRegexBatchSelected.has(s.id)).length;
+        const selCount = scripts.filter((s) =>
+          cfmRegexBatchSelected.has(s.id),
+        ).length;
         const batchToolbar = $(`
           <div class="cfm-regex-batch-toolbar">
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-selall" title="全选/全不选">
@@ -9817,7 +9819,9 @@ jQuery(async () => {
           if (allSel) {
             scripts.forEach((s) => cfmRegexBatchSelected.delete(s.id));
           } else {
-            scripts.forEach((s) => { if (s.id) cfmRegexBatchSelected.add(s.id); });
+            scripts.forEach((s) => {
+              if (s.id) cfmRegexBatchSelected.add(s.id);
+            });
           }
           rerenderCurrentView();
         });
@@ -9831,7 +9835,9 @@ jQuery(async () => {
         // 批量导出（JSON格式，与酒馆保持一致）
         batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
           e.stopPropagation();
-          const toExport = scripts.filter((s) => cfmRegexBatchSelected.has(s.id));
+          const toExport = scripts.filter((s) =>
+            cfmRegexBatchSelected.has(s.id),
+          );
           if (toExport.length === 0) {
             toastr.warning("请先选择要导出的正则脚本");
             return;
@@ -9840,10 +9846,18 @@ jQuery(async () => {
             const download = (await import("../../../utils.js")).download;
             if (toExport.length === 1) {
               const fileName = `regex-${(toExport[0].scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
-              download(JSON.stringify(toExport[0], null, 4), fileName, "application/json");
+              download(
+                JSON.stringify(toExport[0], null, 4),
+                fileName,
+                "application/json",
+              );
             } else {
               const fileName = `regex-${new Date().toISOString()}.json`;
-              download(JSON.stringify(toExport, null, 4), fileName, "application/json");
+              download(
+                JSON.stringify(toExport, null, 4),
+                fileName,
+                "application/json",
+              );
             }
             toastr.success(`已导出 ${toExport.length} 个正则脚本`);
           } catch (err) {
@@ -9854,12 +9868,19 @@ jQuery(async () => {
         // 批量删除
         batchToolbar.find(".cfm-regex-batch-delete").on("click", async (e) => {
           e.stopPropagation();
-          const toDeleteIds = scripts.filter((s) => cfmRegexBatchSelected.has(s.id)).map((s) => s.id);
+          const toDeleteIds = scripts
+            .filter((s) => cfmRegexBatchSelected.has(s.id))
+            .map((s) => s.id);
           if (toDeleteIds.length === 0) {
             toastr.warning("请先选择要删除的正则脚本");
             return;
           }
-          if (!confirm(`确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`)) return;
+          if (
+            !confirm(
+              `确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`,
+            )
+          )
+            return;
           try {
             for (const id of toDeleteIds) {
               const idx = scripts.findIndex((s) => s.id === id);
@@ -9886,7 +9907,8 @@ jQuery(async () => {
       for (let i = 0; i < scripts.length; i++) {
         const script = scripts[i];
         const isDisabled = !!script.disabled;
-        const isBatchSel = cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
+        const isBatchSel =
+          cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
         const toggleHtml = isTarget
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
@@ -9903,11 +9925,15 @@ jQuery(async () => {
             </div>
             <div class="cfm-regex-row-actions">
               <div class="cfm-regex-action-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
-              ${isTarget ? `
+              ${
+                isTarget
+                  ? `
               <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
-              ` : ""}
+              `
+                  : ""
+              }
             </div>
           </div>
         `);
@@ -9915,7 +9941,12 @@ jQuery(async () => {
         // 批量模式：行点击切换选中
         if (cfmRegexBatchMode) {
           row.on("click", (e) => {
-            if ($(e.target).closest(".cfm-regex-row-actions, .cfm-regex-batch-check").length) return;
+            if (
+              $(e.target).closest(
+                ".cfm-regex-row-actions, .cfm-regex-batch-check",
+              ).length
+            )
+              return;
             toggleRegexBatchItem(script.id, e.shiftKey, scripts);
             rerenderCurrentView();
           });
@@ -9992,7 +10023,11 @@ jQuery(async () => {
           try {
             const download = (await import("../../../utils.js")).download;
             const fileName = `regex-${(script.scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
-            download(JSON.stringify(script, null, 4), fileName, "application/json");
+            download(
+              JSON.stringify(script, null, 4),
+              fileName,
+              "application/json",
+            );
             toastr.success(`已导出: ${script.scriptName}`);
           } catch (err) {
             console.error("[CFM] 导出正则失败:", err);
@@ -10003,7 +10038,12 @@ jQuery(async () => {
         row.find(".cfm-regex-delete-btn").on("click", async function (e) {
           e.preventDefault();
           e.stopPropagation();
-          if (!confirm(`确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`)) return;
+          if (
+            !confirm(
+              `确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`,
+            )
+          )
+            return;
           try {
             const idx = scripts.findIndex((s) => s.id === script.id);
             if (idx !== -1) scripts.splice(idx, 1);
