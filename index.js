@@ -9535,7 +9535,7 @@ jQuery(async () => {
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前角色，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}" ${isTarget ? 'draggable="true"' : ""}
                data-script-id="${escapeHtml(script.id || "")}"
                data-script-idx="${i}"
                data-script-type="1"
@@ -9710,6 +9710,51 @@ jQuery(async () => {
           }
         });
         subList.append(row);
+      }
+
+      // 拖拽排序（仅目标角色）
+      if (isTarget) {
+        let dragSrcRegex = null;
+        subList.on("dragstart", ".cfm-regex-script-row", function (e) {
+          dragSrcRegex = this;
+          $(this).addClass("cfm-regex-dragging");
+          e.originalEvent.dataTransfer.effectAllowed = "move";
+        });
+        subList.on("dragover", ".cfm-regex-script-row", function (e) {
+          e.preventDefault();
+          e.originalEvent.dataTransfer.dropEffect = "move";
+          $(this).addClass("cfm-regex-dragover");
+        });
+        subList.on("dragleave", ".cfm-regex-script-row", function () {
+          $(this).removeClass("cfm-regex-dragover");
+        });
+        subList.on("drop", ".cfm-regex-script-row", async function (e) {
+          e.preventDefault();
+          $(this).removeClass("cfm-regex-dragover");
+          if (dragSrcRegex && dragSrcRegex !== this) {
+            const srcIdx = parseInt($(dragSrcRegex).data("script-idx"), 10);
+            const tgtIdx = parseInt($(this).data("script-idx"), 10);
+            if (!isNaN(srcIdx) && !isNaN(tgtIdx) && srcIdx !== tgtIdx) {
+              const [moved] = scripts.splice(srcIdx, 1);
+              scripts.splice(tgtIdx, 0, moved);
+              try {
+                await saveCharRegexScripts(avatar, scripts);
+                rerenderCurrentView();
+              } catch (err) {
+                console.error("[CFM] 正则拖拽排序失败:", err);
+                toastr.error("排序失败: " + err.message);
+                // 回滚
+                const [back] = scripts.splice(tgtIdx, 1);
+                scripts.splice(srcIdx, 0, back);
+              }
+            }
+          }
+        });
+        subList.on("dragend", ".cfm-regex-script-row", function () {
+          $(this).removeClass("cfm-regex-dragging");
+          subList.find(".cfm-regex-dragover").removeClass("cfm-regex-dragover");
+          dragSrcRegex = null;
+        });
       }
     }
     charRow.after(subList);
@@ -9945,7 +9990,7 @@ jQuery(async () => {
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}" ${isTarget ? 'draggable="true"' : ""}
                data-script-id="${escapeHtml(script.id || "")}"
                data-script-idx="${i}"
                data-script-type="2"
@@ -10120,6 +10165,50 @@ jQuery(async () => {
           }
         });
         subList.append(row);
+      }
+
+      // 拖拽排序（仅目标预设）
+      if (isTarget) {
+        let dragSrcRegex = null;
+        subList.on("dragstart", ".cfm-regex-script-row", function (e) {
+          dragSrcRegex = this;
+          $(this).addClass("cfm-regex-dragging");
+          e.originalEvent.dataTransfer.effectAllowed = "move";
+        });
+        subList.on("dragover", ".cfm-regex-script-row", function (e) {
+          e.preventDefault();
+          e.originalEvent.dataTransfer.dropEffect = "move";
+          $(this).addClass("cfm-regex-dragover");
+        });
+        subList.on("dragleave", ".cfm-regex-script-row", function () {
+          $(this).removeClass("cfm-regex-dragover");
+        });
+        subList.on("drop", ".cfm-regex-script-row", async function (e) {
+          e.preventDefault();
+          $(this).removeClass("cfm-regex-dragover");
+          if (dragSrcRegex && dragSrcRegex !== this) {
+            const srcIdx = parseInt($(dragSrcRegex).data("script-idx"), 10);
+            const tgtIdx = parseInt($(this).data("script-idx"), 10);
+            if (!isNaN(srcIdx) && !isNaN(tgtIdx) && srcIdx !== tgtIdx) {
+              const [moved] = scripts.splice(srcIdx, 1);
+              scripts.splice(tgtIdx, 0, moved);
+              try {
+                await savePresetRegexScripts(scripts);
+                rerenderCurrentView();
+              } catch (err) {
+                console.error("[CFM] 正则拖拽排序失败:", err);
+                toastr.error("排序失败: " + err.message);
+                const [back] = scripts.splice(tgtIdx, 1);
+                scripts.splice(srcIdx, 0, back);
+              }
+            }
+          }
+        });
+        subList.on("dragend", ".cfm-regex-script-row", function () {
+          $(this).removeClass("cfm-regex-dragging");
+          subList.find(".cfm-regex-dragover").removeClass("cfm-regex-dragover");
+          dragSrcRegex = null;
+        });
       }
     }
     presetRow.after(subList);

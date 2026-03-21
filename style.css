@@ -4329,6 +4329,20 @@ option.cfm-nf-hidden {
   cursor: not-allowed !important;
   pointer-events: none;
 }
+.cfm-regex-dragging {
+  opacity: 0.4;
+  background: rgba(203, 166, 247, 0.15) !important;
+}
+.cfm-regex-dragover {
+  border-top: 2px solid #cba6f7 !important;
+  margin-top: -2px;
+}
+.cfm-regex-script-row[draggable="true"] {
+  cursor: grab;
+}
+.cfm-regex-script-row[draggable="true"]:active {
+  cursor: grabbing;
+}
 
 /* 正则查看模式：目标角色/预设行高亮 */
 .cfm-regex-target-row {
