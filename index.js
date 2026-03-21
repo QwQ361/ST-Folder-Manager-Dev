@@ -14730,7 +14730,9 @@ jQuery(async () => {
         try {
           const sets = api.listSets();
           if (Array.isArray(sets)) {
-            sets.forEach((s) => existingNames.add(typeof s === "string" ? s : s.name));
+            sets.forEach((s) =>
+              existingNames.add(typeof s === "string" ? s : s.name),
+            );
           }
         } catch (err) {
           console.warn("[CFM] 获取QR集列表失败", err);
@@ -14794,17 +14796,25 @@ jQuery(async () => {
         try {
           let finalName = setName;
 
-          // 覆盖模式：先删除旧的
+          // 覆盖模式：先删除旧的（使用 api.deleteSet 同时清理内存列表和服务器）
           if (isDuplicate && dupAction === "overwrite") {
-            await fetch("/api/quick-replies/delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: setName }),
-            });
-            // 从本地列表中移除
-            if (QRS && QRS.list) {
-              const idx = QRS.list.findIndex((s) => s.name === setName);
-              if (idx !== -1) QRS.list.splice(idx, 1);
+            if (api && api.deleteSet) {
+              try {
+                await api.deleteSet(setName);
+              } catch (delErr) {
+                console.warn(`[CFM] api.deleteSet 失败，回退到直接删除`, delErr);
+                await fetch("/api/quick-replies/delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ name: setName }),
+                });
+              }
+            } else {
+              await fetch("/api/quick-replies/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: setName }),
+              });
             }
           }
 
@@ -14813,35 +14823,54 @@ jQuery(async () => {
             finalName = getUniqueImportName(setName, existingNames);
           }
 
-          // 保存到服务器
+          // 保存到服务器并注册到内存列表
           const saveData = { ...json, name: finalName };
-          const saveResp = await fetch("/api/quick-replies/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(saveData),
-          });
 
-          if (!saveResp.ok) {
-            throw new Error(`保存失败: ${saveResp.statusText}`);
+          // 通过 api.createSet 在内存中注册（会创建空集并保存到服务器）
+          if (api && api.createSet) {
+            try {
+              await api.createSet(finalName, {
+                disableSend: json.disableSend || false,
+                placeBeforeInput: json.placeBeforeInput || false,
+                injectInput: json.injectInput || false,
+              });
+              // createSet 的 debounced save 已完成，现在用完整数据覆盖服务器上的空集
+              const saveResp = await fetch("/api/quick-replies/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(saveData),
+              });
+              if (!saveResp.ok) {
+                throw new Error(`保存完整数据失败: ${saveResp.statusText}`);
+              }
+            } catch (createErr) {
+              console.warn(
+                `[CFM] api.createSet 失败，回退到直接保存`,
+                createErr,
+              );
+              // 回退：直接保存到服务器（不注册到内存）
+              const saveResp = await fetch("/api/quick-replies/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(saveData),
+              });
+              if (!saveResp.ok) {
+                throw new Error(`保存失败: ${saveResp.statusText}`);
+              }
+            }
+          } else {
+            // 无 api.createSet 时直接保存
+            const saveResp = await fetch("/api/quick-replies/save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(saveData),
+            });
+            if (!saveResp.ok) {
+              throw new Error(`保存失败: ${saveResp.statusText}`);
+            }
           }
 
           existingNames.add(finalName);
-
-          // 更新本地 QuickReplySet 列表
-          if (QRS && QRS.list) {
-            // 检查是否已存在（覆盖情况），如不存在则手动添加
-            const existing = QRS.list.find((s) => s.name === finalName);
-            if (!existing) {
-              try {
-                // 尝试通过 QRS.get 加载新保存的集
-                if (QRS.get) {
-                  await QRS.get(finalName);
-                }
-              } catch (loadErr) {
-                console.warn("[CFM] 加载新导入QR集到本地失败", loadErr);
-              }
-            }
-          }
 
           // 分配到文件夹
           if (targetFolder) {
@@ -25534,7 +25563,11 @@ jQuery(async () => {
 
         // 非模式状态下显示备注编辑按钮和重命名按钮
         const noModeActive =
-          !cfmExportMode && !cfmResDeleteMode && !cfmMultiSelectMode && !cfmQrNoteMode && !cfmQrRenameMode;
+          !cfmExportMode &&
+          !cfmResDeleteMode &&
+          !cfmMultiSelectMode &&
+          !cfmQrNoteMode &&
+          !cfmQrRenameMode;
         const singleNoteBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
           : "";
@@ -28983,7 +29016,8 @@ jQuery(async () => {
         e.stopPropagation();
         const currentName = folderTree[folderId]?.displayName || folderId;
         const newName = prompt("重命名文件夹", currentName);
-        if (!newName || !newName.trim() || newName.trim() === currentName) return;
+        if (!newName || !newName.trim() || newName.trim() === currentName)
+          return;
         folderTree[folderId].displayName = newName.trim();
         getContext().saveSettingsDebounced();
         toastr.success(`文件夹已重命名为「${newName.trim()}」`);
