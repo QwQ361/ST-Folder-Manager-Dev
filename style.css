@@ -2559,7 +2559,7 @@ l/* ========== 浮动按钮 ========== */
   background: rgba(137, 180, 250, 0.07);
 }
 .cfm-sort-row.cfm-sort-row-disabled {
-  opacity: 0.5;
+  opacity: 0.35;
 }
 
 /* 拖拽把手 */

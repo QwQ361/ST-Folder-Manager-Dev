@@ -24514,7 +24514,6 @@ jQuery(async () => {
           <button class="cfm-sort-arrow-btn cfm-sort-arrow-down" title="下移"><i class="fa-solid fa-chevron-down"></i></button>
           <span class="cfm-sort-row-name">${escapeHtml(s.scriptName || "(未命名)")}</span>
           <span class="cfm-sort-row-folder">${escapeHtml(folderName)}</span>
-          ${isDisabled ? '<span class="cfm-sort-row-badge cfm-sort-badge-disabled">已禁用</span>' : '<span class="cfm-sort-row-badge cfm-sort-badge-enabled">已启用</span>'}
         </div>
       `);
       // 上移按钮
