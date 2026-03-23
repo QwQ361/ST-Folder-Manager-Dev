@@ -1530,7 +1530,14 @@ jQuery(async () => {
       });
     }
     return [...chars].sort((a, b) => {
-      const cmp = (a.name || "").localeCompare(b.name || "", "zh-CN");
+      const cmp = (a.name || "").localeCompare(
+        b.name || "",
+        "zh-Hans-CN-u-co-pinyin",
+        {
+          numeric: true,
+          sensitivity: "base",
+        },
+      );
       return mode === "az" ? cmp : -cmp;
     });
   }
