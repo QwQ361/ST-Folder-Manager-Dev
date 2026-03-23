@@ -4892,10 +4892,10 @@ option.cfm-nf-hidden {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .cfm-persona-detail-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 6px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -4904,7 +4904,8 @@ option.cfm-nf-hidden {
 .cfm-persona-detail-label .cfm-chat-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  margin-left: 0;
 }
 .cfm-persona-detail-label .cfm-chat-action-btn {
   width: 22px;
