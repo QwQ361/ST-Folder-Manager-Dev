@@ -27184,9 +27184,18 @@ jQuery(async () => {
       <div class="cfm-persona-detail-section">
         <div class="cfm-persona-detail-label">绑定</div>
         <div class="cfm-persona-detail-tags cfm-persona-bind-links">
-          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.default ? "cfm-star-active" : ""}" data-bind-type="default" title="默认绑定"><i class="fa-solid fa-link"></i><span>默认</span></div>
-          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.character ? "cfm-star-active" : ""}" data-bind-type="character" title="角色绑定"><i class="fa-solid fa-link"></i><span>角色</span></div>
-          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.chat ? "cfm-star-active" : ""}" data-bind-type="chat" title="聊天绑定"><i class="fa-solid fa-link"></i><span>聊天</span></div>
+          <div class="menu_button menu_button_icon cfm-persona-bind-btn ${bindStates.default ? "locked" : ""}" data-bind-type="default" title="点击设为新聊天的默认 User；再次点击可取消默认绑定">
+            <i class="icon fa-solid fa-crown fa-fw"></i>
+            <span class="cfm-persona-bind-text">默认</span>
+          </div>
+          <div class="menu_button menu_button_icon cfm-persona-bind-btn ${bindStates.character ? "locked" : ""}" data-bind-type="character" title="点击将当前 User 绑定到当前角色；再次点击可取消角色绑定">
+            <i class="icon fa-solid fa-${bindStates.character ? "lock" : "unlock"} fa-fw"></i>
+            <span class="cfm-persona-bind-text">角色</span>
+          </div>
+          <div class="menu_button menu_button_icon cfm-persona-bind-btn ${bindStates.chat ? "locked" : ""}" data-bind-type="chat" title="点击将当前 User 绑定到当前聊天；再次点击可取消聊天绑定">
+            <i class="icon fa-solid fa-${bindStates.chat ? "lock" : "unlock"} fa-fw"></i>
+            <span class="cfm-persona-bind-text">聊天</span>
+          </div>
         </div>
         <div class="cfm-persona-detail-value">${connections.length ? buildPersonaConnHtml(persona.connections) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
