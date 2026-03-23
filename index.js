@@ -26972,6 +26972,182 @@ jQuery(async () => {
     }
   }
 
+  function ensurePersonaDescriptionEntry(avatarId) {
+    const pu = getContext().powerUserSettings;
+    if (!pu) return null;
+    if (!pu.persona_descriptions) pu.persona_descriptions = {};
+    if (!pu.persona_descriptions[avatarId]) {
+      pu.persona_descriptions[avatarId] = {
+        description: "",
+        title: "",
+        connections: [],
+      };
+    }
+    if (!Array.isArray(pu.persona_descriptions[avatarId].connections)) {
+      pu.persona_descriptions[avatarId].connections = [];
+    }
+    if (typeof pu.persona_descriptions[avatarId].description !== "string") {
+      pu.persona_descriptions[avatarId].description = "";
+    }
+    if (typeof pu.persona_descriptions[avatarId].title !== "string") {
+      pu.persona_descriptions[avatarId].title = "";
+    }
+    return pu.persona_descriptions[avatarId];
+  }
+
+  function getPersonaBindStates(persona) {
+    const ctx = getContext();
+    const pu = ctx.powerUserSettings || {};
+    const desc = ensurePersonaDescriptionEntry(persona.avatarId) || {};
+    const connections = Array.isArray(desc.connections) ? desc.connections : [];
+    const chatMeta =
+      ctx.chatMetadata ||
+      window.chat_metadata ||
+      window.chatMetadata ||
+      {};
+    const chars = ctx.characters || [];
+    const currentChar =
+      typeof ctx.characterId === "number" && ctx.characterId >= 0
+        ? chars[ctx.characterId]?.avatar || null
+        : null;
+    const currentGroupId =
+      ctx.groupId || ctx.selectedGroup || window.selected_group || null;
+
+    return {
+      default: pu.default_persona === persona.avatarId,
+      chat: chatMeta?.persona === persona.avatarId,
+      character: connections.some(
+        (c) =>
+          c &&
+          ((c.type === "character" && currentChar && c.id === currentChar) ||
+            (c.type === "group" &&
+              currentGroupId !== null &&
+              String(c.id) === String(currentGroupId))),
+      ),
+    };
+  }
+
+  function refreshPersonaPanelView() {
+    const q = String($("#cfm-persona-global-search").val() || "").trim();
+    if (q) executePersonaSearch();
+    else renderPersonasView();
+  }
+
+  async function showPersonaDetailFieldPopup(persona, field) {
+    const map = {
+      title: {
+        title: "编辑User标题",
+        label: "标题",
+        placeholder: "输入标题，留空则清空",
+        rows: 1,
+      },
+      description: {
+        title: "编辑User具体设定",
+        label: "具体设定",
+        placeholder: "输入具体设定，留空则清空",
+        rows: 8,
+      },
+    };
+    const meta = map[field];
+    if (!meta || !persona) return null;
+
+    const entry = ensurePersonaDescriptionEntry(persona.avatarId);
+    const currentValue = String(entry?.[field] || "");
+    const inputHtml =
+      meta.rows > 1
+        ? `<textarea class="cfm-edit-input" id="cfm-persona-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
+        : `<input type="text" class="cfm-edit-input" id="cfm-persona-detail-input" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(meta.placeholder)}">`;
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">${meta.title}</div>
+          <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(persona.name || persona.avatarId)}</div></div>
+          <div class="cfm-edit-popup-field">
+            <label>${meta.label}</label>
+            ${inputHtml}
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${currentValue ? '<button class="cfm-btn cfm-edit-popup-clear">清空</button>' : ""}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    const input = overlay.find("#cfm-persona-detail-input");
+    input.trigger("focus");
+    if (input.is("textarea")) {
+      const node = input[0];
+      if (node && typeof node.selectionStart === "number") {
+        node.selectionStart = node.selectionEnd = node.value.length;
+      }
+    }
+
+    return new Promise((resolve) => {
+      const close = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => close(""));
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        close(String(input.val() || "").trim());
+      });
+      input.on("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close(null);
+        }
+        if (e.key === "Enter" && !input.is("textarea")) {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function editPersonaDetailField(persona, field) {
+    const value = await showPersonaDetailFieldPopup(persona, field);
+    if (value === null) return;
+    const entry = ensurePersonaDescriptionEntry(persona.avatarId);
+    if (!entry) {
+      toastr.error("无法获取User设定数据");
+      return;
+    }
+    entry[field] = value;
+    getContext().saveSettingsDebounced();
+    toastr.success(
+      field === "title" ? "已更新User标题" : "已更新User具体设定",
+    );
+    refreshPersonaPanelView();
+  }
+
+  function triggerNativePersonaBind(persona, bindType) {
+    if (!persona?.avatarId) return;
+    const buttonMap = {
+      default: "#lock_persona_default",
+      character: "#lock_persona_to_char",
+      chat: "#lock_user_name",
+    };
+    const selector = buttonMap[bindType];
+    if (!selector) return;
+    selectPersona(persona.avatarId);
+    setTimeout(() => {
+      const btn = $(selector);
+      if (!btn.length) {
+        toastr.warning("未找到酒馆原生绑定按钮");
+        return;
+      }
+      btn.trigger("click");
+      setTimeout(() => refreshPersonaPanelView(), 80);
+    }, 30);
+  }
+
   function renderPersonaDetailSubList(personaRow, persona) {
     personaRow.next(".cfm-chat-sublist").remove();
 
@@ -26979,18 +27155,21 @@ jQuery(async () => {
     const title = persona?.title || "";
     const note = getPersonaNote(persona.avatarId) || "";
     const connections = resolvePersonaConnections(persona?.connections || []);
+    const bindStates = getPersonaBindStates(persona);
 
     const subList = $('<div class="cfm-chat-sublist cfm-persona-sublist"></div>');
     const detailCard = $('<div class="cfm-chat-toolbar cfm-persona-detail-card"></div>');
 
-    if (title) {
-      detailCard.append(`
-        <div class="cfm-persona-detail-section">
-          <div class="cfm-persona-detail-label">标题</div>
-          <div class="cfm-persona-detail-value">${escapeHtml(title)}</div>
+    detailCard.append(`
+      <div class="cfm-persona-detail-section">
+        <div class="cfm-persona-detail-label">标题
+          <div class="cfm-chat-actions">
+            <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="title" title="编辑标题"><i class="fa-solid fa-pen-to-square"></i></div>
+          </div>
         </div>
-      `);
-    }
+        <div class="cfm-persona-detail-value">${title ? escapeHtml(title) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+      </div>
+    `);
 
     if (note) {
       detailCard.append(`
@@ -27001,24 +27180,45 @@ jQuery(async () => {
       `);
     }
 
-    if (connections.length > 0) {
-      detailCard.append(`
-        <div class="cfm-persona-detail-section">
-          <div class="cfm-persona-detail-label">绑定</div>
-          <div class="cfm-persona-detail-tags">${buildPersonaConnHtml(persona.connections)}</div>
+    detailCard.append(`
+      <div class="cfm-persona-detail-section">
+        <div class="cfm-persona-detail-label">绑定</div>
+        <div class="cfm-persona-detail-tags cfm-persona-bind-links">
+          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.default ? "cfm-star-active" : ""}" data-bind-type="default" title="默认绑定"><i class="fa-solid fa-link"></i><span>默认</span></div>
+          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.character ? "cfm-star-active" : ""}" data-bind-type="character" title="角色绑定"><i class="fa-solid fa-link"></i><span>角色</span></div>
+          <div class="cfm-chat-action-btn cfm-persona-bind-btn ${bindStates.chat ? "cfm-star-active" : ""}" data-bind-type="chat" title="聊天绑定"><i class="fa-solid fa-link"></i><span>聊天</span></div>
         </div>
-      `);
-    }
+        <div class="cfm-persona-detail-value">${connections.length ? buildPersonaConnHtml(persona.connections) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+      </div>
+    `);
 
     detailCard.append(`
       <div class="cfm-persona-detail-section">
-        <div class="cfm-persona-detail-label">具体设定</div>
-        <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">暂无具体设定</span>'}</div>
+        <div class="cfm-persona-detail-label">具体设定
+          <div class="cfm-chat-actions">
+            <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="description" title="编辑具体设定"><i class="fa-solid fa-pen-to-square"></i></div>
+          </div>
+        </div>
+        <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `);
 
     subList.append(detailCard);
     personaRow.after(subList);
+
+    subList.find(".cfm-persona-detail-edit").on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const field = $(e.currentTarget).data("field");
+      await editPersonaDetailField(persona, field);
+    });
+
+    subList.find(".cfm-persona-bind-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const bindType = $(e.currentTarget).data("bindType");
+      triggerNativePersonaBind(persona, bindType);
+    });
   }
 
   async function renderPersonasView() {

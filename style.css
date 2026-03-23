@@ -4892,10 +4892,25 @@ option.cfm-nf-hidden {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .cfm-persona-detail-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #89b4fa;
+}
+.cfm-persona-detail-label .cfm-chat-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cfm-persona-detail-label .cfm-chat-action-btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 6px;
 }
 .cfm-persona-detail-value {
   font-size: 12px;
@@ -4914,6 +4929,33 @@ option.cfm-nf-hidden {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+.cfm-persona-bind-links {
+  margin-bottom: 4px;
+}
+.cfm-persona-bind-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+}
+.cfm-persona-bind-btn span {
+  font-size: 11px;
+  line-height: 1;
+}
+.cfm-persona-bind-btn.cfm-star-active {
+  background: rgba(137, 180, 250, 0.16);
+  border-color: rgba(137, 180, 250, 0.35);
+  color: #cdd6f4;
+}
+.cfm-persona-bind-btn:hover,
+.cfm-persona-detail-edit:hover {
+  filter: brightness(1.08);
 }
 .cfm-persona-detail-empty {
   opacity: 0.5;
