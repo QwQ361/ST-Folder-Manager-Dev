@@ -3211,6 +3211,7 @@ jQuery(async () => {
   let themeExpandedNodes = new Set();
   let bgExpandedNodes = new Set();
   let personaExpandedNodes = new Set();
+  let personaItemExpandedIds = new Set(); // 右侧展开的User详情
   let selectedQrFolder = null;
   let qrExpandedNodes = new Set();
   let qrItemExpandedSets = new Set(); // 右侧展开的QR集名称
@@ -26971,6 +26972,55 @@ jQuery(async () => {
     }
   }
 
+  function renderPersonaDetailSubList(personaRow, persona) {
+    personaRow.next(".cfm-chat-sublist").remove();
+
+    const desc = persona?.description || "";
+    const title = persona?.title || "";
+    const note = getPersonaNote(persona.avatarId) || "";
+    const connections = resolvePersonaConnections(persona?.connections || []);
+
+    const subList = $('<div class="cfm-chat-sublist cfm-persona-sublist"></div>');
+    const detailCard = $('<div class="cfm-chat-toolbar cfm-persona-detail-card"></div>');
+
+    if (title) {
+      detailCard.append(`
+        <div class="cfm-persona-detail-section">
+          <div class="cfm-persona-detail-label">标题</div>
+          <div class="cfm-persona-detail-value">${escapeHtml(title)}</div>
+        </div>
+      `);
+    }
+
+    if (note) {
+      detailCard.append(`
+        <div class="cfm-persona-detail-section">
+          <div class="cfm-persona-detail-label">备注</div>
+          <div class="cfm-persona-detail-value">${escapeHtml(note)}</div>
+        </div>
+      `);
+    }
+
+    if (connections.length > 0) {
+      detailCard.append(`
+        <div class="cfm-persona-detail-section">
+          <div class="cfm-persona-detail-label">绑定</div>
+          <div class="cfm-persona-detail-tags">${buildPersonaConnHtml(persona.connections)}</div>
+        </div>
+      `);
+    }
+
+    detailCard.append(`
+      <div class="cfm-persona-detail-section">
+        <div class="cfm-persona-detail-label">具体设定</div>
+        <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">暂无具体设定</span>'}</div>
+      </div>
+    `);
+
+    subList.append(detailCard);
+    personaRow.after(subList);
+  }
+
   async function renderPersonasView() {
     const leftTree = $("#cfm-persona-left-tree");
     const rightList = $("#cfm-persona-right-list");
@@ -27578,9 +27628,12 @@ jQuery(async () => {
           : "";
         // 头像缩略图
         const thumbUrl = getThumbnailUrl("persona", p.avatarId);
+        const isExpanded = personaItemExpandedIds.has(p.avatarId);
+        const detailToggleHtml = `<div class="cfm-chat-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
+            ${detailToggleHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
             ${singleNoteBtn}
@@ -27615,8 +27668,34 @@ jQuery(async () => {
           e.stopPropagation();
           executePersonaNoteEdit([p.avatarId]);
         });
+        row.find(".cfm-persona-toggle").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (personaItemExpandedIds.has(p.avatarId)) {
+            personaItemExpandedIds.delete(p.avatarId);
+            row.next(".cfm-chat-sublist").slideUp(150, function () {
+              $(this).remove();
+            });
+            row
+              .find(".cfm-persona-toggle i")
+              .removeClass("fa-caret-down")
+              .addClass("fa-caret-right");
+          } else {
+            personaItemExpandedIds.add(p.avatarId);
+            row
+              .find(".cfm-persona-toggle i")
+              .removeClass("fa-caret-right")
+              .addClass("fa-caret-down");
+            renderPersonaDetailSubList(row, p);
+            row.next(".cfm-chat-sublist").hide().slideDown(150);
+          }
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-row-note-btn").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-persona-toggle",
+            ).length
+          )
             return;
           if (cfmPersonaNoteMode) {
             togglePersonaNoteItem(p.avatarId, e.shiftKey);
@@ -27664,6 +27743,9 @@ jQuery(async () => {
           return getMultiDragData(singleData);
         });
         rightList.append(row);
+        if (personaItemExpandedIds.has(p.avatarId)) {
+          renderPersonaDetailSubList(row, p);
+        }
       }
 
       // 删除工具栏
@@ -27919,8 +28001,11 @@ jQuery(async () => {
           folderPathNames.length > 0
             ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames.join(" › "))}</span>`
             : "";
+        const isExpanded = personaItemExpandedIds.has(p.avatarId);
+        const detailToggleHtml = `<div class="cfm-chat-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
+            ${detailToggleHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -27932,8 +28017,31 @@ jQuery(async () => {
           toggleResFavorite("personas", p.avatarId);
           executePersonaSearch();
         });
+        row.find(".cfm-persona-toggle").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (personaItemExpandedIds.has(p.avatarId)) {
+            personaItemExpandedIds.delete(p.avatarId);
+            row.next(".cfm-chat-sublist").slideUp(150, function () {
+              $(this).remove();
+            });
+            row
+              .find(".cfm-persona-toggle i")
+              .removeClass("fa-caret-down")
+              .addClass("fa-caret-right");
+          } else {
+            personaItemExpandedIds.add(p.avatarId);
+            row
+              .find(".cfm-persona-toggle i")
+              .removeClass("fa-caret-right")
+              .addClass("fa-caret-down");
+            renderPersonaDetailSubList(row, p);
+            row.next(".cfm-chat-sublist").hide().slideDown(150);
+          }
+        });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star").length) return;
+          if ($(e.target).closest(".cfm-row-star, .cfm-persona-toggle").length)
+            return;
           selectPersona(p.avatarId);
           rightList
             .find(".cfm-rv-item-active")
@@ -27950,6 +28058,9 @@ jQuery(async () => {
         });
         row.on("dragend", () => pcDragEnd());
         rightList.append(row);
+        if (personaItemExpandedIds.has(p.avatarId)) {
+          renderPersonaDetailSubList(row, p);
+        }
       }
     });
   }
