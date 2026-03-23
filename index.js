@@ -724,6 +724,9 @@ jQuery(async () => {
         selectedFolder: null,
         expandedNodes: [],
       };
+    // 角色卡右栏排序模式持久化：null | "az" | "za" | "time"
+    if (extension_settings[extensionName].charRightSortMode === undefined)
+      extension_settings[extensionName].charRightSortMode = null;
     // 自定义布局：标签页可见性/排序 + 子功能可见性/排序
     if (!extension_settings[extensionName].customLayout) {
       extension_settings[extensionName].customLayout = {
@@ -1481,6 +1484,51 @@ jQuery(async () => {
 
   // 角色排序辅助函数
   function sortCharacters(chars, mode) {
+    if (mode === "time") {
+      const parseCharTime = (char) => {
+        const candidates = [
+          char?.create_date,
+          char?.created_at,
+          char?.date_added,
+          char?.last_modified,
+          char?.modified,
+          char?.update_date,
+          char?.updated_at,
+          char?.data?.create_date,
+          char?.data?.created_at,
+          char?.data?.date_added,
+          char?.data?.last_modified,
+          char?.data?.modified,
+          char?.data?.update_date,
+          char?.data?.updated_at,
+        ];
+        for (const value of candidates) {
+          if (value === undefined || value === null || value === "") continue;
+          if (typeof value === "number" && Number.isFinite(value)) return value;
+          const ts = Date.parse(String(value));
+          if (!Number.isNaN(ts)) return ts;
+          const num = Number(value);
+          if (Number.isFinite(num)) return num;
+        }
+        return null;
+      };
+
+      const sourceOrder = new Map(
+        getCharacters().map((char, index) => [char.avatar, index]),
+      );
+      return [...chars].sort((a, b) => {
+        const ta = parseCharTime(a);
+        const tb = parseCharTime(b);
+        if (ta !== null || tb !== null) {
+          if (ta === null) return 1;
+          if (tb === null) return -1;
+          if (tb !== ta) return tb - ta;
+        }
+        const ia = sourceOrder.get(a.avatar) ?? -1;
+        const ib = sourceOrder.get(b.avatar) ?? -1;
+        return ib - ia;
+      });
+    }
     return [...chars].sort((a, b) => {
       const cmp = (a.name || "").localeCompare(b.name || "", "zh-CN");
       return mode === "az" ? cmp : -cmp;
@@ -3365,7 +3413,8 @@ jQuery(async () => {
   // ==================== 排序状态管理 ====================
   let sortDirty = false; // 是否有未确认的排序操作
   let sortSnapshot = null; // 排序前的快照 { folderId: sortOrder, ... }
-  let rightCharSortMode = null; // 右栏角色排序模式: null | 'az' | 'za'
+  let rightCharSortMode =
+    extension_settings[extensionName].charRightSortMode ?? null; // 右栏角色排序模式: null | 'az' | 'za' | 'time'
 
   // ==================== 多选模式状态 ====================
   let cfmMultiSelectMode = false;
@@ -13452,6 +13501,9 @@ jQuery(async () => {
                     <div class="cfm-sort-dropdown-item ${rightCharSortMode === "za" ? "cfm-sort-item-active" : ""}" data-sort="char-za">
                         <i class="fa-solid fa-arrow-up-z-a"></i> 角色 Z → A
                     </div>
+                    <div class="cfm-sort-dropdown-item ${rightCharSortMode === "time" ? "cfm-sort-item-active" : ""}" data-sort="char-time">
+                        <i class="fa-solid fa-clock"></i> 角色按时间排序
+                    </div>
                     ${
                       childFolders.length > 0
                         ? `
@@ -13475,6 +13527,8 @@ jQuery(async () => {
         ev.preventDefault();
         ev.stopPropagation();
         rightCharSortMode = "az";
+        extension_settings[extensionName].charRightSortMode = rightCharSortMode;
+        getContext().saveSettingsDebounced();
         updateSortButtonState();
         renderRightPane();
         dropdown.remove();
@@ -13483,6 +13537,18 @@ jQuery(async () => {
         ev.preventDefault();
         ev.stopPropagation();
         rightCharSortMode = "za";
+        extension_settings[extensionName].charRightSortMode = rightCharSortMode;
+        getContext().saveSettingsDebounced();
+        updateSortButtonState();
+        renderRightPane();
+        dropdown.remove();
+      });
+      dropdown.find('[data-sort="char-time"]').on("click touchend", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        rightCharSortMode = "time";
+        extension_settings[extensionName].charRightSortMode = rightCharSortMode;
+        getContext().saveSettingsDebounced();
         updateSortButtonState();
         renderRightPane();
         dropdown.remove();
@@ -13516,6 +13582,8 @@ jQuery(async () => {
         ev.stopPropagation();
         if (rightCharSortMode === null && !sortSnapshot) return;
         rightCharSortMode = null;
+        extension_settings[extensionName].charRightSortMode = null;
+        getContext().saveSettingsDebounced();
         if (sortSnapshot) {
           revertSort();
           toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
@@ -15640,7 +15708,8 @@ jQuery(async () => {
     // 重置排序状态
     sortDirty = false;
     sortSnapshot = null;
-    rightCharSortMode = null;
+    rightCharSortMode =
+      extension_settings[extensionName].charRightSortMode ?? null;
     // 重置多选状态
     cfmMultiSelectMode = false;
     clearMultiSelect();
@@ -17197,7 +17266,6 @@ jQuery(async () => {
           // 用户选择"是，保留排序" → 清理状态并关闭
           sortSnapshot = null;
           sortDirty = false;
-          rightCharSortMode = null;
           $("#cfm-overlay").remove();
           clearNewlyImportedHighlight();
           $("#cfm-topbar-button .drawer-icon")
