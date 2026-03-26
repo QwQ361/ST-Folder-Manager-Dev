@@ -27223,15 +27223,34 @@ jQuery(async () => {
     const meta = map[field];
     if (!meta || !char) return null;
 
+    const normalizeGreetingItems = (input) => {
+      const results = [];
+      const pushValue = (value) => {
+        if (typeof value === "string") {
+          const text = value.trim();
+          if (text) results.push(text);
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach(pushValue);
+          return;
+        }
+        if (value && typeof value === "object") {
+          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+        }
+      };
+      pushValue(input);
+      return results;
+    };
+
     const currentGreetingIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
+    const currentAlternateGreetings = normalizeGreetingItems(char?.data?.alternate_greetings);
     const currentValue =
       field === "first_mes"
         ? String(
             currentGreetingIndex === 0
               ? char?.data?.first_mes || ""
-              : Array.isArray(char?.data?.alternate_greetings)
-                ? char.data.alternate_greetings[currentGreetingIndex - 1] || ""
-                : "",
+              : currentAlternateGreetings[currentGreetingIndex - 1] || "",
           )
         : String(char?.data?.[field] || "");
     const canAppendGreeting = field === "first_mes";
@@ -27305,15 +27324,33 @@ jQuery(async () => {
     if (result === null || !char?.avatar) return;
     if (!char.data) char.data = {};
 
+    const normalizeGreetingItems = (input) => {
+      const results = [];
+      const pushValue = (value) => {
+        if (typeof value === "string") {
+          const text = value.trim();
+          if (text) results.push(text);
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach(pushValue);
+          return;
+        }
+        if (value && typeof value === "object") {
+          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+        }
+      };
+      pushValue(input);
+      return results;
+    };
+
     const action = typeof result === "object" && result !== null ? result.action : "replace";
     const value = typeof result === "object" && result !== null ? result.value : result;
     const updateData = {};
 
     if (field === "first_mes") {
       const currentGreetingIndex = Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0);
-      const existingGreetings = Array.isArray(char.data.alternate_greetings)
-        ? char.data.alternate_greetings.filter((item) => typeof item === "string")
-        : [];
+      const existingGreetings = normalizeGreetingItems(char.data.alternate_greetings);
 
       if (action === "append") {
         const appendValue = String(value || "").trim();
@@ -27418,17 +27455,32 @@ jQuery(async () => {
   function renderCharacterDetailSubList(charRow, char) {
     charRow.next(".cfm-char-detail-sublist").remove();
 
+    const normalizeGreetingItems = (input) => {
+      const results = [];
+      const pushValue = (value) => {
+        if (typeof value === "string") {
+          const text = value.trim();
+          if (text) results.push(text);
+          return;
+        }
+        if (Array.isArray(value)) {
+          value.forEach(pushValue);
+          return;
+        }
+        if (value && typeof value === "object") {
+          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+        }
+      };
+      pushValue(input);
+      return results;
+    };
+
     const data = char?.data || {};
     const description = typeof data.description === "string" ? data.description.trim() : "";
     const personality = typeof data.personality === "string" ? data.personality.trim() : "";
     const scenario = typeof data.scenario === "string" ? data.scenario.trim() : "";
     const firstMes = typeof data.first_mes === "string" ? data.first_mes.trim() : "";
-    const alternateGreetings = Array.isArray(data.alternate_greetings)
-      ? data.alternate_greetings
-          .filter((item) => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean)
-      : [];
+    const alternateGreetings = normalizeGreetingItems(data.alternate_greetings);
     const greetingMessages = [firstMes, ...alternateGreetings].filter(Boolean);
     const mesExample = typeof data.mes_example === "string" ? data.mes_example.trim() : "";
     const creatorNotes = typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
