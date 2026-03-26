@@ -27364,7 +27364,9 @@ jQuery(async () => {
       } else if (action === "delete") {
         if (currentGreetingIndex === 0) {
           char.data.first_mes = "";
+          char.data.alternate_greetings = existingGreetings;
           updateData.first_mes = "";
+          updateData.alternate_greetings = existingGreetings;
           charRow.data("cfmCharGreetingIndex", 0);
         } else {
           const removeIndex = currentGreetingIndex - 1;
@@ -27393,14 +27395,32 @@ jQuery(async () => {
 
     try {
       const headers = getContext().getRequestHeaders();
+      // V2角色卡的字段同时存在于顶层和data层，需要两层都更新
+      const topLevelSync = {};
+      if ("first_mes" in updateData) topLevelSync.first_mes = updateData.first_mes;
+      if ("alternate_greetings" in updateData) topLevelSync.alternate_greetings = updateData.alternate_greetings;
+      if ("description" in updateData) topLevelSync.description = updateData.description;
+      if ("personality" in updateData) topLevelSync.personality = updateData.personality;
+      if ("scenario" in updateData) topLevelSync.scenario = updateData.scenario;
+      if ("mes_example" in updateData) topLevelSync.mes_example = updateData.mes_example;
+      if ("creator_notes" in updateData) topLevelSync.creator_notes = updateData.creator_notes;
+      if ("system_prompt" in updateData) topLevelSync.system_prompt = updateData.system_prompt;
+      if ("post_history_instructions" in updateData) topLevelSync.post_history_instructions = updateData.post_history_instructions;
       await fetch("/api/characters/merge-attributes", {
         method: "POST",
         headers: headers,
         body: JSON.stringify({
           avatar: char.avatar,
+          ...topLevelSync,
           data: updateData,
         }),
       });
+      // 同步更新酒馆内存中角色对象的顶层字段
+      for (const [k, v] of Object.entries(topLevelSync)) {
+        char[k] = v;
+      }
+      // 刷新酒馆原生前端的角色数据缓存
+      try { await getContext().getCharacters(); } catch (_) { /* 非关键 */ }
       if (field === "first_mes" && action === "append") {
         charRow.data(
           "cfmCharGreetingIndex",
