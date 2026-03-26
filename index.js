@@ -27363,20 +27363,9 @@ jQuery(async () => {
         updateData.alternate_greetings = nextGreetings;
       } else if (action === "delete") {
         if (currentGreetingIndex === 0) {
-          if (existingGreetings.length > 0) {
-            const [nextFirstMes, ...restGreetings] = existingGreetings;
-            char.data.first_mes = nextFirstMes;
-            char.data.alternate_greetings = restGreetings;
-            updateData.first_mes = nextFirstMes;
-            updateData.alternate_greetings = restGreetings;
-            charRow.data("cfmCharGreetingIndex", 0);
-          } else {
-            char.data.first_mes = "";
-            char.data.alternate_greetings = [];
-            updateData.first_mes = "";
-            updateData.alternate_greetings = [];
-            charRow.data("cfmCharGreetingIndex", 0);
-          }
+          char.data.first_mes = "";
+          updateData.first_mes = "";
+          charRow.data("cfmCharGreetingIndex", 0);
         } else {
           const removeIndex = currentGreetingIndex - 1;
           const nextGreetings = existingGreetings.filter((_, index) => index !== removeIndex);
@@ -27569,7 +27558,13 @@ jQuery(async () => {
       e.preventDefault();
       e.stopPropagation();
       const field = $(e.currentTarget).data("field");
+      if (field === "first_mes") {
+        char.__cfmEditingGreetingIndex = Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0);
+      } else {
+        delete char.__cfmEditingGreetingIndex;
+      }
       await editCharacterDetailField(charRow, char, field);
+      delete char.__cfmEditingGreetingIndex;
     });
   }
 
@@ -32663,3 +32658,4 @@ jQuery(async () => {
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
+
