@@ -4679,6 +4679,25 @@ option.cfm-nf-hidden {
   transition: transform 0.2s;
 }
 
+/* 角色卡具体设定展开按钮与标题布局 */
+.cfm-char-name-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.cfm-char-detail-toggle {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  margin-right: 0;
+  color: rgba(137, 180, 250, 0.72);
+}
+.cfm-char-detail-toggle:hover {
+  color: #89b4fa;
+  background-color: rgba(137, 180, 250, 0.14);
+}
+
 /* 正则脚本子列表容器（角色卡/预设行展开后） */
 .cfm-regex-sublist {
   margin-left: 30px;
@@ -4867,11 +4886,13 @@ option.cfm-nf-hidden {
   border-radius: 0 6px 6px 0;
 }
 
-/* User 详情子列表 */
-.cfm-persona-sublist {
+/* User / 角色卡 详情子列表 */
+.cfm-persona-sublist,
+.cfm-char-detail-sublist {
   margin-top: -2px;
 }
-.cfm-persona-detail-card {
+.cfm-persona-detail-card,
+.cfm-char-detail-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4919,6 +4940,27 @@ option.cfm-nf-hidden {
   color: rgba(255, 255, 255, 0.88);
   white-space: normal;
   word-break: break-word;
+}
+.cfm-char-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.cfm-char-detail-meta-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.cfm-char-detail-section.cfm-char-detail-block .cfm-char-detail-value {
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 .cfm-persona-detail-description {
   padding: 8px 10px;

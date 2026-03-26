@@ -10278,6 +10278,7 @@ jQuery(async () => {
   // ==================== 角色卡/预设 正则查看模式 ====================
   let cfmCharRegexMode = false; // 角色卡正则展示模式
   let cfmCharRegexExpandedAvatars = new Set(); // 当前展开正则的角色avatar集合
+  let cfmCharDetailExpandedAvatars = new Set(); // 当前展开具体设定的角色avatar集合
   let cfmCharRegexTargetAvatar = null; // 当前正则查看目标角色avatar
   let cfmCharRegexHighlightPath = []; // 当前目标角色到达路径（文件夹ID列表）
   let cfmCharRegexPrevSelectedTreeNode = undefined; // 进入正则模式前的selectedTreeNode（用于退出时恢复）
@@ -18141,13 +18142,15 @@ jQuery(async () => {
       ? `<div class="cfm-regex-toggle" title="展开/折叠正则脚本"><i class="fa-solid fa-caret-${isRegexExpanded ? "down" : "right"}"></i></div>`
       : "";
     const regexHighlightClass = isRegexTarget ? "cfm-regex-target-row" : "";
+    const isDetailExpanded = cfmCharDetailExpandedAvatars.has(char.avatar);
+    const detailToggleHtml = `<div class="cfm-char-detail-toggle" title="展开/折叠角色卡具体设定"><i class="fa-solid fa-caret-${isDetailExpanded ? "down" : "right"}"></i></div>`;
     const row = $(`
             <div class="cfm-row cfm-row-char ${regexHighlightClass} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 ${chatToggleHtml}
                 ${regexToggleHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
-                <div class="cfm-row-name"><span class="cfm-char-name-text">${escapeHtml(char.name)}</span>${charMetaHtml}${folderPathHtml}</div>
+                <div class="cfm-row-name"><span class="cfm-char-name-inline">${detailToggleHtml}<span class="cfm-char-name-text">${escapeHtml(char.name)}</span></span>${charMetaHtml}${folderPathHtml}</div>
                 ${singleEditBtn}
                 <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
@@ -18185,7 +18188,7 @@ jQuery(async () => {
       if (cfmChatExpandedAvatars.has(avatar)) {
         // 折叠
         cfmChatExpandedAvatars.delete(avatar);
-        row.next(".cfm-chat-sublist").slideUp(150, function () {
+        row.nextAll(".cfm-chat-sublist").first().slideUp(150, function () {
           $(this).remove();
         });
         row
@@ -18201,7 +18204,7 @@ jQuery(async () => {
           .addClass("fa-caret-down");
         const chats = await getCharChats(avatar);
         renderChatSubList(row, avatar, chats || []);
-        row.next(".cfm-chat-sublist").hide().slideDown(150);
+        row.nextAll(".cfm-chat-sublist").first().hide().slideDown(150);
       }
     });
     // 正则模式下小三角点击：展开/折叠正则脚本
@@ -18212,7 +18215,7 @@ jQuery(async () => {
       if (cfmCharRegexExpandedAvatars.has(avatar)) {
         // 折叠
         cfmCharRegexExpandedAvatars.delete(avatar);
-        row.next(".cfm-regex-sublist").slideUp(150, function () {
+        row.nextAll(".cfm-regex-sublist").first().slideUp(150, function () {
           $(this).remove();
         });
         row
@@ -18228,7 +18231,31 @@ jQuery(async () => {
           .addClass("fa-caret-down");
         const scripts = char?.data?.extensions?.regex_scripts || [];
         renderCharRegexSubList(row, avatar, scripts, char.name, isRegexTarget);
-        row.next(".cfm-regex-sublist").hide().slideDown(150);
+        row.nextAll(".cfm-regex-sublist").first().hide().slideDown(150);
+      }
+    });
+    // 角色名旁小三角：展开/折叠角色卡具体设定
+    row.find(".cfm-char-detail-toggle").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const avatar = char.avatar;
+      if (cfmCharDetailExpandedAvatars.has(avatar)) {
+        cfmCharDetailExpandedAvatars.delete(avatar);
+        row.nextAll(".cfm-char-detail-sublist").first().slideUp(150, function () {
+          $(this).remove();
+        });
+        row
+          .find(".cfm-char-detail-toggle i")
+          .removeClass("fa-caret-down")
+          .addClass("fa-caret-right");
+      } else {
+        cfmCharDetailExpandedAvatars.add(avatar);
+        row
+          .find(".cfm-char-detail-toggle i")
+          .removeClass("fa-caret-right")
+          .addClass("fa-caret-down");
+        renderCharacterDetailSubList(row, char);
+        row.nextAll(".cfm-char-detail-sublist").first().hide().slideDown(150);
       }
     });
     // 点击行为：多选模式下切换选中，否则打开角色聊天
@@ -18236,6 +18263,7 @@ jQuery(async () => {
       e.preventDefault();
       if ($(e.target).closest(".cfm-row-star").length) return;
       if ($(e.target).closest(".cfm-row-edit-btn").length) return;
+      if ($(e.target).closest(".cfm-char-detail-toggle").length) return;
       if ($(e.target).closest(".cfm-chat-toggle").length) return;
       if ($(e.target).closest(".cfm-regex-toggle").length) return;
       if (cfmResDeleteMode) {
@@ -18311,6 +18339,9 @@ jQuery(async () => {
           isRegexTarget,
         );
       }
+    }
+    if (cfmCharDetailExpandedAvatars.has(char.avatar)) {
+      renderCharacterDetailSubList(row, char);
     }
   }
 
@@ -27151,6 +27182,55 @@ jQuery(async () => {
       btn.trigger("click");
       setTimeout(() => refreshPersonaPanelView(), 80);
     }, 30);
+  }
+
+  function renderCharacterDetailSubList(charRow, char) {
+    charRow.next(".cfm-char-detail-sublist").remove();
+
+    const data = char?.data || {};
+    const description = typeof data.description === "string" ? data.description.trim() : "";
+    const personality = typeof data.personality === "string" ? data.personality.trim() : "";
+    const scenario = typeof data.scenario === "string" ? data.scenario.trim() : "";
+    const firstMes = typeof data.first_mes === "string" ? data.first_mes.trim() : "";
+    const mesExample = typeof data.mes_example === "string" ? data.mes_example.trim() : "";
+    const creatorNotes = typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
+    const systemPrompt = typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
+    const postHistoryInstructions = typeof data.post_history_instructions === "string" ? data.post_history_instructions.trim() : "";
+    const tags = Array.isArray(data.tags) ? data.tags.filter(Boolean) : [];
+    const hasLorebook = !!data.character_book;
+
+    const sectionHtml = (label, value, extraClass = "") => `
+      <div class="cfm-persona-detail-section cfm-char-detail-section ${extraClass}">
+        <div class="cfm-persona-detail-label">${label}</div>
+        <div class="cfm-persona-detail-value cfm-char-detail-value ${extraClass}">${value ? escapeHtml(value).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+      </div>
+    `;
+
+    const subList = $('<div class="cfm-chat-sublist cfm-char-detail-sublist"></div>');
+    const detailCard = $('<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-char-detail-card"></div>');
+
+    detailCard.append(`
+      <div class="cfm-persona-detail-section cfm-char-detail-section">
+        <div class="cfm-persona-detail-label">角色设定概览</div>
+        <div class="cfm-persona-detail-value cfm-char-detail-meta">
+          ${tags.length ? `<span class="cfm-char-detail-meta-item">标签：${escapeHtml(tags.join(" / "))}</span>` : '<span class="cfm-char-detail-meta-item cfm-persona-detail-empty">标签：无</span>'}
+          <span class="cfm-char-detail-meta-item">内嵌世界书：${hasLorebook ? "有" : "无"}</span>
+        </div>
+      </div>
+    `);
+    detailCard.append(sectionHtml("描述", description));
+    detailCard.append(sectionHtml("性格", personality));
+    detailCard.append(sectionHtml("场景", scenario));
+    detailCard.append(sectionHtml("首条消息", firstMes, "cfm-char-detail-block"));
+    detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block"));
+    if (creatorNotes || systemPrompt || postHistoryInstructions) {
+      detailCard.append(sectionHtml("作者备注", creatorNotes));
+      detailCard.append(sectionHtml("系统提示词", systemPrompt, "cfm-char-detail-block"));
+      detailCard.append(sectionHtml("历史后指令", postHistoryInstructions, "cfm-char-detail-block"));
+    }
+
+    subList.append(detailCard);
+    charRow.after(subList);
   }
 
   function renderPersonaDetailSubList(personaRow, persona) {
