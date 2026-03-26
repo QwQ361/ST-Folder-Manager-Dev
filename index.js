@@ -15740,8 +15740,9 @@ jQuery(async () => {
     cfmResDeleteLastClicked = null;
 
     renderLeftTree();
-    // 如果初始tab不是chars，触发对应视图的渲染
-    if (initialTab === "presets") renderPresetsView();
+    // 触发初始tab对应视图的渲染
+    if (initialTab === "chars") renderRightPane();
+    else if (initialTab === "presets") renderPresetsView();
     else if (initialTab === "worldinfo") renderWorldInfoView();
     else if (initialTab === "themes") renderThemesView();
     else if (initialTab === "backgrounds") renderBackgroundsView();

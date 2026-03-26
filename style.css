@@ -4370,7 +4370,7 @@ option.cfm-nf-hidden {
   width: 20px;
   height: 20px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(137, 180, 250, 0.72);
   transition:
     transform 0.2s ease,
     color 0.15s;
@@ -4378,7 +4378,8 @@ option.cfm-nf-hidden {
   margin-right: 2px;
 }
 .cfm-qr-expand-arrow:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: #89b4fa;
+  background-color: rgba(137, 180, 250, 0.14);
 }
 .cfm-qr-expand-arrow i {
   font-size: 12px;
