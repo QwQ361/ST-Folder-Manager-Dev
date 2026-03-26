@@ -27223,8 +27223,19 @@ jQuery(async () => {
     const meta = map[field];
     if (!meta || !char) return null;
 
-    const currentValue = String(char?.data?.[field] || "");
+    const currentGreetingIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
+    const currentValue =
+      field === "first_mes"
+        ? String(
+            currentGreetingIndex === 0
+              ? char?.data?.first_mes || ""
+              : Array.isArray(char?.data?.alternate_greetings)
+                ? char.data.alternate_greetings[currentGreetingIndex - 1] || ""
+                : "",
+          )
+        : String(char?.data?.[field] || "");
     const canAppendGreeting = field === "first_mes";
+    const deleteButtonText = field === "first_mes" ? "删除" : "清空";
     const inputHtml =
       meta.rows > 1
         ? `<textarea class="cfm-edit-input" id="cfm-char-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
@@ -27241,7 +27252,7 @@ jQuery(async () => {
           </div>
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${currentValue ? '<button class="cfm-btn cfm-edit-popup-clear">清空</button>' : ""}
+            ${currentValue ? `<button class="cfm-btn cfm-edit-popup-clear">${deleteButtonText}</button>` : ""}
             ${canAppendGreeting ? '<button class="cfm-btn cfm-char-detail-append">新增</button>' : ""}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
@@ -27267,7 +27278,9 @@ jQuery(async () => {
       overlay.on("click", (e) => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
-      overlay.find(".cfm-edit-popup-clear").on("click", () => close({ action: "clear", value: "" }));
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        close({ action: field === "first_mes" ? "delete" : "clear", value: "" });
+      });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         close({ action: "replace", value: String(input.val() || "").trim() });
       });
@@ -27296,18 +27309,57 @@ jQuery(async () => {
     const value = typeof result === "object" && result !== null ? result.value : result;
     const updateData = {};
 
-    if (field === "first_mes" && action === "append") {
-      const appendValue = String(value || "").trim();
-      if (!appendValue) {
-        toastr.warning("新增开场白不能为空");
-        return;
-      }
+    if (field === "first_mes") {
+      const currentGreetingIndex = Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0);
       const existingGreetings = Array.isArray(char.data.alternate_greetings)
         ? char.data.alternate_greetings.filter((item) => typeof item === "string")
         : [];
-      const nextGreetings = [...existingGreetings, appendValue];
-      char.data.alternate_greetings = nextGreetings;
-      updateData.alternate_greetings = nextGreetings;
+
+      if (action === "append") {
+        const appendValue = String(value || "").trim();
+        if (!appendValue) {
+          toastr.warning("新增开场白不能为空");
+          return;
+        }
+        const nextGreetings = [...existingGreetings, appendValue];
+        char.data.alternate_greetings = nextGreetings;
+        updateData.alternate_greetings = nextGreetings;
+      } else if (action === "delete") {
+        if (currentGreetingIndex === 0) {
+          if (existingGreetings.length > 0) {
+            const [nextFirstMes, ...restGreetings] = existingGreetings;
+            char.data.first_mes = nextFirstMes;
+            char.data.alternate_greetings = restGreetings;
+            updateData.first_mes = nextFirstMes;
+            updateData.alternate_greetings = restGreetings;
+            charRow.data("cfmCharGreetingIndex", 0);
+          } else {
+            char.data.first_mes = "";
+            char.data.alternate_greetings = [];
+            updateData.first_mes = "";
+            updateData.alternate_greetings = [];
+            charRow.data("cfmCharGreetingIndex", 0);
+          }
+        } else {
+          const removeIndex = currentGreetingIndex - 1;
+          const nextGreetings = existingGreetings.filter((_, index) => index !== removeIndex);
+          char.data.alternate_greetings = nextGreetings;
+          updateData.alternate_greetings = nextGreetings;
+          charRow.data(
+            "cfmCharGreetingIndex",
+            Math.min(currentGreetingIndex, nextGreetings.length),
+          );
+        }
+      } else if (currentGreetingIndex === 0) {
+        char.data.first_mes = value;
+        updateData.first_mes = value;
+      } else {
+        const replaceIndex = currentGreetingIndex - 1;
+        const nextGreetings = [...existingGreetings];
+        nextGreetings[replaceIndex] = value;
+        char.data.alternate_greetings = nextGreetings;
+        updateData.alternate_greetings = nextGreetings;
+      }
     } else {
       char.data[field] = value;
       updateData[field] = value;
@@ -27329,6 +27381,8 @@ jQuery(async () => {
           Math.max((char.data.alternate_greetings || []).length, 0),
         );
         toastr.success("已新增开场白");
+      } else if (field === "first_mes" && action === "delete") {
+        toastr.success("已删除开场白");
       } else {
         toastr.success("已更新角色设定");
       }
