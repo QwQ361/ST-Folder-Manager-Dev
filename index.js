@@ -17273,6 +17273,10 @@ jQuery(async () => {
   function closeMainPopup() {
     // 保存当前页面状态（用于"记住上次页面"功能）
     _saveLastOpenState();
+    const resetPanelExpandedStates = () => {
+      cfmCharDetailExpandedAvatars.clear();
+      personaItemExpandedIds.clear();
+    };
     if (sortDirty) {
       // 排序已更改，弹出确认框
       showSortConfirmDialog(
@@ -17280,6 +17284,7 @@ jQuery(async () => {
           // 用户选择"是，保留排序" → 清理状态并关闭
           sortSnapshot = null;
           sortDirty = false;
+          resetPanelExpandedStates();
           $("#cfm-overlay").remove();
           clearNewlyImportedHighlight();
           $("#cfm-topbar-button .drawer-icon")
@@ -17289,6 +17294,7 @@ jQuery(async () => {
         () => {
           // 用户选择"否，撤回排序" → 恢复快照并关闭
           revertSort();
+          resetPanelExpandedStates();
           $("#cfm-overlay").remove();
           clearNewlyImportedHighlight();
           $("#cfm-topbar-button .drawer-icon")
@@ -17298,6 +17304,7 @@ jQuery(async () => {
       );
       return;
     }
+    resetPanelExpandedStates();
     $("#cfm-overlay").remove();
     clearNewlyImportedHighlight();
     $("#cfm-topbar-button .drawer-icon")
@@ -27923,13 +27930,12 @@ jQuery(async () => {
         // 头像缩略图
         const thumbUrl = getThumbnailUrl("persona", p.avatarId);
         const isExpanded = personaItemExpandedIds.has(p.avatarId);
-        const detailToggleHtml = `<div class="cfm-chat-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
+        const detailToggleHtml = `<div class="cfm-char-detail-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
-            ${detailToggleHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -28296,12 +28302,11 @@ jQuery(async () => {
             ? `<span class="cfm-row-folder-path">${escapeHtml(folderPathNames.join(" › "))}</span>`
             : "";
         const isExpanded = personaItemExpandedIds.has(p.avatarId);
-        const detailToggleHtml = `<div class="cfm-chat-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
+        const detailToggleHtml = `<div class="cfm-char-detail-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
-            ${detailToggleHtml}
             <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
-            <div class="cfm-row-name"><span class="cfm-persona-name-text">${escapeHtml(p.name)}</span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
