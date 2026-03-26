@@ -25786,10 +25786,9 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char cfm-qr-set-row ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
-            ${expandArrowHtml}
             ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-qr-name-inline">${expandArrowHtml}<span class="cfm-qr-name-text">${escapeHtml(n)}</span></span>${noteHtml}</div>
             ${singleNoteBtn}
             ${singleRenameBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
