@@ -27198,6 +27198,13 @@ jQuery(async () => {
     const personality = typeof data.personality === "string" ? data.personality.trim() : "";
     const scenario = typeof data.scenario === "string" ? data.scenario.trim() : "";
     const firstMes = typeof data.first_mes === "string" ? data.first_mes.trim() : "";
+    const alternateGreetings = Array.isArray(data.alternate_greetings)
+      ? data.alternate_greetings
+          .filter((item) => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+    const greetingMessages = [firstMes, ...alternateGreetings].filter(Boolean);
     const mesExample = typeof data.mes_example === "string" ? data.mes_example.trim() : "";
     const creatorNotes = typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
     const systemPrompt = typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
@@ -27227,7 +27234,29 @@ jQuery(async () => {
     detailCard.append(sectionHtml("描述", description));
     detailCard.append(sectionHtml("性格", personality));
     detailCard.append(sectionHtml("场景", scenario));
-    detailCard.append(sectionHtml("首条消息", firstMes, "cfm-char-detail-block"));
+
+    if (greetingMessages.length > 1) {
+      const safeIndex = Math.min(
+        Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0),
+        greetingMessages.length - 1,
+      );
+      const currentGreeting = greetingMessages[safeIndex] || "";
+      detailCard.append(`
+        <div class="cfm-persona-detail-section cfm-char-detail-section cfm-char-detail-block">
+          <div class="cfm-persona-detail-label">首条消息
+            <div class="cfm-chat-actions">
+              <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="prev" title="上一条开场白"><i class="fa-solid fa-caret-left"></i></div>
+              <span class="cfm-char-detail-meta-item">${safeIndex + 1} / ${greetingMessages.length}</span>
+              <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="next" title="下一条开场白"><i class="fa-solid fa-caret-right"></i></div>
+            </div>
+          </div>
+          <div class="cfm-persona-detail-value cfm-char-detail-value cfm-char-detail-block">${currentGreeting ? escapeHtml(currentGreeting).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+        </div>
+      `);
+    } else {
+      detailCard.append(sectionHtml("首条消息", greetingMessages[0] || "", "cfm-char-detail-block"));
+    }
+
     detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block"));
     if (creatorNotes || systemPrompt || postHistoryInstructions) {
       detailCard.append(sectionHtml("作者备注", creatorNotes));
@@ -27237,6 +27266,23 @@ jQuery(async () => {
 
     subList.append(detailCard);
     charRow.after(subList);
+
+    subList.find(".cfm-char-greeting-nav").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dir = $(e.currentTarget).data("dir");
+      const currentIndex = Math.min(
+        Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0),
+        greetingMessages.length - 1,
+      );
+      const nextIndex =
+        dir === "prev"
+          ? (currentIndex - 1 + greetingMessages.length) % greetingMessages.length
+          : (currentIndex + 1) % greetingMessages.length;
+      charRow.data("cfmCharGreetingIndex", nextIndex);
+      renderCharacterDetailSubList(charRow, char);
+      charRow.next(".cfm-char-detail-sublist").show();
+    });
   }
 
   function renderPersonaDetailSubList(personaRow, persona) {
