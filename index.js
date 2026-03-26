@@ -27190,9 +27190,15 @@ jQuery(async () => {
         rows: 8,
       },
       first_mes: {
-        title: "编辑首条消息",
-        label: "首条消息",
-        placeholder: "输入首条消息，留空则清空",
+        title: "编辑第一条消息",
+        label: "第一条消息",
+        placeholder: "输入第一条消息，留空则清空",
+        rows: 8,
+      },
+      alt_greetings: {
+        title: "编辑其它开场",
+        label: "其它开场",
+        placeholder: "输入开场白内容，留空则清空",
         rows: 8,
       },
       mes_example: {
@@ -27243,18 +27249,18 @@ jQuery(async () => {
       return results;
     };
 
-    const currentGreetingIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
     const currentAlternateGreetings = normalizeGreetingItems(char?.data?.alternate_greetings);
-    const currentValue =
-      field === "first_mes"
-        ? String(
-            currentGreetingIndex === 0
-              ? char?.data?.first_mes || ""
-              : currentAlternateGreetings[currentGreetingIndex - 1] || "",
-          )
-        : String(char?.data?.[field] || "");
-    const canAppendGreeting = field === "first_mes";
-    const deleteButtonText = field === "first_mes" ? "删除" : "清空";
+    let currentValue;
+    if (field === "first_mes") {
+      currentValue = String(char?.data?.first_mes || "");
+    } else if (field === "alt_greetings") {
+      const altIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
+      currentValue = String(currentAlternateGreetings[altIndex] || "");
+    } else {
+      currentValue = String(char?.data?.[field] || "");
+    }
+    const canAppendGreeting = field === "alt_greetings";
+    const deleteButtonText = field === "alt_greetings" ? "删除" : "清空";
     const inputHtml =
       meta.rows > 1
         ? `<textarea class="cfm-edit-input" id="cfm-char-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
@@ -27298,7 +27304,7 @@ jQuery(async () => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        close({ action: field === "first_mes" ? "delete" : "clear", value: "" });
+        close({ action: field === "alt_greetings" ? "delete" : "clear", value: "" });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         close({ action: "replace", value: String(input.val() || "").trim() });
@@ -27349,8 +27355,18 @@ jQuery(async () => {
     const updateData = {};
 
     if (field === "first_mes") {
-      const currentGreetingIndex = Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0);
+      // 第一条消息：只能清空或替换
+      if (action === "clear") {
+        char.data.first_mes = "";
+        updateData.first_mes = "";
+      } else {
+        char.data.first_mes = value;
+        updateData.first_mes = value;
+      }
+    } else if (field === "alt_greetings") {
+      // 其它开场：新增、删除、替换
       const existingGreetings = normalizeGreetingItems(char.data.alternate_greetings);
+      const currentAltIndex = Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0);
 
       if (action === "append") {
         const appendValue = String(value || "").trim();
@@ -27362,29 +27378,17 @@ jQuery(async () => {
         char.data.alternate_greetings = nextGreetings;
         updateData.alternate_greetings = nextGreetings;
       } else if (action === "delete") {
-        if (currentGreetingIndex === 0) {
-          char.data.first_mes = "";
-          char.data.alternate_greetings = existingGreetings;
-          updateData.first_mes = "";
-          updateData.alternate_greetings = existingGreetings;
-          charRow.data("cfmCharGreetingIndex", 0);
-        } else {
-          const removeIndex = currentGreetingIndex - 1;
-          const nextGreetings = existingGreetings.filter((_, index) => index !== removeIndex);
-          char.data.alternate_greetings = nextGreetings;
-          updateData.alternate_greetings = nextGreetings;
-          charRow.data(
-            "cfmCharGreetingIndex",
-            Math.min(currentGreetingIndex, nextGreetings.length),
-          );
-        }
-      } else if (currentGreetingIndex === 0) {
-        char.data.first_mes = value;
-        updateData.first_mes = value;
+        const nextGreetings = existingGreetings.filter((_, index) => index !== currentAltIndex);
+        char.data.alternate_greetings = nextGreetings;
+        updateData.alternate_greetings = nextGreetings;
+        charRow.data(
+          "cfmAltGreetingIndex",
+          Math.min(currentAltIndex, Math.max(nextGreetings.length - 1, 0)),
+        );
       } else {
-        const replaceIndex = currentGreetingIndex - 1;
+        // replace
         const nextGreetings = [...existingGreetings];
-        nextGreetings[replaceIndex] = value;
+        nextGreetings[currentAltIndex] = value;
         char.data.alternate_greetings = nextGreetings;
         updateData.alternate_greetings = nextGreetings;
       }
@@ -27421,14 +27425,80 @@ jQuery(async () => {
       }
       // 刷新酒馆原生前端的角色数据缓存
       try { await getContext().getCharacters(); } catch (_) { /* 非关键 */ }
-      if (field === "first_mes" && action === "append") {
+
+      // ── 同步聊天记录中的第一条消息（模拟酒馆原生行为） ──
+      if (field === "first_mes" || field === "alt_greetings") {
+        try {
+          const ctx = getContext();
+          const chatArr = ctx.chat;
+          // 条件与酒馆原生 createOrEditCharacter 一致：
+          // 非群组、聊天未被 tainted、聊天仅有0或1条角色消息
+          const shouldSync =
+            !ctx.groupId &&
+            ctx.characterId !== undefined &&
+            ctx.characterId !== null &&
+            !ctx.chatMetadata?.tainted &&
+            chatArr &&
+            (chatArr.length === 0 ||
+              (chatArr.length === 1 && !chatArr[0].is_user && !chatArr[0].is_system));
+          if (shouldSync) {
+            // 重建第一条消息
+            const newFirstMes = char.data?.first_mes || char.first_mes || "";
+            const altGreetings = char.data?.alternate_greetings || [];
+            const charName = char.name || "";
+            const newMessage = {
+              name: charName,
+              is_user: false,
+              is_system: false,
+              send_date: chatArr.length > 0 && chatArr[0].send_date
+                ? chatArr[0].send_date
+                : new Date().toISOString(),
+              mes: newFirstMes,
+              extra: chatArr.length > 0 && chatArr[0].extra ? chatArr[0].extra : {},
+            };
+            // 如果有多开场白，构建 swipes
+            if (Array.isArray(altGreetings) && altGreetings.length > 0) {
+              const swipes = [newFirstMes, ...altGreetings].filter(s => typeof s === "string");
+              if (!newFirstMes && swipes.length > 0) {
+                swipes.shift();
+                newMessage.mes = swipes[0] || "";
+              }
+              newMessage.swipe_id = 0;
+              newMessage.swipes = swipes;
+              newMessage.swipe_info = swipes.map(() => ({
+                send_date: newMessage.send_date,
+                gen_started: undefined,
+                gen_finished: undefined,
+                extra: {},
+              }));
+            }
+            // 替换聊天数组
+            chatArr.splice(0, chatArr.length, newMessage);
+            // 刷新聊天 DOM
+            try {
+              await ctx.clearChat();
+              await ctx.printMessages();
+            } catch (_) { /* 非关键 */ }
+            // 保存聊天文件
+            try {
+              await ctx.saveChat();
+            } catch (_) { /* 非关键 */ }
+          }
+        } catch (syncErr) {
+          console.warn("[CFM] 同步聊天记录首条消息时出错:", syncErr);
+        }
+      }
+
+      if (field === "alt_greetings" && action === "append") {
         charRow.data(
-          "cfmCharGreetingIndex",
-          Math.max((char.data.alternate_greetings || []).length, 0),
+          "cfmAltGreetingIndex",
+          Math.max((char.data.alternate_greetings || []).length - 1, 0),
         );
         toastr.success("已新增开场白");
-      } else if (field === "first_mes" && action === "delete") {
+      } else if (field === "alt_greetings" && action === "delete") {
         toastr.success("已删除开场白");
+      } else if (field === "first_mes" && action === "clear") {
+        toastr.success("已清空第一条消息");
       } else {
         toastr.success("已更新角色设定");
       }
@@ -27490,7 +27560,6 @@ jQuery(async () => {
     const scenario = typeof data.scenario === "string" ? data.scenario.trim() : "";
     const firstMes = typeof data.first_mes === "string" ? data.first_mes.trim() : "";
     const alternateGreetings = normalizeGreetingItems(data.alternate_greetings);
-    const greetingMessages = [firstMes, ...alternateGreetings].filter(Boolean);
     const mesExample = typeof data.mes_example === "string" ? data.mes_example.trim() : "";
     const creatorNotes = typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
     const systemPrompt = typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
@@ -27524,27 +27593,32 @@ jQuery(async () => {
     detailCard.append(sectionHtml("性格", personality, "", "personality"));
     detailCard.append(sectionHtml("场景", scenario, "", "scenario"));
 
-    if (greetingMessages.length > 1) {
-      const safeIndex = Math.min(
-        Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0),
-        greetingMessages.length - 1,
+    // 第一条消息（主开场白）：只有编辑按钮，不能切换
+    detailCard.append(sectionHtml("第一条消息", firstMes, "cfm-char-detail-block", "first_mes"));
+
+    // 其它开场（额外问候语）：可切换、编辑、新增、删除
+    if (alternateGreetings.length > 0) {
+      const safeAltIndex = Math.min(
+        Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0),
+        alternateGreetings.length - 1,
       );
-      const currentGreeting = greetingMessages[safeIndex] || "";
+      const currentAltGreeting = alternateGreetings[safeAltIndex] || "";
       detailCard.append(`
         <div class="cfm-persona-detail-section cfm-char-detail-section cfm-char-detail-block">
-          <div class="cfm-persona-detail-label">首条消息
+          <div class="cfm-persona-detail-label">其它开场
             <div class="cfm-chat-actions">
-              <div class="cfm-chat-action-btn cfm-char-detail-edit" data-field="first_mes" title="编辑首条消息"><i class="fa-solid fa-pen-to-square"></i></div>
+              <div class="cfm-chat-action-btn cfm-char-detail-edit" data-field="alt_greetings" title="编辑其它开场"><i class="fa-solid fa-pen-to-square"></i></div>
               <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="prev" title="上一条开场白"><i class="fa-solid fa-caret-left"></i></div>
-              <span class="cfm-char-detail-meta-item">${safeIndex + 1} / ${greetingMessages.length}</span>
+              <span class="cfm-char-detail-meta-item">${safeAltIndex + 1} / ${alternateGreetings.length}</span>
               <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="next" title="下一条开场白"><i class="fa-solid fa-caret-right"></i></div>
             </div>
           </div>
-          <div class="cfm-persona-detail-value cfm-char-detail-value cfm-char-detail-block">${currentGreeting ? escapeHtml(currentGreeting).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+          <div class="cfm-persona-detail-value cfm-char-detail-value cfm-char-detail-block">${currentAltGreeting ? escapeHtml(currentAltGreeting).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
         </div>
       `);
     } else {
-      detailCard.append(sectionHtml("首条消息", greetingMessages[0] || "", "cfm-char-detail-block", "first_mes"));
+      // 没有其它开场时，显示空状态，仍可通过编辑按钮新增
+      detailCard.append(sectionHtml("其它开场", "", "cfm-char-detail-block", "alt_greetings"));
     }
 
     detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block", "mes_example"));
@@ -27557,29 +27631,32 @@ jQuery(async () => {
     subList.append(detailCard);
     charRow.after(subList);
 
+    // 其它开场的切换事件
     subList.find(".cfm-char-greeting-nav").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
       const dir = $(e.currentTarget).data("dir");
+      if (alternateGreetings.length === 0) return;
       const currentIndex = Math.min(
-        Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0),
-        greetingMessages.length - 1,
+        Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0),
+        alternateGreetings.length - 1,
       );
       const nextIndex =
         dir === "prev"
-          ? (currentIndex - 1 + greetingMessages.length) % greetingMessages.length
-          : (currentIndex + 1) % greetingMessages.length;
-      charRow.data("cfmCharGreetingIndex", nextIndex);
+          ? (currentIndex - 1 + alternateGreetings.length) % alternateGreetings.length
+          : (currentIndex + 1) % alternateGreetings.length;
+      charRow.data("cfmAltGreetingIndex", nextIndex);
       renderCharacterDetailSubList(charRow, char);
       charRow.next(".cfm-char-detail-sublist").show();
     });
 
+    // 编辑按钮事件
     subList.find(".cfm-char-detail-edit").on("click touchend", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const field = $(e.currentTarget).data("field");
-      if (field === "first_mes") {
-        char.__cfmEditingGreetingIndex = Math.max(charRow.data("cfmCharGreetingIndex") || 0, 0);
+      if (field === "alt_greetings") {
+        char.__cfmEditingGreetingIndex = Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0);
       } else {
         delete char.__cfmEditingGreetingIndex;
       }
