@@ -27169,6 +27169,177 @@ jQuery(async () => {
     refreshPersonaPanelView();
   }
 
+  async function showCharacterDetailFieldPopup(char, field) {
+    const map = {
+      description: {
+        title: "编辑角色描述",
+        label: "描述",
+        placeholder: "输入角色描述，留空则清空",
+        rows: 8,
+      },
+      personality: {
+        title: "编辑角色性格",
+        label: "性格",
+        placeholder: "输入角色性格，留空则清空",
+        rows: 8,
+      },
+      scenario: {
+        title: "编辑角色场景",
+        label: "场景",
+        placeholder: "输入角色场景，留空则清空",
+        rows: 8,
+      },
+      first_mes: {
+        title: "编辑首条消息",
+        label: "首条消息",
+        placeholder: "输入首条消息，留空则清空",
+        rows: 8,
+      },
+      mes_example: {
+        title: "编辑示例对话",
+        label: "示例对话",
+        placeholder: "输入示例对话，留空则清空",
+        rows: 10,
+      },
+      creator_notes: {
+        title: "编辑作者备注",
+        label: "作者备注",
+        placeholder: "输入作者备注，留空则清空",
+        rows: 8,
+      },
+      system_prompt: {
+        title: "编辑系统提示词",
+        label: "系统提示词",
+        placeholder: "输入系统提示词，留空则清空",
+        rows: 8,
+      },
+      post_history_instructions: {
+        title: "编辑历史后指令",
+        label: "历史后指令",
+        placeholder: "输入历史后指令，留空则清空",
+        rows: 8,
+      },
+    };
+    const meta = map[field];
+    if (!meta || !char) return null;
+
+    const currentValue = String(char?.data?.[field] || "");
+    const canAppendGreeting = field === "first_mes";
+    const inputHtml =
+      meta.rows > 1
+        ? `<textarea class="cfm-edit-input" id="cfm-char-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
+        : `<input type="text" class="cfm-edit-input" id="cfm-char-detail-input" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(meta.placeholder)}">`;
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup">
+          <div class="cfm-edit-popup-title">${meta.title}</div>
+          <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(char.name || char.avatar || "未知角色")}</div></div>
+          <div class="cfm-edit-popup-field">
+            <label>${meta.label}</label>
+            ${inputHtml}
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${currentValue ? '<button class="cfm-btn cfm-edit-popup-clear">清空</button>' : ""}
+            ${canAppendGreeting ? '<button class="cfm-btn cfm-char-detail-append">新增</button>' : ""}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    const input = overlay.find("#cfm-char-detail-input");
+    input.trigger("focus");
+    if (input.is("textarea")) {
+      const node = input[0];
+      if (node && typeof node.selectionStart === "number") {
+        node.selectionStart = node.selectionEnd = node.value.length;
+      }
+    }
+
+    return new Promise((resolve) => {
+      const close = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => close({ action: "clear", value: "" }));
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        close({ action: "replace", value: String(input.val() || "").trim() });
+      });
+      overlay.find(".cfm-char-detail-append").on("click", () => {
+        close({ action: "append", value: String(input.val() || "").trim() });
+      });
+      input.on("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close(null);
+        }
+        if (e.key === "Enter" && !input.is("textarea")) {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function editCharacterDetailField(charRow, char, field) {
+    const result = await showCharacterDetailFieldPopup(char, field);
+    if (result === null || !char?.avatar) return;
+    if (!char.data) char.data = {};
+
+    const action = typeof result === "object" && result !== null ? result.action : "replace";
+    const value = typeof result === "object" && result !== null ? result.value : result;
+    const updateData = {};
+
+    if (field === "first_mes" && action === "append") {
+      const appendValue = String(value || "").trim();
+      if (!appendValue) {
+        toastr.warning("新增开场白不能为空");
+        return;
+      }
+      const existingGreetings = Array.isArray(char.data.alternate_greetings)
+        ? char.data.alternate_greetings.filter((item) => typeof item === "string")
+        : [];
+      const nextGreetings = [...existingGreetings, appendValue];
+      char.data.alternate_greetings = nextGreetings;
+      updateData.alternate_greetings = nextGreetings;
+    } else {
+      char.data[field] = value;
+      updateData[field] = value;
+    }
+
+    try {
+      const headers = getContext().getRequestHeaders();
+      await fetch("/api/characters/merge-attributes", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          avatar: char.avatar,
+          data: updateData,
+        }),
+      });
+      if (field === "first_mes" && action === "append") {
+        charRow.data(
+          "cfmCharGreetingIndex",
+          Math.max((char.data.alternate_greetings || []).length, 0),
+        );
+        toastr.success("已新增开场白");
+      } else {
+        toastr.success("已更新角色设定");
+      }
+      renderCharacterDetailSubList(charRow, char);
+      charRow.next(".cfm-char-detail-sublist").show();
+    } catch (error) {
+      console.error("[CFM] 保存角色设定失败:", error);
+      toastr.error("保存角色设定失败");
+    }
+  }
+
   function triggerNativePersonaBind(persona, bindType) {
     if (!persona?.avatarId) return;
     const buttonMap = {
@@ -27212,9 +27383,12 @@ jQuery(async () => {
     const tags = Array.isArray(data.tags) ? data.tags.filter(Boolean) : [];
     const hasLorebook = !!data.character_book;
 
-    const sectionHtml = (label, value, extraClass = "") => `
+    const sectionHtml = (label, value, extraClass = "", field = "") => `
       <div class="cfm-persona-detail-section cfm-char-detail-section ${extraClass}">
-        <div class="cfm-persona-detail-label">${label}</div>
+        <div class="cfm-persona-detail-label">${label}${field ? `
+          <div class="cfm-chat-actions">
+            <div class="cfm-chat-action-btn cfm-char-detail-edit" data-field="${field}" title="编辑${label}"><i class="fa-solid fa-pen-to-square"></i></div>
+          </div>` : ""}</div>
         <div class="cfm-persona-detail-value cfm-char-detail-value ${extraClass}">${value ? escapeHtml(value).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `;
@@ -27231,9 +27405,9 @@ jQuery(async () => {
         </div>
       </div>
     `);
-    detailCard.append(sectionHtml("描述", description));
-    detailCard.append(sectionHtml("性格", personality));
-    detailCard.append(sectionHtml("场景", scenario));
+    detailCard.append(sectionHtml("描述", description, "", "description"));
+    detailCard.append(sectionHtml("性格", personality, "", "personality"));
+    detailCard.append(sectionHtml("场景", scenario, "", "scenario"));
 
     if (greetingMessages.length > 1) {
       const safeIndex = Math.min(
@@ -27245,6 +27419,7 @@ jQuery(async () => {
         <div class="cfm-persona-detail-section cfm-char-detail-section cfm-char-detail-block">
           <div class="cfm-persona-detail-label">首条消息
             <div class="cfm-chat-actions">
+              <div class="cfm-chat-action-btn cfm-char-detail-edit" data-field="first_mes" title="编辑首条消息"><i class="fa-solid fa-pen-to-square"></i></div>
               <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="prev" title="上一条开场白"><i class="fa-solid fa-caret-left"></i></div>
               <span class="cfm-char-detail-meta-item">${safeIndex + 1} / ${greetingMessages.length}</span>
               <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="next" title="下一条开场白"><i class="fa-solid fa-caret-right"></i></div>
@@ -27254,14 +27429,14 @@ jQuery(async () => {
         </div>
       `);
     } else {
-      detailCard.append(sectionHtml("首条消息", greetingMessages[0] || "", "cfm-char-detail-block"));
+      detailCard.append(sectionHtml("首条消息", greetingMessages[0] || "", "cfm-char-detail-block", "first_mes"));
     }
 
-    detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block"));
+    detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block", "mes_example"));
     if (creatorNotes || systemPrompt || postHistoryInstructions) {
-      detailCard.append(sectionHtml("作者备注", creatorNotes));
-      detailCard.append(sectionHtml("系统提示词", systemPrompt, "cfm-char-detail-block"));
-      detailCard.append(sectionHtml("历史后指令", postHistoryInstructions, "cfm-char-detail-block"));
+      detailCard.append(sectionHtml("作者备注", creatorNotes, "", "creator_notes"));
+      detailCard.append(sectionHtml("系统提示词", systemPrompt, "cfm-char-detail-block", "system_prompt"));
+      detailCard.append(sectionHtml("历史后指令", postHistoryInstructions, "cfm-char-detail-block", "post_history_instructions"));
     }
 
     subList.append(detailCard);
@@ -27282,6 +27457,13 @@ jQuery(async () => {
       charRow.data("cfmCharGreetingIndex", nextIndex);
       renderCharacterDetailSubList(charRow, char);
       charRow.next(".cfm-char-detail-sublist").show();
+    });
+
+    subList.find(".cfm-char-detail-edit").on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const field = $(e.currentTarget).data("field");
+      await editCharacterDetailField(charRow, char, field);
     });
   }
 
