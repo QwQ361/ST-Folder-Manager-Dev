@@ -2595,7 +2595,11 @@ jQuery(async () => {
         if (bgSize) extraStyles.backgroundSize = bgSize;
         if (bgRepeat) extraStyles.backgroundRepeat = bgRepeat;
         if (bgPos) extraStyles.backgroundPosition = bgPos;
-        return { cssUrl: beforeBgImage, target: cls + "::before", styles: extraStyles };
+        return {
+          cssUrl: beforeBgImage,
+          target: cls + "::before",
+          styles: extraStyles,
+        };
       }
     }
     return null;
@@ -9424,6 +9428,277 @@ jQuery(async () => {
     return null;
   }
 
+  function getPresetDataForDetail(pm, name) {
+    return getPresetDataForRename(pm, name);
+  }
+
+  function getPresetDetailFields(preset) {
+    if (!preset || typeof preset !== "object") return [];
+
+    const promptMap =
+      preset.prompts && typeof preset.prompts === "object"
+        ? preset.prompts
+        : {};
+    const promptOrder = Array.isArray(preset.prompt_order)
+      ? preset.prompt_order
+      : [];
+    const fields = [];
+    const seen = new Set();
+
+    const addField = (key, label, value) => {
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      fields.push({
+        key,
+        label,
+        value: value == null ? "" : String(value),
+      });
+    };
+
+    addField("name", "名称", preset.name);
+    addField("description", "描述", preset.description);
+    addField("scenario", "场景", preset.scenario);
+    addField("personality", "性格", preset.personality);
+    addField("first_mes", "第一条消息", preset.first_mes);
+    addField("mes_example", "示例对话", preset.mes_example);
+    addField("creator_notes", "作者备注", preset.creator_notes);
+    addField("system_prompt", "系统提示词", preset.system_prompt);
+    addField(
+      "post_history_instructions",
+      "历史后指令",
+      preset.post_history_instructions,
+    );
+
+    for (const item of promptOrder) {
+      if (!item || typeof item !== "object") continue;
+      const identifier =
+        item.identifier || item.id || item.name || item.key || item.prompt;
+      if (!identifier) continue;
+      const promptValue = promptMap[identifier];
+      const promptText =
+        typeof promptValue === "string"
+          ? promptValue
+          : promptValue && typeof promptValue === "object"
+            ? (promptValue.value ??
+              promptValue.content ??
+              promptValue.text ??
+              "")
+            : "";
+      addField(`prompts.${identifier}`, `提示词：${identifier}`, promptText);
+    }
+
+    for (const [identifier, promptValue] of Object.entries(promptMap)) {
+      const promptText =
+        typeof promptValue === "string"
+          ? promptValue
+          : promptValue && typeof promptValue === "object"
+            ? (promptValue.value ??
+              promptValue.content ??
+              promptValue.text ??
+              "")
+            : "";
+      addField(`prompts.${identifier}`, `提示词：${identifier}`, promptText);
+    }
+
+    return fields.filter((field) => field.key !== "name");
+  }
+
+  function getPresetFieldCurrentValue(preset, fieldKey) {
+    if (!preset || !fieldKey) return "";
+    if (fieldKey.startsWith("prompts.")) {
+      const promptKey = fieldKey.slice("prompts.".length);
+      const promptValue = preset.prompts?.[promptKey];
+      if (typeof promptValue === "string") return promptValue;
+      if (promptValue && typeof promptValue === "object") {
+        return String(
+          promptValue.value ?? promptValue.content ?? promptValue.text ?? "",
+        );
+      }
+      return "";
+    }
+    return String(preset[fieldKey] ?? "");
+  }
+
+  async function showPresetDetailFieldPopup(presetName, field) {
+    if (!presetName || !field) return null;
+    const currentValue = String(field.value || "");
+    const multiline = currentValue.includes("\n") || currentValue.length > 120;
+    const rows = multiline ? 10 : 6;
+    const inputHtml = multiline
+      ? `<textarea class="cfm-edit-input" id="cfm-preset-detail-input" rows="${rows}" placeholder="输入${escapeHtml(field.label)}，留空则清空">${escapeHtml(currentValue)}</textarea>`
+      : `<input type="text" class="cfm-edit-input" id="cfm-preset-detail-input" value="${escapeHtml(currentValue)}" placeholder="输入${escapeHtml(field.label)}，留空则清空">`;
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay">
+        <div class="cfm-edit-popup cfm-preset-detail-popup">
+          <div class="cfm-edit-popup-title">编辑预设条目</div>
+          <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(presetName)}</div></div>
+          <div class="cfm-edit-popup-field">
+            <label>${escapeHtml(field.label)}</label>
+            ${inputHtml}
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+            ${currentValue ? '<button class="cfm-btn cfm-edit-popup-clear">清空</button>' : ""}
+            <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    $("body").append(overlay);
+    const input = overlay.find("#cfm-preset-detail-input");
+    input.trigger("focus");
+    if (input.is("textarea")) {
+      const node = input[0];
+      if (node && typeof node.selectionStart === "number") {
+        node.selectionStart = node.selectionEnd = node.value.length;
+      }
+    }
+
+    return new Promise((resolve) => {
+      const close = (result) => {
+        overlay.remove();
+        resolve(result);
+      };
+      overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => close(""));
+      overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+        close(String(input.val() || "").trim());
+      });
+      input.on("keydown", (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close(null);
+        }
+        if (e.key === "Enter" && !input.is("textarea")) {
+          e.preventDefault();
+          overlay.find(".cfm-edit-popup-confirm").trigger("click");
+        }
+      });
+    });
+  }
+
+  async function editPresetDetailField(presetName, fieldKey) {
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    const field = getPresetDetailFields(presetData).find(
+      (item) => item.key === fieldKey,
+    );
+    if (!field) {
+      toastr.error("未找到可编辑的预设条目");
+      return;
+    }
+
+    const value = await showPresetDetailFieldPopup(presetName, field);
+    if (value === null) return;
+
+    if (fieldKey.startsWith("prompts.")) {
+      const promptKey = fieldKey.slice("prompts.".length);
+      if (!presetData.prompts || typeof presetData.prompts !== "object")
+        presetData.prompts = {};
+      const existingPrompt = presetData.prompts[promptKey];
+      if (existingPrompt && typeof existingPrompt === "object") {
+        existingPrompt.value = value;
+      } else {
+        presetData.prompts[promptKey] = value;
+      }
+      if (!Array.isArray(presetData.prompt_order)) presetData.prompt_order = [];
+      if (
+        !presetData.prompt_order.some((item) => {
+          const identifier =
+            item?.identifier ||
+            item?.id ||
+            item?.name ||
+            item?.key ||
+            item?.prompt;
+          return identifier === promptKey;
+        })
+      ) {
+        presetData.prompt_order.push({ identifier: promptKey, enabled: true });
+      }
+    } else {
+      presetData[fieldKey] = value;
+    }
+
+    try {
+      await pm.savePreset(presetName, presetData);
+      toastr.success(`已更新预设条目「${field.label}」`);
+      refreshPresetPanelView();
+    } catch (error) {
+      console.error("[CFM] 保存预设条目失败:", error);
+      toastr.error(`保存失败: ${error.message || error}`);
+    }
+  }
+
+  function renderPresetDetailSubList(presetRow, preset) {
+    presetRow.next(".cfm-preset-detail-sublist").remove();
+
+    const pm = getContext().getPresetManager();
+    if (!pm) return;
+    const presetData = getPresetDataForDetail(pm, preset.name);
+    if (!presetData) return;
+
+    const fields = getPresetDetailFields(presetData);
+    const subList = $(
+      '<div class="cfm-chat-sublist cfm-preset-detail-sublist"></div>',
+    );
+    const detailCard = $(
+      '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-preset-detail-card"></div>',
+    );
+
+    if (fields.length === 0) {
+      detailCard.append(`
+        <div class="cfm-persona-detail-section cfm-preset-detail-section">
+          <div class="cfm-persona-detail-label">预设详情</div>
+          <div class="cfm-persona-detail-value"><span class="cfm-persona-detail-empty">无可展示条目</span></div>
+        </div>
+      `);
+    } else {
+      for (const field of fields) {
+        const hasValue = !!String(field.value || "").trim();
+        detailCard.append(`
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row" data-field="${escapeHtml(field.key)}">
+            <div class="cfm-persona-detail-label cfm-preset-detail-label">${escapeHtml(field.label)}
+              <div class="cfm-chat-actions">
+                <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(field.key)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
+              </div>
+            </div>
+            <div class="cfm-persona-detail-value cfm-preset-detail-value">${hasValue ? '<span class="cfm-preset-detail-filled">已填写</span>' : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+          </div>
+        `);
+      }
+    }
+
+    subList.append(detailCard);
+    presetRow.after(subList);
+
+    subList.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const fieldKey = $(e.currentTarget).data("field");
+      await editPresetDetailField(preset.name, fieldKey);
+    });
+  }
+
+  function refreshPresetPanelView() {
+    const q = String($("#cfm-preset-global-search").val() || "").trim();
+    if (q) executePresetSearch();
+    else renderPresetsView();
+  }
+
   // 同步更新预设管理器DOM中的option（重命名后立即同步，防止渲染清理逻辑误删分组）
   function syncPresetOptionInDOM(pm, oldName, newName) {
     if (!pm || !pm.select) return;
@@ -10286,6 +10561,7 @@ jQuery(async () => {
   let cfmPresetRegexExpandedNames = new Set(); // 当前展开正则的预设name集合
   let cfmPresetRegexTargetName = null; // 当前正则查看目标预设名
   let cfmPresetRegexHighlightPath = []; // 当前目标预设到达路径（文件夹ID列表）
+  let cfmPresetDetailExpandedNames = new Set(); // 当前展开详情的预设name集合
 
   // 正则批量操作状态
   let cfmRegexBatchMode = false; // 正则批量操作模式
@@ -18196,9 +18472,12 @@ jQuery(async () => {
       if (cfmChatExpandedAvatars.has(avatar)) {
         // 折叠
         cfmChatExpandedAvatars.delete(avatar);
-        row.nextAll(".cfm-chat-sublist").first().slideUp(150, function () {
-          $(this).remove();
-        });
+        row
+          .nextAll(".cfm-chat-sublist")
+          .first()
+          .slideUp(150, function () {
+            $(this).remove();
+          });
         row
           .find(".cfm-chat-toggle i")
           .removeClass("fa-caret-down")
@@ -18223,9 +18502,12 @@ jQuery(async () => {
       if (cfmCharRegexExpandedAvatars.has(avatar)) {
         // 折叠
         cfmCharRegexExpandedAvatars.delete(avatar);
-        row.nextAll(".cfm-regex-sublist").first().slideUp(150, function () {
-          $(this).remove();
-        });
+        row
+          .nextAll(".cfm-regex-sublist")
+          .first()
+          .slideUp(150, function () {
+            $(this).remove();
+          });
         row
           .find(".cfm-regex-toggle i")
           .removeClass("fa-caret-down")
@@ -18249,9 +18531,12 @@ jQuery(async () => {
       const avatar = char.avatar;
       if (cfmCharDetailExpandedAvatars.has(avatar)) {
         cfmCharDetailExpandedAvatars.delete(avatar);
-        row.nextAll(".cfm-char-detail-sublist").first().slideUp(150, function () {
-          $(this).remove();
-        });
+        row
+          .nextAll(".cfm-char-detail-sublist")
+          .first()
+          .slideUp(150, function () {
+            $(this).remove();
+          });
         row
           .find(".cfm-char-detail-toggle i")
           .removeClass("fa-caret-down")
@@ -21850,12 +22135,14 @@ jQuery(async () => {
         const presetRegexHighlightClass = isPresetRegexTarget
           ? "cfm-regex-target-row"
           : "";
+        const isPresetDetailExpanded = cfmPresetDetailExpandedNames.has(p.name);
+        const presetDetailToggleHtml = `<div class="cfm-char-detail-toggle cfm-preset-detail-toggle" title="展开/折叠预设详情"><i class="fa-solid fa-caret-${isPresetDetailExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${presetRegexHighlightClass} ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-value="${escapeHtml(p.value)}" data-res-id="${escapeHtml(p.name)}" draggable="true">
             ${msCheckHtml}
             ${presetRegexToggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline">${presetDetailToggleHtml}<span class="cfm-preset-name-text">${escapeHtml(p.name)}</span></span>${noteHtml}</div>
             ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -21922,10 +22209,40 @@ jQuery(async () => {
             row.next(".cfm-regex-sublist").hide().slideDown(150);
           }
         });
+        row.find(".cfm-preset-detail-toggle").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const name = p.name;
+          const detailSubList = row
+            .nextAll(".cfm-preset-detail-sublist")
+            .first();
+          if (cfmPresetDetailExpandedNames.has(name)) {
+            cfmPresetDetailExpandedNames.delete(name);
+            detailSubList.slideUp(150, function () {
+              $(this).remove();
+            });
+            row
+              .find(".cfm-preset-detail-toggle i")
+              .removeClass("fa-caret-down")
+              .addClass("fa-caret-right");
+          } else {
+            cfmPresetDetailExpandedNames.add(name);
+            row
+              .find(".cfm-preset-detail-toggle i")
+              .removeClass("fa-caret-right")
+              .addClass("fa-caret-down");
+            renderPresetDetailSubList(row, p);
+            row
+              .nextAll(".cfm-preset-detail-sublist")
+              .first()
+              .hide()
+              .slideDown(150);
+          }
+        });
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-regex-toggle",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-regex-toggle, .cfm-preset-detail-toggle",
             ).length
           )
             return;
@@ -21978,6 +22295,9 @@ jQuery(async () => {
           if (scripts.length > 0) {
             renderPresetRegexSubList(row, p.name, scripts, isPresetRegexTarget);
           }
+        }
+        if (cfmPresetDetailExpandedNames.has(p.name)) {
+          renderPresetDetailSubList(row, p);
         }
       }
 
@@ -27044,10 +27364,7 @@ jQuery(async () => {
     const desc = ensurePersonaDescriptionEntry(persona.avatarId) || {};
     const connections = Array.isArray(desc.connections) ? desc.connections : [];
     const chatMeta =
-      ctx.chatMetadata ||
-      window.chat_metadata ||
-      window.chatMetadata ||
-      {};
+      ctx.chatMetadata || window.chat_metadata || window.chatMetadata || {};
     const chars = ctx.characters || [];
     const currentChar =
       typeof ctx.characterId === "number" && ctx.characterId >= 0
@@ -27164,9 +27481,7 @@ jQuery(async () => {
     }
     entry[field] = value;
     getContext().saveSettingsDebounced();
-    toastr.success(
-      field === "title" ? "已更新User标题" : "已更新User具体设定",
-    );
+    toastr.success(field === "title" ? "已更新User标题" : "已更新User具体设定");
     refreshPersonaPanelView();
   }
 
@@ -27243,14 +27558,22 @@ jQuery(async () => {
           return;
         }
         if (value && typeof value === "object") {
-          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+          [
+            value.mes,
+            value.message,
+            value.text,
+            value.content,
+            value.value,
+          ].forEach(pushValue);
         }
       };
       pushValue(input);
       return results;
     };
 
-    const currentAlternateGreetings = normalizeGreetingItems(char?.data?.alternate_greetings);
+    const currentAlternateGreetings = normalizeGreetingItems(
+      char?.data?.alternate_greetings,
+    );
     let currentValue;
     if (field === "first_mes") {
       currentValue = String(char?.data?.first_mes || "");
@@ -27305,7 +27628,10 @@ jQuery(async () => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        close({ action: field === "alt_greetings" ? "delete" : "clear", value: "" });
+        close({
+          action: field === "alt_greetings" ? "delete" : "clear",
+          value: "",
+        });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         close({ action: "replace", value: String(input.val() || "").trim() });
@@ -27344,15 +27670,23 @@ jQuery(async () => {
           return;
         }
         if (value && typeof value === "object") {
-          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+          [
+            value.mes,
+            value.message,
+            value.text,
+            value.content,
+            value.value,
+          ].forEach(pushValue);
         }
       };
       pushValue(input);
       return results;
     };
 
-    const action = typeof result === "object" && result !== null ? result.action : "replace";
-    const value = typeof result === "object" && result !== null ? result.value : result;
+    const action =
+      typeof result === "object" && result !== null ? result.action : "replace";
+    const value =
+      typeof result === "object" && result !== null ? result.value : result;
     const updateData = {};
 
     if (field === "first_mes") {
@@ -27366,8 +27700,13 @@ jQuery(async () => {
       }
     } else if (field === "alt_greetings") {
       // 其它开场：新增、删除、替换
-      const existingGreetings = normalizeGreetingItems(char.data.alternate_greetings);
-      const currentAltIndex = Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0);
+      const existingGreetings = normalizeGreetingItems(
+        char.data.alternate_greetings,
+      );
+      const currentAltIndex = Math.max(
+        charRow.data("cfmAltGreetingIndex") || 0,
+        0,
+      );
 
       if (action === "append") {
         const appendValue = String(value || "").trim();
@@ -27379,7 +27718,9 @@ jQuery(async () => {
         char.data.alternate_greetings = nextGreetings;
         updateData.alternate_greetings = nextGreetings;
       } else if (action === "delete") {
-        const nextGreetings = existingGreetings.filter((_, index) => index !== currentAltIndex);
+        const nextGreetings = existingGreetings.filter(
+          (_, index) => index !== currentAltIndex,
+        );
         char.data.alternate_greetings = nextGreetings;
         updateData.alternate_greetings = nextGreetings;
         charRow.data(
@@ -27402,15 +27743,24 @@ jQuery(async () => {
       const headers = getContext().getRequestHeaders();
       // V2角色卡的字段同时存在于顶层和data层，需要两层都更新
       const topLevelSync = {};
-      if ("first_mes" in updateData) topLevelSync.first_mes = updateData.first_mes;
-      if ("alternate_greetings" in updateData) topLevelSync.alternate_greetings = updateData.alternate_greetings;
-      if ("description" in updateData) topLevelSync.description = updateData.description;
-      if ("personality" in updateData) topLevelSync.personality = updateData.personality;
+      if ("first_mes" in updateData)
+        topLevelSync.first_mes = updateData.first_mes;
+      if ("alternate_greetings" in updateData)
+        topLevelSync.alternate_greetings = updateData.alternate_greetings;
+      if ("description" in updateData)
+        topLevelSync.description = updateData.description;
+      if ("personality" in updateData)
+        topLevelSync.personality = updateData.personality;
       if ("scenario" in updateData) topLevelSync.scenario = updateData.scenario;
-      if ("mes_example" in updateData) topLevelSync.mes_example = updateData.mes_example;
-      if ("creator_notes" in updateData) topLevelSync.creator_notes = updateData.creator_notes;
-      if ("system_prompt" in updateData) topLevelSync.system_prompt = updateData.system_prompt;
-      if ("post_history_instructions" in updateData) topLevelSync.post_history_instructions = updateData.post_history_instructions;
+      if ("mes_example" in updateData)
+        topLevelSync.mes_example = updateData.mes_example;
+      if ("creator_notes" in updateData)
+        topLevelSync.creator_notes = updateData.creator_notes;
+      if ("system_prompt" in updateData)
+        topLevelSync.system_prompt = updateData.system_prompt;
+      if ("post_history_instructions" in updateData)
+        topLevelSync.post_history_instructions =
+          updateData.post_history_instructions;
       await fetch("/api/characters/merge-attributes", {
         method: "POST",
         headers: headers,
@@ -27425,7 +27775,11 @@ jQuery(async () => {
         char[k] = v;
       }
       // 刷新酒馆原生前端的角色数据缓存
-      try { await getContext().getCharacters(); } catch (_) { /* 非关键 */ }
+      try {
+        await getContext().getCharacters();
+      } catch (_) {
+        /* 非关键 */
+      }
 
       // ── 同步聊天记录中的第一条消息（模拟酒馆原生行为） ──
       if (field === "first_mes" || field === "alt_greetings") {
@@ -27441,7 +27795,9 @@ jQuery(async () => {
             !ctx.chatMetadata?.tainted &&
             chatArr &&
             (chatArr.length === 0 ||
-              (chatArr.length === 1 && !chatArr[0].is_user && !chatArr[0].is_system));
+              (chatArr.length === 1 &&
+                !chatArr[0].is_user &&
+                !chatArr[0].is_system));
           if (shouldSync) {
             // 重建第一条消息
             const newFirstMes = char.data?.first_mes || char.first_mes || "";
@@ -27451,15 +27807,19 @@ jQuery(async () => {
               name: charName,
               is_user: false,
               is_system: false,
-              send_date: chatArr.length > 0 && chatArr[0].send_date
-                ? chatArr[0].send_date
-                : new Date().toISOString(),
+              send_date:
+                chatArr.length > 0 && chatArr[0].send_date
+                  ? chatArr[0].send_date
+                  : new Date().toISOString(),
               mes: newFirstMes,
-              extra: chatArr.length > 0 && chatArr[0].extra ? chatArr[0].extra : {},
+              extra:
+                chatArr.length > 0 && chatArr[0].extra ? chatArr[0].extra : {},
             };
             // 如果有多开场白，构建 swipes
             if (Array.isArray(altGreetings) && altGreetings.length > 0) {
-              const swipes = [newFirstMes, ...altGreetings].filter(s => typeof s === "string");
+              const swipes = [newFirstMes, ...altGreetings].filter(
+                (s) => typeof s === "string",
+              );
               if (!newFirstMes && swipes.length > 0) {
                 swipes.shift();
                 newMessage.mes = swipes[0] || "";
@@ -27479,11 +27839,15 @@ jQuery(async () => {
             try {
               await ctx.clearChat();
               await ctx.printMessages();
-            } catch (_) { /* 非关键 */ }
+            } catch (_) {
+              /* 非关键 */
+            }
             // 保存聊天文件
             try {
               await ctx.saveChat();
-            } catch (_) { /* 非关键 */ }
+            } catch (_) {
+              /* 非关键 */
+            }
           }
         } catch (syncErr) {
           console.warn("[CFM] 同步聊天记录首条消息时出错:", syncErr);
@@ -27548,7 +27912,13 @@ jQuery(async () => {
           return;
         }
         if (value && typeof value === "object") {
-          [value.mes, value.message, value.text, value.content, value.value].forEach(pushValue);
+          [
+            value.mes,
+            value.message,
+            value.text,
+            value.content,
+            value.value,
+          ].forEach(pushValue);
         }
       };
       pushValue(input);
@@ -27556,30 +27926,48 @@ jQuery(async () => {
     };
 
     const data = char?.data || {};
-    const description = typeof data.description === "string" ? data.description.trim() : "";
-    const personality = typeof data.personality === "string" ? data.personality.trim() : "";
-    const scenario = typeof data.scenario === "string" ? data.scenario.trim() : "";
-    const firstMes = typeof data.first_mes === "string" ? data.first_mes.trim() : "";
+    const description =
+      typeof data.description === "string" ? data.description.trim() : "";
+    const personality =
+      typeof data.personality === "string" ? data.personality.trim() : "";
+    const scenario =
+      typeof data.scenario === "string" ? data.scenario.trim() : "";
+    const firstMes =
+      typeof data.first_mes === "string" ? data.first_mes.trim() : "";
     const alternateGreetings = normalizeGreetingItems(data.alternate_greetings);
-    const mesExample = typeof data.mes_example === "string" ? data.mes_example.trim() : "";
-    const creatorNotes = typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
-    const systemPrompt = typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
-    const postHistoryInstructions = typeof data.post_history_instructions === "string" ? data.post_history_instructions.trim() : "";
+    const mesExample =
+      typeof data.mes_example === "string" ? data.mes_example.trim() : "";
+    const creatorNotes =
+      typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
+    const systemPrompt =
+      typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
+    const postHistoryInstructions =
+      typeof data.post_history_instructions === "string"
+        ? data.post_history_instructions.trim()
+        : "";
     const tags = Array.isArray(data.tags) ? data.tags.filter(Boolean) : [];
     const hasLorebook = !!data.character_book;
 
     const sectionHtml = (label, value, extraClass = "", field = "") => `
       <div class="cfm-persona-detail-section cfm-char-detail-section ${extraClass}">
-        <div class="cfm-persona-detail-label">${label}${field ? `
+        <div class="cfm-persona-detail-label">${label}${
+          field
+            ? `
           <div class="cfm-chat-actions">
             <div class="cfm-chat-action-btn cfm-char-detail-edit" data-field="${field}" title="编辑${label}"><i class="fa-solid fa-pen-to-square"></i></div>
-          </div>` : ""}</div>
+          </div>`
+            : ""
+        }</div>
         <div class="cfm-persona-detail-value cfm-char-detail-value ${extraClass}">${value ? escapeHtml(value).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `;
 
-    const subList = $('<div class="cfm-chat-sublist cfm-char-detail-sublist"></div>');
-    const detailCard = $('<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-char-detail-card"></div>');
+    const subList = $(
+      '<div class="cfm-chat-sublist cfm-char-detail-sublist"></div>',
+    );
+    const detailCard = $(
+      '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-char-detail-card"></div>',
+    );
 
     detailCard.append(`
       <div class="cfm-persona-detail-section cfm-char-detail-section">
@@ -27595,7 +27983,9 @@ jQuery(async () => {
     detailCard.append(sectionHtml("场景", scenario, "", "scenario"));
 
     // 第一条消息（主开场白）：只有编辑按钮，不能切换
-    detailCard.append(sectionHtml("第一条消息", firstMes, "cfm-char-detail-block", "first_mes"));
+    detailCard.append(
+      sectionHtml("第一条消息", firstMes, "cfm-char-detail-block", "first_mes"),
+    );
 
     // 其它开场（额外问候语）：可切换、编辑、新增、删除
     if (alternateGreetings.length > 0) {
@@ -27619,14 +28009,39 @@ jQuery(async () => {
       `);
     } else {
       // 没有其它开场时，显示空状态，仍可通过编辑按钮新增
-      detailCard.append(sectionHtml("其它开场", "", "cfm-char-detail-block", "alt_greetings"));
+      detailCard.append(
+        sectionHtml("其它开场", "", "cfm-char-detail-block", "alt_greetings"),
+      );
     }
 
-    detailCard.append(sectionHtml("示例对话", mesExample, "cfm-char-detail-block", "mes_example"));
+    detailCard.append(
+      sectionHtml(
+        "示例对话",
+        mesExample,
+        "cfm-char-detail-block",
+        "mes_example",
+      ),
+    );
     if (creatorNotes || systemPrompt || postHistoryInstructions) {
-      detailCard.append(sectionHtml("作者备注", creatorNotes, "", "creator_notes"));
-      detailCard.append(sectionHtml("系统提示词", systemPrompt, "cfm-char-detail-block", "system_prompt"));
-      detailCard.append(sectionHtml("历史后指令", postHistoryInstructions, "cfm-char-detail-block", "post_history_instructions"));
+      detailCard.append(
+        sectionHtml("作者备注", creatorNotes, "", "creator_notes"),
+      );
+      detailCard.append(
+        sectionHtml(
+          "系统提示词",
+          systemPrompt,
+          "cfm-char-detail-block",
+          "system_prompt",
+        ),
+      );
+      detailCard.append(
+        sectionHtml(
+          "历史后指令",
+          postHistoryInstructions,
+          "cfm-char-detail-block",
+          "post_history_instructions",
+        ),
+      );
     }
 
     subList.append(detailCard);
@@ -27644,7 +28059,8 @@ jQuery(async () => {
       );
       const nextIndex =
         dir === "prev"
-          ? (currentIndex - 1 + alternateGreetings.length) % alternateGreetings.length
+          ? (currentIndex - 1 + alternateGreetings.length) %
+            alternateGreetings.length
           : (currentIndex + 1) % alternateGreetings.length;
       charRow.data("cfmAltGreetingIndex", nextIndex);
       renderCharacterDetailSubList(charRow, char);
@@ -27657,7 +28073,10 @@ jQuery(async () => {
       e.stopPropagation();
       const field = $(e.currentTarget).data("field");
       if (field === "alt_greetings") {
-        char.__cfmEditingGreetingIndex = Math.max(charRow.data("cfmAltGreetingIndex") || 0, 0);
+        char.__cfmEditingGreetingIndex = Math.max(
+          charRow.data("cfmAltGreetingIndex") || 0,
+          0,
+        );
       } else {
         delete char.__cfmEditingGreetingIndex;
       }
@@ -27675,8 +28094,12 @@ jQuery(async () => {
     const connections = resolvePersonaConnections(persona?.connections || []);
     const bindStates = getPersonaBindStates(persona);
 
-    const subList = $('<div class="cfm-chat-sublist cfm-persona-sublist"></div>');
-    const detailCard = $('<div class="cfm-chat-toolbar cfm-persona-detail-card"></div>');
+    const subList = $(
+      '<div class="cfm-chat-sublist cfm-persona-sublist"></div>',
+    );
+    const detailCard = $(
+      '<div class="cfm-chat-toolbar cfm-persona-detail-card"></div>',
+    );
 
     detailCard.append(`
       <div class="cfm-persona-detail-section">
@@ -32756,4 +33179,3 @@ jQuery(async () => {
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
-

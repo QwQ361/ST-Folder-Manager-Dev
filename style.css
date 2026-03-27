@@ -3056,6 +3056,22 @@
   border-color: rgba(243, 139, 168, 0.4);
   background: rgba(243, 139, 168, 0.1);
 }
+.cfm-edit-popup-actions .cfm-edit-popup-clear {
+  color: #f9e2af;
+  border-color: rgba(249, 226, 175, 0.25);
+}
+.cfm-edit-popup-actions .cfm-edit-popup-clear:hover {
+  color: #f9e2af;
+  border-color: rgba(249, 226, 175, 0.45);
+  background: rgba(249, 226, 175, 0.12);
+}
+.cfm-preset-detail-popup {
+  width: min(720px, 92vw);
+}
+.cfm-preset-detail-popup .cfm-edit-input {
+  min-height: 120px;
+  resize: vertical;
+}
 
 /* 重命名弹窗 - 自动检测区域 */
 .cfm-rename-auto-detect {
@@ -4887,13 +4903,15 @@ option.cfm-nf-hidden {
   border-radius: 0 6px 6px 0;
 }
 
-/* User / 角色卡 详情子列表 */
+/* User / 角色卡 / 预设 详情子列表 */
 .cfm-persona-sublist,
-.cfm-char-detail-sublist {
+.cfm-char-detail-sublist,
+.cfm-preset-detail-sublist {
   margin-top: -2px;
 }
 .cfm-persona-detail-card,
-.cfm-char-detail-card {
+.cfm-char-detail-card,
+.cfm-preset-detail-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4941,6 +4959,27 @@ option.cfm-nf-hidden {
   color: rgba(255, 255, 255, 0.88);
   white-space: normal;
   word-break: break-word;
+}
+.cfm-preset-detail-section {
+  gap: 6px;
+}
+.cfm-preset-detail-row {
+  padding: 2px 0;
+}
+.cfm-preset-detail-label {
+  width: 100%;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cfm-preset-detail-label .cfm-chat-actions {
+  margin-left: auto;
+}
+.cfm-preset-detail-value {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.cfm-preset-detail-filled {
+  color: #a6e3a1;
 }
 .cfm-char-detail-meta {
   display: flex;
