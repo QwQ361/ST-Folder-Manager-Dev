@@ -9460,7 +9460,7 @@ jQuery(async () => {
       return text || fallback;
     };
 
-    const addPromptField = (identifier, labelHint, promptValue) => {
+    const addPromptField = (identifier, labelHint, promptValue, enabledHint) => {
       if (identifier === null || identifier === undefined) return;
       const keyId = String(identifier);
       if (!keyId || seen.has(keyId)) return;
@@ -9469,6 +9469,7 @@ jQuery(async () => {
         key: `prompts.${keyId}`,
         label: normalizeLabel(labelHint, keyId),
         value: getPromptText(promptValue),
+        enabled: enabledHint !== false,
       });
     };
 
@@ -9483,7 +9484,13 @@ jQuery(async () => {
           promptValue && typeof promptValue === "object"
             ? promptValue.name ?? promptValue.title ?? promptValue.label ?? item
             : item;
-        addPromptField(item, promptLabel, promptValue);
+        const promptEnabled =
+          promptValue &&
+          typeof promptValue === "object" &&
+          typeof promptValue.enabled === "boolean"
+            ? promptValue.enabled
+            : true;
+        addPromptField(item, promptLabel, promptValue, promptEnabled);
         continue;
       }
 
@@ -9502,8 +9509,16 @@ jQuery(async () => {
           ? promptValue.name ?? promptValue.title ?? promptValue.label
           : null) ??
         String(identifier);
+      const promptEnabled =
+        typeof item.enabled === "boolean"
+          ? item.enabled
+          : promptValue &&
+              typeof promptValue === "object" &&
+              typeof promptValue.enabled === "boolean"
+            ? promptValue.enabled
+            : true;
 
-      addPromptField(identifier, promptLabel, promptValue);
+      addPromptField(identifier, promptLabel, promptValue, promptEnabled);
     }
 
     // 补充 prompt_order 未覆盖的 prompts 条目
@@ -9512,7 +9527,13 @@ jQuery(async () => {
         promptValue && typeof promptValue === "object"
           ? promptValue.name ?? promptValue.title ?? promptValue.label ?? identifier
           : identifier;
-      addPromptField(identifier, promptLabel, promptValue);
+      const promptEnabled =
+        promptValue &&
+        typeof promptValue === "object" &&
+        typeof promptValue.enabled === "boolean"
+          ? promptValue.enabled
+          : true;
+      addPromptField(identifier, promptLabel, promptValue, promptEnabled);
     }
 
     return fields;
@@ -9532,6 +9553,95 @@ jQuery(async () => {
       return "";
     }
     return String(preset[fieldKey] ?? "");
+  }
+
+  function setPresetPromptEnabled(presetData, promptKey, enabled) {
+    if (!presetData || !promptKey) return;
+
+    if (!presetData.prompts || typeof presetData.prompts !== "object") {
+      presetData.prompts = {};
+    }
+
+    const currentPrompt = presetData.prompts[promptKey];
+    if (currentPrompt && typeof currentPrompt === "object") {
+      currentPrompt.enabled = !!enabled;
+    }
+
+    if (!Array.isArray(presetData.prompt_order)) {
+      presetData.prompt_order = [];
+    }
+
+    let found = false;
+    for (let i = 0; i < presetData.prompt_order.length; i++) {
+      const item = presetData.prompt_order[i];
+      if (typeof item === "string") {
+        if (item === promptKey) {
+          presetData.prompt_order[i] = { identifier: promptKey, enabled: !!enabled };
+          found = true;
+          break;
+        }
+        continue;
+      }
+      if (!item || typeof item !== "object") continue;
+      const identifier =
+        item.identifier ?? item.id ?? item.key ?? item.prompt ?? item.name;
+      if (String(identifier) === String(promptKey)) {
+        item.enabled = !!enabled;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      presetData.prompt_order.push({ identifier: promptKey, enabled: !!enabled });
+    }
+  }
+
+  function syncCurrentPresetSelection(pm, presetName) {
+    try {
+      if (!pm?.select) return;
+      const currentValue = pm.select.val();
+      const currentPreset = getCurrentPresets().find(
+        (p) => String(p.value) === String(currentValue),
+      );
+      if (currentPreset?.name === presetName) {
+        pm.select.trigger("change");
+      }
+    } catch (e) {
+      console.warn("[CFM] 同步当前预设状态失败", e);
+    }
+  }
+
+  async function togglePresetDetailFieldActivation(
+    presetName,
+    fieldKey,
+    activate,
+  ) {
+    if (!fieldKey || !fieldKey.startsWith("prompts.")) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    const promptKey = fieldKey.slice("prompts.".length);
+    setPresetPromptEnabled(presetData, promptKey, activate);
+
+    try {
+      await pm.savePreset(presetName, presetData);
+      syncCurrentPresetSelection(pm, presetName);
+      refreshPresetPanelView();
+    } catch (error) {
+      console.error("[CFM] 切换预设条目激活状态失败:", error);
+      toastr.error(`保存失败: ${error.message || error}`);
+    }
   }
 
   async function showPresetDetailFieldPopup(presetName, field) {
@@ -9688,6 +9798,7 @@ jQuery(async () => {
           <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row" data-field="${escapeHtml(field.key)}">
             <div class="cfm-persona-detail-label cfm-preset-detail-label">${escapeHtml(field.label)}
               <div class="cfm-chat-actions">
+                <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(field.key)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(field.key)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
               </div>
             </div>
@@ -9699,6 +9810,23 @@ jQuery(async () => {
 
     subList.append(detailCard);
     presetRow.after(subList);
+
+    subList
+      .find(".cfm-preset-field-active-toggle")
+      .on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = $(e.currentTarget);
+        if (el.data("pending")) return;
+        const fieldKey = String(el.data("field") || "");
+        const newState = !el.hasClass("cfm-wi-toggle-on");
+        el.data("pending", true);
+        try {
+          await togglePresetDetailFieldActivation(preset.name, fieldKey, newState);
+        } finally {
+          el.data("pending", false);
+        }
+      });
 
     subList.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
       e.preventDefault();
