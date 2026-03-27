@@ -9445,62 +9445,77 @@ jQuery(async () => {
     const fields = [];
     const seen = new Set();
 
-    const addField = (key, label, value) => {
-      if (!key || seen.has(key)) return;
-      seen.add(key);
+    const getPromptText = (promptValue) => {
+      if (typeof promptValue === "string") return promptValue;
+      if (promptValue && typeof promptValue === "object") {
+        return String(
+          promptValue.value ?? promptValue.content ?? promptValue.text ?? "",
+        );
+      }
+      return "";
+    };
+
+    const normalizeLabel = (label, fallback) => {
+      const text = String(label ?? "").trim();
+      return text || fallback;
+    };
+
+    const addPromptField = (identifier, labelHint, promptValue) => {
+      if (identifier === null || identifier === undefined) return;
+      const keyId = String(identifier);
+      if (!keyId || seen.has(keyId)) return;
+      seen.add(keyId);
       fields.push({
-        key,
-        label,
-        value: value == null ? "" : String(value),
+        key: `prompts.${keyId}`,
+        label: normalizeLabel(labelHint, keyId),
+        value: getPromptText(promptValue),
       });
     };
 
-    addField("name", "名称", preset.name);
-    addField("description", "描述", preset.description);
-    addField("scenario", "场景", preset.scenario);
-    addField("personality", "性格", preset.personality);
-    addField("first_mes", "第一条消息", preset.first_mes);
-    addField("mes_example", "示例对话", preset.mes_example);
-    addField("creator_notes", "作者备注", preset.creator_notes);
-    addField("system_prompt", "系统提示词", preset.system_prompt);
-    addField(
-      "post_history_instructions",
-      "历史后指令",
-      preset.post_history_instructions,
-    );
-
+    // 仅显示“预设条目（prompts）”，不包含角色卡字段（描述/场景/性格等）
     for (const item of promptOrder) {
-      if (!item || typeof item !== "object") continue;
-      const identifier =
-        item.identifier || item.id || item.name || item.key || item.prompt;
-      if (!identifier) continue;
-      const promptValue = promptMap[identifier];
-      const promptText =
-        typeof promptValue === "string"
-          ? promptValue
-          : promptValue && typeof promptValue === "object"
-            ? (promptValue.value ??
-              promptValue.content ??
-              promptValue.text ??
-              "")
-            : "";
-      addField(`prompts.${identifier}`, `提示词：${identifier}`, promptText);
+      if (item == null) continue;
+
+      // prompt_order 可能是字符串数组，也可能是对象数组
+      if (typeof item === "string") {
+        const promptValue = promptMap[item];
+        const promptLabel =
+          promptValue && typeof promptValue === "object"
+            ? promptValue.name ?? promptValue.title ?? promptValue.label ?? item
+            : item;
+        addPromptField(item, promptLabel, promptValue);
+        continue;
+      }
+
+      if (typeof item !== "object") continue;
+
+      const identifier = item.identifier ?? item.key ?? item.prompt ?? item.name;
+      if (identifier === null || identifier === undefined || identifier === "")
+        continue;
+
+      const promptValue = promptMap[String(identifier)];
+      const promptLabel =
+        item.name ??
+        item.title ??
+        item.label ??
+        (promptValue && typeof promptValue === "object"
+          ? promptValue.name ?? promptValue.title ?? promptValue.label
+          : null) ??
+        String(identifier);
+
+      addPromptField(identifier, promptLabel, promptValue);
     }
 
+    // 补充 prompt_order 未覆盖的 prompts 条目
     for (const [identifier, promptValue] of Object.entries(promptMap)) {
-      const promptText =
-        typeof promptValue === "string"
-          ? promptValue
-          : promptValue && typeof promptValue === "object"
-            ? (promptValue.value ??
-              promptValue.content ??
-              promptValue.text ??
-              "")
-            : "";
-      addField(`prompts.${identifier}`, `提示词：${identifier}`, promptText);
+      const promptLabel =
+        promptValue && typeof promptValue === "object"
+          ? promptValue.name ?? promptValue.title ?? promptValue.label ?? identifier
+          : identifier;
+      addPromptField(identifier, promptLabel, promptValue);
     }
 
-    return fields.filter((field) => field.key !== "name");
+    return fields;
   }
 
   function getPresetFieldCurrentValue(preset, fieldKey) {
