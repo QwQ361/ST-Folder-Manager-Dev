@@ -4407,9 +4407,22 @@ option.cfm-nf-hidden {
 
 /* QR 集内的单个快速回复项（聊天记录行风格） */
 .cfm-qr-sub-items {
+  position: relative;
   border-left: 2px solid rgba(137, 180, 250, 0.2);
   margin-left: 28px;
   margin-bottom: 2px;
+}
+.cfm-qr-sub-items::before {
+  content: "▶";
+  position: absolute;
+  top: 50%;
+  left: -18px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 .cfm-qr-sub-item {
   display: flex;
@@ -4717,6 +4730,7 @@ option.cfm-nf-hidden {
 
 /* 正则脚本子列表容器（角色卡/预设行展开后） */
 .cfm-regex-sublist {
+  position: relative;
   margin-left: 30px;
   margin-right: 8px;
   margin-bottom: 4px;
@@ -4724,6 +4738,18 @@ option.cfm-nf-hidden {
   padding-left: 8px;
   background-color: rgba(0, 0, 0, 0.1);
   border-radius: 0 6px 6px 0;
+}
+.cfm-regex-sublist::before {
+  content: "▶";
+  position: absolute;
+  top: 50%;
+  left: -18px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 
 /* 正则脚本行（子列表内） */
@@ -4894,6 +4920,7 @@ option.cfm-nf-hidden {
 
 /* 聊天记录子列表容器 */
 .cfm-chat-sublist {
+  position: relative;
   margin-left: 30px;
   margin-right: 8px;
   margin-bottom: 4px;
@@ -4901,6 +4928,18 @@ option.cfm-nf-hidden {
   padding-left: 8px;
   background-color: rgba(0, 0, 0, 0.1);
   border-radius: 0 6px 6px 0;
+}
+.cfm-chat-sublist::before {
+  content: "▶";
+  position: absolute;
+  top: 50%;
+  left: -18px;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
 }
 
 /* User / 角色卡 / 预设 详情子列表 */
