@@ -3151,6 +3151,23 @@
   gap: 8px;
   margin-top: 16px;
 }
+.cfm-edit-popup-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-evenly;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: nowrap;
+}
+.cfm-edit-popup-footer .menu_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
 .cfm-edit-popup-actions .cfm-btn {
   padding: 6px 16px;
   font-size: 13px;
