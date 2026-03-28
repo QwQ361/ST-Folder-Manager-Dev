@@ -823,6 +823,7 @@ jQuery(async () => {
   ];
   const CFM_ACTION_META = {
     import: { label: "导入", icon: "fa-file-import" },
+    create: { label: "新增", icon: "fa-plus" },
     chatmode: { label: "显示聊天记录", icon: "fa-comments" },
     regexmode: { label: "查看正则", icon: "fa-code" },
     quickedit: { label: "快速编辑", icon: "fa-pen-to-square" },
@@ -898,7 +899,7 @@ jQuery(async () => {
           "delete",
         ],
         personas: ["import", "note", "export", "delete"],
-        regex: ["import", "export", "delete", "sort"],
+        regex: ["import", "create", "export", "delete", "sort"],
         quickreply: ["import", "note", "rename", "export", "delete"],
       };
       const refOrder = defaultOrder[tabId] || Object.keys(knownIds);
@@ -982,6 +983,7 @@ jQuery(async () => {
     },
     regex: {
       import: "#cfm-import-regex-btn",
+      create: "#cfm-regex-create-btn",
       export: "#cfm-export-regex-btn",
       delete: "#cfm-res-delete-regex-btn",
       sort: "#cfm-regex-sort-btn",
@@ -1004,25 +1006,6 @@ jQuery(async () => {
     for (const [actionId, selector] of Object.entries(btnMap)) {
       $(selector).toggle(visibleActions.includes(actionId));
     }
-
-    if (tabId === "regex") {
-      let visualOrder = 10;
-      let createOrder = 11;
-      orderedActions.forEach((a) => {
-        const selector = btnMap[a.id];
-        if (!selector) return;
-        $(selector).css("order", visualOrder);
-        if (a.id === "import") {
-          createOrder = visualOrder + 1;
-          visualOrder += 2;
-        } else {
-          visualOrder += 1;
-        }
-      });
-      $("#cfm-regex-create-btn").css("order", createOrder);
-      return;
-    }
-
     // 按配置顺序设置 CSS order
     orderedActions.forEach((a, idx) => {
       const selector = btnMap[a.id];
@@ -30203,7 +30186,9 @@ jQuery(async () => {
 
     const nativeCreateBtn = $("#open_regex_editor");
     if (!nativeCreateBtn.length) {
-      toastr.warning("未找到原生全局正则编辑器入口，请先确保原生正则功能已完成加载");
+      toastr.warning(
+        "未找到原生全局正则编辑器入口，请先确保原生正则功能已完成加载",
+      );
       return;
     }
 
@@ -30935,10 +30920,14 @@ jQuery(async () => {
       function updateSelectedInsertSlot() {
         sortList.find(".cfm-sort-insert-slot").each(function () {
           const slot = $(this);
-          const isSelected = Number(slot.attr("data-target-index")) === selectedTargetIndex;
+          const isSelected =
+            Number(slot.attr("data-target-index")) === selectedTargetIndex;
           const lineEl = slot.find(".cfm-sort-insert-line");
           const btnEl = slot.find(".cfm-sort-insert-btn");
-          btnEl.attr("title", isSelected ? "已选中，点击确认插入" : "选择插入到此处");
+          btnEl.attr(
+            "title",
+            isSelected ? "已选中，点击确认插入" : "选择插入到此处",
+          );
           btnEl.attr("aria-pressed", isSelected ? "true" : "false");
           btnEl.css({
             color: isSelected ? "#a6e3a1" : "#89b4fa",
@@ -30948,7 +30937,9 @@ jQuery(async () => {
             backgroundColor: isSelected
               ? "rgba(166, 227, 161, 0.14)"
               : "var(--SmartThemeBlurTintColor, #1e1e2e)",
-            boxShadow: isSelected ? "0 0 0 3px rgba(166, 227, 161, 0.08)" : "none",
+            boxShadow: isSelected
+              ? "0 0 0 3px rgba(166, 227, 161, 0.08)"
+              : "none",
           });
           lineEl.css({
             background: isSelected
@@ -30997,7 +30988,10 @@ jQuery(async () => {
           toastr.warning("请先选择一个插入位置");
           return;
         }
-        const newOrder = moveRegexScriptToIndex(newScriptId, selectedTargetIndex);
+        const newOrder = moveRegexScriptToIndex(
+          newScriptId,
+          selectedTargetIndex,
+        );
         if (!newOrder) {
           toastr.warning("未找到新建的正则脚本，无法调整位置");
           closeDialog();
@@ -31088,25 +31082,27 @@ jQuery(async () => {
       sortList.disableSelection();
 
       // 确认排序
-      dialog.find(".cfm-sort-dialog-confirm").on("click touchend", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const newOrder = [];
-        sortList.find(".cfm-sort-row[data-script-id]").each(function () {
-          const id = $(this).attr("data-script-id");
-          const script = globalScripts.find((s) => s.id === id);
-          if (script) newOrder.push(script);
+      dialog
+        .find(".cfm-sort-dialog-confirm")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const newOrder = [];
+          sortList.find(".cfm-sort-row[data-script-id]").each(function () {
+            const id = $(this).attr("data-script-id");
+            const script = globalScripts.find((s) => s.id === id);
+            if (script) newOrder.push(script);
+          });
+          // 补充未在列表中出现的脚本（防御性）
+          for (const s of globalScripts) {
+            if (!newOrder.find((n) => n.id === s.id)) newOrder.push(s);
+          }
+          await applyRegexGlobalOrder(
+            newOrder,
+            `正则脚本顺序已保存（共 ${newOrder.length} 个）`,
+          );
+          closeDialog();
         });
-        // 补充未在列表中出现的脚本（防御性）
-        for (const s of globalScripts) {
-          if (!newOrder.find((n) => n.id === s.id)) newOrder.push(s);
-        }
-        await applyRegexGlobalOrder(
-          newOrder,
-          `正则脚本顺序已保存（共 ${newOrder.length} 个）`,
-        );
-        closeDialog();
-      });
 
       // 取消
       dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
