@@ -34566,25 +34566,38 @@ jQuery(async () => {
         }
       });
     }
+
+    let autoApplyWiTimer = null;
+    let autoApplyQrTimer = null;
+    const scheduleAutoApplyBoundGroups = () => {
+      if (autoApplyWiTimer) clearTimeout(autoApplyWiTimer);
+      if (autoApplyQrTimer) clearTimeout(autoApplyQrTimer);
+      autoApplyWiTimer = setTimeout(() => {
+        autoApplyWiTimer = null;
+        autoApplyWiPresets();
+      }, 300);
+      autoApplyQrTimer = setTimeout(() => {
+        autoApplyQrTimer = null;
+        autoApplyQrPresets();
+      }, 350);
+    };
+
     // 角色/聊天切换时自动应用/关闭世界书分组和快速回复分组
     if (event_types.CHAT_CHANGED) {
       eventSource.on(event_types.CHAT_CHANGED, () => {
         // 延迟执行，确保角色信息已更新
-        setTimeout(() => autoApplyWiPresets(), 300);
-        setTimeout(() => autoApplyQrPresets(), 350);
+        scheduleAutoApplyBoundGroups();
       });
     }
     // 预设切换时自动应用/关闭世界书分组和快速回复分组
     if (event_types.OAI_PRESET_CHANGED_AFTER) {
       eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
-        setTimeout(() => autoApplyWiPresets(), 300);
-        setTimeout(() => autoApplyQrPresets(), 350);
+        scheduleAutoApplyBoundGroups();
       });
     }
     if (event_types.PRESET_CHANGED) {
       eventSource.on(event_types.PRESET_CHANGED, () => {
-        setTimeout(() => autoApplyWiPresets(), 300);
-        setTimeout(() => autoApplyQrPresets(), 350);
+        scheduleAutoApplyBoundGroups();
       });
     }
   }
