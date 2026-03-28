@@ -12228,13 +12228,25 @@ jQuery(async () => {
    * @param {Array} scripts - 正则脚本列表
    */
   async function saveCharRegexScripts(avatar, scripts) {
-    // 1. 同步更新内存中的角色数据
+    // 1. 同步更新内存中的角色数据（直接修改 characters 数组引用，与原生 writeExtensionField 保持一致）
     const chars = getCharacters();
     const ch = chars.find((c) => c.avatar === avatar);
     if (ch) {
       if (!ch.data) ch.data = {};
       if (!ch.data.extensions) ch.data.extensions = {};
       ch.data.extensions.regex_scripts = scripts;
+      // 同步更新 json_data（与原生 writeExtensionField 行为一致，防止后续保存时数据不同步）
+      if (ch.json_data) {
+        try {
+          const jsonData = JSON.parse(ch.json_data);
+          if (!jsonData.data) jsonData.data = {};
+          if (!jsonData.data.extensions) jsonData.data.extensions = {};
+          jsonData.data.extensions.regex_scripts = scripts;
+          ch.json_data = JSON.stringify(jsonData);
+        } catch (parseErr) {
+          console.debug("[CFM] json_data 同步失败:", parseErr);
+        }
+      }
     }
     // 2. 持久化到服务器
     const ctx = getContext();
@@ -12247,15 +12259,11 @@ jQuery(async () => {
         data: { extensions: { regex_scripts: scripts } },
       }),
     });
-    // 3. 刷新角色缓存，确保原生正则引擎读取到最新 scoped scripts
-    try {
-      if (typeof ctx.getCharacters === "function") {
-        await ctx.getCharacters();
-      }
-    } catch (refreshErr) {
-      console.debug("[CFM] 刷新角色缓存失败:", refreshErr);
-    }
-    // 4. 清除原生正则引擎缓存 & 刷新原生正则UI
+    // 3. 清除原生正则引擎缓存 & 刷新原生正则UI
+    // 注意：不再调用 ctx.getCharacters()，因为：
+    //  - 我们已经直接更新了 characters 数组中的角色对象
+    //  - getCharacters() 会触发 selectCharacterById → 异步重建原生正则面板，
+    //    导致与 syncNativeRegexState 的同步结果产生时序冲突
     await syncNativeRegexState();
   }
 
@@ -32124,6 +32132,8 @@ jQuery(async () => {
         cfmRegexBatchLastClicked = null;
       }
 
+      // 互通完成后统一刷新原生正则UI，确保所有面板（全局/角色/预设）都反映最新状态
+      await syncNativeRegexState();
       rerenderCurrentView();
       if (currentResourceType === "regex") renderRegexView();
       toastr.success(
