@@ -31565,14 +31565,45 @@ jQuery(async () => {
     } = options || {};
 
     return new Promise((resolve) => {
-      const canUseChar = !!currentCharAvatar;
-      const canUsePreset = !!currentPresetName;
-      let defaultTargetType = "global";
-      if (sourceScope?.type === "global") {
+      const sourceType = sourceScope?.type || "";
+      const hasCurrentChar = !!currentCharAvatar;
+      const hasCurrentPreset = !!currentPresetName;
+      const canUseGlobal = sourceType !== "global";
+      const canUseChar = hasCurrentChar && sourceType !== "char";
+      const canUsePreset = hasCurrentPreset && sourceType !== "preset";
+      const enabledTargetTypes = [
+        canUseGlobal ? "global" : "",
+        canUseChar ? "char" : "",
+        canUsePreset ? "preset" : "",
+      ].filter(Boolean);
+
+      let defaultTargetType = "";
+      if (sourceType === "global") {
         if (canUseChar) defaultTargetType = "char";
         else if (canUsePreset) defaultTargetType = "preset";
+      } else if (sourceType === "char") {
+        if (canUseGlobal) defaultTargetType = "global";
+        else if (canUsePreset) defaultTargetType = "preset";
+      } else if (sourceType === "preset") {
+        if (canUseGlobal) defaultTargetType = "global";
+        else if (canUseChar) defaultTargetType = "char";
       }
+      if (!enabledTargetTypes.includes(defaultTargetType)) {
+        defaultTargetType = enabledTargetTypes[0] || "";
+      }
+
       const folderOptions = getRegexTransferGlobalFolderOptions();
+      const globalDisabledReason = canUseGlobal ? "" : "（来源位置，不可选）";
+      const charDisabledReason = !hasCurrentChar
+        ? "（当前未选择角色）"
+        : sourceType === "char"
+          ? "（来源位置，不可选）"
+          : "";
+      const presetDisabledReason = !hasCurrentPreset
+        ? "（当前未选择预设）"
+        : sourceType === "preset"
+          ? "（来源位置，不可选）"
+          : "";
       const overlay = $(
         '<div class="cfm-edit-popup-overlay" style="background:rgba(0,0,0,0.12);z-index:100000;"></div>',
       );
@@ -31590,10 +31621,11 @@ jQuery(async () => {
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">选择目标</div>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-target" value="global" ${defaultTargetType === "global" ? "checked" : ""}> <span>全局正则</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择")}）</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择")}）</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseGlobal ? "pointer" : "not-allowed"};opacity:${canUseGlobal ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="global" ${defaultTargetType === "global" ? "checked" : ""} ${canUseGlobal ? "" : "disabled"}> <span>全局正则${globalDisabledReason}</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择")}）${escapeHtml(charDisabledReason)}</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择")}）${escapeHtml(presetDisabledReason)}</span></label>
             </div>
+            ${enabledTargetTypes.length === 0 ? '<div style="font-size:12px;line-height:1.6;color:#f38ba8;opacity:0.92;">当前没有可用的互通目标，请先切换到角色或预设后再试。</div>' : ""}
             <div class="cfm-regex-transfer-global-folder" style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">全局分组</div>
               <select class="text_pole cfm-regex-transfer-folder-select"></select>
@@ -31620,7 +31652,7 @@ jQuery(async () => {
         const targetType =
           dialog
             .find('input[name="cfm-regex-transfer-target"]:checked')
-            .val() || "global";
+            .val() || "";
         dialog
           .find(".cfm-regex-transfer-global-folder")
           .toggle(targetType === "global");
@@ -31640,15 +31672,20 @@ jQuery(async () => {
       dialog.find(".cfm-regex-transfer-confirm").on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const targetType =
+          dialog
+            .find('input[name="cfm-regex-transfer-target"]:checked')
+            .val() || "";
+        if (!targetType) {
+          toastr.warning("当前没有可用的目标位置");
+          return;
+        }
         closeDialog({
           mode:
             dialog
               .find('input[name="cfm-regex-transfer-mode"]:checked')
               .val() || "move",
-          targetType:
-            dialog
-              .find('input[name="cfm-regex-transfer-target"]:checked')
-              .val() || "global",
+          targetType,
           globalFolderId:
             folderSelect.val() || defaultGlobalFolderId || "__ungrouped__",
         });
@@ -31910,10 +31947,7 @@ jQuery(async () => {
       return;
     }
 
-    if (
-      transferConfig.targetType !== "global" &&
-      isSameRegexScopeList(sourceScope, targetScope)
-    ) {
+    if (isSameRegexScopeList(sourceScope, targetScope)) {
       toastr.warning("来源与目标相同，请选择其他位置");
       return;
     }
@@ -32164,6 +32198,29 @@ jQuery(async () => {
         await openRegexSortDialog({
           insertMode: true,
           newScriptId: String(newScript.id),
+          onCancelInsert: async () => {
+            ensureResourceSettings();
+            const nextScripts = getRegexGlobalScripts().filter(
+              (script) => String(script?.id || "") !== String(newScript.id),
+            );
+            const nextGroups = {
+              ...(extension_settings[extensionName].regexGlobalGroups || {}),
+            };
+            delete nextGroups[newScript.id];
+            const nextFavorites = getResFavorites("regex").filter(
+              (id) => String(id) !== String(newScript.id),
+            );
+            await saveRegexScopeScripts(
+              { type: "global" },
+              nextScripts,
+              {
+                globalGroups: nextGroups,
+                globalFavorites: nextFavorites,
+              },
+            );
+            renderRegexView();
+            toastr.info("已取消新建正则");
+          },
         });
       },
       onAbort: () => {
@@ -32189,7 +32246,13 @@ jQuery(async () => {
   }
 
   async function openOwnedRegexInsertDialog(options = {}) {
-    const { scripts = [], newScriptId = "", onApply, onSkip } = options || {};
+    const {
+      scripts = [],
+      newScriptId = "",
+      onApply,
+      onSkip,
+      onCancel,
+    } = options || {};
     const ownedScripts = Array.isArray(scripts) ? scripts : [];
     const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
     const dialog = $(`
@@ -32216,6 +32279,18 @@ jQuery(async () => {
     function closeDialog() {
       overlay.remove();
       dialog.remove();
+    }
+
+    async function handleCancel() {
+      try {
+        if (typeof onCancel === "function") {
+          await onCancel();
+        }
+        closeDialog();
+      } catch (err) {
+        console.error("[CFM] 取消新建局部正则失败:", err);
+        toastr.error("取消新建失败: " + (err?.message || err));
+      }
     }
 
     function updateSelectedInsertSlot() {
@@ -32326,14 +32401,14 @@ jQuery(async () => {
       }
     });
 
-    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeDialog();
+      await handleCancel();
     });
 
-    overlay.on("click", (e) => {
-      if ($(e.target).is(overlay)) closeDialog();
+    overlay.on("click", async (e) => {
+      if ($(e.target).is(overlay)) await handleCancel();
     });
 
     $("#cfm-popup").append(overlay).append(dialog);
@@ -32410,6 +32485,15 @@ jQuery(async () => {
             rerenderCurrentView();
             toastr.success("新正则已创建，顺序保持在最后");
           },
+          onCancel: async () => {
+            const latestScripts = getScripts();
+            const nextScripts = latestScripts.filter(
+              (script) => String(script?.id || "") !== String(newScript.id),
+            );
+            await saveCharRegexScripts(avatar, nextScripts);
+            rerenderCurrentView();
+            toastr.info(`已取消角色「${charName || "当前角色"}」的新正则`);
+          },
         });
       },
       onAbort: () => {
@@ -32459,6 +32543,15 @@ jQuery(async () => {
           onSkip: () => {
             rerenderCurrentView();
             toastr.success("新正则已创建，顺序保持在最后");
+          },
+          onCancel: async () => {
+            const latestScripts = getScripts();
+            const nextScripts = latestScripts.filter(
+              (script) => String(script?.id || "") !== String(newScript.id),
+            );
+            await savePresetRegexScripts(nextScripts);
+            rerenderCurrentView();
+            toastr.info(`已取消预设「${presetName || "当前预设"}」的新正则`);
           },
         });
       },
@@ -33164,7 +33257,11 @@ jQuery(async () => {
   // ==================== 正则脚本排序弹窗 ====================
   async function openRegexSortDialog(options = {}) {
     ensureResourceSettings();
-    const { insertMode = false, newScriptId = "" } = options || {};
+    const {
+      insertMode = false,
+      newScriptId = "",
+      onCancelInsert,
+    } = options || {};
     const globalScripts = getRegexGlobalScripts();
     const folderTree = extension_settings[extensionName].regexFolderTree || {};
     const globalGroups =
@@ -33193,6 +33290,7 @@ jQuery(async () => {
     `);
 
     const sortList = dialog.find(".cfm-sort-dialog-list");
+    let insertCancelHandler = null;
 
     // 关闭弹窗辅助
     function closeDialog() {
@@ -33210,6 +33308,17 @@ jQuery(async () => {
     if (insertMode) {
       let selectedTargetIndex = null;
       const confirmBtn = dialog.find(".cfm-sort-dialog-insert-confirm");
+      insertCancelHandler = async () => {
+        try {
+          if (typeof onCancelInsert === "function") {
+            await onCancelInsert();
+          }
+          closeDialog();
+        } catch (err) {
+          console.error("[CFM] 取消新建全局正则失败:", err);
+          toastr.error("取消新建失败: " + (err?.message || err));
+        }
+      };
 
       function updateSelectedInsertSlot() {
         sortList.find(".cfm-sort-insert-slot").each(function () {
@@ -33303,10 +33412,10 @@ jQuery(async () => {
         closeDialog();
       });
 
-      dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+      dialog.find(".cfm-sort-dialog-cancel").on("click touchend", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        closeDialog();
+        await insertCancelHandler();
       });
     } else {
       // 填充脚本列表行
@@ -33407,8 +33516,13 @@ jQuery(async () => {
     }
 
     // 点击遮罩关闭
-    overlay.on("click", (e) => {
-      if ($(e.target).is(overlay)) closeDialog();
+    overlay.on("click", async (e) => {
+      if (!$(e.target).is(overlay)) return;
+      if (insertMode && typeof insertCancelHandler === "function") {
+        await insertCancelHandler();
+        return;
+      }
+      closeDialog();
     });
 
     // 挂载到主弹窗容器内（确保 position:absolute 相对于 #cfm-popup 定位）
