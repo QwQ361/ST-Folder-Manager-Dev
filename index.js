@@ -7133,6 +7133,47 @@ jQuery(async () => {
   }
 
   /**
+   * 获取当前聊天文件名（不含扩展名）
+   */
+  function getCurrentChatFileName() {
+    try {
+      const ctx = getContext();
+      const charId = ctx.characterId;
+      if (charId === undefined || charId === null) return null;
+      const characters = ctx.characters || getCharacters();
+      const ch = characters[charId];
+      return ch && typeof ch.chat === "string" && ch.chat ? ch.chat : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 获取当前聊天绑定键：avatar::chatFileName
+   */
+  function getCurrentChatBindKey() {
+    const avatar = getCurrentCharAvatar();
+    const chatFileName = getCurrentChatFileName();
+    if (!avatar || !chatFileName) return null;
+    return `${avatar}::${chatFileName}`;
+  }
+
+  function makeChatBindKey(charAvatar, chatFileName) {
+    if (!charAvatar || !chatFileName) return null;
+    return `${charAvatar}::${chatFileName}`;
+  }
+
+  function parseChatBindKey(bindKey) {
+    const raw = String(bindKey || "");
+    const sepIdx = raw.indexOf("::");
+    if (sepIdx === -1) return { avatar: "", chatFileName: raw };
+    return {
+      avatar: raw.slice(0, sepIdx),
+      chatFileName: raw.slice(sepIdx + 2),
+    };
+  }
+
+  /**
    * 更新分组的 scope
    * scope: "global"（不自动管理）| "bound"（有绑定，自动管理）
    */
@@ -7144,6 +7185,7 @@ jQuery(async () => {
       if (scope === "global") {
         presets[presetIdx].bindChars = [];
         presets[presetIdx].bindPresets = [];
+        presets[presetIdx].bindChats = [];
       }
       getContext().saveSettingsDebounced();
     }
@@ -7159,6 +7201,21 @@ jQuery(async () => {
     if (!Array.isArray(p.bindChars)) p.bindChars = [];
     if (!p.bindChars.includes(charAvatar)) {
       p.bindChars.push(charAvatar);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  /**
+   * 绑定分组到聊天记录
+   */
+  function bindWiPresetToChat(presetIdx, charAvatar, chatFileName) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    const bindKey = makeChatBindKey(charAvatar, chatFileName);
+    if (!p || !bindKey) return;
+    if (!Array.isArray(p.bindChats)) p.bindChats = [];
+    if (!p.bindChats.includes(bindKey)) {
+      p.bindChats.push(bindKey);
       getContext().saveSettingsDebounced();
     }
   }
@@ -7191,6 +7248,17 @@ jQuery(async () => {
     }
   }
 
+  function unbindWiPresetFromChat(presetIdx, bindKey) {
+    const presets = getWiActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindChats)) return;
+    const idx = p.bindChats.indexOf(bindKey);
+    if (idx !== -1) {
+      p.bindChats.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
   /**
    * 取消绑定分组与预设
    */
@@ -7206,13 +7274,14 @@ jQuery(async () => {
   }
 
   /**
-   * 获取当前角色/预设应该自动应用的分组列表（含匹配原因）
-   * @returns {{indices: number[], details: Object<number, {charMatch: boolean, presetMatch: boolean}>}}
+   * 获取当前角色/聊天/预设应该自动应用的分组列表（含匹配原因）
+   * @returns {{indices: number[], details: Object<number, {charMatch: boolean, presetMatch: boolean, chatMatch: boolean}>}}
    */
   function getAutoApplyPresetIndices() {
     const presets = getWiActivePresets();
     const currentChar = getCurrentCharAvatar();
     const currentPreset = getCurrentPresetName();
+    const currentChatKey = getCurrentChatBindKey();
     const indices = [];
     const details = {};
     for (let i = 0; i < presets.length; i++) {
@@ -7220,9 +7289,16 @@ jQuery(async () => {
       if (p.scope === "global") continue;
       const hasBindings =
         (p.bindChars && p.bindChars.length > 0) ||
-        (p.bindPresets && p.bindPresets.length > 0);
+        (p.bindPresets && p.bindPresets.length > 0) ||
+        (p.bindChats && p.bindChats.length > 0);
       if (!hasBindings) continue;
+      const chatMatch = !!(
+        currentChatKey &&
+        p.bindChats &&
+        p.bindChats.includes(currentChatKey)
+      );
       const charMatch = !!(
+        !chatMatch &&
         currentChar &&
         p.bindChars &&
         p.bindChars.includes(currentChar)
@@ -7232,9 +7308,9 @@ jQuery(async () => {
         p.bindPresets &&
         p.bindPresets.includes(currentPreset)
       );
-      if (charMatch || presetMatch) {
+      if (chatMatch || charMatch || presetMatch) {
         indices.push(i);
-        details[i] = { charMatch, presetMatch };
+        details[i] = { chatMatch, charMatch, presetMatch };
       }
     }
     return { indices, details };
@@ -7313,6 +7389,10 @@ jQuery(async () => {
         const d = details[idx];
         if (!d) return "";
         const reasons = [];
+        if (d.chatMatch) {
+          const currentChatName = getCurrentChatFileName();
+          if (currentChatName) reasons.push(`聊天「${currentChatName}」`);
+        }
         if (d.charMatch && currentCharName)
           reasons.push(`角色「${currentCharName}」`);
         if (d.presetMatch && currentPresetName)
@@ -7335,6 +7415,7 @@ jQuery(async () => {
           // 分析关闭原因：哪些绑定不再匹配
           const p = presets[idx];
           const reasons = [];
+          if (p.bindChats && p.bindChats.length > 0) reasons.push("聊天不匹配");
           if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
           if (p.bindPresets && p.bindPresets.length > 0)
             reasons.push("预设不匹配");
@@ -7701,7 +7782,11 @@ jQuery(async () => {
           <div class="cfm-wi-preset-bind-menu-title">应用方式</div>
           <div class="cfm-wi-preset-bind-menu-item" data-action="global"><i class="fa-solid fa-globe" style="color:#a6e3a1;"></i> 应用到全局</div>
           <div class="cfm-wi-preset-bind-menu-item ${!currentPresetName ? "cfm-disabled" : ""}" data-action="preset"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定到当前预设${currentPresetName ? "「" + escapeHtml(currentPresetName) + "」" : "（无预设）"}</div>
-          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char">
+            <span style="display:flex;align-items:center;min-width:0;flex:1;"><i class="fa-solid fa-user" style="color:#f9e2af;"></i><span style="margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</span></span>
+            <i class="fa-solid fa-caret-down cfm-wi-bind-chat-toggle" style="margin-left:auto;opacity:.7;"></i>
+          </div>
+          <div class="cfm-wi-preset-bind-menu-item cfm-wi-preset-bind-subitem ${!getCurrentChatBindKey() ? "cfm-disabled" : ""}" data-action="chat" style="display:none;"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定到当前聊天${getCurrentChatFileName() ? "「" + escapeHtml(getCurrentChatFileName()) + "」" : "（无聊天）"}</div>
         </div>
       `);
       // append 到 overlay 层避免被 overflow 裁剪，用 fixed 定位
@@ -7714,10 +7799,23 @@ jQuery(async () => {
       if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
       menu.css({ top: menuTop + "px", left: menuLeft + "px" });
 
+      menu.find(".cfm-wi-bind-chat-toggle").on("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const chatItem = menu.find('[data-action="chat"]');
+        if (!chatItem.length) return;
+        const willShow = !chatItem.is(":visible");
+        chatItem.stop(true, true).slideToggle(150);
+        $(this)
+          .toggleClass("fa-caret-down", !willShow)
+          .toggleClass("fa-caret-up", willShow);
+      });
+
       menu
         .find(".cfm-wi-preset-bind-menu-item")
         .on("click", async function (ev) {
           ev.stopPropagation();
+          if ($(ev.target).closest(".cfm-wi-bind-chat-toggle").length) return;
           if ($(this).hasClass("cfm-disabled")) return;
           const action = $(this).data("action");
           const allPresets = getWiActivePresets();
@@ -7779,6 +7877,33 @@ jQuery(async () => {
                 `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
               );
             }
+          } else if (action === "chat") {
+            const currentChatKey = getCurrentChatBindKey();
+            const currentChatName = getCurrentChatFileName();
+            if (!currentChar || !currentChatKey || !currentChatName) return;
+            const alreadyBound =
+              Array.isArray(preset.bindChats) &&
+              preset.bindChats.includes(currentChatKey);
+            const autoApplied = getAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.chatMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前聊天，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前聊天已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setWiPresetScope(idx, "bound");
+              bindWiPresetToChat(idx, currentChar, currentChatName);
+              await applyWorldInfoPreset(preset.books, wiCharBound);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到聊天「${currentChatName}」`,
+              );
+            }
           }
           menu.remove();
           overlay.remove();
@@ -7825,6 +7950,22 @@ jQuery(async () => {
           </div>`;
         }
       }
+      if (preset.bindChats && preset.bindChats.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定的聊天</div>';
+        for (const bindKey of preset.bindChats) {
+          const parsed = parseChatBindKey(bindKey);
+          const ch = chars.find((c) => c.avatar === parsed.avatar);
+          const charName = ch ? ch.name : parsed.avatar;
+          const name = `${charName} / ${parsed.chatFileName}`;
+          const isCurrentChat = getCurrentChatBindKey() === bindKey;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChat ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="chat" data-bind-id="${escapeHtml(bindKey)}">
+            <span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span>
+            <i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i>
+          </div>`;
+        }
+      }
       if (preset.bindPresets && preset.bindPresets.length > 0) {
         html +=
           '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
@@ -7852,12 +7993,14 @@ jQuery(async () => {
         const displayName = entry.find(".cfm-wi-bind-entry-name").text();
         if (
           !confirm(
-            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : "预设"}「${displayName}」的绑定？`,
+            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : bindType === "chat" ? "聊天" : "预设"}「${displayName}」的绑定？`,
           )
         )
           return;
         if (bindType === "char") {
           unbindWiPresetFromChar(idx, bindId);
+        } else if (bindType === "chat") {
+          unbindWiPresetFromChat(idx, bindId);
         } else {
           unbindWiPresetFromPreset(idx, bindId);
         }
@@ -26772,6 +26915,7 @@ jQuery(async () => {
     const presets = getQrActivePresets();
     const currentChar = getCurrentCharAvatar();
     const currentPreset = getCurrentPresetName();
+    const currentChatKey = getCurrentChatBindKey();
     const indices = [];
     const details = {};
     for (let i = 0; i < presets.length; i++) {
@@ -26779,9 +26923,16 @@ jQuery(async () => {
       if (p.scope === "global") continue;
       const hasBindings =
         (p.bindChars && p.bindChars.length > 0) ||
-        (p.bindPresets && p.bindPresets.length > 0);
+        (p.bindPresets && p.bindPresets.length > 0) ||
+        (p.bindChats && p.bindChats.length > 0);
       if (!hasBindings) continue;
+      const chatMatch = !!(
+        currentChatKey &&
+        p.bindChats &&
+        p.bindChats.includes(currentChatKey)
+      );
       const charMatch = !!(
+        !chatMatch &&
         currentChar &&
         p.bindChars &&
         p.bindChars.includes(currentChar)
@@ -26791,9 +26942,9 @@ jQuery(async () => {
         p.bindPresets &&
         p.bindPresets.includes(currentPreset)
       );
-      if (charMatch || presetMatch) {
+      if (chatMatch || charMatch || presetMatch) {
         indices.push(i);
-        details[i] = { charMatch, presetMatch };
+        details[i] = { chatMatch, charMatch, presetMatch };
       }
     }
     return { indices, details };
@@ -27190,7 +27341,11 @@ jQuery(async () => {
           <div class="cfm-wi-preset-bind-menu-title">应用方式</div>
           <div class="cfm-wi-preset-bind-menu-item" data-action="global"><i class="fa-solid fa-globe" style="color:#a6e3a1;"></i> 应用到全局</div>
           <div class="cfm-wi-preset-bind-menu-item ${!currentPresetName ? "cfm-disabled" : ""}" data-action="preset"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定到当前预设${currentPresetName ? "「" + escapeHtml(currentPresetName) + "」" : "（无预设）"}</div>
-          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char">
+            <span style="display:flex;align-items:center;min-width:0;flex:1;"><i class="fa-solid fa-user" style="color:#f9e2af;"></i><span style="margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</span></span>
+            <i class="fa-solid fa-caret-down cfm-wi-bind-chat-toggle" style="margin-left:auto;opacity:.7;"></i>
+          </div>
+          <div class="cfm-wi-preset-bind-menu-item cfm-wi-preset-bind-subitem ${!getCurrentChatBindKey() ? "cfm-disabled" : ""}" data-action="chat" style="display:none;"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定到当前聊天${getCurrentChatFileName() ? "「" + escapeHtml(getCurrentChatFileName()) + "」" : "（无聊天）"}</div>
         </div>
       `);
       overlay.append(menu);
@@ -27201,10 +27356,23 @@ jQuery(async () => {
       if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
       menu.css({ top: menuTop + "px", left: menuLeft + "px" });
 
+      menu.find(".cfm-wi-bind-chat-toggle").on("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const chatItem = menu.find('[data-action="chat"]');
+        if (!chatItem.length) return;
+        const willShow = !chatItem.is(":visible");
+        chatItem.stop(true, true).slideToggle(150);
+        $(this)
+          .toggleClass("fa-caret-down", !willShow)
+          .toggleClass("fa-caret-up", willShow);
+      });
+
       menu
         .find(".cfm-wi-preset-bind-menu-item")
         .on("click", async function (ev) {
           ev.stopPropagation();
+          if ($(ev.target).closest(".cfm-wi-bind-chat-toggle").length) return;
           if ($(this).hasClass("cfm-disabled")) return;
           const action = $(this).data("action");
           const allPresets = getQrActivePresets();
@@ -27264,6 +27432,33 @@ jQuery(async () => {
                 `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
               );
             }
+          } else if (action === "chat") {
+            const currentChatKey = getCurrentChatBindKey();
+            const currentChatName = getCurrentChatFileName();
+            if (!currentChar || !currentChatKey || !currentChatName) return;
+            const alreadyBound =
+              Array.isArray(preset.bindChats) &&
+              preset.bindChats.includes(currentChatKey);
+            const autoApplied = getQrAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.chatMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前聊天，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前聊天已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setQrPresetScope(idx, "bound");
+              bindQrPresetToChat(idx, currentChar, currentChatName);
+              await applyQrPreset(preset.sets);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到聊天「${currentChatName}」`,
+              );
+            }
           }
           menu.remove();
           overlay.remove();
@@ -27301,6 +27496,19 @@ jQuery(async () => {
           html += `<div class="cfm-wi-bind-entry ${isCurrentChar ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="char" data-bind-id="${escapeHtml(av)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
         }
       }
+      if (preset.bindChats && preset.bindChats.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定的聊天</div>';
+        for (const bindKey of preset.bindChats) {
+          const parsed = parseChatBindKey(bindKey);
+          const ch = chars.find((c) => c.avatar === parsed.avatar);
+          const charName = ch ? ch.name : parsed.avatar;
+          const name = `${charName} / ${parsed.chatFileName}`;
+          const isCurrentChat = getCurrentChatBindKey() === bindKey;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChat ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="chat" data-bind-id="${escapeHtml(bindKey)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
       if (preset.bindPresets && preset.bindPresets.length > 0) {
         html +=
           '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
@@ -27323,11 +27531,12 @@ jQuery(async () => {
         const displayName = entry.find(".cfm-wi-bind-entry-name").text();
         if (
           !confirm(
-            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : "预设"}「${displayName}」的绑定？`,
+            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : bindType === "chat" ? "聊天" : "预设"}「${displayName}」的绑定？`,
           )
         )
           return;
         if (bindType === "char") unbindQrPresetFromChar(idx, bindId);
+        else if (bindType === "chat") unbindQrPresetFromChat(idx, bindId);
         else unbindQrPresetFromPreset(idx, bindId);
 
         const applied =
