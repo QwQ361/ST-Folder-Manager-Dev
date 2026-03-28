@@ -12130,14 +12130,52 @@ jQuery(async () => {
           }
         }
       }
-      // 如果有新脚本缺少原生行，触发原生正则面板完整重建
+      // 如果有新脚本缺少原生行，完整重建面板
       if (hasMissingRows) {
+        console.debug(
+          "[CFM] syncNativeRegexState: detected missing rows, rebuilding panels",
+        );
         try {
-          const { renderExtensionTemplateAsync } =
-            await import("../../extensions.js");
-          const scriptTemplate = $(
-            await renderExtensionTemplateAsync("regex", "scriptTemplate"),
-          );
+          // 尝试获取原生模板
+          let scriptTemplate;
+          try {
+            const { renderExtensionTemplateAsync } =
+              await import("../../extensions.js");
+            scriptTemplate = $(
+              await renderExtensionTemplateAsync("regex", "scriptTemplate"),
+            );
+          } catch (templateErr) {
+            console.debug(
+              "[CFM] syncNativeRegexState: template load failed, using fallback",
+              templateErr,
+            );
+          }
+          // 如果模板加载失败或为空，使用内联回退模板
+          if (!scriptTemplate || !scriptTemplate.length) {
+            scriptTemplate = $(`
+              <div class="regex-script-label flex-container flexnowrap">
+                <input type="checkbox" class="regex_bulk_checkbox" />
+                <span class="drag-handle menu-handle">&#9776;</span>
+                <div class="regex_script_name flex1 overflow-hidden"></div>
+                <div class="flex-container flexnowrap">
+                  <label class="checkbox flex-container margin-r5" for="regex_disable">
+                    <input type="checkbox" name="regex_disable" class="disable_regex" />
+                    <span class="regex-toggle-on fa-solid fa-toggle-on" title="Disable script"></span>
+                    <span class="regex-toggle-off fa-solid fa-toggle-off" title="Enable script"></span>
+                  </label>
+                  <div class="edit_existing_regex menu_button" title="Edit script">
+                    <i class="fa-solid fa-pencil"></i>
+                  </div>
+                  <div class="export_regex menu_button" title="Export script">
+                    <i class="fa-solid fa-file-export"></i>
+                  </div>
+                  <div class="delete_regex menu_button" title="Delete script">
+                    <i class="fa-solid fa-trash"></i>
+                  </div>
+                </div>
+              </div>
+            `);
+          }
           for (const { sel, type } of containers) {
             const container = $(sel);
             if (!container.length) continue;
@@ -12179,10 +12217,18 @@ jQuery(async () => {
                   .prop("checked", false)
                   .trigger("input");
               });
-              scriptHtml.find(".edit_existing_regex").on("click", function () {
-                // 触发原生编辑器：先点击已有的原生行，或通过 ID 查找
-                $(this).closest(".regex_script").trigger("click");
-              });
+              scriptHtml
+                .find(".edit_existing_regex")
+                .on("click", function () {
+                  // 触发原生编辑对话框
+                  const id = scriptHtml.attr("id");
+                  const editBtn = $(
+                    "#" + $.escapeSelector(String(id)),
+                  ).find(".edit_existing_regex");
+                  if (editBtn.length && editBtn[0] !== this) {
+                    editBtn.trigger("click");
+                  }
+                });
               scriptHtml.find(".export_regex").on("click", function () {
                 const fileName = `regex-${(script.scriptName || "").replace(/[\s.<>:"/\\|?*\x00-\x1F\x7F]/g, "_").toLowerCase()}.json`;
                 const fileData = JSON.stringify(script, null, 4);
@@ -12196,21 +12242,25 @@ jQuery(async () => {
                 a.click();
                 URL.revokeObjectURL(url);
               });
-              scriptHtml.find(".delete_regex").on("click", async function () {
-                // 删除操作交由原生处理
-                const nativeRow = $("#" + $.escapeSelector(String(script.id)));
-                if (nativeRow.length) {
-                  nativeRow.find(".delete_regex").trigger("click");
-                }
-              });
+              scriptHtml
+                .find(".delete_regex")
+                .on("click", async function () {
+                  // 删除操作交由原生处理
+                  const nativeRow = $(
+                    "#" + $.escapeSelector(String(script.id)),
+                  );
+                  if (nativeRow.length) {
+                    nativeRow.find(".delete_regex").trigger("click");
+                  }
+                });
               container.append(scriptHtml);
             });
           }
           console.debug(
-            "[CFM] syncNativeRegexState: rebuilt native regex panels due to missing rows",
+            "[CFM] syncNativeRegexState: rebuilt native regex panels",
           );
         } catch (rebuildErr) {
-          console.debug(
+          console.error(
             "[CFM] syncNativeRegexState rebuild failed:",
             rebuildErr,
           );
