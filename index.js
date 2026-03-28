@@ -1602,7 +1602,7 @@ jQuery(async () => {
           if (mgr.active) return;
           if (
             e.target.closest(
-              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow",
+              ".cfm-row-star, .cfm-tnode-arrow, .cfm-row-bglink-btn, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-row-edit-btn, .cfm-wi-toggle, .cfm-qr-expand-arrow, .cfm-chat-toggle, .cfm-regex-toggle, .cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle",
             )
           )
             return;
