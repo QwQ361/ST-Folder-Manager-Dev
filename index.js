@@ -30441,6 +30441,22 @@ jQuery(async () => {
       : "";
     // 使用与世界书相同的 cfm-wi-toggle 样式
     const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+    const isDelSel =
+      scriptType === 0 && cfmResDeleteMode && script.id && cfmResDeleteSelected.has(script.id);
+    const isExportSel =
+      scriptType === 0 && cfmExportMode && script.id && cfmExportSelected.has(script.id);
+    const isMSel =
+      scriptType === 0 && cfmMultiSelectMode && script.id && cfmMultiSelected.has(script.id);
+    const checkHtml =
+      scriptType === 0
+        ? cfmResDeleteMode
+          ? `<div class="cfm-res-delete-checkbox ${isDelSel ? "cfm-res-delete-checked" : ""}"><i class="fa-${isDelSel ? "solid" : "regular"} fa-square${isDelSel ? "-check" : ""}"></i></div>`
+          : cfmExportMode
+            ? `<div class="cfm-export-checkbox ${isExportSel ? "cfm-export-checked" : ""}"><i class="fa-${isExportSel ? "solid" : "regular"} fa-square${isExportSel ? "-check" : ""}"></i></div>`
+            : cfmMultiSelectMode
+              ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+              : ""
+        : "";
     // 收藏星标（仅全局正则显示）
     const fav =
       scriptType === 0 && script.id ? isResFavorite("regex", script.id) : false;
@@ -30450,10 +30466,11 @@ jQuery(async () => {
         : "";
     return `
       <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
-           data-script-id="${escapeHtml(script.id || "")}"
+           data-script-id="${escapeHtml(script.id || "") }"
            data-script-type="${scriptType}"
            data-owner="${escapeHtml(ownerLabel || "")}"
            ${scriptType === 0 ? 'draggable="true"' : ""}>
+        ${checkHtml}
         ${toggleHtml}
         <div class="cfm-row-name">
           <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
