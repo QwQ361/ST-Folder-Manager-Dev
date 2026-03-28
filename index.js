@@ -317,6 +317,15 @@ jQuery(async () => {
       pm.select.val(value).trigger("change");
     }
   }
+  function getCurrentPresetName() {
+    const pm = getContext().getPresetManager();
+    if (!pm || !pm.select) return "";
+    const currentValue = pm.select.val();
+    const currentPreset = getCurrentPresets().find(
+      (p) => String(p.value) === String(currentValue),
+    );
+    return currentPreset?.name || "";
+  }
 
   // 获取世界书列表（带缓存，优先从DOM读取避免网络延迟）
   let _worldInfoNamesCache = null;
@@ -35385,6 +35394,72 @@ jQuery(async () => {
     }
   }
 
+  let cfmNativePresetGroupButtonObserver = null;
+  let cfmNativePresetGroupButtonBootObserver = null;
+
+  function injectNativePresetGroupButton() {
+    const header = $(
+      "#completion_prompt_manager .completion_prompt_manager_header",
+    ).first();
+    if (!header.length) return false;
+
+    const promptBlock = header
+      .find(".completion_prompt_manager_header_advanced")
+      .first();
+    if (!promptBlock.length) return false;
+    if (promptBlock.find(".cfm-native-preset-group-btn").length) return true;
+
+    const btn = $(
+      `<span class="cfm-native-preset-group-btn menu_button menu_button_icon fa-solid fa-layer-group" title="预设条目激活分组" style="margin-left:0.35em;display:flex;align-items:center;"></span>`,
+    );
+    promptBlock.append(btn);
+    btn.on("click touchend", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const presetName = getCurrentPresetName();
+      if (!presetName) {
+        toastr.warning("请先选择一个预设");
+        return;
+      }
+      await showPresetDetailGroupPanel(presetName);
+    });
+    return true;
+  }
+
+  function setupNativePresetGroupButtonObserver() {
+    const attachObserver = () => {
+      const root = document.querySelector("#completion_prompt_manager");
+      if (!root) return false;
+      if (cfmNativePresetGroupButtonObserver) {
+        injectNativePresetGroupButton();
+        return true;
+      }
+      cfmNativePresetGroupButtonObserver = new MutationObserver(() => {
+        injectNativePresetGroupButton();
+      });
+      cfmNativePresetGroupButtonObserver.observe(root, {
+        childList: true,
+        subtree: true,
+      });
+      injectNativePresetGroupButton();
+      return true;
+    };
+
+    if (attachObserver()) return;
+    if (cfmNativePresetGroupButtonBootObserver) return;
+
+    cfmNativePresetGroupButtonBootObserver = new MutationObserver(() => {
+      if (attachObserver()) {
+        cfmNativePresetGroupButtonBootObserver.disconnect();
+        cfmNativePresetGroupButtonBootObserver = null;
+      }
+    });
+    cfmNativePresetGroupButtonBootObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
   /**
    * 注入原生界面文件夹过滤按钮
    */
@@ -35978,6 +36053,7 @@ jQuery(async () => {
   autoCleanRedundantTags(); // 自动清理多余的路径标签
   initButton();
   injectNativeFilterButtons();
+  setupNativePresetGroupButtonObserver();
   setupCharWorldPopupFilterObserver();
   setupPersonaSelectionPopupEnhancer();
   initPinnedChatHook(); // 初始化聊天置顶 welcome-screen hook
