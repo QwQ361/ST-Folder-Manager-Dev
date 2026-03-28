@@ -17996,6 +17996,9 @@ jQuery(async () => {
     autoApplyWiPresets(true).catch((e) =>
       console.error("[CFM] 关闭插件时静默恢复世界书分组失败", e),
     );
+    autoApplyQrPresets(true).catch((e) =>
+      console.error("[CFM] 关闭插件时静默恢复QR分组失败", e),
+    );
     $("#cfm-overlay").remove();
     clearNewlyImportedHighlight();
     $("#cfm-topbar-button .drawer-icon")
@@ -27122,7 +27125,7 @@ jQuery(async () => {
     return { indices, details };
   }
 
-  async function autoApplyQrPresets() {
+  async function autoApplyQrPresets(silent = false) {
     try {
       const presets = getQrActivePresets();
       const { indices: shouldApply, details } = getQrAutoApplyPresetIndices();
@@ -27199,7 +27202,7 @@ jQuery(async () => {
             msgParts.push(`🔄 「${name}」保持开启${describeMatchReason(idx)}`);
         }
       }
-      if (msgParts.length > 0) {
+      if (!silent && msgParts.length > 0) {
         toastr.info(msgParts.join("<br>"), "快速回复分组", {
           timeOut: 4000,
           escapeHtml: false,
