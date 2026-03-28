@@ -17355,6 +17355,7 @@ jQuery(async () => {
             toggleWorldInfoActivation(n, newState).then(() => {
               if (newState) wiActiveSet.add(n);
               else wiActiveSet.delete(n);
+              syncWiPresetTrackingForManualToggle(n, newState);
               const el = $(this);
               el.toggleClass("cfm-wi-toggle-on", newState);
               el.find("i").attr(
@@ -25314,6 +25315,7 @@ jQuery(async () => {
             // 更新本地缓存
             if (newState) wiActiveSet.add(n);
             else wiActiveSet.delete(n);
+            syncWiPresetTrackingForManualToggle(n, newState);
             // 更新 toggle 按钮外观
             const el = $(this);
             el.toggleClass("cfm-wi-toggle-on", newState);
@@ -25862,6 +25864,7 @@ jQuery(async () => {
         toggleQrSetActivation(n, newState).then(() => {
           if (newState) qrActiveSet.add(n);
           else qrActiveSet.delete(n);
+          syncQrPresetTrackingForManualToggle(n, newState);
           const el = $(this);
           el.toggleClass("cfm-wi-toggle-on", newState);
           el.find("i").attr(
@@ -26534,6 +26537,7 @@ jQuery(async () => {
           toggleQrSetActivation(n, newState).then(() => {
             if (newState) qrActiveSet.add(n);
             else qrActiveSet.delete(n);
+            syncQrPresetTrackingForManualToggle(n, newState);
             const el = $(this);
             el.toggleClass("cfm-wi-toggle-on", newState);
             el.find("i").attr(
@@ -26908,6 +26912,36 @@ jQuery(async () => {
     extension_settings[extensionName]._qrAppliedPresetIndices = otherApplied;
     getContext().saveSettingsDebounced();
     return removedCount;
+  }
+
+  function syncWiPresetTrackingForManualToggle(bookName, isActive) {
+    if (isActive) return;
+    const applied =
+      extension_settings[extensionName]._wiAppliedPresetIndices || [];
+    if (!applied.length) return;
+    const presets = getWiActivePresets();
+    const nextApplied = applied.filter(
+      (idx) => !(presets[idx] && presets[idx].books.includes(bookName)),
+    );
+    if (nextApplied.length !== applied.length) {
+      extension_settings[extensionName]._wiAppliedPresetIndices = nextApplied;
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function syncQrPresetTrackingForManualToggle(setName, isActive) {
+    if (isActive) return;
+    const applied =
+      extension_settings[extensionName]._qrAppliedPresetIndices || [];
+    if (!applied.length) return;
+    const presets = getQrActivePresets();
+    const nextApplied = applied.filter(
+      (idx) => !(presets[idx] && presets[idx].sets.includes(setName)),
+    );
+    if (nextApplied.length !== applied.length) {
+      extension_settings[extensionName]._qrAppliedPresetIndices = nextApplied;
+      getContext().saveSettingsDebounced();
+    }
   }
   function bindQrPresetToChar(presetIdx, charAvatar) {
     const presets = getQrActivePresets();
