@@ -26919,32 +26919,114 @@ jQuery(async () => {
   }
 
   function syncWiPresetTrackingForManualToggle(bookName, isActive) {
-    if (isActive) return;
+    const presets = getWiActivePresets();
     const applied =
       extension_settings[extensionName]._wiAppliedPresetIndices || [];
-    if (!applied.length) return;
-    const presets = getWiActivePresets();
-    const nextApplied = applied.filter(
-      (idx) => !(presets[idx] && presets[idx].books.includes(bookName)),
+    const activeSet = new Set(
+      Object.entries(world_names || {})
+        .filter(([, v]) => v)
+        .map(([k]) => k),
     );
-    if (nextApplied.length !== applied.length) {
+
+    let nextApplied = isActive
+      ? [...applied]
+      : applied.filter(
+          (idx) => !(presets[idx] && presets[idx].books.includes(bookName)),
+        );
+
+    if (isActive) {
+      presets.forEach((preset, idx) => {
+        if (
+          preset &&
+          preset.books.includes(bookName) &&
+          preset.books.every((b) => activeSet.has(b)) &&
+          !nextApplied.includes(idx)
+        ) {
+          nextApplied.push(idx);
+        }
+      });
+    }
+
+    const changed =
+      nextApplied.length !== applied.length ||
+      nextApplied.some((idx, i) => idx !== applied[i]);
+
+    if (changed) {
       extension_settings[extensionName]._wiAppliedPresetIndices = nextApplied;
       getContext().saveSettingsDebounced();
+    }
+
+    const overlay = $("#cfm-wi-preset-panel-overlay");
+    if (overlay.length) {
+      overlay.find(".cfm-wi-preset-item").each(function () {
+        const idx = parseInt($(this).attr("data-preset-idx"), 10);
+        const preset = presets[idx];
+        if (!preset) return;
+        const fullyApplied = preset.books.every((b) => activeSet.has(b));
+        const btn = $(this).find(".cfm-wi-preset-apply");
+        btn.toggleClass("cfm-wi-preset-apply-active", fullyApplied);
+        btn.attr("title", fullyApplied ? "当前已激活" : "应用到全局");
+        btn.attr(
+          "style",
+          fullyApplied
+            ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);"
+            : "",
+        );
+      });
     }
   }
 
   function syncQrPresetTrackingForManualToggle(setName, isActive) {
-    if (isActive) return;
+    const presets = getQrActivePresets();
     const applied =
       extension_settings[extensionName]._qrAppliedPresetIndices || [];
-    if (!applied.length) return;
-    const presets = getQrActivePresets();
-    const nextApplied = applied.filter(
-      (idx) => !(presets[idx] && presets[idx].sets.includes(setName)),
-    );
-    if (nextApplied.length !== applied.length) {
+    const activeSet = getActiveQrSets();
+
+    let nextApplied = isActive
+      ? [...applied]
+      : applied.filter(
+          (idx) => !(presets[idx] && presets[idx].sets.includes(setName)),
+        );
+
+    if (isActive) {
+      presets.forEach((preset, idx) => {
+        if (
+          preset &&
+          preset.sets.includes(setName) &&
+          preset.sets.every((s) => activeSet.has(s)) &&
+          !nextApplied.includes(idx)
+        ) {
+          nextApplied.push(idx);
+        }
+      });
+    }
+
+    const changed =
+      nextApplied.length !== applied.length ||
+      nextApplied.some((idx, i) => idx !== applied[i]);
+
+    if (changed) {
       extension_settings[extensionName]._qrAppliedPresetIndices = nextApplied;
       getContext().saveSettingsDebounced();
+    }
+
+    const overlay = $("#cfm-qr-preset-panel-overlay");
+    if (overlay.length) {
+      overlay.find(".cfm-wi-preset-item").each(function () {
+        const idx = parseInt($(this).attr("data-preset-idx"), 10);
+        const preset = presets[idx];
+        if (!preset) return;
+        const fullyApplied = preset.sets.every((s) => activeSet.has(s));
+        const btn = $(this).find(".cfm-qr-preset-apply");
+        btn.toggleClass("cfm-wi-preset-apply-active", fullyApplied);
+        btn.attr("title", fullyApplied ? "当前已激活" : "应用到全局");
+        btn.attr(
+          "style",
+          fullyApplied
+            ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);"
+            : "",
+        );
+      });
     }
   }
   function bindQrPresetToChar(presetIdx, charAvatar) {
