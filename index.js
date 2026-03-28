@@ -12237,7 +12237,8 @@ jQuery(async () => {
       ch.data.extensions.regex_scripts = scripts;
     }
     // 2. 持久化到服务器
-    const headers = getContext().getRequestHeaders();
+    const ctx = getContext();
+    const headers = ctx.getRequestHeaders();
     await fetch("/api/characters/merge-attributes", {
       method: "POST",
       headers: headers,
@@ -12246,7 +12247,15 @@ jQuery(async () => {
         data: { extensions: { regex_scripts: scripts } },
       }),
     });
-    // 3. 清除原生正则引擎缓存 & 刷新原生正则UI
+    // 3. 刷新角色缓存，确保原生正则引擎读取到最新 scoped scripts
+    try {
+      if (typeof ctx.getCharacters === "function") {
+        await ctx.getCharacters();
+      }
+    } catch (refreshErr) {
+      console.debug("[CFM] 刷新角色缓存失败:", refreshErr);
+    }
+    // 4. 清除原生正则引擎缓存 & 刷新原生正则UI
     await syncNativeRegexState();
   }
 
