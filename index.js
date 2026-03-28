@@ -14046,6 +14046,7 @@ jQuery(async () => {
       clearMultiSelect();
       cfmMultiSelectRangeMode = false;
       $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+      $("#cfm-popup").removeClass("cfm-multisel-on");
       // 切换标签时清空导出模式
       if (cfmExportMode) exitExportMode();
       if (cfmResDeleteMode) exitResDeleteMode();
@@ -19094,6 +19095,7 @@ jQuery(async () => {
           clearMultiSelect();
           cfmMultiSelectRangeMode = false;
           $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+          $("#cfm-popup").removeClass("cfm-multisel-on");
           if (cfmExportMode) exitExportMode();
           if (cfmResDeleteMode) exitResDeleteMode();
           if (cfmThemeNoteMode) exitThemeNoteMode();
