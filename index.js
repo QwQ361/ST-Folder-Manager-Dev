@@ -9796,9 +9796,10 @@ jQuery(async () => {
         const hasValue = !!String(field.value || "").trim();
         detailCard.append(`
           <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row" data-field="${escapeHtml(field.key)}">
-            <div class="cfm-persona-detail-label cfm-preset-detail-label">${escapeHtml(field.label)}
+            <div class="cfm-persona-detail-label cfm-preset-detail-label">
+              <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(field.key)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
+              <span class="cfm-preset-detail-label-text">${escapeHtml(field.label)}</span>
               <div class="cfm-chat-actions">
-                <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(field.key)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(field.key)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
               </div>
             </div>
