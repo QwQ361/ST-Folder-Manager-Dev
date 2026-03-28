@@ -12097,6 +12097,7 @@ jQuery(async () => {
           type: engine.SCRIPT_TYPES.PRESET,
         },
       ];
+      let hasMissingRows = false;
       for (const { sel, type } of containers) {
         const container = $(sel);
         if (!container.length) continue;
@@ -12107,7 +12108,7 @@ jQuery(async () => {
           const id = $(this).attr("id");
           if (id && !scriptIds.has(id)) $(this).remove();
         });
-        // 更新现有脚本行的状态并按新顺序排列
+        // 检查是否有新脚本缺少原生行
         for (const script of scripts) {
           if (!script.id) continue;
           const row = container.children("#" + $.escapeSelector(script.id));
@@ -12123,7 +12124,96 @@ jQuery(async () => {
               .prop("checked", script.disabled ?? false);
             // 移动到容器末尾以保持正确顺序
             container.append(row);
+          } else {
+            // 标记有缺失行，需要完整重建
+            hasMissingRows = true;
           }
+        }
+      }
+      // 如果有新脚本缺少原生行，触发原生正则面板完整重建
+      if (hasMissingRows) {
+        try {
+          const { renderExtensionTemplateAsync } =
+            await import("../../extensions.js");
+          const scriptTemplate = $(
+            await renderExtensionTemplateAsync("regex", "scriptTemplate"),
+          );
+          for (const { sel, type } of containers) {
+            const container = $(sel);
+            if (!container.length) continue;
+            const scripts = engine.getScriptsByType(type);
+            // 清空容器后完整重建
+            container.empty();
+            scripts.forEach((script, index) => {
+              if (!script.id) {
+                script.id = getContext().uuidv4();
+              }
+              const scriptHtml = scriptTemplate.clone();
+              const saveFunc = async () => {
+                await engine.saveScriptsByType(
+                  engine.getScriptsByType(type),
+                  type,
+                );
+              };
+              scriptHtml.attr("id", script.id);
+              scriptHtml
+                .find(".regex_script_name")
+                .text(script.scriptName)
+                .attr("title", script.scriptName);
+              scriptHtml
+                .find(".disable_regex")
+                .prop("checked", script.disabled ?? false)
+                .on("input", async function () {
+                  script.disabled = !!$(this).prop("checked");
+                  await saveFunc();
+                });
+              scriptHtml.find(".regex-toggle-on").on("click", function () {
+                scriptHtml
+                  .find(".disable_regex")
+                  .prop("checked", true)
+                  .trigger("input");
+              });
+              scriptHtml.find(".regex-toggle-off").on("click", function () {
+                scriptHtml
+                  .find(".disable_regex")
+                  .prop("checked", false)
+                  .trigger("input");
+              });
+              scriptHtml.find(".edit_existing_regex").on("click", function () {
+                // 触发原生编辑器：先点击已有的原生行，或通过 ID 查找
+                $(this).closest(".regex_script").trigger("click");
+              });
+              scriptHtml.find(".export_regex").on("click", function () {
+                const fileName = `regex-${(script.scriptName || "").replace(/[\s.<>:"/\\|?*\x00-\x1F\x7F]/g, "_").toLowerCase()}.json`;
+                const fileData = JSON.stringify(script, null, 4);
+                const blob = new Blob([fileData], {
+                  type: "application/json",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+              });
+              scriptHtml.find(".delete_regex").on("click", async function () {
+                // 删除操作交由原生处理
+                const nativeRow = $("#" + $.escapeSelector(String(script.id)));
+                if (nativeRow.length) {
+                  nativeRow.find(".delete_regex").trigger("click");
+                }
+              });
+              container.append(scriptHtml);
+            });
+          }
+          console.debug(
+            "[CFM] syncNativeRegexState: rebuilt native regex panels due to missing rows",
+          );
+        } catch (rebuildErr) {
+          console.debug(
+            "[CFM] syncNativeRegexState rebuild failed:",
+            rebuildErr,
+          );
         }
       }
     } catch (e) {
@@ -32210,14 +32300,10 @@ jQuery(async () => {
             const nextFavorites = getResFavorites("regex").filter(
               (id) => String(id) !== String(newScript.id),
             );
-            await saveRegexScopeScripts(
-              { type: "global" },
-              nextScripts,
-              {
-                globalGroups: nextGroups,
-                globalFavorites: nextFavorites,
-              },
-            );
+            await saveRegexScopeScripts({ type: "global" }, nextScripts, {
+              globalGroups: nextGroups,
+              globalFavorites: nextFavorites,
+            });
             renderRegexView();
             toastr.info("已取消新建正则");
           },
