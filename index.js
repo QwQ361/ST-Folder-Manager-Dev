@@ -14046,6 +14046,7 @@ jQuery(async () => {
                             <input type="file" id="cfm-import-regex-file" accept=".json" multiple style="display:none;">
                             <button class="cfm-export-btn" id="cfm-export-regex-btn" title="导出正则"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-regex-btn" title="删除正则"><i class="fa-solid fa-trash-can"></i></button>
+                            <button class="cfm-regex-create-btn" id="cfm-regex-create-btn" title="新建全局正则"><i class="fa-solid fa-plus"></i></button>
                             <button class="cfm-regex-sort-btn" id="cfm-regex-sort-btn" title="排序正则脚本"><i class="fa-solid fa-arrow-up-short-wide"></i></button>
                             <button class="cfm-multisel-toggle cfm-multisel-toggle-regex" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
                         </div>
@@ -15873,6 +15874,13 @@ jQuery(async () => {
           : null;
       await importRegexScripts(Array.from(files), targetFolder);
       $(this).val("");
+    });
+
+    popup.find("#cfm-regex-create-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (currentResourceType !== "regex") return;
+      createGlobalRegexFromManager();
     });
 
     // 正则排序按钮 —— 弹窗形式
@@ -30101,6 +30109,94 @@ jQuery(async () => {
     return extension_settings.regex ?? [];
   }
 
+  let cfmRegexCreateMonitorTimer = null;
+
+  function stopRegexCreateMonitor() {
+    if (cfmRegexCreateMonitorTimer) {
+      window.clearInterval(cfmRegexCreateMonitorTimer);
+      cfmRegexCreateMonitorTimer = null;
+    }
+  }
+
+  async function applyRegexGlobalOrder(newOrder, successMessage) {
+    extension_settings.regex = newOrder;
+    getContext().saveSettingsDebounced();
+    await syncNativeRegexState();
+    renderRegexView();
+    if (successMessage) {
+      toastr.success(successMessage);
+    }
+  }
+
+  function moveRegexScriptToIndex(scriptId, targetIndex) {
+    const scripts = [...getRegexGlobalScripts()];
+    const currentIndex = scripts.findIndex((script) => script?.id === scriptId);
+    if (currentIndex === -1) return null;
+    const [script] = scripts.splice(currentIndex, 1);
+    const normalizedIndex = Math.max(0, Math.min(targetIndex, scripts.length));
+    scripts.splice(normalizedIndex, 0, script);
+    return scripts;
+  }
+
+  function monitorNewGlobalRegexScript(beforeIds) {
+    stopRegexCreateMonitor();
+    const monitorState = {
+      startedAt: Date.now(),
+      editorOpened: false,
+    };
+
+    cfmRegexCreateMonitorTimer = window.setInterval(async () => {
+      const editorVisible = $(".regex_script_name:visible").length > 0;
+      if (editorVisible) {
+        monitorState.editorOpened = true;
+      }
+
+      const newScript = getRegexGlobalScripts().find(
+        (script) => script?.id && !beforeIds.has(script.id),
+      );
+      if (newScript?.id) {
+        stopRegexCreateMonitor();
+        renderRegexView();
+        await openRegexSortDialog({
+          insertMode: true,
+          newScriptId: String(newScript.id),
+        });
+        return;
+      }
+
+      const elapsed = Date.now() - monitorState.startedAt;
+      const neverOpened = !monitorState.editorOpened && elapsed > 4000;
+      const timedOut = elapsed > 5 * 60 * 1000;
+      const closedWithoutSave = monitorState.editorOpened && !editorVisible;
+      if (neverOpened || timedOut || closedWithoutSave) {
+        stopRegexCreateMonitor();
+        renderRegexView();
+      }
+    }, 250);
+  }
+
+  function createGlobalRegexFromManager() {
+    ensureResourceSettings();
+    if (cfmRegexCreateMonitorTimer) {
+      toastr.info("正在等待当前新建正则完成");
+      return;
+    }
+
+    const nativeCreateBtn = $("#open_regex_editor");
+    if (!nativeCreateBtn.length) {
+      toastr.warning("未找到原生全局正则编辑器入口，请先确保原生正则功能已完成加载");
+      return;
+    }
+
+    const beforeIds = new Set(
+      getRegexGlobalScripts()
+        .map((script) => script?.id)
+        .filter(Boolean),
+    );
+    monitorNewGlobalRegexScript(beforeIds);
+    nativeCreateBtn.trigger("click");
+  }
+
   // --- 正则辅助函数 ---
   function getRegexPlacementLabel(placement) {
     const labels = {
@@ -30768,108 +30864,37 @@ jQuery(async () => {
   }
 
   // ==================== 正则脚本排序弹窗 ====================
-  async function openRegexSortDialog() {
+  async function openRegexSortDialog(options = {}) {
     ensureResourceSettings();
+    const { insertMode = false, newScriptId = "" } = options || {};
     const globalScripts = getRegexGlobalScripts();
     const folderTree = extension_settings[extensionName].regexFolderTree || {};
     const globalGroups =
       extension_settings[extensionName].regexGlobalGroups || {};
 
     // 加载 jQuery UI Sortable（若尚未加载）
-    if (!$.fn.sortable) {
+    if (!insertMode && !$.fn.sortable) {
       await import("../../../../lib/jquery-ui.min.js").catch(() => {});
     }
 
     // 构建弹窗 DOM
     const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
     const dialog = $(`
-      <div class="cfm-sort-dialog">
+      <div class="cfm-sort-dialog ${insertMode ? "cfm-sort-dialog-insert" : ""}">
         <div class="cfm-sort-dialog-header">
           <span class="cfm-sort-dialog-title"><i class="fa-solid fa-sort"></i> 正则脚本排序</span>
-          <span class="cfm-sort-dialog-desc">拖动 <i class="fa-solid fa-grip-vertical"></i> 手柄调整脚本在 extension_settings.regex 中的顺序（影响执行优先级）</span>
+          <span class="cfm-sort-dialog-desc">${insertMode ? '新正则已创建，点击分隔线中间的 <i class="fa-solid fa-plus"></i> 可插入到对应位置；点击跳过则保持在最后。' : '拖动 <i class="fa-solid fa-grip-vertical"></i> 手柄调整脚本在 extension_settings.regex 中的顺序（影响执行优先级）'}</span>
         </div>
         <div class="cfm-sort-dialog-body">
-          <div class="cfm-sort-dialog-list"></div>
+          <div class="cfm-sort-dialog-list ${insertMode ? "cfm-sort-dialog-list-insert" : ""}"></div>
         </div>
         <div class="cfm-sort-dialog-footer">
-          <button class="cfm-btn cfm-sort-dialog-confirm"><i class="fa-solid fa-check"></i> 确认排序</button>
-          <button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+          ${insertMode ? '<button class="cfm-btn cfm-sort-dialog-skip"><i class="fa-solid fa-forward"></i> 跳过</button>' : '<button class="cfm-btn cfm-sort-dialog-confirm"><i class="fa-solid fa-check"></i> 确认排序</button><button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>'}
         </div>
       </div>
     `);
 
     const sortList = dialog.find(".cfm-sort-dialog-list");
-
-    // 填充脚本列表行
-    for (const s of globalScripts) {
-      const groupId = globalGroups[s.id];
-      const folderName =
-        groupId && folderTree[groupId]
-          ? folderTree[groupId].displayName || groupId
-          : "未归类";
-      const isDisabled = !!s.disabled;
-      const row = $(`
-        <div class="cfm-sort-row ${isDisabled ? "cfm-sort-row-disabled" : ""}" data-script-id="${escapeHtml(s.id || "")}">
-          <span class="cfm-sort-handle" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
-          <button class="cfm-sort-arrow-btn cfm-sort-arrow-up" title="上移"><i class="fa-solid fa-chevron-up"></i></button>
-          <button class="cfm-sort-arrow-btn cfm-sort-arrow-down" title="下移"><i class="fa-solid fa-chevron-down"></i></button>
-          <span class="cfm-sort-row-name">${escapeHtml(s.scriptName || "(未命名)")}</span>
-          <span class="cfm-sort-row-folder">${escapeHtml(folderName)}</span>
-        </div>
-      `);
-      // 上移按钮
-      row.find(".cfm-sort-arrow-up").on("click touchend", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const prev = row.prev(".cfm-sort-row");
-        if (prev.length) {
-          row.insertBefore(prev);
-          updateArrowStates();
-        }
-      });
-      // 下移按钮
-      row.find(".cfm-sort-arrow-down").on("click touchend", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const next = row.next(".cfm-sort-row");
-        if (next.length) {
-          row.insertAfter(next);
-          updateArrowStates();
-        }
-      });
-      sortList.append(row);
-    }
-
-    // 更新所有箭头按钮的禁用状态（首行上箭头 & 末行下箭头置灰不可点）
-    function updateArrowStates() {
-      const rows = sortList.find(".cfm-sort-row");
-      rows.each(function (i) {
-        const isFirst = i === 0;
-        const isLast = i === rows.length - 1;
-        $(this)
-          .find(".cfm-sort-arrow-up")
-          .prop("disabled", isFirst)
-          .toggleClass("cfm-sort-arrow-disabled", isFirst);
-        $(this)
-          .find(".cfm-sort-arrow-down")
-          .prop("disabled", isLast)
-          .toggleClass("cfm-sort-arrow-disabled", isLast);
-      });
-    }
-
-    // 初始化箭头状态
-    updateArrowStates();
-
-    // 启用拖拽
-    sortList.sortable({
-      handle: ".cfm-sort-handle",
-      axis: "y",
-      tolerance: "pointer",
-      placeholder: "cfm-sort-placeholder",
-      forcePlaceholderSize: true,
-      stop: () => updateArrowStates(),
-    });
-    sortList.disableSelection();
 
     // 关闭弹窗辅助
     function closeDialog() {
@@ -30877,35 +30902,151 @@ jQuery(async () => {
       dialog.remove();
     }
 
-    // 确认排序
-    dialog.find(".cfm-sort-dialog-confirm").on("click touchend", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const newOrder = [];
-      sortList.find(".cfm-sort-row[data-script-id]").each(function () {
-        const id = $(this).attr("data-script-id");
-        const script = globalScripts.find((s) => s.id === id);
-        if (script) newOrder.push(script);
-      });
-      // 补充未在列表中出现的脚本（防御性）
-      for (const s of globalScripts) {
-        if (!newOrder.find((n) => n.id === s.id)) newOrder.push(s);
-      }
-      extension_settings.regex = newOrder;
-      getContext().saveSettingsDebounced();
-      // 同步原生正则 UI 面板顺序 & 刷新 CFM 视图
-      await syncNativeRegexState();
-      renderRegexView();
-      toastr.success(`正则脚本顺序已保存（共 ${newOrder.length} 个）`);
-      closeDialog();
-    });
+    function getFolderName(script) {
+      const groupId = globalGroups[script.id];
+      return groupId && folderTree[groupId]
+        ? folderTree[groupId].displayName || groupId
+        : "未归类";
+    }
 
-    // 取消
-    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeDialog();
-    });
+    if (insertMode) {
+      const renderInsertSlot = (targetIndex) => {
+        const slot = $(`
+          <div class="cfm-sort-insert-slot" data-target-index="${targetIndex}">
+            <div class="cfm-sort-insert-line"></div>
+            <button class="cfm-sort-insert-btn" title="插入到此处"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        `);
+        slot.find(".cfm-sort-insert-btn").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const newOrder = moveRegexScriptToIndex(newScriptId, targetIndex);
+          if (!newOrder) {
+            toastr.warning("未找到新建的正则脚本，无法调整位置");
+            closeDialog();
+            return;
+          }
+          await applyRegexGlobalOrder(newOrder, "新正则插入位置已保存");
+          closeDialog();
+        });
+        return slot;
+      };
+
+      sortList.append(renderInsertSlot(0));
+      globalScripts.forEach((script, index) => {
+        const row = $(`
+          <div class="cfm-sort-row cfm-sort-row-static ${script.disabled ? "cfm-sort-row-disabled" : ""} ${script.id === newScriptId ? "cfm-sort-row-new" : ""}" data-script-id="${escapeHtml(script.id || "")}">
+            <span class="cfm-sort-row-static-index">${index + 1}</span>
+            <span class="cfm-sort-row-name">${escapeHtml(script.scriptName || "(未命名)")}</span>
+            <span class="cfm-sort-row-folder">${escapeHtml(getFolderName(script))}</span>
+            ${script.id === newScriptId ? '<span class="cfm-sort-row-badge cfm-sort-badge-new">新建</span>' : ""}
+          </div>
+        `);
+        sortList.append(row).append(renderInsertSlot(index + 1));
+      });
+
+      dialog.find(".cfm-sort-dialog-skip").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renderRegexView();
+        toastr.success("新正则已创建，顺序保持在最后");
+        closeDialog();
+      });
+    } else {
+      // 填充脚本列表行
+      for (const s of globalScripts) {
+        const isDisabled = !!s.disabled;
+        const row = $(`
+          <div class="cfm-sort-row ${isDisabled ? "cfm-sort-row-disabled" : ""}" data-script-id="${escapeHtml(s.id || "")}">
+            <span class="cfm-sort-handle" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
+            <button class="cfm-sort-arrow-btn cfm-sort-arrow-up" title="上移"><i class="fa-solid fa-chevron-up"></i></button>
+            <button class="cfm-sort-arrow-btn cfm-sort-arrow-down" title="下移"><i class="fa-solid fa-chevron-down"></i></button>
+            <span class="cfm-sort-row-name">${escapeHtml(s.scriptName || "(未命名)")}</span>
+            <span class="cfm-sort-row-folder">${escapeHtml(getFolderName(s))}</span>
+          </div>
+        `);
+        // 上移按钮
+        row.find(".cfm-sort-arrow-up").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const prev = row.prev(".cfm-sort-row");
+          if (prev.length) {
+            row.insertBefore(prev);
+            updateArrowStates();
+          }
+        });
+        // 下移按钮
+        row.find(".cfm-sort-arrow-down").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const next = row.next(".cfm-sort-row");
+          if (next.length) {
+            row.insertAfter(next);
+            updateArrowStates();
+          }
+        });
+        sortList.append(row);
+      }
+
+      // 更新所有箭头按钮的禁用状态（首行上箭头 & 末行下箭头置灰不可点）
+      function updateArrowStates() {
+        const rows = sortList.find(".cfm-sort-row");
+        rows.each(function (i) {
+          const isFirst = i === 0;
+          const isLast = i === rows.length - 1;
+          $(this)
+            .find(".cfm-sort-arrow-up")
+            .prop("disabled", isFirst)
+            .toggleClass("cfm-sort-arrow-disabled", isFirst);
+          $(this)
+            .find(".cfm-sort-arrow-down")
+            .prop("disabled", isLast)
+            .toggleClass("cfm-sort-arrow-disabled", isLast);
+        });
+      }
+
+      // 初始化箭头状态
+      updateArrowStates();
+
+      // 启用拖拽
+      sortList.sortable({
+        handle: ".cfm-sort-handle",
+        axis: "y",
+        tolerance: "pointer",
+        placeholder: "cfm-sort-placeholder",
+        forcePlaceholderSize: true,
+        stop: () => updateArrowStates(),
+      });
+      sortList.disableSelection();
+
+      // 确认排序
+      dialog.find(".cfm-sort-dialog-confirm").on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const newOrder = [];
+        sortList.find(".cfm-sort-row[data-script-id]").each(function () {
+          const id = $(this).attr("data-script-id");
+          const script = globalScripts.find((s) => s.id === id);
+          if (script) newOrder.push(script);
+        });
+        // 补充未在列表中出现的脚本（防御性）
+        for (const s of globalScripts) {
+          if (!newOrder.find((n) => n.id === s.id)) newOrder.push(s);
+        }
+        await applyRegexGlobalOrder(
+          newOrder,
+          `正则脚本顺序已保存（共 ${newOrder.length} 个）`,
+        );
+        closeDialog();
+      });
+
+      // 取消
+      dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDialog();
+      });
+    }
 
     // 点击遮罩关闭
     overlay.on("click", (e) => {

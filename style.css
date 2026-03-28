@@ -2467,6 +2467,33 @@
   border: 1px solid rgba(243, 139, 168, 0.4) !important;
 }
 
+/* 正则新建按钮 */
+.cfm-regex-create-btn {
+  background: none !important;
+  border: 1px solid transparent !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  opacity: 0.72;
+  padding: 3px 7px !important;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  transition:
+    opacity 0.15s,
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.12s;
+}
+.cfm-regex-create-btn:hover {
+  opacity: 1 !important;
+  color: #a6e3a1 !important;
+  background-color: rgba(166, 227, 161, 0.12) !important;
+  border-color: rgba(166, 227, 161, 0.32) !important;
+}
+.cfm-regex-create-btn:active {
+  transform: scale(0.96);
+}
+
 /* 正则排序按钮 */
 .cfm-regex-sort-btn {
   background: none !important;
@@ -2559,6 +2586,11 @@
   gap: 3px;
   padding: 4px 12px;
 }
+.cfm-sort-dialog-list.cfm-sort-dialog-list-insert {
+  gap: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
 
 /* 排序行 */
 .cfm-sort-row {
@@ -2570,7 +2602,10 @@
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 5px;
   cursor: default;
-  transition: background 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    box-shadow 0.1s;
   user-select: none;
 }
 .cfm-sort-row:hover {
@@ -2579,6 +2614,14 @@
 .cfm-sort-row.cfm-sort-row-disabled {
   opacity: 0.2;
   filter: grayscale(60%);
+}
+.cfm-sort-row.cfm-sort-row-static {
+  margin: 0;
+}
+.cfm-sort-row.cfm-sort-row-new {
+  border-color: rgba(166, 227, 161, 0.38);
+  background: rgba(166, 227, 161, 0.08);
+  box-shadow: 0 0 0 1px rgba(166, 227, 161, 0.08);
 }
 
 /* 拖拽把手 */
@@ -2643,6 +2686,17 @@
   white-space: nowrap;
 }
 
+/* 插入模式序号 */
+.cfm-sort-row-static-index {
+  width: 22px;
+  min-width: 22px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
 /* 排序行文件夹标签 */
 .cfm-sort-row-folder {
   font-size: 11px;
@@ -2671,6 +2725,68 @@
   color: #f38ba8;
   border-color: rgba(243, 139, 168, 0.35);
 }
+.cfm-sort-badge-new {
+  color: #a6e3a1;
+  border-color: rgba(166, 227, 161, 0.45);
+  background: rgba(166, 227, 161, 0.08);
+}
+
+/* 插入位 */
+.cfm-sort-insert-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  margin: 2px 0;
+}
+.cfm-sort-insert-line {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    90deg,
+    rgba(137, 180, 250, 0.08) 0%,
+    rgba(137, 180, 250, 0.35) 50%,
+    rgba(137, 180, 250, 0.08) 100%
+  );
+}
+.cfm-sort-insert-btn {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(137, 180, 250, 0.35);
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  color: #89b4fa;
+  opacity: 0.82;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 0.12s,
+    opacity 0.12s,
+    border-color 0.12s,
+    background-color 0.12s,
+    color 0.12s,
+    box-shadow 0.12s;
+}
+.cfm-sort-insert-btn:hover {
+  opacity: 1;
+  color: #a6e3a1;
+  border-color: rgba(166, 227, 161, 0.45);
+  background-color: rgba(166, 227, 161, 0.1);
+  box-shadow: 0 0 0 3px rgba(166, 227, 161, 0.08);
+}
+.cfm-sort-insert-btn:active {
+  transform: scale(0.94);
+}
 
 /* 拖拽占位符 */
 .cfm-sort-placeholder {
@@ -2695,6 +2811,13 @@
 }
 .cfm-sort-dialog-confirm:hover {
   background-color: rgba(166, 227, 161, 0.12) !important;
+}
+.cfm-sort-dialog-skip {
+  color: #f9e2af !important;
+  border-color: rgba(249, 226, 175, 0.35) !important;
+}
+.cfm-sort-dialog-skip:hover {
+  background-color: rgba(249, 226, 175, 0.12) !important;
 }
 .cfm-sort-dialog-cancel {
   color: #f38ba8 !important;
