@@ -7652,11 +7652,15 @@ jQuery(async () => {
 
         const autoAppliedState = getAutoApplyPresetIndices();
         const autoDetail = autoAppliedState.details[idx] || {};
+        const currentActiveSet = await getActiveWorldInfoSet();
+        const isActuallyApplied = preset.books.every((b) => currentActiveSet.has(b));
         if (
           autoAppliedState.indices.includes(idx) &&
-          (autoDetail.charMatch || autoDetail.presetMatch)
+          isActuallyApplied &&
+          (autoDetail.charMatch || autoDetail.presetMatch || autoDetail.chatMatch)
         ) {
           const reasons = [];
+          if (autoDetail.chatMatch) reasons.push("当前聊天");
           if (autoDetail.charMatch) reasons.push("当前角色");
           if (autoDetail.presetMatch) reasons.push("当前预设");
           toastr.info(
@@ -27303,11 +27307,15 @@ jQuery(async () => {
         }
         const autoAppliedState = getQrAutoApplyPresetIndices();
         const autoDetail = autoAppliedState.details[idx] || {};
+        const currentActiveSet = getActiveQrSets();
+        const isActuallyApplied = preset.sets.every((s) => currentActiveSet.has(s));
         if (
           autoAppliedState.indices.includes(idx) &&
-          (autoDetail.charMatch || autoDetail.presetMatch)
+          isActuallyApplied &&
+          (autoDetail.charMatch || autoDetail.presetMatch || autoDetail.chatMatch)
         ) {
           const reasons = [];
+          if (autoDetail.chatMatch) reasons.push("当前聊天");
           if (autoDetail.charMatch) reasons.push("当前角色");
           if (autoDetail.presetMatch) reasons.push("当前预设");
           toastr.info(
