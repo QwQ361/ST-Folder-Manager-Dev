@@ -7319,7 +7319,7 @@ jQuery(async () => {
   /**
    * 自动应用/关闭世界书分组（角色或预设切换时调用）
    */
-  async function autoApplyWiPresets() {
+  async function autoApplyWiPresets(silent = false) {
     try {
       const presets = getWiActivePresets();
       const charBound = await getCharBoundWorldBooks();
@@ -7436,7 +7436,7 @@ jQuery(async () => {
         }
       }
 
-      if (msgParts.length > 0) {
+      if (!silent && msgParts.length > 0) {
         toastr.info(msgParts.join("<br>"), "世界书分组", {
           timeOut: 4000,
           escapeHtml: false,
@@ -17993,6 +17993,9 @@ jQuery(async () => {
       return;
     }
     resetPanelExpandedStates();
+    autoApplyWiPresets(true).catch((e) =>
+      console.error("[CFM] 关闭插件时静默恢复世界书分组失败", e),
+    );
     $("#cfm-overlay").remove();
     clearNewlyImportedHighlight();
     $("#cfm-topbar-button .drawer-icon")
