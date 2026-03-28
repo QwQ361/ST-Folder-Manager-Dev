@@ -11217,7 +11217,7 @@ jQuery(async () => {
         <div class="cfm-regex-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
           <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
-          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> +新增</button>
+          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> 新增</button>
           <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
           <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
         </div>
@@ -11681,7 +11681,7 @@ jQuery(async () => {
         <div class="cfm-regex-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
           <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
-          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> +新增</button>
+          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> 新增</button>
           <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
           <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
         </div>
