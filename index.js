@@ -12251,6 +12251,8 @@ jQuery(async () => {
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-range ${cfmRegexBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
               <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
             </button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-activate" title="批量激活"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-deactivate" title="批量取消激活"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
             <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-transfer" title="互通正则"><i class="fa-solid fa-right-left"></i> 互通</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
@@ -12276,6 +12278,30 @@ jQuery(async () => {
           if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
           rerenderCurrentView();
         });
+        batchToolbar
+          .find(".cfm-regex-batch-activate")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            const changed = await applyOwnedRegexBatchActivation({
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+              activate: true,
+              save: () => saveCharRegexScripts(avatar, scripts),
+            });
+            if (changed) rerenderCurrentView();
+          });
+        batchToolbar
+          .find(".cfm-regex-batch-deactivate")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            const changed = await applyOwnedRegexBatchActivation({
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+              activate: false,
+              save: () => saveCharRegexScripts(avatar, scripts),
+            });
+            if (changed) rerenderCurrentView();
+          });
         // 互通按钮
         batchToolbar
           .find(".cfm-regex-batch-transfer")
@@ -12564,6 +12590,193 @@ jQuery(async () => {
     cfmRegexBatchLastClicked = scriptId;
   }
 
+  async function applyOwnedRegexBatchActivation({
+    scripts,
+    selectedIds,
+    activate,
+    save,
+    successLabel = "正则脚本",
+  }) {
+    const normalizedIds = Array.from(
+      new Set(
+        (Array.isArray(selectedIds) ? selectedIds : [])
+          .map((id) => String(id || ""))
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length) {
+      toastr.warning("请先选择要操作的正则脚本");
+      return false;
+    }
+    if (!Array.isArray(scripts) || typeof save !== "function") {
+      toastr.error("批量激活正则脚本失败：缺少保存上下文");
+      return false;
+    }
+
+    const touched = [];
+    let changedCount = 0;
+    for (const scriptId of normalizedIds) {
+      const script = scripts.find((item) => item?.id === scriptId);
+      if (!script) continue;
+      const oldDisabled = !!script.disabled;
+      const nextDisabled = !activate;
+      if (oldDisabled === nextDisabled) continue;
+      touched.push([script, oldDisabled]);
+      script.disabled = nextDisabled;
+      changedCount++;
+    }
+
+    if (!changedCount) {
+      toastr.warning("所选正则脚本状态未发生变化");
+      return false;
+    }
+
+    try {
+      await save();
+      toastr.success(
+        `已${activate ? "激活" : "取消激活"} ${changedCount} 个${successLabel}`,
+      );
+      return true;
+    } catch (error) {
+      for (const [script, oldDisabled] of touched) {
+        script.disabled = oldDisabled;
+      }
+      console.error("[CFM] 批量切换正则脚本激活状态失败:", error);
+      toastr.error(`保存失败: ${error.message || error}`);
+      return false;
+    }
+  }
+
+  async function applyWorldInfoMultiActivation(bookNames, activate) {
+    const normalizedNames = Array.from(
+      new Set(
+        (Array.isArray(bookNames) ? bookNames : [])
+          .map((name) => String(name || ""))
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedNames.length) {
+      toastr.warning("请先选择要操作的世界书");
+      return false;
+    }
+
+    const charBound = await getCharBoundWorldBooks();
+    const activeSet = await getActiveWorldInfoSet();
+    let changedCount = 0;
+    let skippedCount = 0;
+
+    for (const name of normalizedNames) {
+      if (charBound.has(name)) {
+        skippedCount++;
+        continue;
+      }
+      if (activeSet.has(name) === activate) continue;
+      await toggleWorldInfoActivation(name, activate);
+      if (activate) activeSet.add(name);
+      else activeSet.delete(name);
+      syncWiPresetTrackingForManualToggle(name, activate);
+      changedCount++;
+    }
+
+    if (changedCount > 0) {
+      toastr.success(
+        `已${activate ? "激活" : "取消激活"} ${changedCount} 个世界书`,
+      );
+    } else {
+      toastr.warning(
+        `所选世界书状态未发生变化${skippedCount ? "（角色关联项已自动跳过）" : ""}`,
+      );
+    }
+    if (skippedCount > 0) {
+      toastr.info(`已跳过 ${skippedCount} 个角色关联世界书`);
+    }
+    return changedCount > 0;
+  }
+
+  async function applyQrMultiActivation(setNames, activate) {
+    const normalizedNames = Array.from(
+      new Set(
+        (Array.isArray(setNames) ? setNames : [])
+          .map((name) => String(name || ""))
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedNames.length) {
+      toastr.warning("请先选择要操作的快速回复集");
+      return false;
+    }
+
+    const activeSet = getActiveQrSets();
+    let changedCount = 0;
+    for (const name of normalizedNames) {
+      if (activeSet.has(name) === activate) continue;
+      await toggleQrSetActivation(name, activate);
+      if (activate) activeSet.add(name);
+      else activeSet.delete(name);
+      syncQrPresetTrackingForManualToggle(name, activate);
+      changedCount++;
+    }
+
+    if (!changedCount) {
+      toastr.warning("所选快速回复集状态未发生变化");
+      return false;
+    }
+
+    toastr.success(
+      `已${activate ? "激活" : "取消激活"} ${changedCount} 个快速回复集`,
+    );
+    return true;
+  }
+
+  async function applyGlobalRegexMultiActivation(scriptIds, activate) {
+    const normalizedIds = Array.from(
+      new Set(
+        (Array.isArray(scriptIds) ? scriptIds : [])
+          .map((id) => String(id || ""))
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length) {
+      toastr.warning("请先选择要操作的正则脚本");
+      return false;
+    }
+
+    const globalScripts = extension_settings.regex ?? [];
+    const touched = [];
+    let changedCount = 0;
+    for (const scriptId of normalizedIds) {
+      const script = globalScripts.find((item) => item?.id === scriptId);
+      if (!script) continue;
+      const oldDisabled = !!script.disabled;
+      const nextDisabled = !activate;
+      if (oldDisabled === nextDisabled) continue;
+      touched.push([script, oldDisabled]);
+      toggleRegexScriptActivation(scriptId, activate);
+      changedCount++;
+    }
+
+    if (!changedCount) {
+      toastr.warning("所选正则脚本状态未发生变化");
+      return false;
+    }
+
+    try {
+      getContext().saveSettingsDebounced();
+      await syncNativeRegexState();
+      toastr.success(
+        `已${activate ? "激活" : "取消激活"} ${changedCount} 个正则脚本`,
+      );
+      return true;
+    } catch (error) {
+      for (const [script, oldDisabled] of touched) {
+        script.disabled = oldDisabled;
+      }
+      console.error("[CFM] 批量切换全局正则激活状态失败:", error);
+      toastr.error(`保存失败: ${error.message || error}`);
+      return false;
+    }
+  }
+
   /**
    * 保存预设正则脚本
    * @param {Array} scripts - 正则脚本列表
@@ -12669,6 +12882,8 @@ jQuery(async () => {
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-range ${cfmRegexBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
               <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
             </button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-activate" title="批量激活"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-deactivate" title="批量取消激活"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
             <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-transfer" title="互通正则"><i class="fa-solid fa-right-left"></i> 互通</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
@@ -12694,6 +12909,30 @@ jQuery(async () => {
           if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
           rerenderCurrentView();
         });
+        batchToolbar
+          .find(".cfm-regex-batch-activate")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            const changed = await applyOwnedRegexBatchActivation({
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+              activate: true,
+              save: () => savePresetRegexScripts(scripts),
+            });
+            if (changed) rerenderCurrentView();
+          });
+        batchToolbar
+          .find(".cfm-regex-batch-deactivate")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            const changed = await applyOwnedRegexBatchActivation({
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+              activate: false,
+              save: () => savePresetRegexScripts(scripts),
+            });
+            if (changed) rerenderCurrentView();
+          });
         // 互通按钮
         batchToolbar
           .find(".cfm-regex-batch-transfer")
@@ -18429,6 +18668,8 @@ jQuery(async () => {
             <div class="cfm-multisel-toolbar">
               <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
               <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+              <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活世界书"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+              <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活世界书"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
               <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
             </div>
           `);
@@ -18445,6 +18686,28 @@ jQuery(async () => {
             if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
             executeWorldInfoSearch();
           });
+          toolbar
+            .find(".cfm-multisel-activate")
+            .on("click touchend", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const changed = await applyWorldInfoMultiActivation(
+                Array.from(cfmMultiSelected),
+                true,
+              );
+              if (changed) executeWorldInfoSearch();
+            });
+          toolbar
+            .find(".cfm-multisel-deactivate")
+            .on("click touchend", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const changed = await applyWorldInfoMultiActivation(
+                Array.from(cfmMultiSelected),
+                false,
+              );
+              if (changed) executeWorldInfoSearch();
+            });
           rightList.prepend(toolbar);
         }
       });
@@ -26428,6 +26691,8 @@ jQuery(async () => {
           <div class="cfm-multisel-toolbar">
             <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
             <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活世界书"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活世界书"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
             <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
           </div>
         `);
@@ -26444,6 +26709,28 @@ jQuery(async () => {
           if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
           renderWorldInfoView();
         });
+        toolbar
+          .find(".cfm-multisel-activate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyWorldInfoMultiActivation(
+              Array.from(cfmMultiSelected),
+              true,
+            );
+            if (changed) renderWorldInfoView();
+          });
+        toolbar
+          .find(".cfm-multisel-deactivate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyWorldInfoMultiActivation(
+              Array.from(cfmMultiSelected),
+              false,
+            );
+            if (changed) renderWorldInfoView();
+          });
         rightList.prepend(toolbar);
       }
     }
@@ -26849,12 +27136,17 @@ jQuery(async () => {
     for (const n of matched) {
       const fav = isResFavorite("quickreply", n);
       const qrIsActive = qrActiveSet.has(n);
+      const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
+      const msCheckHtml = cfmMultiSelectMode
+        ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
+        : "";
       const toggleHtml = `<div class="cfm-wi-toggle ${qrIsActive ? "cfm-wi-toggle-on" : ""}" title="${qrIsActive ? "点击取消激活" : "点击激活"}" data-qr-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${qrIsActive ? "on" : "off"}"></i></div>`;
       const grpLabel = groups[n]
         ? `<span class="cfm-theme-note">${escapeHtml(getResFolderDisplayName("quickreply", groups[n]))}</span>`
         : "";
       const row = $(`
-        <div class="cfm-row cfm-row-char cfm-search-result" data-res-id="${escapeHtml(n)}">
+        <div class="cfm-row cfm-row-char cfm-search-result ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
+          ${msCheckHtml}
           ${toggleHtml}
           <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
           <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${grpLabel}</div>
@@ -26885,7 +27177,17 @@ jQuery(async () => {
         executeQrSearch();
       });
       row.on("click", (e) => {
-        if ($(e.target).closest(".cfm-row-star, .cfm-wi-toggle").length) return;
+        if (
+          $(e.target).closest(
+            ".cfm-row-star, .cfm-wi-toggle, .cfm-multisel-checkbox",
+          ).length
+        )
+          return;
+        if (cfmMultiSelectMode) {
+          toggleMultiSelectItem(n, e.shiftKey);
+          executeQrSearch();
+          return;
+        }
         // 定位到该快速回复集所在文件夹
         const folder = groups[n];
         if (folder) {
@@ -26900,6 +27202,55 @@ jQuery(async () => {
         renderQRView();
       });
       rightList.append(row);
+    }
+
+    if (cfmMultiSelectMode) {
+      const visible = getVisibleResourceIds();
+      const allSel =
+        visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
+      const toolbar = $(`
+        <div class="cfm-multisel-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+          <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+          <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活快速回复集"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+          <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活快速回复集"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
+          <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+        </div>
+      `);
+      toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectAllVisible();
+        executeQrSearch();
+      });
+      toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+        if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+        executeQrSearch();
+      });
+      toolbar.find(".cfm-multisel-activate").on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const changed = await applyQrMultiActivation(
+          Array.from(cfmMultiSelected),
+          true,
+        );
+        if (changed) executeQrSearch();
+      });
+      toolbar
+        .find(".cfm-multisel-deactivate")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const changed = await applyQrMultiActivation(
+            Array.from(cfmMultiSelected),
+            false,
+          );
+          if (changed) executeQrSearch();
+        });
+      rightList.prepend(toolbar);
     }
   }
 
@@ -27701,6 +28052,8 @@ jQuery(async () => {
           <div class="cfm-multisel-toolbar">
             <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
             <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活快速回复集"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活快速回复集"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
             <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
           </div>
         `);
@@ -27717,6 +28070,28 @@ jQuery(async () => {
           if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
           renderQRView();
         });
+        toolbar
+          .find(".cfm-multisel-activate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyQrMultiActivation(
+              Array.from(cfmMultiSelected),
+              true,
+            );
+            if (changed) renderQRView();
+          });
+        toolbar
+          .find(".cfm-multisel-deactivate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyQrMultiActivation(
+              Array.from(cfmMultiSelected),
+              false,
+            );
+            if (changed) renderQRView();
+          });
         rightList.prepend(toolbar);
       }
     }
@@ -33257,6 +33632,57 @@ jQuery(async () => {
         });
         rightList.append(scriptRow);
       }
+
+      if (cfmMultiSelectMode) {
+        const visible = getVisibleResourceIds();
+        const allSel =
+          visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
+        const toolbar = $(`
+          <div class="cfm-multisel-toolbar">
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活正则脚本"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活正则脚本"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
+            <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
+          </div>
+        `);
+        toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectAllVisible();
+          executeRegexSearch();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
+          executeRegexSearch();
+        });
+        toolbar
+          .find(".cfm-multisel-activate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyGlobalRegexMultiActivation(
+              Array.from(cfmMultiSelected),
+              true,
+            );
+            if (changed) executeRegexSearch();
+          });
+        toolbar
+          .find(".cfm-multisel-deactivate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyGlobalRegexMultiActivation(
+              Array.from(cfmMultiSelected),
+              false,
+            );
+            if (changed) executeRegexSearch();
+          });
+        rightList.prepend(toolbar);
+      }
     }
   }
 
@@ -33787,6 +34213,8 @@ jQuery(async () => {
           <div class="cfm-multisel-toolbar">
             <button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
             <button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-activate" title="批量激活正则脚本"><i class="fa-solid fa-toggle-on"></i> 激活</button>
+            <button class="cfm-btn cfm-btn-sm cfm-multisel-deactivate" title="批量取消激活正则脚本"><i class="fa-solid fa-toggle-off"></i> 取消激活</button>
             <span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span>
           </div>
         `);
@@ -33803,6 +34231,28 @@ jQuery(async () => {
           if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
           renderRegexView();
         });
+        toolbar
+          .find(".cfm-multisel-activate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyGlobalRegexMultiActivation(
+              Array.from(cfmMultiSelected),
+              true,
+            );
+            if (changed) renderRegexView();
+          });
+        toolbar
+          .find(".cfm-multisel-deactivate")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const changed = await applyGlobalRegexMultiActivation(
+              Array.from(cfmMultiSelected),
+              false,
+            );
+            if (changed) renderRegexView();
+          });
         rightList.prepend(toolbar);
       }
     }
