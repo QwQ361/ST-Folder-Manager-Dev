@@ -30701,8 +30701,8 @@ jQuery(async () => {
         getDisplayName: (id) => folderTree[id]?.displayName || id,
         getItemCount: (folderId) => {
           if (folderId === "__ungrouped__") {
-            return scripts.filter((script) => {
-              const grp = folderMap[script.id];
+            return globalScripts.filter((script) => {
+              const grp = globalGroups[script.id];
               return !grp || !folderTree[grp];
             }).length;
           }
@@ -30715,8 +30715,8 @@ jQuery(async () => {
             for (const c of children) collectChildren(c);
           }
           collectChildren(folderId);
-          return scripts.filter((script) =>
-            allowedFolders.has(folderMap[script.id]),
+          return globalScripts.filter((script) =>
+            allowedFolders.has(globalGroups[script.id]),
           ).length;
         },
         ungroupedLabel: "未归类正则脚本",
