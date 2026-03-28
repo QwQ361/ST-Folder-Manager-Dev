@@ -11217,6 +11217,7 @@ jQuery(async () => {
         <div class="cfm-regex-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
           <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> +新增</button>
           <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
           <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
         </div>
@@ -11251,6 +11252,12 @@ jQuery(async () => {
           console.error("[CFM] 正则导入失败:", err);
           toastr.error("导入失败: " + err.message);
         }
+      });
+      // 新增按钮
+      regexToolbar.find(".cfm-regex-create-btn").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        createCharScopedRegexFromManager(avatar, charName);
       });
       // 批量操作切换
       regexToolbar.find(".cfm-regex-batch-toggle").on("click", (e) => {
@@ -11674,6 +11681,7 @@ jQuery(async () => {
         <div class="cfm-regex-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
           <input type="file" class="cfm-regex-import-file" multiple accept=".json" style="display:none;">
+          <button class="cfm-btn cfm-btn-sm cfm-regex-create-btn" title="新增正则脚本"><i class="fa-solid fa-plus"></i> +新增</button>
           <button class="cfm-btn cfm-btn-sm cfm-regex-batch-toggle ${cfmRegexBatchMode ? "cfm-regex-batch-active" : ""}" title="批量操作模式"><i class="fa-solid fa-list-check"></i> ${cfmRegexBatchMode ? "退出批量" : "批量操作"}</button>
           <span class="cfm-regex-count">${scripts ? scripts.length : 0} 个脚本</span>
         </div>
@@ -11708,6 +11716,12 @@ jQuery(async () => {
           console.error("[CFM] 正则导入失败:", err);
           toastr.error("导入失败: " + err.message);
         }
+      });
+      // 新增按钮
+      regexToolbar.find(".cfm-regex-create-btn").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        createPresetRegexFromManager(presetName);
       });
       // 批量操作切换
       regexToolbar.find(".cfm-regex-batch-toggle").on("click", (e) => {
@@ -18888,13 +18902,14 @@ jQuery(async () => {
     const chatToggleHtml = showChatToggle
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
-    // 正则模式下的小三角按钮（对所有有正则脚本的角色显示）
+    // 正则模式下的小三角按钮（有正则脚本的角色，或当前目标空角色，也显示）
     const isRegexTarget =
       cfmCharRegexMode && cfmCharRegexTargetAvatar === char.avatar;
     let showRegexToggle = false;
     if (cfmCharRegexMode) {
       const scripts = char?.data?.extensions?.regex_scripts;
-      showRegexToggle = Array.isArray(scripts) && scripts.length > 0;
+      showRegexToggle =
+        (Array.isArray(scripts) && scripts.length > 0) || isRegexTarget;
     }
     const isRegexExpanded =
       showRegexToggle && cfmCharRegexExpandedAvatars.has(char.avatar);
@@ -19096,18 +19111,16 @@ jQuery(async () => {
         renderChatSubList(row, char.avatar, cachedChats);
       }
     }
-    // 正则模式下，如果该角色已展开且有正则脚本，立即渲染正则子列表
+    // 正则模式下，如果该角色已展开，则立即渲染正则子列表（目标角色允许为空）
     if (showRegexToggle && cfmCharRegexExpandedAvatars.has(char.avatar)) {
       const scripts = char?.data?.extensions?.regex_scripts || [];
-      if (scripts.length > 0) {
-        renderCharRegexSubList(
-          row,
-          char.avatar,
-          scripts,
-          char.name,
-          isRegexTarget,
-        );
-      }
+      renderCharRegexSubList(
+        row,
+        char.avatar,
+        scripts,
+        char.name,
+        isRegexTarget,
+      );
     }
     if (cfmCharDetailExpandedAvatars.has(char.avatar)) {
       renderCharacterDetailSubList(row, char);
@@ -22583,7 +22596,7 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
-        // 正则模式下的小三角按钮（对所有有正则脚本的预设显示）
+        // 正则模式下的小三角按钮（有正则脚本的预设，或当前目标空预设，也显示）
         const isPresetRegexTarget =
           cfmPresetRegexMode && cfmPresetRegexTargetName === p.name;
         let showPresetRegexToggle = false;
@@ -22601,7 +22614,9 @@ jQuery(async () => {
             /* skip */
           }
           showPresetRegexToggle =
-            Array.isArray(presetRegexScripts) && presetRegexScripts.length > 0;
+            (Array.isArray(presetRegexScripts) &&
+              presetRegexScripts.length > 0) ||
+            isPresetRegexTarget;
         }
         const isPresetRegexExpanded =
           showPresetRegexToggle && cfmPresetRegexExpandedNames.has(p.name);
@@ -22765,12 +22780,10 @@ jQuery(async () => {
           return getMultiDragData(singleData);
         });
         rightList.append(row);
-        // 正则模式下，如果该预设已展开且有正则脚本，立即渲染正则子列表
+        // 正则模式下，如果该预设已展开，则立即渲染正则子列表（目标预设允许为空）
         if (showPresetRegexToggle && cfmPresetRegexExpandedNames.has(p.name)) {
           const scripts = presetRegexScripts || [];
-          if (scripts.length > 0) {
-            renderPresetRegexSubList(row, p.name, scripts, isPresetRegexTarget);
-          }
+          renderPresetRegexSubList(row, p.name, scripts, isPresetRegexTarget);
         }
         if (cfmPresetDetailExpandedNames.has(p.name)) {
           renderPresetDetailSubList(row, p);
@@ -30130,17 +30143,35 @@ jQuery(async () => {
     }
   }
 
-  function moveRegexScriptToIndex(scriptId, targetIndex) {
-    const scripts = [...getRegexGlobalScripts()];
-    const currentIndex = scripts.findIndex((script) => script?.id === scriptId);
+  function moveRegexScriptInArray(scripts, scriptId, targetIndex) {
+    const currentScripts = Array.isArray(scripts) ? [...scripts] : [];
+    const currentIndex = currentScripts.findIndex(
+      (script) => script?.id === scriptId,
+    );
     if (currentIndex === -1) return null;
-    const [script] = scripts.splice(currentIndex, 1);
-    const normalizedIndex = Math.max(0, Math.min(targetIndex, scripts.length));
-    scripts.splice(normalizedIndex, 0, script);
-    return scripts;
+    const [script] = currentScripts.splice(currentIndex, 1);
+    const normalizedIndex = Math.max(
+      0,
+      Math.min(targetIndex, currentScripts.length),
+    );
+    currentScripts.splice(normalizedIndex, 0, script);
+    return currentScripts;
   }
 
-  function monitorNewGlobalRegexScript(beforeIds) {
+  function moveRegexScriptToIndex(scriptId, targetIndex) {
+    return moveRegexScriptInArray(
+      getRegexGlobalScripts(),
+      scriptId,
+      targetIndex,
+    );
+  }
+
+  function monitorNewOwnedRegexScript({
+    beforeIds,
+    getScripts,
+    onCreated,
+    onAbort,
+  }) {
     stopRegexCreateMonitor();
     const monitorState = {
       startedAt: Date.now(),
@@ -30148,33 +30179,229 @@ jQuery(async () => {
     };
 
     cfmRegexCreateMonitorTimer = window.setInterval(async () => {
-      const editorVisible = $(".regex_script_name:visible").length > 0;
-      if (editorVisible) {
-        monitorState.editorOpened = true;
-      }
+      try {
+        const editorVisible = $(".regex_script_name:visible").length > 0;
+        if (editorVisible) {
+          monitorState.editorOpened = true;
+        }
 
-      const newScript = getRegexGlobalScripts().find(
-        (script) => script?.id && !beforeIds.has(script.id),
-      );
-      if (newScript?.id) {
+        const latestScripts = getScripts?.();
+        const currentScripts = Array.isArray(latestScripts)
+          ? latestScripts
+          : [];
+        const newScript = currentScripts.find(
+          (script) => script?.id && !beforeIds.has(script.id),
+        );
+        if (newScript?.id) {
+          stopRegexCreateMonitor();
+          if (typeof onCreated === "function") {
+            await onCreated(newScript, currentScripts);
+          }
+          return;
+        }
+
+        const elapsed = Date.now() - monitorState.startedAt;
+        const neverOpened = !monitorState.editorOpened && elapsed > 4000;
+        const timedOut = elapsed > 5 * 60 * 1000;
+        const closedWithoutSave = monitorState.editorOpened && !editorVisible;
+        if (neverOpened || timedOut || closedWithoutSave) {
+          stopRegexCreateMonitor();
+          if (typeof onAbort === "function") {
+            onAbort();
+          }
+        }
+      } catch (err) {
+        console.error("[CFM] 监听新增正则失败:", err);
         stopRegexCreateMonitor();
+        if (typeof onAbort === "function") {
+          onAbort(err);
+        }
+      }
+    }, 250);
+  }
+
+  function monitorNewGlobalRegexScript(beforeIds) {
+    monitorNewOwnedRegexScript({
+      beforeIds,
+      getScripts: () => getRegexGlobalScripts(),
+      onCreated: async (newScript) => {
         renderRegexView();
         await openRegexSortDialog({
           insertMode: true,
           newScriptId: String(newScript.id),
         });
+      },
+      onAbort: () => {
+        renderRegexView();
+      },
+    });
+  }
+
+  function getPresetRegexScriptsByName(presetName) {
+    try {
+      if (!presetName) return [];
+      const pm = getContext().getPresetManager();
+      if (!pm) return [];
+      const scripts = pm.readPresetExtensionField({
+        name: presetName,
+        path: "regex_scripts",
+      });
+      return Array.isArray(scripts) ? scripts : [];
+    } catch (err) {
+      console.debug("[CFM] getPresetRegexScriptsByName:", err);
+      return [];
+    }
+  }
+
+  async function openOwnedRegexInsertDialog(options = {}) {
+    const { scripts = [], newScriptId = "", onApply, onSkip } = options || {};
+    const ownedScripts = Array.isArray(scripts) ? scripts : [];
+    const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
+    const dialog = $(`
+      <div class="cfm-sort-dialog cfm-sort-dialog-insert">
+        <div class="cfm-sort-dialog-header">
+          <span class="cfm-sort-dialog-title"><i class="fa-solid fa-sort"></i> 正则脚本排序</span>
+          <span class="cfm-sort-dialog-desc">新正则已创建，请先点击分隔线中间的 <i class="fa-solid fa-plus"></i> 选择插入位置，再点击确认按钮提交；点击跳过则保持在最后。</span>
+        </div>
+        <div class="cfm-sort-dialog-body">
+          <div class="cfm-sort-dialog-list cfm-sort-dialog-list-insert"></div>
+        </div>
+        <div class="cfm-sort-dialog-footer">
+          <button class="cfm-btn cfm-sort-dialog-confirm cfm-sort-dialog-insert-confirm" disabled><i class="fa-solid fa-check"></i> 确认插入</button>
+          <button class="cfm-btn cfm-sort-dialog-skip"><i class="fa-solid fa-forward"></i> 跳过</button>
+          <button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+        </div>
+      </div>
+    `);
+
+    const sortList = dialog.find(".cfm-sort-dialog-list");
+    const confirmBtn = dialog.find(".cfm-sort-dialog-insert-confirm");
+    let selectedTargetIndex = null;
+
+    function closeDialog() {
+      overlay.remove();
+      dialog.remove();
+    }
+
+    function updateSelectedInsertSlot() {
+      sortList.find(".cfm-sort-insert-slot").each(function () {
+        const slot = $(this);
+        const isSelected =
+          Number(slot.attr("data-target-index")) === selectedTargetIndex;
+        const lineEl = slot.find(".cfm-sort-insert-line");
+        const btnEl = slot.find(".cfm-sort-insert-btn");
+        btnEl.attr(
+          "title",
+          isSelected ? "已选中，点击确认插入" : "选择插入到此处",
+        );
+        btnEl.attr("aria-pressed", isSelected ? "true" : "false");
+        btnEl.css({
+          color: isSelected ? "#a6e3a1" : "#89b4fa",
+          borderColor: isSelected
+            ? "rgba(166, 227, 161, 0.5)"
+            : "rgba(137, 180, 250, 0.35)",
+          backgroundColor: isSelected
+            ? "rgba(166, 227, 161, 0.14)"
+            : "var(--SmartThemeBlurTintColor, #1e1e2e)",
+          boxShadow: isSelected
+            ? "0 0 0 3px rgba(166, 227, 161, 0.08)"
+            : "none",
+        });
+        lineEl.css({
+          background: isSelected
+            ? "linear-gradient(90deg, rgba(166, 227, 161, 0.12) 0%, rgba(166, 227, 161, 0.55) 50%, rgba(166, 227, 161, 0.12) 100%)"
+            : "linear-gradient(90deg, rgba(137, 180, 250, 0.08) 0%, rgba(137, 180, 250, 0.35) 50%, rgba(137, 180, 250, 0.08) 100%)",
+        });
+      });
+      confirmBtn.prop("disabled", selectedTargetIndex === null);
+    }
+
+    const renderInsertSlot = (targetIndex) => {
+      const slot = $(`
+        <div class="cfm-sort-insert-slot" data-target-index="${targetIndex}">
+          <div class="cfm-sort-insert-line"></div>
+          <button class="cfm-sort-insert-btn" title="选择插入到此处"><i class="fa-solid fa-plus"></i></button>
+        </div>
+      `);
+      slot.find(".cfm-sort-insert-btn").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedTargetIndex = targetIndex;
+        updateSelectedInsertSlot();
+      });
+      return slot;
+    };
+
+    sortList.append(renderInsertSlot(0));
+    ownedScripts.forEach((script, index) => {
+      const placementLabel = getRegexPlacementLabel(script?.placement);
+      const row = $(`
+        <div class="cfm-sort-row cfm-sort-row-static ${script?.disabled ? "cfm-sort-row-disabled" : ""} ${script?.id === newScriptId ? "cfm-sort-row-new" : ""}" data-script-id="${escapeHtml(script?.id || "")}">
+          <span class="cfm-sort-row-static-index">${index + 1}</span>
+          <span class="cfm-sort-row-name">${escapeHtml(script?.scriptName || "(未命名)")}</span>
+          <span class="cfm-sort-row-folder">${escapeHtml(placementLabel || "当前作用域")}</span>
+          ${script?.id === newScriptId ? '<span class="cfm-sort-row-badge cfm-sort-badge-new">新建</span>' : ""}
+        </div>
+      `);
+      sortList.append(row);
+      sortList.append(renderInsertSlot(index + 1));
+    });
+
+    updateSelectedInsertSlot();
+
+    confirmBtn.on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (selectedTargetIndex === null) {
+        toastr.warning("请先选择一个插入位置");
         return;
       }
-
-      const elapsed = Date.now() - monitorState.startedAt;
-      const neverOpened = !monitorState.editorOpened && elapsed > 4000;
-      const timedOut = elapsed > 5 * 60 * 1000;
-      const closedWithoutSave = monitorState.editorOpened && !editorVisible;
-      if (neverOpened || timedOut || closedWithoutSave) {
-        stopRegexCreateMonitor();
-        renderRegexView();
+      const newOrder = moveRegexScriptInArray(
+        ownedScripts,
+        newScriptId,
+        selectedTargetIndex,
+      );
+      if (!newOrder) {
+        toastr.warning("未找到新建的正则脚本，无法调整位置");
+        closeDialog();
+        return;
       }
-    }, 250);
+      try {
+        if (typeof onApply === "function") {
+          await onApply(newOrder);
+        }
+        closeDialog();
+      } catch (err) {
+        console.error("[CFM] 保存局部正则插入位置失败:", err);
+        toastr.error("保存插入位置失败: " + (err?.message || err));
+      }
+    });
+
+    dialog.find(".cfm-sort-dialog-skip").on("click touchend", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        if (typeof onSkip === "function") {
+          await onSkip();
+        }
+        closeDialog();
+      } catch (err) {
+        console.error("[CFM] 跳过局部正则插入排序失败:", err);
+        toastr.error("跳过失败: " + (err?.message || err));
+      }
+    });
+
+    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDialog();
+    });
+
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) closeDialog();
+    });
+
+    $("#cfm-popup").append(overlay).append(dialog);
   }
 
   function createGlobalRegexFromManager() {
@@ -30198,6 +30425,112 @@ jQuery(async () => {
         .filter(Boolean),
     );
     monitorNewGlobalRegexScript(beforeIds);
+    nativeCreateBtn.trigger("click");
+  }
+
+  function createCharScopedRegexFromManager(avatar, charName) {
+    ensureResourceSettings();
+    if (cfmRegexCreateMonitorTimer) {
+      toastr.info("正在等待当前新建正则完成");
+      return;
+    }
+
+    const nativeCreateBtn = $("#open_scoped_editor");
+    if (!nativeCreateBtn.length) {
+      toastr.warning(
+        "未找到原生角色正则编辑器入口，请先确保原生正则功能已完成加载",
+      );
+      return;
+    }
+
+    const getScripts = () => {
+      const chars = getCharacters();
+      const ch = chars.find((item) => item.avatar === avatar);
+      const scripts = ch?.data?.extensions?.regex_scripts;
+      return Array.isArray(scripts) ? scripts : [];
+    };
+
+    const beforeIds = new Set(
+      getScripts()
+        .map((script) => script?.id)
+        .filter(Boolean),
+    );
+
+    monitorNewOwnedRegexScript({
+      beforeIds,
+      getScripts,
+      onCreated: async (newScript, currentScripts) => {
+        rerenderCurrentView();
+        await openOwnedRegexInsertDialog({
+          scripts: currentScripts,
+          newScriptId: String(newScript.id),
+          onApply: async (newOrder) => {
+            await saveCharRegexScripts(avatar, newOrder);
+            rerenderCurrentView();
+            toastr.success(
+              `角色「${charName || "当前角色"}」的新正则插入位置已保存`,
+            );
+          },
+          onSkip: () => {
+            rerenderCurrentView();
+            toastr.success("新正则已创建，顺序保持在最后");
+          },
+        });
+      },
+      onAbort: () => {
+        rerenderCurrentView();
+      },
+    });
+    nativeCreateBtn.trigger("click");
+  }
+
+  function createPresetRegexFromManager(presetName) {
+    ensureResourceSettings();
+    if (cfmRegexCreateMonitorTimer) {
+      toastr.info("正在等待当前新建正则完成");
+      return;
+    }
+
+    const nativeCreateBtn = $("#open_preset_editor");
+    if (!nativeCreateBtn.length) {
+      toastr.warning(
+        "未找到原生预设正则编辑器入口，请先确保原生正则功能已完成加载",
+      );
+      return;
+    }
+
+    const getScripts = () => getPresetRegexScriptsByName(presetName);
+    const beforeIds = new Set(
+      getScripts()
+        .map((script) => script?.id)
+        .filter(Boolean),
+    );
+
+    monitorNewOwnedRegexScript({
+      beforeIds,
+      getScripts,
+      onCreated: async (newScript, currentScripts) => {
+        rerenderCurrentView();
+        await openOwnedRegexInsertDialog({
+          scripts: currentScripts,
+          newScriptId: String(newScript.id),
+          onApply: async (newOrder) => {
+            await savePresetRegexScripts(newOrder);
+            rerenderCurrentView();
+            toastr.success(
+              `预设「${presetName || "当前预设"}」的新正则插入位置已保存`,
+            );
+          },
+          onSkip: () => {
+            rerenderCurrentView();
+            toastr.success("新正则已创建，顺序保持在最后");
+          },
+        });
+      },
+      onAbort: () => {
+        rerenderCurrentView();
+      },
+    });
     nativeCreateBtn.trigger("click");
   }
 
