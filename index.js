@@ -14304,9 +14304,9 @@ jQuery(async () => {
     const clientX = getEventClientX(e);
     if (typeof clientX !== "number") return false;
     const selectors = [
-      ".cfm-chat-sublist",
-      ".cfm-regex-sublist",
-      ".cfm-qr-sub-items",
+      ".cfm-char-detail-sublist",
+      ".cfm-preset-detail-sublist",
+      ".cfm-persona-sublist",
     ];
     for (const selector of selectors) {
       const nodes = $(selector).toArray();
@@ -14323,7 +14323,7 @@ jQuery(async () => {
         const row = subList.prevAll(".cfm-row").first();
         const toggle = row
           .find(
-            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-chat-toggle, .cfm-regex-toggle, .cfm-qr-expand-arrow",
+            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle",
           )
           .first();
         if (!toggle.length) continue;
