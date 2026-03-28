@@ -30883,13 +30883,13 @@ jQuery(async () => {
       <div class="cfm-sort-dialog ${insertMode ? "cfm-sort-dialog-insert" : ""}">
         <div class="cfm-sort-dialog-header">
           <span class="cfm-sort-dialog-title"><i class="fa-solid fa-sort"></i> 正则脚本排序</span>
-          <span class="cfm-sort-dialog-desc">${insertMode ? '新正则已创建，点击分隔线中间的 <i class="fa-solid fa-plus"></i> 可插入到对应位置；点击跳过则保持在最后。' : '拖动 <i class="fa-solid fa-grip-vertical"></i> 手柄调整脚本在 extension_settings.regex 中的顺序（影响执行优先级）'}</span>
+          <span class="cfm-sort-dialog-desc">${insertMode ? '新正则已创建，请先点击分隔线中间的 <i class="fa-solid fa-plus"></i> 选择插入位置，再点击确认按钮提交；点击跳过则保持在最后。' : '拖动 <i class="fa-solid fa-grip-vertical"></i> 手柄调整脚本在 extension_settings.regex 中的顺序（影响执行优先级）'}</span>
         </div>
         <div class="cfm-sort-dialog-body">
           <div class="cfm-sort-dialog-list ${insertMode ? "cfm-sort-dialog-list-insert" : ""}"></div>
         </div>
         <div class="cfm-sort-dialog-footer">
-          ${insertMode ? '<button class="cfm-btn cfm-sort-dialog-skip"><i class="fa-solid fa-forward"></i> 跳过</button>' : '<button class="cfm-btn cfm-sort-dialog-confirm"><i class="fa-solid fa-check"></i> 确认排序</button><button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>'}
+          ${insertMode ? '<button class="cfm-btn cfm-sort-dialog-confirm cfm-sort-dialog-insert-confirm" disabled><i class="fa-solid fa-check"></i> 确认插入</button><button class="cfm-btn cfm-sort-dialog-skip"><i class="fa-solid fa-forward"></i> 跳过</button><button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>' : '<button class="cfm-btn cfm-sort-dialog-confirm"><i class="fa-solid fa-check"></i> 确认排序</button><button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>'}
         </div>
       </div>
     `);
@@ -30910,24 +30910,48 @@ jQuery(async () => {
     }
 
     if (insertMode) {
+      let selectedTargetIndex = null;
+      const confirmBtn = dialog.find(".cfm-sort-dialog-insert-confirm");
+
+      function updateSelectedInsertSlot() {
+        sortList.find(".cfm-sort-insert-slot").each(function () {
+          const slot = $(this);
+          const isSelected = Number(slot.attr("data-target-index")) === selectedTargetIndex;
+          const lineEl = slot.find(".cfm-sort-insert-line");
+          const btnEl = slot.find(".cfm-sort-insert-btn");
+          btnEl.attr("title", isSelected ? "已选中，点击确认插入" : "选择插入到此处");
+          btnEl.attr("aria-pressed", isSelected ? "true" : "false");
+          btnEl.css({
+            color: isSelected ? "#a6e3a1" : "#89b4fa",
+            borderColor: isSelected
+              ? "rgba(166, 227, 161, 0.5)"
+              : "rgba(137, 180, 250, 0.35)",
+            backgroundColor: isSelected
+              ? "rgba(166, 227, 161, 0.14)"
+              : "var(--SmartThemeBlurTintColor, #1e1e2e)",
+            boxShadow: isSelected ? "0 0 0 3px rgba(166, 227, 161, 0.08)" : "none",
+          });
+          lineEl.css({
+            background: isSelected
+              ? "linear-gradient(90deg, rgba(166, 227, 161, 0.12) 0%, rgba(166, 227, 161, 0.55) 50%, rgba(166, 227, 161, 0.12) 100%)"
+              : "linear-gradient(90deg, rgba(137, 180, 250, 0.08) 0%, rgba(137, 180, 250, 0.35) 50%, rgba(137, 180, 250, 0.08) 100%)",
+          });
+        });
+        confirmBtn.prop("disabled", selectedTargetIndex === null);
+      }
+
       const renderInsertSlot = (targetIndex) => {
         const slot = $(`
           <div class="cfm-sort-insert-slot" data-target-index="${targetIndex}">
             <div class="cfm-sort-insert-line"></div>
-            <button class="cfm-sort-insert-btn" title="插入到此处"><i class="fa-solid fa-plus"></i></button>
+            <button class="cfm-sort-insert-btn" title="选择插入到此处"><i class="fa-solid fa-plus"></i></button>
           </div>
         `);
-        slot.find(".cfm-sort-insert-btn").on("click touchend", async (e) => {
+        slot.find(".cfm-sort-insert-btn").on("click touchend", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const newOrder = moveRegexScriptToIndex(newScriptId, targetIndex);
-          if (!newOrder) {
-            toastr.warning("未找到新建的正则脚本，无法调整位置");
-            closeDialog();
-            return;
-          }
-          await applyRegexGlobalOrder(newOrder, "新正则插入位置已保存");
-          closeDialog();
+          selectedTargetIndex = targetIndex;
+          updateSelectedInsertSlot();
         });
         return slot;
       };
@@ -30945,11 +30969,36 @@ jQuery(async () => {
         sortList.append(row).append(renderInsertSlot(index + 1));
       });
 
+      updateSelectedInsertSlot();
+
+      confirmBtn.on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (selectedTargetIndex === null) {
+          toastr.warning("请先选择一个插入位置");
+          return;
+        }
+        const newOrder = moveRegexScriptToIndex(newScriptId, selectedTargetIndex);
+        if (!newOrder) {
+          toastr.warning("未找到新建的正则脚本，无法调整位置");
+          closeDialog();
+          return;
+        }
+        await applyRegexGlobalOrder(newOrder, "新正则插入位置已保存");
+        closeDialog();
+      });
+
       dialog.find(".cfm-sort-dialog-skip").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
         renderRegexView();
         toastr.success("新正则已创建，顺序保持在最后");
+        closeDialog();
+      });
+
+      dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         closeDialog();
       });
     } else {
