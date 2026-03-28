@@ -32326,16 +32326,9 @@ jQuery(async () => {
       }
     });
 
-    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", async (e) => {
+    dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      try {
-        if (typeof onSkip === "function") {
-          await onSkip();
-        }
-      } catch (err) {
-        console.error("[CFM] 取消局部正则插入排序失败:", err);
-      }
       closeDialog();
     });
 
@@ -33313,8 +33306,6 @@ jQuery(async () => {
       dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        renderRegexView();
-        toastr.success("新正则已创建，顺序保持在最后");
         closeDialog();
       });
     } else {
