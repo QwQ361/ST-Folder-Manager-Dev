@@ -11285,6 +11285,7 @@ jQuery(async () => {
               <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
             </button>
             <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-transfer" title="互通正则"><i class="fa-solid fa-right-left"></i> 互通</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-delete" title="批量删除"><i class="fa-solid fa-trash-can"></i> 删除</button>
           </div>
@@ -11307,6 +11308,17 @@ jQuery(async () => {
           cfmRegexBatchRangeMode = !cfmRegexBatchRangeMode;
           if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
           rerenderCurrentView();
+        });
+        // 互通按钮
+        batchToolbar.find(".cfm-regex-batch-transfer").on("click", async (e) => {
+          e.stopPropagation();
+          await startOwnedRegexTransferFlow({
+            sourceType: "char",
+            sourceName: charName,
+            avatar,
+            scripts,
+            selectedIds: Array.from(cfmRegexBatchSelected),
+          });
         });
         // 批量导出（JSON格式，与酒馆保持一致）
         batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
@@ -11689,6 +11701,7 @@ jQuery(async () => {
               <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmRegexBatchRangeMode ? "(开)" : ""}
             </button>
             <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+            <button class="cfm-btn cfm-btn-sm cfm-regex-batch-transfer" title="互通正则"><i class="fa-solid fa-right-left"></i> 互通</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-export" title="批量导出"><i class="fa-solid fa-file-export"></i> 导出</button>
             <button class="cfm-btn cfm-btn-sm cfm-regex-batch-delete" title="批量删除"><i class="fa-solid fa-trash-can"></i> 删除</button>
           </div>
@@ -11711,6 +11724,16 @@ jQuery(async () => {
           cfmRegexBatchRangeMode = !cfmRegexBatchRangeMode;
           if (cfmRegexBatchRangeMode) cfmRegexBatchLastClicked = null;
           rerenderCurrentView();
+        });
+        // 互通按钮
+        batchToolbar.find(".cfm-regex-batch-transfer").on("click", async (e) => {
+          e.stopPropagation();
+          await startOwnedRegexTransferFlow({
+            sourceType: "preset",
+            sourceName: presetName,
+            scripts,
+            selectedIds: Array.from(cfmRegexBatchSelected),
+          });
         });
         // 批量导出（JSON格式，与酒馆保持一致）
         batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
@@ -13941,6 +13964,7 @@ jQuery(async () => {
                             <button class="cfm-import-btn" id="cfm-import-regex-btn" title="导入正则"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-regex-file" accept=".json" multiple style="display:none;">
                             <button class="cfm-regex-create-btn" id="cfm-regex-create-btn" title="新建全局正则"><i class="fa-solid fa-plus"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-regex-transfer-btn" title="互通正则"><i class="fa-solid fa-right-left"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-regex-btn" title="导出正则"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-regex-btn" title="删除正则"><i class="fa-solid fa-trash-can"></i></button>
                             <button class="cfm-regex-sort-btn" id="cfm-regex-sort-btn" title="排序正则脚本"><i class="fa-solid fa-arrow-up-short-wide"></i></button>
@@ -15778,6 +15802,13 @@ jQuery(async () => {
       e.stopPropagation();
       if (currentResourceType !== "regex") return;
       createGlobalRegexFromManager();
+    });
+
+    popup.find("#cfm-regex-transfer-btn").on("click touchend", async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (currentResourceType !== "regex") return;
+      await startGlobalRegexTransferFlow();
     });
 
     // 正则排序按钮 —— 弹窗形式
@@ -30004,6 +30035,624 @@ jQuery(async () => {
   // --- 正则数据扫描 ---
   function getRegexGlobalScripts() {
     return extension_settings.regex ?? [];
+  }
+
+  function getRegexTransferGlobalFolderOptions() {
+    ensureResourceSettings();
+    const folderTree = extension_settings[extensionName].regexFolderTree || {};
+    const options = Object.keys(folderTree)
+      .map((id) => {
+        const pathNames = [];
+        let currentId = id;
+        while (currentId && folderTree[currentId]) {
+          pathNames.unshift(folderTree[currentId].displayName || currentId);
+          currentId = folderTree[currentId].parentId;
+        }
+        return {
+          value: id,
+          label: pathNames.join(" › ") || id,
+          sortOrder: folderTree[id]?.sortOrder ?? 0,
+        };
+      })
+      .sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return a.label.localeCompare(b.label, "zh-CN");
+      });
+    return [{ value: "__ungrouped__", label: "未归类" }, ...options];
+  }
+
+  function getRegexTransferGlobalFolderLabel(folderId) {
+    if (!folderId || folderId === "__ungrouped__") return "未归类";
+    ensureResourceSettings();
+    const folderTree = extension_settings[extensionName].regexFolderTree || {};
+    if (!folderTree[folderId]) return "未归类";
+    const pathNames = [];
+    let currentId = folderId;
+    while (currentId && folderTree[currentId]) {
+      pathNames.unshift(folderTree[currentId].displayName || currentId);
+      currentId = folderTree[currentId].parentId;
+    }
+    return pathNames.join(" › ") || "未归类";
+  }
+
+  function getRegexTransferScopeLabel(scope) {
+    if (!scope) return "目标位置";
+    if (scope.type === "global") {
+      return `全局正则（${getRegexTransferGlobalFolderLabel(scope.folderId)}）`;
+    }
+    if (scope.type === "char") {
+      return `角色正则（${scope.name || "当前角色"}）`;
+    }
+    if (scope.type === "preset") {
+      return `预设正则（${scope.name || "当前预设"}）`;
+    }
+    return "目标位置";
+  }
+
+  function getRegexScriptsForScope(scope) {
+    if (!scope) return [];
+    if (Array.isArray(scope.scripts)) return scope.scripts;
+    if (scope.type === "global") return getRegexGlobalScripts();
+    if (scope.type === "char") {
+      const chars = getCharacters();
+      const ch = chars.find((item) => item.avatar === scope.avatar);
+      return Array.isArray(ch?.data?.extensions?.regex_scripts)
+        ? ch.data.extensions.regex_scripts
+        : [];
+    }
+    if (scope.type === "preset") {
+      return getPresetRegexScriptsByName(scope.name);
+    }
+    return [];
+  }
+
+  function isSameRegexScopeList(sourceScope, targetScope) {
+    if (!sourceScope || !targetScope) return false;
+    if (sourceScope.type !== targetScope.type) return false;
+    if (sourceScope.type === "global") return true;
+    if (sourceScope.type === "char") {
+      return sourceScope.avatar && sourceScope.avatar === targetScope.avatar;
+    }
+    if (sourceScope.type === "preset") {
+      return sourceScope.name && sourceScope.name === targetScope.name;
+    }
+    return false;
+  }
+
+  function cloneRegexScriptsForTransfer(scripts, isCopyMode) {
+    const sourceScripts = Array.isArray(scripts) ? scripts : [];
+    return sourceScripts.map((script) => ({
+      ...script,
+      id: String(
+        isCopyMode || !script?.id ? getContext().uuidv4() : script.id,
+      ),
+    }));
+  }
+
+  function removeRegexScriptsByIds(scripts, idSet) {
+    const sourceScripts = Array.isArray(scripts) ? scripts : [];
+    return sourceScripts.filter((script) => !idSet.has(script?.id));
+  }
+
+  function insertRegexScriptsAtIndex(baseScripts, insertedScripts, targetIndex) {
+    const currentScripts = Array.isArray(baseScripts) ? [...baseScripts] : [];
+    const scriptsToInsert = Array.isArray(insertedScripts) ? insertedScripts : [];
+    const normalizedIndex = Math.max(
+      0,
+      Math.min(Number(targetIndex) || 0, currentScripts.length),
+    );
+    return [
+      ...currentScripts.slice(0, normalizedIndex),
+      ...scriptsToInsert,
+      ...currentScripts.slice(normalizedIndex),
+    ];
+  }
+
+  async function saveRegexScopeScripts(scope, scripts, extra = {}) {
+    if (!scope) return;
+    if (scope.type === "global") {
+      ensureResourceSettings();
+      extension_settings.regex = Array.isArray(scripts) ? scripts : [];
+      if (extra.globalGroups) {
+        extension_settings[extensionName].regexGlobalGroups = extra.globalGroups;
+      }
+      if (extra.globalFavorites) {
+        extension_settings[extensionName].regexFavorites = extra.globalFavorites;
+      }
+      getContext().saveSettingsDebounced();
+      await syncNativeRegexState();
+      return;
+    }
+    if (scope.type === "char") {
+      await saveCharRegexScripts(scope.avatar, scripts);
+      return;
+    }
+    if (scope.type === "preset") {
+      await savePresetRegexScripts(scripts);
+    }
+  }
+
+  function showRegexTransferSetupDialog(options = {}) {
+    const {
+      sourceScope,
+      selectedCount = 0,
+      currentCharName = "",
+      currentCharAvatar = "",
+      currentPresetName = "",
+      defaultGlobalFolderId = "__ungrouped__",
+    } = options || {};
+
+    return new Promise((resolve) => {
+      const canUseChar = !!currentCharAvatar;
+      const canUsePreset = !!currentPresetName;
+      let defaultTargetType = "global";
+      if (sourceScope?.type === "global") {
+        if (canUseChar) defaultTargetType = "char";
+        else if (canUsePreset) defaultTargetType = "preset";
+      }
+      const folderOptions = getRegexTransferGlobalFolderOptions();
+      const overlay = $('<div class="cfm-edit-popup-overlay"></div>');
+      const dialog = $(`
+        <div class="cfm-edit-popup" style="width:min(560px,calc(100vw - 32px));max-width:560px;">
+          <div class="cfm-edit-popup-header">
+            <span><i class="fa-solid fa-right-left"></i> 正则互通</span>
+          </div>
+          <div class="cfm-edit-popup-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div style="font-size:13px;line-height:1.6;opacity:0.92;">已选择 <b>${selectedCount}</b> 个正则脚本，来源：<b>${escapeHtml(getRegexTransferScopeLabel(sourceScope))}</b></div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="font-size:12px;opacity:0.85;">选择模式</div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="move" checked> <span>移动</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="copy"> <span>复制</span></label>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="font-size:12px;opacity:0.85;">选择目标</div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-target" value="global" ${defaultTargetType === "global" ? "checked" : ""}> <span>全局正则</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择") }）</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择") }）</span></label>
+            </div>
+            <div class="cfm-regex-transfer-global-folder" style="display:flex;flex-direction:column;gap:8px;">
+              <div style="font-size:12px;opacity:0.85;">全局分组</div>
+              <select class="text_pole cfm-regex-transfer-folder-select"></select>
+            </div>
+          </div>
+          <div class="cfm-edit-popup-footer">
+            <button class="menu_button cfm-regex-transfer-confirm"><i class="fa-solid fa-check"></i> 确认</button>
+            <button class="menu_button cfm-regex-transfer-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+          </div>
+        </div>
+      `);
+
+      const folderSelect = dialog.find(".cfm-regex-transfer-folder-select");
+      folderOptions.forEach((item) => {
+        folderSelect.append(
+          $(
+            `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`,
+          ),
+        );
+      });
+      folderSelect.val(defaultGlobalFolderId || "__ungrouped__");
+
+      const updateFolderVisibility = () => {
+        const targetType =
+          dialog.find('input[name="cfm-regex-transfer-target"]:checked').val() ||
+          "global";
+        dialog
+          .find(".cfm-regex-transfer-global-folder")
+          .toggle(targetType === "global");
+      };
+
+      function closeDialog(result = null) {
+        overlay.remove();
+        dialog.remove();
+        resolve(result);
+      }
+
+      dialog
+        .find('input[name="cfm-regex-transfer-target"]')
+        .on("change", updateFolderVisibility);
+      updateFolderVisibility();
+
+      dialog.find(".cfm-regex-transfer-confirm").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDialog({
+          mode:
+            dialog.find('input[name="cfm-regex-transfer-mode"]:checked').val() ||
+            "move",
+          targetType:
+            dialog.find('input[name="cfm-regex-transfer-target"]:checked').val() ||
+            "global",
+          globalFolderId:
+            folderSelect.val() || defaultGlobalFolderId || "__ungrouped__",
+        });
+      });
+
+      dialog.find(".cfm-regex-transfer-cancel").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDialog(null);
+      });
+
+      overlay.on("click", (e) => {
+        if ($(e.target).is(overlay)) closeDialog(null);
+      });
+
+      $("#cfm-popup").append(overlay).append(dialog);
+    });
+  }
+
+  function openRegexTransferInsertDialog(options = {}) {
+    const {
+      targetScope,
+      baseScripts = [],
+      insertedScripts = [],
+      onApply,
+      onSkip,
+    } = options || {};
+
+    return new Promise((resolve) => {
+      const currentScripts = Array.isArray(baseScripts) ? baseScripts : [];
+      const scriptsToInsert = Array.isArray(insertedScripts) ? insertedScripts : [];
+      const previewNames = scriptsToInsert
+        .map((script) => script?.scriptName || "(未命名)")
+        .slice(0, 5)
+        .join("、");
+      const previewSuffix =
+        scriptsToInsert.length > 5 ? ` 等 ${scriptsToInsert.length} 项` : "";
+      const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
+      const dialog = $(`
+        <div class="cfm-sort-dialog cfm-sort-dialog-insert">
+          <div class="cfm-sort-dialog-header">
+            <span class="cfm-sort-dialog-title"><i class="fa-solid fa-sort"></i> 正则脚本排序</span>
+            <span class="cfm-sort-dialog-desc">准备将 <b>${scriptsToInsert.length}</b> 个正则脚本插入到 <b>${escapeHtml(getRegexTransferScopeLabel(targetScope))}</b>。点击分隔线中间的 <i class="fa-solid fa-plus"></i> 选择插入位置；点击跳过则默认追加到最后。${previewNames ? `<br>待插入：${escapeHtml(previewNames)}${escapeHtml(previewSuffix)}` : ""}</span>
+          </div>
+          <div class="cfm-sort-dialog-body">
+            <div class="cfm-sort-dialog-list cfm-sort-dialog-list-insert"></div>
+          </div>
+          <div class="cfm-sort-dialog-footer">
+            <button class="cfm-btn cfm-sort-dialog-confirm cfm-sort-dialog-insert-confirm" disabled><i class="fa-solid fa-check"></i> 确认插入</button>
+            <button class="cfm-btn cfm-sort-dialog-skip"><i class="fa-solid fa-forward"></i> 跳过</button>
+            <button class="cfm-btn cfm-sort-dialog-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+          </div>
+        </div>
+      `);
+
+      const sortList = dialog.find(".cfm-sort-dialog-list");
+      const confirmBtn = dialog.find(".cfm-sort-dialog-insert-confirm");
+      let selectedTargetIndex = null;
+
+      function getPlacementText(script) {
+        if (targetScope?.type === "global") {
+          ensureResourceSettings();
+          const groups = extension_settings[extensionName].regexGlobalGroups || {};
+          return getRegexTransferGlobalFolderLabel(groups[script?.id] || "__ungrouped__");
+        }
+        return getRegexTransferScopeLabel(targetScope);
+      }
+
+      function closeDialog() {
+        overlay.remove();
+        dialog.remove();
+        resolve();
+      }
+
+      function updateSelectedInsertSlot() {
+        sortList.find(".cfm-sort-insert-slot").each(function () {
+          const slot = $(this);
+          const isSelected =
+            Number(slot.attr("data-target-index")) === selectedTargetIndex;
+          const lineEl = slot.find(".cfm-sort-insert-line");
+          const btnEl = slot.find(".cfm-sort-insert-btn");
+          btnEl.attr(
+            "title",
+            isSelected ? "已选中，点击确认插入" : "选择插入到此处",
+          );
+          btnEl.attr("aria-pressed", isSelected ? "true" : "false");
+          btnEl.css({
+            color: isSelected ? "#a6e3a1" : "#89b4fa",
+            borderColor: isSelected
+              ? "rgba(166, 227, 161, 0.5)"
+              : "rgba(137, 180, 250, 0.35)",
+            backgroundColor: isSelected
+              ? "rgba(166, 227, 161, 0.14)"
+              : "var(--SmartThemeBlurTintColor, #1e1e2e)",
+            boxShadow: isSelected
+              ? "0 0 0 3px rgba(166, 227, 161, 0.08)"
+              : "none",
+          });
+          lineEl.css({
+            background: isSelected
+              ? "linear-gradient(90deg, rgba(166, 227, 161, 0.12) 0%, rgba(166, 227, 161, 0.55) 50%, rgba(166, 227, 161, 0.12) 100%)"
+              : "linear-gradient(90deg, rgba(137, 180, 250, 0.08) 0%, rgba(137, 180, 250, 0.35) 50%, rgba(137, 180, 250, 0.08) 100%)",
+          });
+        });
+        confirmBtn.prop("disabled", selectedTargetIndex === null);
+      }
+
+      const renderInsertSlot = (targetIndex) => {
+        const slot = $(`
+          <div class="cfm-sort-insert-slot" data-target-index="${targetIndex}">
+            <div class="cfm-sort-insert-line"></div>
+            <button class="cfm-sort-insert-btn" title="选择插入到此处"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        `);
+        slot.find(".cfm-sort-insert-btn").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectedTargetIndex = targetIndex;
+          updateSelectedInsertSlot();
+        });
+        return slot;
+      };
+
+      sortList.append(renderInsertSlot(0));
+      currentScripts.forEach((script, index) => {
+        const row = $(`
+          <div class="cfm-sort-row cfm-sort-row-static ${script?.disabled ? "cfm-sort-row-disabled" : ""}" data-script-id="${escapeHtml(script?.id || "")}">
+            <span class="cfm-sort-row-static-index">${index + 1}</span>
+            <span class="cfm-sort-row-name">${escapeHtml(script?.scriptName || "(未命名)")}</span>
+            <span class="cfm-sort-row-folder">${escapeHtml(getPlacementText(script))}</span>
+          </div>
+        `);
+        sortList.append(row);
+        sortList.append(renderInsertSlot(index + 1));
+      });
+
+      updateSelectedInsertSlot();
+
+      confirmBtn.on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (selectedTargetIndex === null) {
+          toastr.warning("请先选择一个插入位置");
+          return;
+        }
+        try {
+          if (typeof onApply === "function") {
+            await onApply(selectedTargetIndex);
+          }
+          closeDialog();
+        } catch (err) {
+          console.error("[CFM] 互通正则插入失败:", err);
+          toastr.error("保存插入位置失败: " + (err?.message || err));
+        }
+      });
+
+      dialog.find(".cfm-sort-dialog-skip").on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          if (typeof onSkip === "function") {
+            await onSkip();
+          }
+          closeDialog();
+        } catch (err) {
+          console.error("[CFM] 跳过互通正则插入失败:", err);
+          toastr.error("跳过失败: " + (err?.message || err));
+        }
+      });
+
+      dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeDialog();
+      });
+
+      overlay.on("click", (e) => {
+        if ($(e.target).is(overlay)) closeDialog();
+      });
+
+      $("#cfm-popup").append(overlay).append(dialog);
+    });
+  }
+
+  async function executeRegexTransferFlow(options = {}) {
+    const { sourceScope, selectedIds = [] } = options || {};
+    const uniqueIds = [...new Set((selectedIds || []).filter(Boolean))];
+    if (!sourceScope || uniqueIds.length === 0) {
+      toastr.warning("请先选择要移动/复制的正则脚本");
+      return;
+    }
+
+    const sourceScripts = getRegexScriptsForScope(sourceScope);
+    const selectedIdSet = new Set(uniqueIds);
+    const selectedScripts = sourceScripts.filter((script) =>
+      selectedIdSet.has(script?.id),
+    );
+    if (selectedScripts.length === 0) {
+      toastr.warning("未找到选中的正则脚本");
+      return;
+    }
+
+    const currentCharAvatar = getCurrentCharAvatar();
+    const currentCharName = getCurrentCharName();
+    const currentPresetName = getCurrentPresetName();
+    const defaultGlobalFolderId =
+      selectedRegexNode &&
+      selectedRegexNode !== "__ungrouped__" &&
+      selectedRegexNode !== "__favorites__"
+        ? selectedRegexNode
+        : "__ungrouped__";
+
+    const transferConfig = await showRegexTransferSetupDialog({
+      sourceScope,
+      selectedCount: selectedScripts.length,
+      currentCharName,
+      currentCharAvatar,
+      currentPresetName,
+      defaultGlobalFolderId,
+    });
+    if (!transferConfig) return;
+
+    let targetScope = null;
+    if (transferConfig.targetType === "global") {
+      targetScope = {
+        type: "global",
+        folderId: transferConfig.globalFolderId || "__ungrouped__",
+      };
+    } else if (transferConfig.targetType === "char") {
+      if (!currentCharAvatar) {
+        toastr.warning("当前没有可用的目标角色");
+        return;
+      }
+      targetScope = {
+        type: "char",
+        avatar: currentCharAvatar,
+        name: currentCharName,
+      };
+    } else if (transferConfig.targetType === "preset") {
+      if (!currentPresetName) {
+        toastr.warning("当前没有可用的目标预设");
+        return;
+      }
+      targetScope = {
+        type: "preset",
+        name: currentPresetName,
+      };
+    }
+
+    if (!targetScope) {
+      toastr.warning("未能确定目标位置");
+      return;
+    }
+
+    if (
+      transferConfig.targetType !== "global" &&
+      isSameRegexScopeList(sourceScope, targetScope)
+    ) {
+      toastr.warning("来源与目标相同，请选择其他位置");
+      return;
+    }
+
+    const sameList = isSameRegexScopeList(sourceScope, targetScope);
+    const isCopyMode = transferConfig.mode === "copy";
+    const insertedScripts = cloneRegexScriptsForTransfer(selectedScripts, isCopyMode);
+    const baseTargetScripts =
+      sameList && !isCopyMode
+        ? removeRegexScriptsByIds(sourceScripts, selectedIdSet)
+        : getRegexScriptsForScope(targetScope);
+
+    const applyTransfer = async (targetIndex) => {
+      const finalTargetScripts = insertRegexScriptsAtIndex(
+        baseTargetScripts,
+        insertedScripts,
+        targetIndex,
+      );
+
+      if (targetScope.type === "global") {
+        ensureResourceSettings();
+        const currentGroups = {
+          ...(extension_settings[extensionName].regexGlobalGroups || {}),
+        };
+        insertedScripts.forEach((script) => {
+          if (
+            transferConfig.globalFolderId &&
+            transferConfig.globalFolderId !== "__ungrouped__"
+          ) {
+            currentGroups[script.id] = transferConfig.globalFolderId;
+          } else {
+            delete currentGroups[script.id];
+          }
+        });
+        await saveRegexScopeScripts(targetScope, finalTargetScripts, {
+          globalGroups: currentGroups,
+        });
+      } else {
+        await saveRegexScopeScripts(targetScope, finalTargetScripts);
+      }
+
+      if (!isCopyMode && !sameList) {
+        const sourceAfterScripts = removeRegexScriptsByIds(sourceScripts, selectedIdSet);
+        if (sourceScope.type === "global") {
+          ensureResourceSettings();
+          const nextGroups = {
+            ...(extension_settings[extensionName].regexGlobalGroups || {}),
+          };
+          uniqueIds.forEach((id) => delete nextGroups[id]);
+          const nextFavorites = getResFavorites("regex").filter(
+            (id) => !selectedIdSet.has(id),
+          );
+          await saveRegexScopeScripts(sourceScope, sourceAfterScripts, {
+            globalGroups: nextGroups,
+            globalFavorites: nextFavorites,
+          });
+        } else {
+          await saveRegexScopeScripts(sourceScope, sourceAfterScripts);
+        }
+      }
+
+      if (sourceScope.type === "global") {
+        cfmMultiSelected.clear();
+        cfmMultiSelectRangeMode = false;
+        cfmMultiSelectLastClicked = null;
+      } else {
+        cfmRegexBatchSelected.clear();
+        cfmRegexBatchRangeMode = false;
+        cfmRegexBatchLastClicked = null;
+      }
+
+      rerenderCurrentView();
+      if (currentResourceType === "regex") renderRegexView();
+      toastr.success(
+        `已${isCopyMode ? "复制" : "移动"} ${insertedScripts.length} 个正则脚本到${getRegexTransferScopeLabel(targetScope)}`,
+      );
+    };
+
+    await openRegexTransferInsertDialog({
+      targetScope,
+      baseScripts: baseTargetScripts,
+      insertedScripts,
+      onApply: async (targetIndex) => {
+        await applyTransfer(targetIndex);
+      },
+      onSkip: async () => {
+        await applyTransfer(baseTargetScripts.length);
+      },
+    });
+  }
+
+  async function startGlobalRegexTransferFlow() {
+    const selectedIds = Array.from(cfmMultiSelected || []).filter(Boolean);
+    if (!cfmMultiSelectMode) {
+      toastr.warning("请先开启多选模式，再选择要互通的正则脚本");
+      return;
+    }
+    if (selectedIds.length === 0) {
+      toastr.warning("请先选择要移动/复制的正则脚本");
+      return;
+    }
+    await executeRegexTransferFlow({
+      sourceScope: {
+        type: "global",
+        folderId:
+          selectedRegexNode &&
+          selectedRegexNode !== "__ungrouped__" &&
+          selectedRegexNode !== "__favorites__"
+            ? selectedRegexNode
+            : "__ungrouped__",
+      },
+      selectedIds,
+    });
+  }
+
+  async function startOwnedRegexTransferFlow(options = {}) {
+    const { sourceType = "char", sourceName = "", avatar = "", selectedIds = [] } =
+      options || {};
+    if (!cfmRegexBatchMode) {
+      toastr.warning("请先开启批量操作，再选择要互通的正则脚本");
+      return;
+    }
+    if (!selectedIds.length) {
+      toastr.warning("请先选择要移动/复制的正则脚本");
+      return;
+    }
+    await executeRegexTransferFlow({
+      sourceScope:
+        sourceType === "preset"
+          ? { type: "preset", name: sourceName }
+          : { type: "char", avatar, name: sourceName },
+      selectedIds,
+    });
   }
 
   let cfmRegexCreateMonitorTimer = null;
