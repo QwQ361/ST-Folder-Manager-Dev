@@ -4248,6 +4248,16 @@ option.cfm-nf-hidden {
 .cfm-wi-bind-entry:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+.cfm-wi-bind-entry.cfm-wi-bind-entry-current {
+  background: rgba(137, 180, 250, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(137, 180, 250, 0.28);
+}
+.cfm-wi-bind-entry.cfm-wi-bind-entry-current:hover {
+  background: rgba(137, 180, 250, 0.2);
+}
+.cfm-wi-bind-entry.cfm-wi-bind-entry-current .cfm-wi-bind-entry-name {
+  color: #89b4fa;
+}
 .cfm-wi-bind-entry-name {
   flex: 1;
   min-width: 0;

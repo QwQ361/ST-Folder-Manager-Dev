@@ -7773,7 +7773,8 @@ jQuery(async () => {
         for (const av of preset.bindChars) {
           const ch = chars.find((c) => c.avatar === av);
           const name = ch ? ch.name : av;
-          html += `<div class="cfm-wi-bind-entry" data-bind-type="char" data-bind-id="${escapeHtml(av)}">
+          const isCurrentChar = !!currentChar && currentChar === av;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChar ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="char" data-bind-id="${escapeHtml(av)}">
             <span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span>
             <i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i>
           </div>`;
@@ -7783,7 +7784,9 @@ jQuery(async () => {
         html +=
           '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
         for (const pn of preset.bindPresets) {
-          html += `<div class="cfm-wi-bind-entry" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}">
+          const isCurrentPreset =
+            !!currentPresetName && currentPresetName === pn;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentPreset ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}">
             <span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span>
             <i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i>
           </div>`;
@@ -12786,15 +12789,18 @@ jQuery(async () => {
         const rect = node.getBoundingClientRect();
         const gapLeft = rect.left - 30;
         const gapRight = rect.left;
-        const withinVertical = e.clientY >= rect.top && e.clientY <= rect.bottom;
+        const withinVertical =
+          e.clientY >= rect.top && e.clientY <= rect.bottom;
         const withinGap = clientX >= gapLeft && clientX <= gapRight;
         if (!withinVertical || !withinGap) continue;
 
         const subList = $(node);
         const row = subList.prevAll(".cfm-row").first();
-        const toggle = row.find(
-          ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-chat-toggle, .cfm-regex-toggle, .cfm-qr-expand-arrow",
-        ).first();
+        const toggle = row
+          .find(
+            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-chat-toggle, .cfm-regex-toggle, .cfm-qr-expand-arrow",
+          )
+          .first();
         if (!toggle.length) continue;
 
         e.preventDefault();
@@ -27202,14 +27208,17 @@ jQuery(async () => {
         for (const av of preset.bindChars) {
           const ch = chars.find((c) => c.avatar === av);
           const name = ch ? ch.name : av;
-          html += `<div class="cfm-wi-bind-entry" data-bind-type="char" data-bind-id="${escapeHtml(av)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+          const isCurrentChar = !!currentChar && currentChar === av;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChar ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="char" data-bind-id="${escapeHtml(av)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
         }
       }
       if (preset.bindPresets && preset.bindPresets.length > 0) {
         html +=
           '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
         for (const pn of preset.bindPresets) {
-          html += `<div class="cfm-wi-bind-entry" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+          const isCurrentPreset =
+            !!currentPresetName && currentPresetName === pn;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentPreset ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
         }
       }
       if (!html) html = '<div class="cfm-wi-bind-empty">无绑定</div>';
