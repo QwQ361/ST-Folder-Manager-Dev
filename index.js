@@ -32728,6 +32728,7 @@ jQuery(async () => {
     }
 
     const panel = $(`<div class="cfm-nf-panel" data-preset-folder-panel="${escapeHtml(panelKey)}"></div>`);
+    panel.css("z-index", 40000);
     const toolbar = $(
       `<div class="cfm-nf-toolbar">
         <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
