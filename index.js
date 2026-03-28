@@ -804,6 +804,12 @@ jQuery(async () => {
     // 当前已应用的正则分组索引集合（用于应用/取消追踪）
     if (!extension_settings[extensionName]._regexAppliedPresetIndices)
       extension_settings[extensionName]._regexAppliedPresetIndices = [];
+    // 预设详情激活分组：{ [presetName]: [{name, fields}] }
+    if (!extension_settings[extensionName].presetDetailActivePresets)
+      extension_settings[extensionName].presetDetailActivePresets = {};
+    // 当前已应用的预设详情分组索引集合：{ [presetName]: number[] }
+    if (!extension_settings[extensionName]._presetDetailAppliedPresetIndices)
+      extension_settings[extensionName]._presetDetailAppliedPresetIndices = {};
     // 置顶聊天列表：[{ avatar, chatFileName }]
     if (!Array.isArray(extension_settings[extensionName].pinnedChats))
       extension_settings[extensionName].pinnedChats = [];
@@ -9991,6 +9997,539 @@ jQuery(async () => {
     }
   }
 
+  function getPresetDetailActivePresets(presetName) {
+    ensureSettings();
+    const presetKey = String(presetName || "");
+    if (!presetKey) return [];
+    const store =
+      extension_settings[extensionName].presetDetailActivePresets || {};
+    if (!Array.isArray(store[presetKey])) store[presetKey] = [];
+    extension_settings[extensionName].presetDetailActivePresets = store;
+    return store[presetKey];
+  }
+
+  function getPresetDetailAppliedPresetIndices(presetName) {
+    ensureSettings();
+    const presetKey = String(presetName || "");
+    if (!presetKey) return [];
+    const store =
+      extension_settings[extensionName]._presetDetailAppliedPresetIndices || {};
+    if (!Array.isArray(store[presetKey])) store[presetKey] = [];
+    extension_settings[extensionName]._presetDetailAppliedPresetIndices = store;
+    return store[presetKey];
+  }
+
+  function setPresetDetailAppliedPresetIndices(presetName, indices) {
+    ensureSettings();
+    const presetKey = String(presetName || "");
+    if (!presetKey) return;
+    const store =
+      extension_settings[extensionName]._presetDetailAppliedPresetIndices || {};
+    store[presetKey] = Array.from(
+      new Set(
+        (Array.isArray(indices) ? indices : []).filter(
+          (idx) => Number.isInteger(idx) && idx >= 0,
+        ),
+      ),
+    );
+    extension_settings[extensionName]._presetDetailAppliedPresetIndices = store;
+    getContext().saveSettingsDebounced();
+  }
+
+  function normalizePresetDetailFieldKeys(fieldKeys) {
+    return Array.from(
+      new Set(
+        (Array.isArray(fieldKeys) ? fieldKeys : [])
+          .map((fieldKey) => String(fieldKey || ""))
+          .filter((fieldKey) => fieldKey.startsWith("prompts.")),
+      ),
+    );
+  }
+
+  function savePresetDetailActivePreset(presetName, name, fieldKeys) {
+    const presets = getPresetDetailActivePresets(presetName);
+    const normalizedKeys = normalizePresetDetailFieldKeys(fieldKeys);
+    const existing = presets.find((p) => p.name === name);
+    if (existing) {
+      existing.fields = normalizedKeys;
+    } else {
+      presets.push({ name, fields: normalizedKeys });
+    }
+    getContext().saveSettingsDebounced();
+  }
+
+  function deletePresetDetailActivePreset(presetName, name) {
+    const presets = getPresetDetailActivePresets(presetName);
+    const remaining = presets.filter((p) => p.name !== name);
+    extension_settings[extensionName].presetDetailActivePresets[
+      String(presetName || "")
+    ] = remaining;
+    getContext().saveSettingsDebounced();
+  }
+
+  function renamePresetDetailActivePreset(presetName, oldName, newName) {
+    const presets = getPresetDetailActivePresets(presetName);
+    const target = presets.find((p) => p.name === oldName);
+    if (target) {
+      target.name = newName;
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function getEnabledPresetDetailFieldKeys(presetData) {
+    return getPresetDetailFields(presetData)
+      .filter(
+        (field) =>
+          !!field?.enabled && String(field?.key || "").startsWith("prompts."),
+      )
+      .map((field) => String(field.key || ""));
+  }
+
+  function setPresetDetailFieldsEnabled(presetData, fieldKeys, enabled) {
+    const normalizedKeys = normalizePresetDetailFieldKeys(fieldKeys);
+    let changedCount = 0;
+    for (const fieldKey of normalizedKeys) {
+      const promptKey = fieldKey.slice("prompts.".length);
+      if (!promptKey) continue;
+      setPresetPromptEnabled(presetData, promptKey, enabled);
+      changedCount++;
+    }
+    return changedCount;
+  }
+
+  async function showPresetDetailGroupPanel(presetName) {
+    if ($("#cfm-preset-detail-group-panel-overlay").length > 0) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    const fields = getPresetDetailFields(presetData).filter((field) =>
+      String(field?.key || "").startsWith("prompts."),
+    );
+    const enabledIds = getEnabledPresetDetailFieldKeys(presetData);
+    const presets = getPresetDetailActivePresets(presetName);
+    const enabledSet = new Set(enabledIds);
+    let matchedPresetName = null;
+    for (const p of presets) {
+      const presetFields = normalizePresetDetailFieldKeys(p.fields);
+      if (
+        presetFields.length === enabledIds.length &&
+        presetFields.every((fieldKey) => enabledSet.has(fieldKey))
+      ) {
+        matchedPresetName = p.name;
+        break;
+      }
+    }
+
+    const presetsHtml =
+      presets.length === 0
+        ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
+        : presets
+            .map((p, idx) => {
+              const presetFields = normalizePresetDetailFieldKeys(p.fields);
+              return `
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+          <div class="cfm-wi-preset-item-left">
+            <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+            <span class="cfm-wi-preset-item-count">${presetFields.length} 个</span>
+          </div>
+          <span class="cfm-wi-preset-item-actions">
+            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用分组"></i>
+            <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
+            <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
+            <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
+          </span>
+        </div>
+      `;
+            })
+            .join("");
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-preset-detail-group-panel-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-panel">
+          <div class="cfm-edit-popup-title"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>预设条目激活分组</div>
+          <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(presetName)}</div></div>
+          <div class="cfm-wi-preset-save-section">
+            <div class="cfm-wi-preset-save-row">
+              <input type="text" class="cfm-edit-input" id="cfm-preset-detail-group-name-input" placeholder="输入分组名称，保存当前激活的 ${enabledIds.length} 个预设条目">
+              <button class="cfm-edit-popup-confirm" id="cfm-preset-detail-group-save-confirm" ${enabledIds.length === 0 ? "disabled" : ""}><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+            </div>
+            ${enabledIds.length === 0 ? '<div class="cfm-wi-preset-save-hint">当前没有激活的预设条目可保存</div>' : ""}
+            ${matchedPresetName ? `<div class="cfm-wi-preset-save-hint" style="color:#f9e2af;">当前激活组合与已有分组「${escapeHtml(matchedPresetName)}」相同</div>` : ""}
+          </div>
+          <div class="cfm-wi-preset-divider"></div>
+          <div class="cfm-wi-preset-list-section">
+            <div class="cfm-wi-preset-list-title">已保存的分组</div>
+            <div class="cfm-wi-preset-list">${presetsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">关闭</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+    overlay.find("#cfm-preset-detail-group-name-input").focus();
+
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+
+    overlay.find("#cfm-preset-detail-group-name-input").on("keydown", (e) => {
+      if (e.key === "Enter")
+        overlay.find("#cfm-preset-detail-group-save-confirm").trigger("click");
+      if (e.key === "Escape") overlay.remove();
+    });
+    overlay.find("#cfm-preset-detail-group-save-confirm").on("click", () => {
+      if (enabledIds.length === 0) return;
+      const name = overlay
+        .find("#cfm-preset-detail-group-name-input")
+        .val()
+        .trim();
+      if (!name) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existing = getPresetDetailActivePresets(presetName).find(
+        (p) => p.name === name,
+      );
+      if (existing) {
+        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+      }
+      savePresetDetailActivePreset(presetName, name, enabledIds);
+      toastr.success(
+        `已保存激活分组「${name}」（${enabledIds.length} 个预设条目）`,
+      );
+      overlay.remove();
+    });
+
+    overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getPresetDetailActivePresets(presetName);
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied = getPresetDetailAppliedPresetIndices(presetName);
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+
+        let mode = "stack";
+        if (otherApplied.length > 0) {
+          const otherNames = otherApplied
+            .map((i) => currentPresets[i].name)
+            .join("、");
+          const choice = await new Promise((resolve) => {
+            const confirmOverlay = $(`
+              <div class="cfm-edit-popup-overlay" style="z-index:100001;">
+                <div class="cfm-edit-popup" style="max-width:380px;">
+                  <div class="cfm-edit-popup-title">应用方式</div>
+                  <div class="cfm-edit-field" style="font-size:13px;line-height:1.6;">
+                    当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：
+                  </div>
+                  <div class="cfm-edit-popup-actions" style="gap:8px;">
+                    <button class="cfm-edit-popup-cancel" data-choice="cancel">取消</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="replace" style="background:#f38ba8;">替换</button>
+                    <button class="cfm-edit-popup-confirm" data-choice="stack">叠加</button>
+                  </div>
+                </div>
+              </div>
+            `);
+            $("body").append(confirmOverlay);
+            confirmOverlay.find("[data-choice]").on("click", function () {
+              resolve($(this).attr("data-choice"));
+              confirmOverlay.remove();
+            });
+            confirmOverlay.on("click", function (ev) {
+              if ($(ev.target).is(confirmOverlay)) {
+                resolve("cancel");
+                confirmOverlay.remove();
+              }
+            });
+          });
+          if (choice === "cancel") return;
+          mode = choice;
+        }
+
+        const latestPresetData = getPresetDataForDetail(pm, presetName);
+        if (!latestPresetData) {
+          toastr.error(`找不到预设「${presetName}」的数据`);
+          return;
+        }
+
+        const presetFields = normalizePresetDetailFieldKeys(preset.fields);
+        if (mode === "replace") {
+          const keepFields = new Set(presetFields);
+          for (const oi of otherApplied) {
+            const otherFields = normalizePresetDetailFieldKeys(
+              currentPresets[oi]?.fields,
+            );
+            for (const fieldKey of otherFields) {
+              if (!keepFields.has(fieldKey)) {
+                setPresetDetailFieldsEnabled(
+                  latestPresetData,
+                  [fieldKey],
+                  false,
+                );
+              }
+            }
+          }
+        }
+
+        setPresetDetailFieldsEnabled(latestPresetData, presetFields, true);
+        await pm.savePreset(presetName, latestPresetData);
+        syncCurrentPresetSelection(pm, presetName);
+
+        const newApplied =
+          mode === "replace"
+            ? [idx]
+            : [...otherApplied.filter((i) => i !== idx), idx];
+        setPresetDetailAppliedPresetIndices(presetName, newApplied);
+
+        toastr.success(
+          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
+        );
+        overlay.remove();
+        refreshPresetPanelView();
+      } catch (err) {
+        console.error("[CFM] 应用预设详情分组失败", err);
+        toastr.error("应用分组失败");
+      }
+    });
+
+    overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getPresetDetailActivePresets(presetName);
+      const preset = currentPresets[idx];
+      if (!preset) {
+        toastr.error("分组不存在");
+        return;
+      }
+      try {
+        const applied = getPresetDetailAppliedPresetIndices(presetName);
+        if (!applied.includes(idx)) {
+          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          return;
+        }
+        const otherApplied = applied.filter(
+          (i) => i !== idx && currentPresets[i],
+        );
+        const otherFields = new Set();
+        for (const oi of otherApplied) {
+          for (const fieldKey of normalizePresetDetailFieldKeys(
+            currentPresets[oi]?.fields,
+          )) {
+            otherFields.add(fieldKey);
+          }
+        }
+
+        const latestPresetData = getPresetDataForDetail(pm, presetName);
+        if (!latestPresetData) {
+          toastr.error(`找不到预设「${presetName}」的数据`);
+          return;
+        }
+
+        let removedCount = 0;
+        for (const fieldKey of normalizePresetDetailFieldKeys(preset.fields)) {
+          if (!otherFields.has(fieldKey)) {
+            removedCount += setPresetDetailFieldsEnabled(
+              latestPresetData,
+              [fieldKey],
+              false,
+            );
+          }
+        }
+
+        await pm.savePreset(presetName, latestPresetData);
+        syncCurrentPresetSelection(pm, presetName);
+        setPresetDetailAppliedPresetIndices(presetName, otherApplied);
+
+        toastr.success(
+          `已取消应用分组「${preset.name}」（取消激活 ${removedCount} 个独占预设条目）`,
+        );
+        overlay.remove();
+        refreshPresetPanelView();
+      } catch (err) {
+        console.error("[CFM] 取消应用预设详情分组失败", err);
+        toastr.error("取消应用分组失败");
+      }
+    });
+
+    overlay.find(".cfm-wi-preset-edit").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getPresetDetailActivePresets(presetName);
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      overlay.remove();
+      showPresetDetailGroupEditPopup(presetName, preset);
+    });
+
+    overlay.find(".cfm-wi-preset-del").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const idx = parseInt(
+        $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
+        10,
+      );
+      const currentPresets = getPresetDetailActivePresets(presetName);
+      const preset = currentPresets[idx];
+      if (!preset) return;
+      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      const applied = getPresetDetailAppliedPresetIndices(presetName);
+      if (applied.includes(idx)) {
+        setPresetDetailAppliedPresetIndices(
+          presetName,
+          applied.filter((i) => i !== idx),
+        );
+      }
+      deletePresetDetailActivePreset(presetName, preset.name);
+      toastr.success(`已删除激活分组「${preset.name}」`);
+      overlay.remove();
+      showPresetDetailGroupPanel(presetName);
+    });
+  }
+
+  function showPresetDetailGroupEditPopup(presetName, preset) {
+    if ($("#cfm-preset-detail-group-edit-overlay").length > 0) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    const fields = getPresetDetailFields(presetData).filter((field) =>
+      String(field?.key || "").startsWith("prompts."),
+    );
+    const fieldSet = new Set(normalizePresetDetailFieldKeys(preset?.fields));
+    const fieldsHtml =
+      fields.length === 0
+        ? '<div class="cfm-wi-preset-empty">暂无可编辑的预设条目</div>'
+        : fields
+            .map((field) => {
+              const checked = fieldSet.has(String(field.key || ""))
+                ? "checked"
+                : "";
+              return `<label class="cfm-wi-preset-edit-item">
+          <input type="checkbox" value="${escapeHtml(String(field.key || ""))}" ${checked}>
+          <i class="fa-solid fa-list-check" style="color:#a6e3a1;"></i>
+          <span>${escapeHtml(String(field.label || field.key || "(未命名)"))}</span>
+        </label>`;
+            })
+            .join("");
+
+    const overlay = $(`
+      <div class="cfm-edit-popup-overlay" id="cfm-preset-detail-group-edit-overlay">
+        <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
+          <div class="cfm-edit-popup-title">编辑预设条目激活分组</div>
+          <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(presetName)}</div></div>
+          <div class="cfm-edit-field">
+            <label>分组名称</label>
+            <input type="text" class="cfm-edit-input" id="cfm-preset-detail-group-edit-name" value="${escapeHtml(preset.name)}">
+          </div>
+          <div class="cfm-edit-field">
+            <label>包含的预设条目</label>
+            <div class="cfm-wi-preset-edit-search">
+              <input type="text" class="cfm-edit-input" id="cfm-preset-detail-group-edit-filter" placeholder="搜索...">
+            </div>
+            <div class="cfm-wi-preset-edit-list">${fieldsHtml}</div>
+          </div>
+          <div class="cfm-edit-popup-actions">
+            <button class="cfm-edit-popup-cancel">取消</button>
+            <button class="cfm-edit-popup-confirm">保存</button>
+          </div>
+        </div>
+      </div>
+    `);
+    $("body").append(overlay);
+
+    function applyEditFilters() {
+      const q = overlay
+        .find("#cfm-preset-detail-group-edit-filter")
+        .val()
+        .toLowerCase()
+        .trim();
+      overlay.find(".cfm-wi-preset-edit-item").each(function () {
+        const name = $(this).find("span").text().toLowerCase();
+        $(this).toggle(!q || name.includes(q));
+      });
+    }
+
+    overlay
+      .find("#cfm-preset-detail-group-edit-filter")
+      .on("input", applyEditFilters);
+    applyEditFilters();
+    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
+    overlay.on("click", (e) => {
+      if ($(e.target).is(overlay)) overlay.remove();
+    });
+    overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+      const newName = overlay
+        .find("#cfm-preset-detail-group-edit-name")
+        .val()
+        .trim();
+      if (!newName) {
+        toastr.warning("请输入分组名称");
+        return;
+      }
+      const existingOther = getPresetDetailActivePresets(presetName).find(
+        (p) => p.name === newName && p.name !== preset.name,
+      );
+      if (existingOther) {
+        toastr.warning(`分组名称「${newName}」已被使用`);
+        return;
+      }
+      const newFields = [];
+      overlay.find(".cfm-wi-preset-edit-item input:checked").each(function () {
+        newFields.push($(this).val());
+      });
+      if (newFields.length === 0) {
+        toastr.warning("请至少选择一个预设条目");
+        return;
+      }
+      if (newName !== preset.name) {
+        renamePresetDetailActivePreset(presetName, preset.name, newName);
+      }
+      savePresetDetailActivePreset(presetName, newName, newFields);
+      toastr.success(
+        `已更新激活分组「${newName}」（${newFields.length} 个预设条目）`,
+      );
+      overlay.remove();
+    });
+  }
+
   async function showPresetDetailFieldPopup(presetName, field) {
     if (!presetName || !field) return null;
     const currentValue = String(field.value || "");
@@ -10135,10 +10674,19 @@ jQuery(async () => {
 
     const detailToolbar = $(`
       <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-group-btn" title="预设条目激活分组" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-layer-group"></i> 分组</button>
         <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="批量操作模式" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
         <span class="cfm-regex-count">${fields.length} 个条目</span>
       </div>
     `);
+    detailToolbar
+      .find(".cfm-preset-detail-group-btn")
+      .on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!fields.length) return;
+        await showPresetDetailGroupPanel(preset.name);
+      });
     detailToolbar
       .find(".cfm-preset-detail-batch-toggle")
       .on("click touchend", (e) => {
