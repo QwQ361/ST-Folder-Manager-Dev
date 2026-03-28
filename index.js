@@ -315,6 +315,9 @@ jQuery(async () => {
     const pm = getContext().getPresetManager();
     if (pm && pm.select) {
       pm.select.val(value).trigger("change");
+      setTimeout(() => {
+        refreshActiveViewerStateAfterSelectionChange({ preset: true });
+      }, 0);
     }
   }
   function getCurrentPresetName() {
@@ -11915,6 +11918,162 @@ jQuery(async () => {
     else enterPresetRegexMode();
   }
 
+  function refreshChatModeTargetFromCurrent() {
+    if (!cfmChatMode) return;
+    const targetAvatar = getCurrentCharAvatar();
+    cfmChatExpandedAvatars.clear();
+    cfmChatCache.clear();
+
+    if (targetAvatar) {
+      const tagMap = getTagMap();
+      const charTags = tagMap[targetAvatar] || [];
+      const folderIds = getFolderTagIds();
+      const charFolderTags = charTags.filter((t) => folderIds.includes(t));
+      if (charFolderTags.length > 0) {
+        let deepest = charFolderTags[0];
+        let maxDepth = getFolderPath(deepest).length;
+        for (let i = 1; i < charFolderTags.length; i++) {
+          const depth = getFolderPath(charFolderTags[i]).length;
+          if (depth > maxDepth) {
+            deepest = charFolderTags[i];
+            maxDepth = depth;
+          }
+        }
+        for (const pid of getFolderPath(deepest)) expandedNodes.add(pid);
+        selectedTreeNode = deepest;
+      } else {
+        selectedTreeNode = "__uncategorized__";
+      }
+      cfmChatExpandedAvatars.add(targetAvatar);
+    }
+
+    renderLeftTree();
+    renderRightPane();
+
+    requestAnimationFrame(() => {
+      const targetRow = Array.from(
+        document.querySelectorAll("#cfm-right-list .cfm-row[data-avatar]"),
+      ).find((el) => el.getAttribute("data-avatar") === targetAvatar);
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+
+    if (targetAvatar) {
+      getCharChats(targetAvatar)
+        .then(() => {
+          if (cfmChatMode && getCurrentCharAvatar() === targetAvatar) {
+            renderRightPane();
+            requestAnimationFrame(() => {
+              const targetRow = Array.from(
+                document.querySelectorAll(
+                  "#cfm-right-list .cfm-row[data-avatar]",
+                ),
+              ).find((el) => el.getAttribute("data-avatar") === targetAvatar);
+              if (targetRow) {
+                targetRow.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              }
+            });
+          }
+        })
+        .catch((e) => console.warn("[CFM] 刷新聊天模式目标失败:", e));
+    }
+  }
+
+  function refreshCharRegexModeTargetFromCurrent() {
+    if (!cfmCharRegexMode) return;
+    cfmCharRegexExpandedAvatars.clear();
+    cfmCharRegexTargetAvatar = getCurrentCharAvatar();
+    cfmCharRegexHighlightPath = [];
+
+    if (cfmCharRegexTargetAvatar) {
+      const tagMap = getTagMap();
+      const charTags = tagMap[cfmCharRegexTargetAvatar] || [];
+      const folderIds = getFolderTagIds();
+      const charFolderTags = charTags.filter((t) => folderIds.includes(t));
+      if (charFolderTags.length > 0) {
+        let deepest = charFolderTags[0];
+        let maxDepth = getFolderPath(deepest).length;
+        for (let i = 1; i < charFolderTags.length; i++) {
+          const depth = getFolderPath(charFolderTags[i]).length;
+          if (depth > maxDepth) {
+            deepest = charFolderTags[i];
+            maxDepth = depth;
+          }
+        }
+        cfmCharRegexHighlightPath = getFolderPath(deepest);
+        for (const pid of cfmCharRegexHighlightPath) expandedNodes.add(pid);
+        selectedTreeNode = deepest;
+      } else {
+        cfmCharRegexHighlightPath = [];
+        selectedTreeNode = "__uncategorized__";
+      }
+      cfmCharRegexExpandedAvatars.add(cfmCharRegexTargetAvatar);
+    }
+
+    renderLeftTree();
+    renderRightPane();
+    requestAnimationFrame(() => {
+      const targetRow = document.querySelector(
+        "#cfm-right-list .cfm-regex-target-row",
+      );
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }
+
+  function refreshPresetRegexModeTargetFromCurrent() {
+    if (!cfmPresetRegexMode) return;
+    cfmPresetRegexExpandedNames.clear();
+    cfmPresetRegexTargetName = getCurrentPresetName();
+    cfmPresetRegexHighlightPath = [];
+
+    if (cfmPresetRegexTargetName) {
+      const groups = getResourceGroups("presets");
+      const tree = getResFolderTree("presets");
+      const folderId = groups[cfmPresetRegexTargetName];
+      if (folderId && tree[folderId]) {
+        cfmPresetRegexHighlightPath = getResFolderPath("presets", folderId);
+        for (const pid of cfmPresetRegexHighlightPath) {
+          presetExpandedNodes.add(pid);
+        }
+        selectedPresetFolder = folderId;
+      } else {
+        cfmPresetRegexHighlightPath = [];
+        selectedPresetFolder = "__ungrouped__";
+      }
+      cfmPresetRegexExpandedNames.add(cfmPresetRegexTargetName);
+    }
+
+    renderPresetsView();
+    requestAnimationFrame(() => {
+      const targetRow = document.querySelector(
+        "#cfm-preset-right-list .cfm-regex-target-row",
+      );
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }
+
+  function refreshActiveViewerStateAfterSelectionChange({
+    character = false,
+    preset = false,
+  } = {}) {
+    if (!$("#cfm-overlay").length && !$("#cfm-popup").length) return;
+    if (character) {
+      if (cfmChatMode) refreshChatModeTargetFromCurrent();
+      if (cfmCharRegexMode) refreshCharRegexModeTargetFromCurrent();
+    }
+    if (preset && cfmPresetRegexMode) {
+      refreshPresetRegexModeTargetFromCurrent();
+    }
+  }
+
   /**
    * 同步原生正则引擎状态：清除缓存并刷新原生正则UI面板
    */
@@ -13137,6 +13296,9 @@ jQuery(async () => {
       // 先选中角色
       if (ctx.selectCharacterById) {
         await ctx.selectCharacterById(charIdx);
+        setTimeout(() => {
+          refreshActiveViewerStateAfterSelectionChange({ character: true });
+        }, 0);
       }
       // 然后打开指定聊天
       if (openCharacterChatFunc) {
@@ -18763,6 +18925,25 @@ jQuery(async () => {
     const resetPanelExpandedStates = () => {
       cfmCharDetailExpandedAvatars.clear();
       personaItemExpandedIds.clear();
+
+      cfmChatMode = false;
+      cfmChatExpandedAvatars.clear();
+      cfmChatCache.clear();
+      cfmChatBatchMode = false;
+      cfmChatBatchSelected.clear();
+      cfmChatBatchRangeMode = false;
+      cfmChatBatchLastClicked = null;
+
+      cfmCharRegexMode = false;
+      cfmCharRegexExpandedAvatars.clear();
+      cfmCharRegexTargetAvatar = null;
+      cfmCharRegexHighlightPath = [];
+      cfmCharRegexPrevSelectedTreeNode = undefined;
+
+      cfmPresetRegexMode = false;
+      cfmPresetRegexExpandedNames.clear();
+      cfmPresetRegexTargetName = null;
+      cfmPresetRegexHighlightPath = [];
     };
     if (sortDirty) {
       // 排序已更改，弹出确认框
@@ -19801,7 +19982,13 @@ jQuery(async () => {
       const idx = characters.findIndex((c) => c.avatar === char.avatar);
       if (idx >= 0) {
         const selectCharacterById = getContext().selectCharacterById;
-        if (selectCharacterById) selectCharacterById(idx);
+        if (selectCharacterById) {
+          Promise.resolve(selectCharacterById(idx)).finally(() => {
+            setTimeout(() => {
+              refreshActiveViewerStateAfterSelectionChange({ character: true });
+            }, 0);
+          });
+        }
       }
     });
     // 移动端触摸拖拽
