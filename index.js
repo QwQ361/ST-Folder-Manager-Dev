@@ -14044,9 +14044,9 @@ jQuery(async () => {
                             <span class="cfm-rh-count" id="cfm-regex-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-regex-btn" title="导入正则"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-regex-file" accept=".json" multiple style="display:none;">
+                            <button class="cfm-regex-create-btn" id="cfm-regex-create-btn" title="新建全局正则"><i class="fa-solid fa-plus"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-regex-btn" title="导出正则"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-regex-btn" title="删除正则"><i class="fa-solid fa-trash-can"></i></button>
-                            <button class="cfm-regex-create-btn" id="cfm-regex-create-btn" title="新建全局正则"><i class="fa-solid fa-plus"></i></button>
                             <button class="cfm-regex-sort-btn" id="cfm-regex-sort-btn" title="排序正则脚本"><i class="fa-solid fa-arrow-up-short-wide"></i></button>
                             <button class="cfm-multisel-toggle cfm-multisel-toggle-regex" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
                         </div>
