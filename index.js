@@ -7564,6 +7564,21 @@ jQuery(async () => {
           mode = choice;
         }
 
+        const autoAppliedState = getAutoApplyPresetIndices();
+        const autoDetail = autoAppliedState.details[idx] || {};
+        if (
+          autoAppliedState.indices.includes(idx) &&
+          (autoDetail.charMatch || autoDetail.presetMatch)
+        ) {
+          const reasons = [];
+          if (autoDetail.charMatch) reasons.push("当前角色");
+          if (autoDetail.presetMatch) reasons.push("当前预设");
+          toastr.info(
+            `分组「${preset.name}」已因${reasons.join("和")}绑定自动生效`,
+          );
+          return;
+        }
+
         if (mode === "replace") {
           // 替换模式：先关闭其他已应用分组的独占世界书
           const keepBooks = new Set(preset.books);
@@ -27056,6 +27071,20 @@ jQuery(async () => {
           });
           if (choice === "cancel") return;
           mode = choice;
+        }
+        const autoAppliedState = getQrAutoApplyPresetIndices();
+        const autoDetail = autoAppliedState.details[idx] || {};
+        if (
+          autoAppliedState.indices.includes(idx) &&
+          (autoDetail.charMatch || autoDetail.presetMatch)
+        ) {
+          const reasons = [];
+          if (autoDetail.charMatch) reasons.push("当前角色");
+          if (autoDetail.presetMatch) reasons.push("当前预设");
+          toastr.info(
+            `分组「${preset.name}」已因${reasons.join("和")}绑定自动生效`,
+          );
+          return;
         }
         if (mode === "replace") {
           const keepSets = new Set(preset.sets);
