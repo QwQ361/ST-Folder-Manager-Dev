@@ -7625,11 +7625,11 @@ jQuery(async () => {
           toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
-        // 检查该分组是否因绑定条件匹配而自动应用，如果是则阻止手动取消
+        // 检查该分组是否因绑定条件匹配而自动应用
         const { indices: autoIndices, details: autoDetails } =
           getAutoApplyPresetIndices();
         if (autoIndices.includes(idx)) {
-          const detail = autoDetails[idx];
+          const detail = autoDetails[idx] || {};
           const reasons = [];
           if (detail.charMatch)
             reasons.push(
@@ -7637,12 +7637,8 @@ jQuery(async () => {
             );
           if (detail.presetMatch)
             reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
-          toastr.warning(
-            `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
-            "无法取消应用",
-            { timeOut: 5000 },
-          );
-          return;
+          const confirmMsg = `分组「${preset.name}」当前因${reasons.join(" 和 ")}自动应用，确认取消应用吗？`;
+          if (!confirm(confirmMsg)) return;
         }
         // 计算其他已应用分组覆盖的世界书
         const otherApplied = applied.filter(
@@ -7719,21 +7715,55 @@ jQuery(async () => {
             toastr.success(`已将分组「${preset.name}」设为全局应用`);
           } else if (action === "preset") {
             if (!currentPresetName) return;
-            // 确保 scope 为 bound
-            if (preset.scope === "global") setWiPresetScope(idx, "bound");
-            bindWiPresetToPreset(idx, currentPresetName);
-            await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
-            );
+            const alreadyBound =
+              Array.isArray(preset.bindPresets) &&
+              preset.bindPresets.includes(currentPresetName);
+            const autoApplied = getAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.presetMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前预设，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前预设已绑定分组「${preset.name}」`);
+              }
+            } else {
+              // 确保 scope 为 bound
+              if (preset.scope === "global") setWiPresetScope(idx, "bound");
+              bindWiPresetToPreset(idx, currentPresetName);
+              await applyWorldInfoPreset(preset.books, wiCharBound);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
+              );
+            }
           } else if (action === "char") {
             if (!currentChar) return;
-            if (preset.scope === "global") setWiPresetScope(idx, "bound");
-            bindWiPresetToChar(idx, currentChar);
-            await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
-            );
+            const alreadyBound =
+              Array.isArray(preset.bindChars) &&
+              preset.bindChars.includes(currentChar);
+            const autoApplied = getAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.charMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前角色，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前角色已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setWiPresetScope(idx, "bound");
+              bindWiPresetToChar(idx, currentChar);
+              await applyWorldInfoPreset(preset.books, wiCharBound);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
+              );
+            }
           }
           menu.remove();
           overlay.remove();
@@ -27079,7 +27109,7 @@ jQuery(async () => {
         const { indices: autoIndices, details: autoDetails } =
           getQrAutoApplyPresetIndices();
         if (autoIndices.includes(idx)) {
-          const detail = autoDetails[idx];
+          const detail = autoDetails[idx] || {};
           const reasons = [];
           if (detail.charMatch)
             reasons.push(
@@ -27087,12 +27117,8 @@ jQuery(async () => {
             );
           if (detail.presetMatch)
             reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
-          toastr.warning(
-            `分组「${preset.name}」因绑定了${reasons.join(" 和 ")}而自动应用，无法手动取消。请先取消对应的绑定关系。`,
-            "无法取消应用",
-            { timeOut: 5000 },
-          );
-          return;
+          const confirmMsg = `分组「${preset.name}」当前因${reasons.join(" 和 ")}自动应用，确认取消应用吗？`;
+          if (!confirm(confirmMsg)) return;
         }
         const otherApplied = applied.filter(
           (i) => i !== idx && currentPresets[i],
@@ -27161,20 +27187,54 @@ jQuery(async () => {
             toastr.success(`已将分组「${preset.name}」设为全局应用`);
           } else if (action === "preset") {
             if (!currentPresetName) return;
-            if (preset.scope === "global") setQrPresetScope(idx, "bound");
-            bindQrPresetToPreset(idx, currentPresetName);
-            await applyQrPreset(preset.sets);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
-            );
+            const alreadyBound =
+              Array.isArray(preset.bindPresets) &&
+              preset.bindPresets.includes(currentPresetName);
+            const autoApplied = getQrAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.presetMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前预设，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前预设已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setQrPresetScope(idx, "bound");
+              bindQrPresetToPreset(idx, currentPresetName);
+              await applyQrPreset(preset.sets);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
+              );
+            }
           } else if (action === "char") {
             if (!currentChar) return;
-            if (preset.scope === "global") setQrPresetScope(idx, "bound");
-            bindQrPresetToChar(idx, currentChar);
-            await applyQrPreset(preset.sets);
-            toastr.success(
-              `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
-            );
+            const alreadyBound =
+              Array.isArray(preset.bindChars) &&
+              preset.bindChars.includes(currentChar);
+            const autoApplied = getQrAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.charMatch
+              ) {
+                toastr.info(
+                  `分组「${preset.name}」已绑定当前角色，且已处于应用状态`,
+                );
+              } else {
+                toastr.info(`当前角色已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setQrPresetScope(idx, "bound");
+              bindQrPresetToChar(idx, currentChar);
+              await applyQrPreset(preset.sets);
+              toastr.success(
+                `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
+              );
+            }
           }
           menu.remove();
           overlay.remove();
