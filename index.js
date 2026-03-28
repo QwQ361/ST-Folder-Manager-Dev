@@ -7501,6 +7501,12 @@ jQuery(async () => {
     const appliedPresetIndices = new Set(
       extension_settings[extensionName]._wiAppliedPresetIndices || [],
     );
+    const currentWiActiveSet = new Set();
+    $("#world_info")
+      .find("option:selected")
+      .each(function () {
+        currentWiActiveSet.add($(this).text());
+      });
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
@@ -7512,7 +7518,9 @@ jQuery(async () => {
                 (p.bindPresets && p.bindPresets.length > 0) ||
                 (p.bindChats && p.bindChats.length > 0);
               const bindSummary = getWiPresetBindSummary(p);
-              const isApplied = appliedPresetIndices.has(idx);
+              const isApplied =
+                appliedPresetIndices.has(idx) ||
+                p.books.every((b) => currentWiActiveSet.has(b));
               return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <div class="cfm-wi-preset-item-left">
