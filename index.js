@@ -11406,9 +11406,6 @@ jQuery(async () => {
                   ? `
               <div class="cfm-regex-action-btn cfm-regex-move-up-btn${i === 0 ? " cfm-regex-move-disabled" : ""}" title="上移"><i class="fa-solid fa-arrow-up"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-move-down-btn${i === scripts.length - 1 ? " cfm-regex-move-disabled" : ""}" title="下移"><i class="fa-solid fa-arrow-down"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
               `
                   : ""
               }
@@ -11504,63 +11501,6 @@ jQuery(async () => {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
             toastr.error("下移失败: " + err.message);
-          }
-        });
-        // 重命名按钮
-        row.find(".cfm-regex-rename-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const oldName = script.scriptName || "";
-          const newName = await showRegexRenamePopup(oldName);
-          if (!newName || newName === oldName) return;
-          try {
-            script.scriptName = newName;
-            await saveCharRegexScripts(avatar, scripts);
-            toastr.success(`已重命名: ${oldName} → ${newName}`);
-            rerenderCurrentView();
-          } catch (err) {
-            console.error("[CFM] 正则重命名失败:", err);
-            script.scriptName = oldName;
-            toastr.error("重命名失败: " + err.message);
-          }
-        });
-        // 导出按钮（单个导出，JSON格式）
-        row.find(".cfm-regex-export-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          try {
-            const download = (await import("../../../utils.js")).download;
-            const fileName = `regex-${(script.scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
-            download(
-              JSON.stringify(script, null, 4),
-              fileName,
-              "application/json",
-            );
-            toastr.success(`已导出: ${script.scriptName}`);
-          } catch (err) {
-            console.error("[CFM] 导出正则失败:", err);
-            toastr.error("导出失败: " + err.message);
-          }
-        });
-        // 删除按钮
-        row.find(".cfm-regex-delete-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (
-            !confirm(
-              `确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`,
-            )
-          )
-            return;
-          try {
-            const idx = scripts.findIndex((s) => s.id === script.id);
-            if (idx !== -1) scripts.splice(idx, 1);
-            await saveCharRegexScripts(avatar, scripts);
-            toastr.success(`已删除: ${script.scriptName || "(未命名)"}`);
-            rerenderCurrentView();
-          } catch (err) {
-            console.error("[CFM] 删除正则失败:", err);
-            toastr.error("删除失败: " + err.message);
           }
         });
         subList.append(row);
@@ -11870,9 +11810,6 @@ jQuery(async () => {
                   ? `
               <div class="cfm-regex-action-btn cfm-regex-move-up-btn${i === 0 ? " cfm-regex-move-disabled" : ""}" title="上移"><i class="fa-solid fa-arrow-up"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-move-down-btn${i === scripts.length - 1 ? " cfm-regex-move-disabled" : ""}" title="下移"><i class="fa-solid fa-arrow-down"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-export-btn" title="导出"><i class="fa-solid fa-file-export"></i></div>
-              <div class="cfm-regex-action-btn cfm-regex-delete-btn" title="删除"><i class="fa-solid fa-trash-can"></i></div>
               `
                   : ""
               }
@@ -11968,63 +11905,6 @@ jQuery(async () => {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
             toastr.error("下移失败: " + err.message);
-          }
-        });
-        // 重命名按钮
-        row.find(".cfm-regex-rename-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const oldName = script.scriptName || "";
-          const newName = await showRegexRenamePopup(oldName);
-          if (!newName || newName === oldName) return;
-          try {
-            script.scriptName = newName;
-            await savePresetRegexScripts(scripts);
-            toastr.success(`已重命名: ${oldName} → ${newName}`);
-            rerenderCurrentView();
-          } catch (err) {
-            console.error("[CFM] 正则重命名失败:", err);
-            script.scriptName = oldName;
-            toastr.error("重命名失败: " + err.message);
-          }
-        });
-        // 导出按钮（单个导出，JSON格式）
-        row.find(".cfm-regex-export-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          try {
-            const download = (await import("../../../utils.js")).download;
-            const fileName = `regex-${(script.scriptName || "unnamed").replace(/[^\w\-_.]/g, "_")}.json`;
-            download(
-              JSON.stringify(script, null, 4),
-              fileName,
-              "application/json",
-            );
-            toastr.success(`已导出: ${script.scriptName}`);
-          } catch (err) {
-            console.error("[CFM] 导出正则失败:", err);
-            toastr.error("导出失败: " + err.message);
-          }
-        });
-        // 删除按钮
-        row.find(".cfm-regex-delete-btn").on("click", async function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (
-            !confirm(
-              `确定要删除正则脚本「${script.scriptName || "(未命名)"}」吗？\n此操作不可撤销！`,
-            )
-          )
-            return;
-          try {
-            const idx = scripts.findIndex((s) => s.id === script.id);
-            if (idx !== -1) scripts.splice(idx, 1);
-            await savePresetRegexScripts(scripts);
-            toastr.success(`已删除: ${script.scriptName || "(未命名)"}`);
-            rerenderCurrentView();
-          } catch (err) {
-            console.error("[CFM] 删除正则失败:", err);
-            toastr.error("删除失败: " + err.message);
           }
         });
         subList.append(row);
