@@ -7498,6 +7498,9 @@ jQuery(async () => {
     const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
 
     // 构建已有分组列表（用索引定位）
+    const appliedPresetIndices = new Set(
+      extension_settings[extensionName]._wiAppliedPresetIndices || [],
+    );
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
@@ -7506,8 +7509,10 @@ jQuery(async () => {
               const scope = p.scope || "global";
               const hasBindings =
                 (p.bindChars && p.bindChars.length > 0) ||
-                (p.bindPresets && p.bindPresets.length > 0);
+                (p.bindPresets && p.bindPresets.length > 0) ||
+                (p.bindChats && p.bindChats.length > 0);
               const bindSummary = getWiPresetBindSummary(p);
+              const isApplied = appliedPresetIndices.has(idx);
               return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <div class="cfm-wi-preset-item-left">
@@ -7517,7 +7522,7 @@ jQuery(async () => {
             ${hasBindings ? `<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>` : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用到全局"></i>
+            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用到全局"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-link cfm-wi-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
@@ -7958,7 +7963,7 @@ jQuery(async () => {
           const parsed = parseChatBindKey(bindKey);
           const ch = chars.find((c) => c.avatar === parsed.avatar);
           const charName = ch ? ch.name : parsed.avatar;
-          const name = `${charName} / ${parsed.chatFileName}`;
+          const name = `${charName}（${parsed.chatFileName || bindKey}）`;
           const isCurrentChat = getCurrentChatBindKey() === bindKey;
           html += `<div class="cfm-wi-bind-entry ${isCurrentChat ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="chat" data-bind-id="${escapeHtml(bindKey)}">
             <span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span>
@@ -8010,26 +8015,7 @@ jQuery(async () => {
         if (applied.includes(idx)) {
           const { indices: stillAutoIndices } = getAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
-            // 不再满足绑定条件，自动取消应用
-            const allPresets = getWiActivePresets();
-            const otherApplied = applied.filter(
-              (i) => i !== idx && allPresets[i],
-            );
-            const otherBooks = new Set();
-            for (const oi of otherApplied) {
-              for (const b of allPresets[oi].books) otherBooks.add(b);
-            }
-            const wiCharBoundLocal = await getCharBoundWorldBooks();
-            let removedCount = 0;
-            for (const b of preset.books) {
-              if (!wiCharBoundLocal.has(b) && !otherBooks.has(b)) {
-                await toggleWorldInfoActivation(b, false);
-                removedCount++;
-              }
-            }
-            extension_settings[extensionName]._wiAppliedPresetIndices =
-              otherApplied;
-            getContext().saveSettingsDebounced();
+            const removedCount = await unapplyWiPresetIndex(idx);
             toastr.info(
               `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`,
             );
@@ -8044,7 +8030,8 @@ jQuery(async () => {
         const stillHasBindings =
           updated &&
           ((updated.bindChars && updated.bindChars.length > 0) ||
-            (updated.bindPresets && updated.bindPresets.length > 0));
+            (updated.bindPresets && updated.bindPresets.length > 0) ||
+            (updated.bindChats && updated.bindChats.length > 0));
         if (!stillHasBindings) {
           if (updated) setWiPresetScope(idx, "global");
           // 最后一个绑定被取消，重建面板
@@ -26866,9 +26853,61 @@ jQuery(async () => {
       if (scope === "global") {
         presets[presetIdx].bindChars = [];
         presets[presetIdx].bindPresets = [];
+        presets[presetIdx].bindChats = [];
       }
       getContext().saveSettingsDebounced();
     }
+  }
+
+  async function unapplyWiPresetIndex(presetIdx) {
+    const allPresets = getWiActivePresets();
+    const preset = allPresets[presetIdx];
+    if (!preset) return 0;
+    const applied =
+      extension_settings[extensionName]._wiAppliedPresetIndices || [];
+    const otherApplied = applied.filter(
+      (i) => i !== presetIdx && allPresets[i],
+    );
+    const otherBooks = new Set();
+    for (const oi of otherApplied) {
+      for (const b of allPresets[oi].books) otherBooks.add(b);
+    }
+    const wiCharBoundLocal = await getCharBoundWorldBooks();
+    let removedCount = 0;
+    for (const b of preset.books) {
+      if (!wiCharBoundLocal.has(b) && !otherBooks.has(b)) {
+        await toggleWorldInfoActivation(b, false);
+        removedCount++;
+      }
+    }
+    extension_settings[extensionName]._wiAppliedPresetIndices = otherApplied;
+    getContext().saveSettingsDebounced();
+    return removedCount;
+  }
+
+  async function unapplyQrPresetIndex(presetIdx) {
+    const allPresets = getQrActivePresets();
+    const preset = allPresets[presetIdx];
+    if (!preset) return 0;
+    const applied =
+      extension_settings[extensionName]._qrAppliedPresetIndices || [];
+    const otherApplied = applied.filter(
+      (i) => i !== presetIdx && allPresets[i],
+    );
+    const otherSets = new Set();
+    for (const oi of otherApplied) {
+      for (const s of allPresets[oi].sets) otherSets.add(s);
+    }
+    let removedCount = 0;
+    for (const s of preset.sets) {
+      if (!otherSets.has(s)) {
+        await toggleQrSetActivation(s, false);
+        removedCount++;
+      }
+    }
+    extension_settings[extensionName]._qrAppliedPresetIndices = otherApplied;
+    getContext().saveSettingsDebounced();
+    return removedCount;
   }
   function bindQrPresetToChar(presetIdx, charAvatar) {
     const presets = getQrActivePresets();
@@ -27081,6 +27120,9 @@ jQuery(async () => {
     const scopeLabels = { global: "全局", bound: "已绑定" };
     const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
 
+    const appliedPresetIndices = new Set(
+      extension_settings[extensionName]._qrAppliedPresetIndices || [],
+    );
     const presetsHtml =
       presets.length === 0
         ? '<div class="cfm-wi-preset-empty">暂无已保存的分组</div>'
@@ -27089,7 +27131,9 @@ jQuery(async () => {
               const scope = p.scope || "global";
               const hasBindings =
                 (p.bindChars && p.bindChars.length > 0) ||
-                (p.bindPresets && p.bindPresets.length > 0);
+                (p.bindPresets && p.bindPresets.length > 0) ||
+                (p.bindChats && p.bindChats.length > 0);
+              const isApplied = appliedPresetIndices.has(idx);
               return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <div class="cfm-wi-preset-item-left">
@@ -27099,7 +27143,7 @@ jQuery(async () => {
             ${hasBindings ? '<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>' : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-qr-preset-apply" title="应用到全局"></i>
+            <i class="fa-solid fa-play cfm-qr-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用到全局"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
             <i class="fa-solid fa-stop cfm-qr-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-link cfm-qr-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-qr-preset-edit" title="编辑"></i>
@@ -27504,7 +27548,7 @@ jQuery(async () => {
           const parsed = parseChatBindKey(bindKey);
           const ch = chars.find((c) => c.avatar === parsed.avatar);
           const charName = ch ? ch.name : parsed.avatar;
-          const name = `${charName} / ${parsed.chatFileName}`;
+          const name = `${charName}（${parsed.chatFileName || bindKey}）`;
           const isCurrentChat = getCurrentChatBindKey() === bindKey;
           html += `<div class="cfm-wi-bind-entry ${isCurrentChat ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="chat" data-bind-id="${escapeHtml(bindKey)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
         }
@@ -27544,24 +27588,7 @@ jQuery(async () => {
         if (applied.includes(idx)) {
           const { indices: stillAutoIndices } = getQrAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
-            const allPresets = getQrActivePresets();
-            const otherApplied = applied.filter(
-              (i) => i !== idx && allPresets[i],
-            );
-            const otherSets = new Set();
-            for (const oi of otherApplied) {
-              for (const s of allPresets[oi].sets) otherSets.add(s);
-            }
-            let removedCount = 0;
-            for (const s of preset.sets) {
-              if (!otherSets.has(s)) {
-                await toggleQrSetActivation(s, false);
-                removedCount++;
-              }
-            }
-            extension_settings[extensionName]._qrAppliedPresetIndices =
-              otherApplied;
-            getContext().saveSettingsDebounced();
+            const removedCount = await unapplyQrPresetIndex(idx);
             toastr.info(
               `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个快速回复集）`,
             );
@@ -27575,7 +27602,8 @@ jQuery(async () => {
         const stillHasBindings =
           updated &&
           ((updated.bindChars && updated.bindChars.length > 0) ||
-            (updated.bindPresets && updated.bindPresets.length > 0));
+            (updated.bindPresets && updated.bindPresets.length > 0) ||
+            (updated.bindChats && updated.bindChats.length > 0));
         if (!stillHasBindings) {
           if (updated) setQrPresetScope(idx, "global");
           overlay.remove();
