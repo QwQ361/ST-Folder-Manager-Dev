@@ -7661,11 +7661,15 @@ jQuery(async () => {
         const autoAppliedState = getAutoApplyPresetIndices();
         const autoDetail = autoAppliedState.details[idx] || {};
         const currentActiveSet = await getActiveWorldInfoSet();
-        const isActuallyApplied = preset.books.every((b) => currentActiveSet.has(b));
+        const isActuallyApplied = preset.books.every((b) =>
+          currentActiveSet.has(b),
+        );
         if (
           autoAppliedState.indices.includes(idx) &&
           isActuallyApplied &&
-          (autoDetail.charMatch || autoDetail.presetMatch || autoDetail.chatMatch)
+          (autoDetail.charMatch ||
+            autoDetail.presetMatch ||
+            autoDetail.chatMatch)
         ) {
           const reasons = [];
           if (autoDetail.chatMatch) reasons.push("当前聊天");
@@ -8235,8 +8239,8 @@ jQuery(async () => {
         getDisplayName: (id) => getResFolderDisplayName("worldinfo", id),
         getItemCount: (folderId) => {
           if (folderId === "__ungrouped__") {
-            return names.filter((name) => {
-              const grp = groups[name];
+            return allNames.filter((name) => {
+              const grp = wiGroups[name];
               return !grp || !wiTree[grp];
             }).length;
           }
@@ -8249,7 +8253,8 @@ jQuery(async () => {
             for (const c of children) collectChildren(c);
           }
           collectChildren(folderId);
-          return names.filter((name) => allowedFolders.has(groups[name])).length;
+          return allNames.filter((name) => allowedFolders.has(wiGroups[name]))
+            .length;
         },
         ungroupedLabel: "未归类世界书",
         currentFilter:
@@ -27450,11 +27455,15 @@ jQuery(async () => {
         const autoAppliedState = getQrAutoApplyPresetIndices();
         const autoDetail = autoAppliedState.details[idx] || {};
         const currentActiveSet = getActiveQrSets();
-        const isActuallyApplied = preset.sets.every((s) => currentActiveSet.has(s));
+        const isActuallyApplied = preset.sets.every((s) =>
+          currentActiveSet.has(s),
+        );
         if (
           autoAppliedState.indices.includes(idx) &&
           isActuallyApplied &&
-          (autoDetail.charMatch || autoDetail.presetMatch || autoDetail.chatMatch)
+          (autoDetail.charMatch ||
+            autoDetail.presetMatch ||
+            autoDetail.chatMatch)
         ) {
           const reasons = [];
           if (autoDetail.chatMatch) reasons.push("当前聊天");
@@ -27963,8 +27972,8 @@ jQuery(async () => {
         getDisplayName: (id) => getResFolderDisplayName("quickreply", id),
         getItemCount: (folderId) => {
           if (folderId === "__ungrouped__") {
-            return names.filter((name) => {
-              const grp = groups[name];
+            return allNames.filter((name) => {
+              const grp = qrGroups[name];
               return !grp || !qrTree[grp];
             }).length;
           }
@@ -27977,7 +27986,8 @@ jQuery(async () => {
             for (const c of children) collectChildren(c);
           }
           collectChildren(folderId);
-          return names.filter((name) => allowedFolders.has(groups[name])).length;
+          return allNames.filter((name) => allowedFolders.has(qrGroups[name]))
+            .length;
         },
         ungroupedLabel: "未归类快速回复集",
         currentFilter:
@@ -32679,7 +32689,9 @@ jQuery(async () => {
     } = config;
 
     $(".cfm-nf-panel").remove();
-    $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+    $(document).off(
+      "mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel",
+    );
 
     if (!showPresetEditFolderFilterPanel._expanded)
       showPresetEditFolderFilterPanel._expanded = {};
@@ -32727,8 +32739,10 @@ jQuery(async () => {
       return html;
     }
 
-    const panel = $(`<div class="cfm-nf-panel" data-preset-folder-panel="${escapeHtml(panelKey)}"></div>`);
-    panel.css("z-index", 40000);
+    const panel = $(
+      `<div class="cfm-nf-panel" data-preset-folder-panel="${escapeHtml(panelKey)}"></div>`,
+    );
+    panel.css("z-index", 100001);
     const toolbar = $(
       `<div class="cfm-nf-toolbar">
         <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
@@ -32738,11 +32752,12 @@ jQuery(async () => {
         </span>
       </div>`,
     );
-    const showAllBtn = $(`<div class="cfm-nf-item cfm-nf-show-all${!currentFilter || currentFilter === "__all__" ? " cfm-nf-active" : ""}">
+    const showAllBtn =
+      $(`<div class="cfm-nf-item cfm-nf-show-all${!currentFilter || currentFilter === "__all__" ? " cfm-nf-active" : ""}">
       <i class="fa-solid fa-layer-group cfm-nf-icon"></i>
       <span class="cfm-nf-name">显示全部</span>
     </div>`);
-    const treeContainer = $("<div class=\"cfm-nf-tree\"></div>");
+    const treeContainer = $('<div class="cfm-nf-tree"></div>');
 
     function renderTree(activeId) {
       treeContainer.html(buildHtml(null, 0, activeId));
@@ -32791,7 +32806,9 @@ jQuery(async () => {
       e.stopPropagation();
       onSelect("__all__");
       panel.remove();
-      $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+      $(document).off(
+        "mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel",
+      );
     });
 
     panel.on("click", ".cfm-nf-item", function (e) {
@@ -32799,7 +32816,9 @@ jQuery(async () => {
       e.stopPropagation();
       onSelect($(this).attr("data-folder-id") || "__all__");
       panel.remove();
-      $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+      $(document).off(
+        "mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel",
+      );
     });
 
     setTimeout(() => {
@@ -32808,7 +32827,9 @@ jQuery(async () => {
         function (e) {
           if (!$(e.target).closest(".cfm-nf-panel, .cfm-nf-btn").length) {
             $(".cfm-nf-panel").remove();
-            $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+            $(document).off(
+              "mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel",
+            );
           }
         },
       );
