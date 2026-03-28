@@ -2467,8 +2467,8 @@
   border: 1px solid rgba(243, 139, 168, 0.4) !important;
 }
 
-/* 正则新建按钮 */
-.cfm-regex-create-btn {
+/* 正则页顶部新建按钮（仅顶部 + 按钮，工具栏里的“新增”直接走通用 .cfm-btn-sm 样式） */
+.cfm-regex-create-btn:not(.cfm-btn):not(.cfm-btn-sm) {
   background: none !important;
   border: 1px solid transparent !important;
   color: var(--SmartThemeBodyColor, #cdd6f4) !important;
@@ -2484,13 +2484,13 @@
     border-color 0.15s,
     transform 0.12s;
 }
-.cfm-regex-create-btn:hover {
+.cfm-regex-create-btn:not(.cfm-btn):not(.cfm-btn-sm):hover {
   opacity: 1 !important;
   color: #a6e3a1 !important;
   background-color: rgba(166, 227, 161, 0.12) !important;
   border-color: rgba(166, 227, 161, 0.32) !important;
 }
-.cfm-regex-create-btn:active {
+.cfm-regex-create-btn:not(.cfm-btn):not(.cfm-btn-sm):active {
   transform: scale(0.96);
 }
 
