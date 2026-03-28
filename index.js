@@ -1004,6 +1004,25 @@ jQuery(async () => {
     for (const [actionId, selector] of Object.entries(btnMap)) {
       $(selector).toggle(visibleActions.includes(actionId));
     }
+
+    if (tabId === "regex") {
+      let visualOrder = 10;
+      let createOrder = 11;
+      orderedActions.forEach((a) => {
+        const selector = btnMap[a.id];
+        if (!selector) return;
+        $(selector).css("order", visualOrder);
+        if (a.id === "import") {
+          createOrder = visualOrder + 1;
+          visualOrder += 2;
+        } else {
+          visualOrder += 1;
+        }
+      });
+      $("#cfm-regex-create-btn").css("order", createOrder);
+      return;
+    }
+
     // 按配置顺序设置 CSS order
     orderedActions.forEach((a, idx) => {
       const selector = btnMap[a.id];
