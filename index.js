@@ -8163,7 +8163,9 @@ jQuery(async () => {
           <div class="cfm-edit-field">
             <label>包含的世界书 <span class="cfm-wi-preset-edit-hint">（角色关联的世界书已排除）</span></label>
             <div class="cfm-wi-preset-edit-search">
-              <select class="cfm-edit-input" id="cfm-wi-preset-edit-folder-filter">${buildWiFilterOptions()}</select>
+              <div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" id="cfm-wi-preset-edit-folder-btn" title="文件夹过滤"></div>
+              <span class="cfm-wi-preset-edit-folder-label" id="cfm-wi-preset-edit-folder-label">显示全部</span>
+              <input type="hidden" id="cfm-wi-preset-edit-folder-filter" value="__all__">
               <input type="text" class="cfm-edit-input" id="cfm-wi-preset-edit-filter" placeholder="搜索世界书...">
             </div>
             <div class="cfm-wi-preset-edit-list">${booksHtml}</div>
@@ -8177,8 +8179,18 @@ jQuery(async () => {
     `);
     $("body").append(overlay);
     // 组合过滤函数（文件夹 + 文本搜索）
+    function getWiFolderFilterLabel(folderVal) {
+      if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__ungrouped__") return "未归类世界书";
+      return getResFolderDisplayName("worldinfo", folderVal) || folderVal;
+    }
+
     function applyEditFilters() {
-      const folderVal = overlay.find("#cfm-wi-preset-edit-folder-filter").val();
+      const folderVal =
+        overlay.find("#cfm-wi-preset-edit-folder-filter").val() || "__all__";
+      overlay
+        .find("#cfm-wi-preset-edit-folder-label")
+        .text(getWiFolderFilterLabel(folderVal));
       const q = overlay
         .find("#cfm-wi-preset-edit-filter")
         .val()
@@ -8214,10 +8226,42 @@ jQuery(async () => {
         $(this).toggle(folderMatch && textMatch);
       });
     }
-    overlay
-      .find("#cfm-wi-preset-edit-folder-filter")
-      .on("change", applyEditFilters);
+    overlay.find("#cfm-wi-preset-edit-folder-btn").on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showPresetEditFolderFilterPanel($(this), {
+        panelKey: "wi_preset_edit",
+        folderTree: wiTree,
+        getDisplayName: (id) => getResFolderDisplayName("worldinfo", id),
+        getItemCount: (folderId) => {
+          if (folderId === "__ungrouped__") {
+            return names.filter((name) => {
+              const grp = groups[name];
+              return !grp || !wiTree[grp];
+            }).length;
+          }
+          const allowedFolders = new Set();
+          function collectChildren(pid) {
+            allowedFolders.add(pid);
+            const children = Object.keys(wiTree).filter(
+              (id) => wiTree[id].parentId === pid,
+            );
+            for (const c of children) collectChildren(c);
+          }
+          collectChildren(folderId);
+          return names.filter((name) => allowedFolders.has(groups[name])).length;
+        },
+        ungroupedLabel: "未归类世界书",
+        currentFilter:
+          overlay.find("#cfm-wi-preset-edit-folder-filter").val() || "__all__",
+        onSelect: (folderId) => {
+          overlay.find("#cfm-wi-preset-edit-folder-filter").val(folderId);
+          applyEditFilters();
+        },
+      });
+    });
     overlay.find("#cfm-wi-preset-edit-filter").on("input", applyEditFilters);
+    applyEditFilters();
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -27848,7 +27892,9 @@ jQuery(async () => {
           <div class="cfm-edit-field">
             <label>包含的快速回复集</label>
             <div class="cfm-wi-preset-edit-search">
-              <select class="cfm-edit-input" id="cfm-qr-preset-edit-folder-filter">${buildQrFilterOptions()}</select>
+              <div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" id="cfm-qr-preset-edit-folder-btn" title="文件夹过滤"></div>
+              <span class="cfm-wi-preset-edit-folder-label" id="cfm-qr-preset-edit-folder-label">显示全部</span>
+              <input type="hidden" id="cfm-qr-preset-edit-folder-filter" value="__all__">
               <input type="text" class="cfm-edit-input" id="cfm-qr-preset-edit-filter" placeholder="搜索...">
             </div>
             <div class="cfm-wi-preset-edit-list">${setsHtml}</div>
@@ -27862,8 +27908,18 @@ jQuery(async () => {
     `);
     $("body").append(overlay);
 
+    function getQrFolderFilterLabel(folderVal) {
+      if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__ungrouped__") return "未归类快速回复集";
+      return getResFolderDisplayName("quickreply", folderVal) || folderVal;
+    }
+
     function applyEditFilters() {
-      const folderVal = overlay.find("#cfm-qr-preset-edit-folder-filter").val();
+      const folderVal =
+        overlay.find("#cfm-qr-preset-edit-folder-filter").val() || "__all__";
+      overlay
+        .find("#cfm-qr-preset-edit-folder-label")
+        .text(getQrFolderFilterLabel(folderVal));
       const q = overlay
         .find("#cfm-qr-preset-edit-filter")
         .val()
@@ -27898,10 +27954,42 @@ jQuery(async () => {
         $(this).toggle(folderMatch && textMatch);
       });
     }
-    overlay
-      .find("#cfm-qr-preset-edit-folder-filter")
-      .on("change", applyEditFilters);
+    overlay.find("#cfm-qr-preset-edit-folder-btn").on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showPresetEditFolderFilterPanel($(this), {
+        panelKey: "qr_preset_edit",
+        folderTree: qrTree,
+        getDisplayName: (id) => getResFolderDisplayName("quickreply", id),
+        getItemCount: (folderId) => {
+          if (folderId === "__ungrouped__") {
+            return names.filter((name) => {
+              const grp = groups[name];
+              return !grp || !qrTree[grp];
+            }).length;
+          }
+          const allowedFolders = new Set();
+          function collectChildren(pid) {
+            allowedFolders.add(pid);
+            const children = Object.keys(qrTree).filter(
+              (id) => qrTree[id].parentId === pid,
+            );
+            for (const c of children) collectChildren(c);
+          }
+          collectChildren(folderId);
+          return names.filter((name) => allowedFolders.has(groups[name])).length;
+        },
+        ungroupedLabel: "未归类快速回复集",
+        currentFilter:
+          overlay.find("#cfm-qr-preset-edit-folder-filter").val() || "__all__",
+        onSelect: (folderId) => {
+          overlay.find("#cfm-qr-preset-edit-folder-filter").val(folderId);
+          applyEditFilters();
+        },
+      });
+    });
     overlay.find("#cfm-qr-preset-edit-filter").on("input", applyEditFilters);
+    applyEditFilters();
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -30531,7 +30619,9 @@ jQuery(async () => {
           <div class="cfm-edit-field">
             <label>包含的正则脚本</label>
             <div class="cfm-wi-preset-edit-search">
-              <select class="cfm-edit-input" id="cfm-regex-preset-edit-folder-filter">${buildRegexFilterOptions()}</select>
+              <div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" id="cfm-regex-preset-edit-folder-btn" title="文件夹过滤"></div>
+              <span class="cfm-wi-preset-edit-folder-label" id="cfm-regex-preset-edit-folder-label">显示全部</span>
+              <input type="hidden" id="cfm-regex-preset-edit-folder-filter" value="__all__">
               <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-filter" placeholder="搜索...">
             </div>
             <div class="cfm-wi-preset-edit-list">${scriptsHtml}</div>
@@ -30546,10 +30636,18 @@ jQuery(async () => {
     $("body").append(overlay);
 
     // 组合过滤函数
+    function getRegexFolderFilterLabel(folderVal) {
+      if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__ungrouped__") return "未归类正则脚本";
+      return folderTree[folderVal]?.displayName || folderVal;
+    }
+
     function applyEditFilters() {
-      const folderVal = overlay
-        .find("#cfm-regex-preset-edit-folder-filter")
-        .val();
+      const folderVal =
+        overlay.find("#cfm-regex-preset-edit-folder-filter").val() || "__all__";
+      overlay
+        .find("#cfm-regex-preset-edit-folder-label")
+        .text(getRegexFolderFilterLabel(folderVal));
       const q = overlay
         .find("#cfm-regex-preset-edit-filter")
         .val()
@@ -30584,10 +30682,45 @@ jQuery(async () => {
         $(this).toggle(folderMatch && textMatch);
       });
     }
-    overlay
-      .find("#cfm-regex-preset-edit-folder-filter")
-      .on("change", applyEditFilters);
+    overlay.find("#cfm-regex-preset-edit-folder-btn").on("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showPresetEditFolderFilterPanel($(this), {
+        panelKey: "regex_preset_edit",
+        folderTree,
+        getDisplayName: (id) => folderTree[id]?.displayName || id,
+        getItemCount: (folderId) => {
+          if (folderId === "__ungrouped__") {
+            return scripts.filter((script) => {
+              const grp = folderMap[script.id];
+              return !grp || !folderTree[grp];
+            }).length;
+          }
+          const allowedFolders = new Set();
+          function collectChildren(pid) {
+            allowedFolders.add(pid);
+            const children = Object.keys(folderTree).filter(
+              (id) => folderTree[id].parentId === pid,
+            );
+            for (const c of children) collectChildren(c);
+          }
+          collectChildren(folderId);
+          return scripts.filter((script) =>
+            allowedFolders.has(folderMap[script.id]),
+          ).length;
+        },
+        ungroupedLabel: "未归类正则脚本",
+        currentFilter:
+          overlay.find("#cfm-regex-preset-edit-folder-filter").val() ||
+          "__all__",
+        onSelect: (folderId) => {
+          overlay.find("#cfm-regex-preset-edit-folder-filter").val(folderId);
+          applyEditFilters();
+        },
+      });
+    });
     overlay.find("#cfm-regex-preset-edit-filter").on("input", applyEditFilters);
+    applyEditFilters();
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -32532,6 +32665,153 @@ jQuery(async () => {
       html += `</div>`;
     }
     return html;
+  }
+
+  function showPresetEditFolderFilterPanel(anchorEl, config) {
+    const {
+      panelKey,
+      folderTree,
+      getDisplayName,
+      getItemCount,
+      ungroupedLabel,
+      currentFilter,
+      onSelect,
+    } = config;
+
+    $(".cfm-nf-panel").remove();
+    $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+
+    if (!showPresetEditFolderFilterPanel._expanded)
+      showPresetEditFolderFilterPanel._expanded = {};
+    if (!showPresetEditFolderFilterPanel._expanded[panelKey])
+      showPresetEditFolderFilterPanel._expanded[panelKey] = new Set();
+    const expandedSet = showPresetEditFolderFilterPanel._expanded[panelKey];
+
+    function buildHtml(parentId, depth, activeId) {
+      const folderIds = Object.keys(folderTree)
+        .filter((id) => folderTree[id].parentId === parentId)
+        .sort((a, b) =>
+          getDisplayName(a).localeCompare(getDisplayName(b), "zh-CN"),
+        );
+      let html = "";
+      for (const fid of folderIds) {
+        const children = Object.keys(folderTree).filter(
+          (id) => folderTree[id].parentId === fid,
+        );
+        const hasChildren = children.length > 0;
+        const isExpanded = expandedSet.has(fid);
+        const isActive = fid === activeId;
+        html += `<div class="cfm-nf-item${isActive ? " cfm-nf-active" : ""}" data-folder-id="${escapeHtml(fid)}" style="padding-left:${12 + depth * 16}px;">`;
+        if (hasChildren) {
+          html += `<span class="cfm-nf-arrow ${isExpanded ? "cfm-nf-expanded" : ""}" data-folder-id="${escapeHtml(fid)}"><i class="fa-solid fa-chevron-right"></i></span>`;
+        } else {
+          html += `<span class="cfm-nf-arrow-placeholder"></span>`;
+        }
+        html += `<i class="fa-solid fa-folder cfm-nf-icon"></i>`;
+        html += `<span class="cfm-nf-name">${escapeHtml(getDisplayName(fid))}</span>`;
+        html += `<span class="cfm-nf-count">${getItemCount(fid)}</span>`;
+        html += `</div>`;
+        if (hasChildren && isExpanded) {
+          html += buildHtml(fid, depth + 1, activeId);
+        }
+      }
+      if (parentId === null) {
+        const isUncatActive = activeId === "__ungrouped__";
+        html += `<div class="cfm-nf-item cfm-nf-uncat${isUncatActive ? " cfm-nf-active" : ""}" data-folder-id="__ungrouped__" style="padding-left:12px;">`;
+        html += `<span class="cfm-nf-arrow-placeholder"></span>`;
+        html += `<i class="fa-solid fa-box-open cfm-nf-icon"></i>`;
+        html += `<span class="cfm-nf-name">${escapeHtml(ungroupedLabel)}</span>`;
+        html += `<span class="cfm-nf-count">${getItemCount("__ungrouped__")}</span>`;
+        html += `</div>`;
+      }
+      return html;
+    }
+
+    const panel = $(`<div class="cfm-nf-panel" data-preset-folder-panel="${escapeHtml(panelKey)}"></div>`);
+    const toolbar = $(
+      `<div class="cfm-nf-toolbar">
+        <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
+        <span class="cfm-nf-toolbar-actions">
+          <i class="fa-solid fa-angles-down cfm-nf-expand-all" title="展开全部"></i>
+          <i class="fa-solid fa-angles-up cfm-nf-collapse-all" title="收起全部"></i>
+        </span>
+      </div>`,
+    );
+    const showAllBtn = $(`<div class="cfm-nf-item cfm-nf-show-all${!currentFilter || currentFilter === "__all__" ? " cfm-nf-active" : ""}">
+      <i class="fa-solid fa-layer-group cfm-nf-icon"></i>
+      <span class="cfm-nf-name">显示全部</span>
+    </div>`);
+    const treeContainer = $("<div class=\"cfm-nf-tree\"></div>");
+
+    function renderTree(activeId) {
+      treeContainer.html(buildHtml(null, 0, activeId));
+    }
+
+    renderTree(currentFilter);
+    panel.append(toolbar, showAllBtn, treeContainer);
+    panel.on("mousedown mouseup click touchstart touchend", (e) =>
+      e.stopPropagation(),
+    );
+    $("body").append(panel);
+
+    const anchorRect = anchorEl[0].getBoundingClientRect();
+    let top = anchorRect.bottom + 4;
+    let left = anchorRect.left;
+    const panelWidth = panel.outerWidth();
+    const panelHeight = panel.outerHeight();
+    if (left + panelWidth > window.innerWidth)
+      left = window.innerWidth - panelWidth - 8;
+    if (left < 4) left = 4;
+    if (top + panelHeight > window.innerHeight)
+      top = anchorRect.top - panelHeight - 4;
+    panel.css({ top: `${top}px`, left: `${left}px` });
+
+    panel.on("click", ".cfm-nf-arrow", function (e) {
+      e.stopPropagation();
+      const fid = $(this).attr("data-folder-id");
+      if (expandedSet.has(fid)) expandedSet.delete(fid);
+      else expandedSet.add(fid);
+      renderTree(currentFilter);
+    });
+
+    toolbar.find(".cfm-nf-expand-all").on("click", function (e) {
+      e.stopPropagation();
+      Object.keys(folderTree).forEach((id) => expandedSet.add(id));
+      renderTree(currentFilter);
+    });
+
+    toolbar.find(".cfm-nf-collapse-all").on("click", function (e) {
+      e.stopPropagation();
+      expandedSet.clear();
+      renderTree(currentFilter);
+    });
+
+    showAllBtn.on("click", function (e) {
+      e.stopPropagation();
+      onSelect("__all__");
+      panel.remove();
+      $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+    });
+
+    panel.on("click", ".cfm-nf-item", function (e) {
+      if ($(e.target).closest(".cfm-nf-arrow").length) return;
+      e.stopPropagation();
+      onSelect($(this).attr("data-folder-id") || "__all__");
+      panel.remove();
+      $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+    });
+
+    setTimeout(() => {
+      $(document).on(
+        "mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel",
+        function (e) {
+          if (!$(e.target).closest(".cfm-nf-panel, .cfm-nf-btn").length) {
+            $(".cfm-nf-panel").remove();
+            $(document).off("mousedown.cfmPresetEditFolderPanel touchstart.cfmPresetEditFolderPanel");
+          }
+        },
+      );
+    }, 0);
   }
 
   /**
