@@ -9905,6 +9905,92 @@ jQuery(async () => {
     }
   }
 
+  function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
+    const normalizedFields = Array.isArray(fields) ? fields : [];
+    const visibleKeys = normalizedFields
+      .map((field) => String(field?.key || ""))
+      .filter(Boolean);
+    const normalizedFieldKey = String(fieldKey || "");
+    if (!normalizedFieldKey) return;
+
+    if (
+      (shiftKey || cfmPresetDetailBatchRangeMode) &&
+      cfmPresetDetailBatchLastClicked
+    ) {
+      const lastIdx = visibleKeys.indexOf(cfmPresetDetailBatchLastClicked);
+      const curIdx = visibleKeys.indexOf(normalizedFieldKey);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        for (let i = start; i <= end; i++) {
+          if (visibleKeys[i]) cfmPresetDetailBatchSelected.add(visibleKeys[i]);
+        }
+      }
+    } else if (cfmPresetDetailBatchSelected.has(normalizedFieldKey)) {
+      cfmPresetDetailBatchSelected.delete(normalizedFieldKey);
+    } else {
+      cfmPresetDetailBatchSelected.add(normalizedFieldKey);
+    }
+
+    cfmPresetDetailBatchLastClicked = normalizedFieldKey;
+  }
+
+  async function applyPresetDetailBatchActivation(
+    presetName,
+    fieldKeys,
+    activate,
+  ) {
+    const normalizedKeys = Array.from(
+      new Set(
+        (Array.isArray(fieldKeys) ? fieldKeys : [])
+          .map((fieldKey) => String(fieldKey || ""))
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedKeys.length) {
+      toastr.warning("请先选择要操作的预设条目");
+      return;
+    }
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    let changedCount = 0;
+    for (const fieldKey of normalizedKeys) {
+      if (!fieldKey.startsWith("prompts.")) continue;
+      const promptKey = fieldKey.slice("prompts.".length);
+      if (!promptKey) continue;
+      setPresetPromptEnabled(presetData, promptKey, activate);
+      changedCount++;
+    }
+
+    if (!changedCount) {
+      toastr.warning("所选条目不支持批量激活操作");
+      return;
+    }
+
+    try {
+      await pm.savePreset(presetName, presetData);
+      syncCurrentPresetSelection(pm, presetName);
+      toastr.success(
+        `已${activate ? "激活" : "取消激活"} ${changedCount} 个预设条目`,
+      );
+      refreshPresetPanelView();
+    } catch (error) {
+      console.error("[CFM] 批量切换预设条目激活状态失败:", error);
+      toastr.error(`保存失败: ${error.message || error}`);
+    }
+  }
+
   async function showPresetDetailFieldPopup(presetName, field) {
     if (!presetName || !field) return null;
     const currentValue = String(field.value || "");
@@ -10038,12 +10124,114 @@ jQuery(async () => {
     if (!presetData) return;
 
     const fields = getPresetDetailFields(presetData);
+    const isBatchOwner =
+      cfmPresetDetailBatchMode && cfmPresetDetailBatchOwnerName === preset.name;
     const subList = $(
       '<div class="cfm-chat-sublist cfm-preset-detail-sublist"></div>',
     );
     const detailCard = $(
       '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-preset-detail-card"></div>',
     );
+
+    const detailToolbar = $(`
+      <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="批量操作模式" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
+        <span class="cfm-regex-count">${fields.length} 个条目</span>
+      </div>
+    `);
+    detailToolbar
+      .find(".cfm-preset-detail-batch-toggle")
+      .on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!fields.length) return;
+        if (isBatchOwner) {
+          cfmPresetDetailBatchMode = false;
+          cfmPresetDetailBatchOwnerName = null;
+          cfmPresetDetailBatchSelected.clear();
+          cfmPresetDetailBatchRangeMode = false;
+          cfmPresetDetailBatchLastClicked = null;
+        } else {
+          cfmPresetDetailBatchMode = true;
+          cfmPresetDetailBatchOwnerName = preset.name;
+          cfmPresetDetailBatchSelected.clear();
+          cfmPresetDetailBatchRangeMode = false;
+          cfmPresetDetailBatchLastClicked = null;
+        }
+        refreshPresetPanelView();
+      });
+    detailCard.append(detailToolbar);
+
+    if (isBatchOwner && fields.length > 0) {
+      const allSel =
+        fields.length > 0 &&
+        fields.every((field) => cfmPresetDetailBatchSelected.has(field.key));
+      const selCount = fields.filter((field) =>
+        cfmPresetDetailBatchSelected.has(field.key),
+      ).length;
+      const batchToolbar = $(`
+        <div class="cfm-regex-batch-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-selall" title="全选/全不选">
+            <i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}
+          </button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-range ${cfmPresetDetailBatchRangeMode ? "cfm-range-active" : ""}" title="框选模式">
+            <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmPresetDetailBatchRangeMode ? "(开)" : ""}
+          </button>
+          <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-activate" title="批量激活"><i class="fa-solid fa-play"></i> 激活</button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-deactivate" title="批量取消激活"><i class="fa-solid fa-stop"></i> 取消激活</button>
+        </div>
+      `);
+      batchToolbar
+        .find(".cfm-preset-detail-batch-selall")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (allSel) {
+            fields.forEach((field) =>
+              cfmPresetDetailBatchSelected.delete(field.key),
+            );
+          } else {
+            fields.forEach((field) => {
+              if (field?.key) cfmPresetDetailBatchSelected.add(field.key);
+            });
+          }
+          refreshPresetPanelView();
+        });
+      batchToolbar
+        .find(".cfm-preset-detail-batch-range")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmPresetDetailBatchRangeMode = !cfmPresetDetailBatchRangeMode;
+          if (cfmPresetDetailBatchRangeMode)
+            cfmPresetDetailBatchLastClicked = null;
+          refreshPresetPanelView();
+        });
+      batchToolbar
+        .find(".cfm-preset-detail-batch-activate")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await applyPresetDetailBatchActivation(
+            preset.name,
+            Array.from(cfmPresetDetailBatchSelected),
+            true,
+          );
+        });
+      batchToolbar
+        .find(".cfm-preset-detail-batch-deactivate")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await applyPresetDetailBatchActivation(
+            preset.name,
+            Array.from(cfmPresetDetailBatchSelected),
+            false,
+          );
+        });
+      detailCard.append(batchToolbar);
+    }
 
     if (fields.length === 0) {
       detailCard.append(`
@@ -10054,52 +10242,77 @@ jQuery(async () => {
       `);
     } else {
       for (const field of fields) {
+        const fieldKey = String(field.key || "");
         const hasValue = !!String(field.value || "").trim();
-        detailCard.append(`
-          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row" data-field="${escapeHtml(field.key)}">
+        const isBatchSel =
+          isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
+        const row = $(`
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}">
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
-              <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(field.key)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
+              ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+              <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(fieldKey)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
               <span class="cfm-preset-detail-label-text">${escapeHtml(field.label)}</span>
               <div class="cfm-chat-actions">
-                <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(field.key)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
+                <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
               </div>
             </div>
             <div class="cfm-persona-detail-value cfm-preset-detail-value">${hasValue ? '<span class="cfm-preset-detail-filled">已填写</span>' : '<span class="cfm-persona-detail-empty">无</span>'}</div>
           </div>
         `);
+
+        if (isBatchOwner) {
+          row.on("click", (e) => {
+            if (
+              $(e.target).closest(
+                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle",
+              ).length
+            )
+              return;
+            togglePresetDetailBatchItem(fieldKey, e.shiftKey, fields);
+            refreshPresetPanelView();
+          });
+          row.find(".cfm-edit-checkbox").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePresetDetailBatchItem(fieldKey, e.shiftKey, fields);
+            refreshPresetPanelView();
+          });
+        }
+
+        row
+          .find(".cfm-preset-field-active-toggle")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const el = $(e.currentTarget);
+            if (el.data("pending")) return;
+            const currentFieldKey = String(el.data("field") || "");
+            const newState = !el.hasClass("cfm-wi-toggle-on");
+            el.data("pending", true);
+            try {
+              await togglePresetDetailFieldActivation(
+                preset.name,
+                currentFieldKey,
+                newState,
+              );
+            } finally {
+              el.data("pending", false);
+            }
+          });
+
+        row.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const currentFieldKey = $(e.currentTarget).data("field");
+          await editPresetDetailField(preset.name, currentFieldKey);
+        });
+
+        detailCard.append(row);
       }
     }
 
     subList.append(detailCard);
     presetRow.after(subList);
-
-    subList
-      .find(".cfm-preset-field-active-toggle")
-      .on("click touchend", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const el = $(e.currentTarget);
-        if (el.data("pending")) return;
-        const fieldKey = String(el.data("field") || "");
-        const newState = !el.hasClass("cfm-wi-toggle-on");
-        el.data("pending", true);
-        try {
-          await togglePresetDetailFieldActivation(
-            preset.name,
-            fieldKey,
-            newState,
-          );
-        } finally {
-          el.data("pending", false);
-        }
-      });
-
-    subList.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const fieldKey = $(e.currentTarget).data("field");
-      await editPresetDetailField(preset.name, fieldKey);
-    });
   }
 
   function refreshPresetPanelView() {
@@ -10971,6 +11184,11 @@ jQuery(async () => {
   let cfmPresetRegexTargetName = null; // 当前正则查看目标预设名
   let cfmPresetRegexHighlightPath = []; // 当前目标预设到达路径（文件夹ID列表）
   let cfmPresetDetailExpandedNames = new Set(); // 当前展开详情的预设name集合
+  let cfmPresetDetailBatchMode = false; // 预设详情批量操作模式
+  let cfmPresetDetailBatchOwnerName = null; // 当前批量操作所属预设名
+  let cfmPresetDetailBatchSelected = new Set(); // 当前批量选中的预设条目 key 集合
+  let cfmPresetDetailBatchRangeMode = false; // 预设详情框选模式
+  let cfmPresetDetailBatchLastClicked = null; // 预设详情框选锚点
 
   // 正则批量操作状态
   let cfmRegexBatchMode = false; // 正则批量操作模式
@@ -11312,16 +11530,18 @@ jQuery(async () => {
           rerenderCurrentView();
         });
         // 互通按钮
-        batchToolbar.find(".cfm-regex-batch-transfer").on("click", async (e) => {
-          e.stopPropagation();
-          await startOwnedRegexTransferFlow({
-            sourceType: "char",
-            sourceName: charName,
-            avatar,
-            scripts,
-            selectedIds: Array.from(cfmRegexBatchSelected),
+        batchToolbar
+          .find(".cfm-regex-batch-transfer")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            await startOwnedRegexTransferFlow({
+              sourceType: "char",
+              sourceName: charName,
+              avatar,
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+            });
           });
-        });
         // 批量导出（JSON格式，与酒馆保持一致）
         batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
           e.stopPropagation();
@@ -11728,15 +11948,17 @@ jQuery(async () => {
           rerenderCurrentView();
         });
         // 互通按钮
-        batchToolbar.find(".cfm-regex-batch-transfer").on("click", async (e) => {
-          e.stopPropagation();
-          await startOwnedRegexTransferFlow({
-            sourceType: "preset",
-            sourceName: presetName,
-            scripts,
-            selectedIds: Array.from(cfmRegexBatchSelected),
+        batchToolbar
+          .find(".cfm-regex-batch-transfer")
+          .on("click", async (e) => {
+            e.stopPropagation();
+            await startOwnedRegexTransferFlow({
+              sourceType: "preset",
+              sourceName: presetName,
+              scripts,
+              selectedIds: Array.from(cfmRegexBatchSelected),
+            });
           });
-        });
         // 批量导出（JSON格式，与酒馆保持一致）
         batchToolbar.find(".cfm-regex-batch-export").on("click", async (e) => {
           e.stopPropagation();
@@ -15806,12 +16028,14 @@ jQuery(async () => {
       createGlobalRegexFromManager();
     });
 
-    popup.find("#cfm-regex-transfer-btn").on("click touchend", async function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (currentResourceType !== "regex") return;
-      await startGlobalRegexTransferFlow();
-    });
+    popup
+      .find("#cfm-regex-transfer-btn")
+      .on("click touchend", async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (currentResourceType !== "regex") return;
+        await startGlobalRegexTransferFlow();
+      });
 
     // 正则排序按钮 —— 弹窗形式
     popup.find("#cfm-regex-sort-btn").on("click touchend", async function (e) {
@@ -30125,9 +30349,7 @@ jQuery(async () => {
     const sourceScripts = Array.isArray(scripts) ? scripts : [];
     return sourceScripts.map((script) => ({
       ...script,
-      id: String(
-        isCopyMode || !script?.id ? getContext().uuidv4() : script.id,
-      ),
+      id: String(isCopyMode || !script?.id ? getContext().uuidv4() : script.id),
     }));
   }
 
@@ -30136,9 +30358,15 @@ jQuery(async () => {
     return sourceScripts.filter((script) => !idSet.has(script?.id));
   }
 
-  function insertRegexScriptsAtIndex(baseScripts, insertedScripts, targetIndex) {
+  function insertRegexScriptsAtIndex(
+    baseScripts,
+    insertedScripts,
+    targetIndex,
+  ) {
     const currentScripts = Array.isArray(baseScripts) ? [...baseScripts] : [];
-    const scriptsToInsert = Array.isArray(insertedScripts) ? insertedScripts : [];
+    const scriptsToInsert = Array.isArray(insertedScripts)
+      ? insertedScripts
+      : [];
     const normalizedIndex = Math.max(
       0,
       Math.min(Number(targetIndex) || 0, currentScripts.length),
@@ -30156,10 +30384,12 @@ jQuery(async () => {
       ensureResourceSettings();
       extension_settings.regex = Array.isArray(scripts) ? scripts : [];
       if (extra.globalGroups) {
-        extension_settings[extensionName].regexGlobalGroups = extra.globalGroups;
+        extension_settings[extensionName].regexGlobalGroups =
+          extra.globalGroups;
       }
       if (extra.globalFavorites) {
-        extension_settings[extensionName].regexFavorites = extra.globalFavorites;
+        extension_settings[extensionName].regexFavorites =
+          extra.globalFavorites;
       }
       getContext().saveSettingsDebounced();
       await syncNativeRegexState();
@@ -30211,8 +30441,8 @@ jQuery(async () => {
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">选择目标</div>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-target" value="global" ${defaultTargetType === "global" ? "checked" : ""}> <span>全局正则</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择") }）</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择") }）</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择")}）</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择")}）</span></label>
             </div>
             <div class="cfm-regex-transfer-global-folder" style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">全局分组</div>
@@ -30238,8 +30468,9 @@ jQuery(async () => {
 
       const updateFolderVisibility = () => {
         const targetType =
-          dialog.find('input[name="cfm-regex-transfer-target"]:checked').val() ||
-          "global";
+          dialog
+            .find('input[name="cfm-regex-transfer-target"]:checked')
+            .val() || "global";
         dialog
           .find(".cfm-regex-transfer-global-folder")
           .toggle(targetType === "global");
@@ -30261,11 +30492,13 @@ jQuery(async () => {
         e.stopPropagation();
         closeDialog({
           mode:
-            dialog.find('input[name="cfm-regex-transfer-mode"]:checked').val() ||
-            "move",
+            dialog
+              .find('input[name="cfm-regex-transfer-mode"]:checked')
+              .val() || "move",
           targetType:
-            dialog.find('input[name="cfm-regex-transfer-target"]:checked').val() ||
-            "global",
+            dialog
+              .find('input[name="cfm-regex-transfer-target"]:checked')
+              .val() || "global",
           globalFolderId:
             folderSelect.val() || defaultGlobalFolderId || "__ungrouped__",
         });
@@ -30296,7 +30529,9 @@ jQuery(async () => {
 
     return new Promise((resolve) => {
       const currentScripts = Array.isArray(baseScripts) ? baseScripts : [];
-      const scriptsToInsert = Array.isArray(insertedScripts) ? insertedScripts : [];
+      const scriptsToInsert = Array.isArray(insertedScripts)
+        ? insertedScripts
+        : [];
       const previewNames = scriptsToInsert
         .map((script) => script?.scriptName || "(未命名)")
         .slice(0, 5)
@@ -30330,8 +30565,11 @@ jQuery(async () => {
       function getPlacementText(script) {
         if (targetScope?.type === "global") {
           ensureResourceSettings();
-          const groups = extension_settings[extensionName].regexGlobalGroups || {};
-          return getRegexTransferGlobalFolderLabel(groups[script?.id] || "__ungrouped__");
+          const groups =
+            extension_settings[extensionName].regexGlobalGroups || {};
+          return getRegexTransferGlobalFolderLabel(
+            groups[script?.id] || "__ungrouped__",
+          );
         }
         return getRegexTransferScopeLabel(targetScope);
       }
@@ -30532,7 +30770,10 @@ jQuery(async () => {
 
     const sameList = isSameRegexScopeList(sourceScope, targetScope);
     const isCopyMode = transferConfig.mode === "copy";
-    const insertedScripts = cloneRegexScriptsForTransfer(selectedScripts, isCopyMode);
+    const insertedScripts = cloneRegexScriptsForTransfer(
+      selectedScripts,
+      isCopyMode,
+    );
     const baseTargetScripts =
       sameList && !isCopyMode
         ? removeRegexScriptsByIds(sourceScripts, selectedIdSet)
@@ -30568,7 +30809,10 @@ jQuery(async () => {
       }
 
       if (!isCopyMode && !sameList) {
-        const sourceAfterScripts = removeRegexScriptsByIds(sourceScripts, selectedIdSet);
+        const sourceAfterScripts = removeRegexScriptsByIds(
+          sourceScripts,
+          selectedIdSet,
+        );
         if (sourceScope.type === "global") {
           ensureResourceSettings();
           const nextGroups = {
@@ -30642,8 +30886,12 @@ jQuery(async () => {
   }
 
   async function startOwnedRegexTransferFlow(options = {}) {
-    const { sourceType = "char", sourceName = "", avatar = "", selectedIds = [] } =
-      options || {};
+    const {
+      sourceType = "char",
+      sourceName = "",
+      avatar = "",
+      selectedIds = [],
+    } = options || {};
     if (!cfmRegexBatchMode) {
       toastr.warning("请先开启批量操作，再选择要互通的正则脚本");
       return;
@@ -31097,11 +31345,20 @@ jQuery(async () => {
     // 使用与世界书相同的 cfm-wi-toggle 样式
     const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
     const isDelSel =
-      scriptType === 0 && cfmResDeleteMode && script.id && cfmResDeleteSelected.has(script.id);
+      scriptType === 0 &&
+      cfmResDeleteMode &&
+      script.id &&
+      cfmResDeleteSelected.has(script.id);
     const isExportSel =
-      scriptType === 0 && cfmExportMode && script.id && cfmExportSelected.has(script.id);
+      scriptType === 0 &&
+      cfmExportMode &&
+      script.id &&
+      cfmExportSelected.has(script.id);
     const isMSel =
-      scriptType === 0 && cfmMultiSelectMode && script.id && cfmMultiSelected.has(script.id);
+      scriptType === 0 &&
+      cfmMultiSelectMode &&
+      script.id &&
+      cfmMultiSelected.has(script.id);
     const checkHtml =
       scriptType === 0
         ? cfmResDeleteMode
@@ -31121,7 +31378,7 @@ jQuery(async () => {
         : "";
     return `
       <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""}"
-           data-script-id="${escapeHtml(script.id || "") }"
+           data-script-id="${escapeHtml(script.id || "")}"
            data-script-type="${scriptType}"
            data-owner="${escapeHtml(ownerLabel || "")}"
            ${scriptType === 0 ? 'draggable="true"' : ""}>
