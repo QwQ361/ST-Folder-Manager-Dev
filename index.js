@@ -26922,11 +26922,13 @@ jQuery(async () => {
     const presets = getWiActivePresets();
     const applied =
       extension_settings[extensionName]._wiAppliedPresetIndices || [];
-    const activeSet = new Set(
-      Object.entries(world_names || {})
-        .filter(([, v]) => v)
-        .map(([k]) => k),
-    );
+    const activeWorldNames =
+      typeof world_names !== "undefined" && world_names
+        ? Object.entries(world_names)
+            .filter(([, v]) => v)
+            .map(([k]) => k)
+        : [];
+    const activeSet = new Set(activeWorldNames);
 
     let nextApplied = isActive
       ? [...applied]
