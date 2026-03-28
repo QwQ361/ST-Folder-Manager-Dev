@@ -326,6 +326,21 @@ jQuery(async () => {
     );
     return currentPreset?.name || "";
   }
+  function isCurrentAppliedPreset(presetName) {
+    return String(presetName || "") === String(getCurrentPresetName() || "");
+  }
+  function ensureCurrentAppliedPreset(presetName, actionLabel = "操作") {
+    if (isCurrentAppliedPreset(presetName)) return true;
+    const currentPresetName = getCurrentPresetName();
+    if (currentPresetName) {
+      toastr.warning(
+        `${actionLabel}仅支持当前应用的预设：${currentPresetName}`,
+      );
+    } else {
+      toastr.warning(`请先应用一个预设后再执行${actionLabel}`);
+    }
+    return false;
+  }
 
   // 获取世界书列表（带缓存，优先从DOM读取避免网络延迟）
   let _worldInfoNamesCache = null;
@@ -9955,6 +9970,7 @@ jQuery(async () => {
     fieldKeys,
     activate,
   ) {
+    if (!ensureCurrentAppliedPreset(presetName, "批量操作")) return;
     const normalizedKeys = Array.from(
       new Set(
         (Array.isArray(fieldKeys) ? fieldKeys : [])
@@ -10108,6 +10124,7 @@ jQuery(async () => {
 
   async function showPresetDetailGroupPanel(presetName) {
     if ($("#cfm-preset-detail-group-panel-overlay").length > 0) return;
+    if (!ensureCurrentAppliedPreset(presetName, "预设分组")) return;
 
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -10119,6 +10136,8 @@ jQuery(async () => {
       toastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
+    const ensureCurrent = () =>
+      ensureCurrentAppliedPreset(presetName, "预设分组");
 
     const fields = getPresetDetailFields(presetData).filter((field) =>
       String(field?.key || "").startsWith("prompts."),
@@ -10199,6 +10218,7 @@ jQuery(async () => {
       if (e.key === "Escape") overlay.remove();
     });
     overlay.find("#cfm-preset-detail-group-save-confirm").on("click", () => {
+      if (!ensureCurrent()) return;
       if (enabledIds.length === 0) return;
       const name = overlay
         .find("#cfm-preset-detail-group-name-input")
@@ -10224,6 +10244,7 @@ jQuery(async () => {
     overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
+      if (!ensureCurrent()) return;
       const idx = parseInt(
         $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
         10,
@@ -10326,6 +10347,7 @@ jQuery(async () => {
     overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
+      if (!ensureCurrent()) return;
       const idx = parseInt(
         $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
         10,
@@ -10389,6 +10411,7 @@ jQuery(async () => {
     overlay.find(".cfm-wi-preset-edit").on("click", function (e) {
       e.stopPropagation();
       e.preventDefault();
+      if (!ensureCurrent()) return;
       const idx = parseInt(
         $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
         10,
@@ -10403,6 +10426,7 @@ jQuery(async () => {
     overlay.find(".cfm-wi-preset-del").on("click", function (e) {
       e.stopPropagation();
       e.preventDefault();
+      if (!ensureCurrent()) return;
       const idx = parseInt(
         $(this).closest(".cfm-wi-preset-item").attr("data-preset-idx"),
         10,
@@ -10427,6 +10451,7 @@ jQuery(async () => {
 
   function showPresetDetailGroupEditPopup(presetName, preset) {
     if ($("#cfm-preset-detail-group-edit-overlay").length > 0) return;
+    if (!ensureCurrentAppliedPreset(presetName, "预设分组")) return;
 
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -10505,6 +10530,7 @@ jQuery(async () => {
       if ($(e.target).is(overlay)) overlay.remove();
     });
     overlay.find(".cfm-edit-popup-confirm").on("click", () => {
+      if (!ensureCurrentAppliedPreset(presetName, "预设分组")) return;
       const newName = overlay
         .find("#cfm-preset-detail-group-edit-name")
         .val()
@@ -10672,8 +10698,11 @@ jQuery(async () => {
     if (!presetData) return;
 
     const fields = getPresetDetailFields(presetData);
+    const isCurrentApplied = isCurrentAppliedPreset(preset.name);
     const isBatchOwner =
-      cfmPresetDetailBatchMode && cfmPresetDetailBatchOwnerName === preset.name;
+      isCurrentApplied &&
+      cfmPresetDetailBatchMode &&
+      cfmPresetDetailBatchOwnerName === preset.name;
     const subList = $(
       '<div class="cfm-chat-sublist cfm-preset-detail-sublist"></div>',
     );
@@ -10683,8 +10712,8 @@ jQuery(async () => {
 
     const detailToolbar = $(`
       <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
-        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-group-btn" title="预设条目激活分组" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-layer-group"></i> 分组</button>
-        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="批量操作模式" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-group-btn" title="${isCurrentApplied ? "预设条目激活分组" : "仅当前应用的预设可使用分组"}" ${fields.length === 0 || !isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-layer-group"></i> 分组</button>
+        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="${isCurrentApplied ? "批量操作模式" : "仅当前应用的预设可使用批量操作"}" ${fields.length === 0 || !isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
         <span class="cfm-regex-count">${fields.length} 个条目</span>
       </div>
     `);
@@ -10694,6 +10723,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         if (!fields.length) return;
+        if (!ensureCurrentAppliedPreset(preset.name, "预设分组")) return;
         await showPresetDetailGroupPanel(preset.name);
       });
     detailToolbar
@@ -10702,6 +10732,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         if (!fields.length) return;
+        if (!ensureCurrentAppliedPreset(preset.name, "批量操作")) return;
         if (isBatchOwner) {
           cfmPresetDetailBatchMode = false;
           cfmPresetDetailBatchOwnerName = null;
