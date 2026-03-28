@@ -9460,7 +9460,12 @@ jQuery(async () => {
       return text || fallback;
     };
 
-    const addPromptField = (identifier, labelHint, promptValue, enabledHint) => {
+    const addPromptField = (
+      identifier,
+      labelHint,
+      promptValue,
+      enabledHint,
+    ) => {
       if (identifier === null || identifier === undefined) return;
       const keyId = String(identifier);
       if (!keyId || seen.has(keyId)) return;
@@ -9482,7 +9487,10 @@ jQuery(async () => {
         const promptValue = promptMap[item];
         const promptLabel =
           promptValue && typeof promptValue === "object"
-            ? promptValue.name ?? promptValue.title ?? promptValue.label ?? item
+            ? (promptValue.name ??
+              promptValue.title ??
+              promptValue.label ??
+              item)
             : item;
         const promptEnabled =
           promptValue &&
@@ -9496,7 +9504,8 @@ jQuery(async () => {
 
       if (typeof item !== "object") continue;
 
-      const identifier = item.identifier ?? item.key ?? item.prompt ?? item.name;
+      const identifier =
+        item.identifier ?? item.key ?? item.prompt ?? item.name;
       if (identifier === null || identifier === undefined || identifier === "")
         continue;
 
@@ -9506,7 +9515,7 @@ jQuery(async () => {
         item.title ??
         item.label ??
         (promptValue && typeof promptValue === "object"
-          ? promptValue.name ?? promptValue.title ?? promptValue.label
+          ? (promptValue.name ?? promptValue.title ?? promptValue.label)
           : null) ??
         String(identifier);
       const promptEnabled =
@@ -9525,7 +9534,10 @@ jQuery(async () => {
     for (const [identifier, promptValue] of Object.entries(promptMap)) {
       const promptLabel =
         promptValue && typeof promptValue === "object"
-          ? promptValue.name ?? promptValue.title ?? promptValue.label ?? identifier
+          ? (promptValue.name ??
+            promptValue.title ??
+            promptValue.label ??
+            identifier)
           : identifier;
       const promptEnabled =
         promptValue &&
@@ -9576,7 +9588,10 @@ jQuery(async () => {
       const item = presetData.prompt_order[i];
       if (typeof item === "string") {
         if (item === promptKey) {
-          presetData.prompt_order[i] = { identifier: promptKey, enabled: !!enabled };
+          presetData.prompt_order[i] = {
+            identifier: promptKey,
+            enabled: !!enabled,
+          };
           found = true;
           break;
         }
@@ -9593,7 +9608,10 @@ jQuery(async () => {
     }
 
     if (!found) {
-      presetData.prompt_order.push({ identifier: promptKey, enabled: !!enabled });
+      presetData.prompt_order.push({
+        identifier: promptKey,
+        enabled: !!enabled,
+      });
     }
   }
 
@@ -9823,7 +9841,11 @@ jQuery(async () => {
         const newState = !el.hasClass("cfm-wi-toggle-on");
         el.data("pending", true);
         try {
-          await togglePresetDetailFieldActivation(preset.name, fieldKey, newState);
+          await togglePresetDetailFieldActivation(
+            preset.name,
+            fieldKey,
+            newState,
+          );
         } finally {
           el.data("pending", false);
         }
@@ -12738,6 +12760,57 @@ jQuery(async () => {
     }
     rerenderCurrentView();
   }
+
+  function getEventClientX(e) {
+    const original = e?.originalEvent;
+    const touch =
+      original?.changedTouches?.[0] ||
+      original?.touches?.[0] ||
+      e?.changedTouches?.[0] ||
+      e?.touches?.[0];
+    if (touch && typeof touch.clientX === "number") return touch.clientX;
+    return typeof e?.clientX === "number" ? e.clientX : null;
+  }
+
+  function tryCollapseSublistFromOuterGap(e) {
+    const clientX = getEventClientX(e);
+    if (typeof clientX !== "number") return false;
+    const selectors = [
+      ".cfm-chat-sublist",
+      ".cfm-regex-sublist",
+      ".cfm-qr-sub-items",
+    ];
+    for (const selector of selectors) {
+      const nodes = $(selector).toArray();
+      for (const node of nodes) {
+        const rect = node.getBoundingClientRect();
+        const gapLeft = rect.left - 30;
+        const gapRight = rect.left;
+        const withinVertical = e.clientY >= rect.top && e.clientY <= rect.bottom;
+        const withinGap = clientX >= gapLeft && clientX <= gapRight;
+        if (!withinVertical || !withinGap) continue;
+
+        const subList = $(node);
+        const row = subList.prevAll(".cfm-row").first();
+        const toggle = row.find(
+          ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-chat-toggle, .cfm-regex-toggle, .cfm-qr-expand-arrow",
+        ).first();
+        if (!toggle.length) continue;
+
+        e.preventDefault();
+        e.stopPropagation();
+        toggle.trigger("click");
+        return true;
+      }
+    }
+    return false;
+  }
+
+  $(document)
+    .off("click.cfmSublistOuterGapCollapse")
+    .on("click.cfmSublistOuterGapCollapse", (e) => {
+      tryCollapseSublistFromOuterGap(e);
+    });
 
   /**
    * 渲染角色的聊天记录子列表
