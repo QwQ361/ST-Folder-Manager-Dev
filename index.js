@@ -3261,6 +3261,7 @@ jQuery(async () => {
   let selectedQrFolder = null;
   let qrExpandedNodes = new Set();
   let qrItemExpandedSets = new Set(); // 右侧展开的QR集名称
+  let cfmQrLastFocusedSetName = null; // 最近一次操作/展开的QR集名称（用于收起后回定位）
   let presetConfigExpandedNodes = new Set();
   let worldInfoConfigExpandedNodes = new Set();
   let themeConfigExpandedNodes = new Set();
@@ -14977,7 +14978,7 @@ jQuery(async () => {
     const getManagedScrollContainer = (node) => {
       if (!node?.closest) return null;
       return node.closest(
-        "#cfm-right-list, #cfm-preset-right-list, #cfm-worldinfo-right-list, #cfm-persona-right-list",
+        "#cfm-right-list, #cfm-preset-right-list, #cfm-worldinfo-right-list, #cfm-persona-right-list, #cfm-qr-right-list",
       );
     };
     requestAnimationFrame(() => {
@@ -15033,6 +15034,22 @@ jQuery(async () => {
     );
   }
 
+  function getLatestQrCollapseTargetName() {
+    if (cfmQrLastFocusedSetName) return String(cfmQrLastFocusedSetName);
+    const expandedNames = Array.from(qrItemExpandedSets);
+    return String(expandedNames[expandedNames.length - 1] || "");
+  }
+
+  function scrollQrRowIntoView(setName) {
+    const normalizedName = String(setName || "");
+    if (!normalizedName) return;
+    scrollElementIntoViewCentered(() =>
+      Array.from(
+        document.querySelectorAll("#cfm-qr-right-list .cfm-row[data-res-id]"),
+      ).find((el) => el.getAttribute("data-res-id") === normalizedName),
+    );
+  }
+
   function tryCollapseSublistFromOuterGap(e) {
     const clientX = getEventClientX(e);
     if (typeof clientX !== "number") return false;
@@ -15040,6 +15057,7 @@ jQuery(async () => {
       ".cfm-char-detail-sublist",
       ".cfm-preset-detail-sublist",
       ".cfm-persona-sublist",
+      ".cfm-qr-sub-items",
     ];
     for (const selector of selectors) {
       const nodes = $(selector).toArray();
@@ -15056,15 +15074,23 @@ jQuery(async () => {
         const row = subList.prevAll(".cfm-row").first();
         const toggle = row
           .find(
-            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle",
+            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-qr-expand-arrow",
           )
           .first();
         if (!toggle.length) continue;
 
         e.preventDefault();
         e.stopPropagation();
-        toggle.trigger("click");
-        scrollElementIntoViewCentered(row);
+        if (selector === ".cfm-qr-sub-items") {
+          const targetName =
+            row.attr("data-res-id") || getLatestQrCollapseTargetName();
+          if (targetName) cfmQrLastFocusedSetName = targetName;
+          toggle.trigger("click");
+          if (targetName) scrollQrRowIntoView(targetName);
+        } else {
+          toggle.trigger("click");
+          scrollElementIntoViewCentered(row);
+        }
         return true;
       }
     }
@@ -28799,6 +28825,7 @@ jQuery(async () => {
         row.find(".cfm-qr-expand-arrow").on("click touchend", function (e) {
           e.preventDefault();
           e.stopPropagation();
+          cfmQrLastFocusedSetName = n;
           if (qrItemExpandedSets.has(n)) {
             qrItemExpandedSets.delete(n);
           } else {
