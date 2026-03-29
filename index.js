@@ -291,26 +291,119 @@ jQuery(async () => {
   function getCurrentPresets() {
     const pm = getContext().getPresetManager();
     if (!pm || !pm.select) return [];
-    const presets = [];
+    const presetMap = new Map();
     pm.select.find("option").each(function () {
       const v = $(this).val();
       const t = $(this).text();
-      if (v !== "" && v !== undefined) presets.push({ value: v, name: t });
+      if (v !== "" && v !== undefined && !presetMap.has(t)) {
+        presetMap.set(t, { value: v, name: t });
+      }
     });
     // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
     if (_presetDetachedOptions && _presetDetachedOptions.length > 0) {
       for (const opt of _presetDetachedOptions) {
         const v = $(opt).val();
         const t = $(opt).text();
-        if (v !== "" && v !== undefined) presets.push({ value: v, name: t });
+        if (v !== "" && v !== undefined && !presetMap.has(t)) {
+          presetMap.set(t, { value: v, name: t });
+        }
       }
     }
-    return presets;
+    const orderedNames = syncPresetCustomOrder([...presetMap.values()]);
+    return orderedNames.map((name) => presetMap.get(name)).filter(Boolean);
   }
   function getCurrentPresetApiId() {
     const pm = getContext().getPresetManager();
     return pm ? pm.apiId : "unknown";
   }
+
+  function getPresetCustomOrderStore() {
+    ensureSettings();
+    const settings = extension_settings[extensionName];
+    if (!Array.isArray(settings.presetCustomOrder)) {
+      settings.presetCustomOrder = [];
+    }
+    return settings.presetCustomOrder;
+  }
+
+  function syncPresetCustomOrder(presets = []) {
+    const normalizedItems = (Array.isArray(presets) ? presets : []).filter(
+      (item) => item && typeof item === "object",
+    );
+    const normalizedNames = [
+      ...new Set(
+        normalizedItems
+          .map((item) => String(item.name || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+    const currentOrder = getPresetCustomOrderStore();
+    const normalizedOrder = [
+      ...new Set(
+        currentOrder.map((name) => String(name || "").trim()).filter(Boolean),
+      ),
+    ];
+    const nextOrder = normalizedOrder.filter((name) =>
+      normalizedNames.includes(name),
+    );
+    for (const name of normalizedNames) {
+      if (!nextOrder.includes(name)) nextOrder.push(name);
+    }
+    const changed =
+      nextOrder.length !== currentOrder.length ||
+      nextOrder.some(
+        (name, idx) => name !== String(currentOrder[idx] || "").trim(),
+      );
+    if (changed) {
+      extension_settings[extensionName].presetCustomOrder = nextOrder;
+      getContext().saveSettingsDebounced();
+    }
+    return nextOrder;
+  }
+
+  function insertPresetAfterInCustomOrder(sourcePresetName, newPresetName) {
+    const sourceName = String(sourcePresetName || "").trim();
+    const targetName = String(newPresetName || "").trim();
+    if (!targetName) return;
+    const order = [...getPresetCustomOrderStore()]
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+    const filtered = order.filter((name) => name !== targetName);
+    const sourceIndex = filtered.indexOf(sourceName);
+    if (sourceIndex === -1) filtered.push(targetName);
+    else filtered.splice(sourceIndex + 1, 0, targetName);
+    extension_settings[extensionName].presetCustomOrder = filtered;
+    getContext().saveSettingsDebounced();
+  }
+
+  function removePresetFromCustomOrder(presetName) {
+    const targetName = String(presetName || "").trim();
+    if (!targetName) return;
+    const order = getPresetCustomOrderStore();
+    const nextOrder = order.filter(
+      (name) => String(name || "").trim() !== targetName,
+    );
+    if (nextOrder.length === order.length) return;
+    extension_settings[extensionName].presetCustomOrder = nextOrder;
+    getContext().saveSettingsDebounced();
+  }
+
+  function buildDuplicatedPresetName(baseName) {
+    const normalizedBase = String(baseName || "").trim() || "未命名预设";
+    const existingNames = new Set(
+      getCurrentPresets()
+        .map((preset) => String(preset?.name || "").trim())
+        .filter(Boolean),
+    );
+    let nextName = `${normalizedBase} - 副本`;
+    let counter = 2;
+    while (existingNames.has(nextName)) {
+      nextName = `${normalizedBase} - 副本 ${counter}`;
+      counter++;
+    }
+    return nextName;
+  }
+
   function applyPreset(value) {
     const pm = getContext().getPresetManager();
     if (pm && pm.select) {
@@ -873,6 +966,9 @@ jQuery(async () => {
     // User 自定义顺序：用于默认排序下保持手动/复制插入后的相对顺序
     if (!Array.isArray(extension_settings[extensionName].personaCustomOrder))
       extension_settings[extensionName].personaCustomOrder = [];
+    // 预设自定义顺序：用于默认排序下保持手动/复制插入后的相对顺序
+    if (!Array.isArray(extension_settings[extensionName].presetCustomOrder))
+      extension_settings[extensionName].presetCustomOrder = [];
   }
   ensureSettings();
 
@@ -4781,6 +4877,12 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].presetGroups;
               if (groups && groups[name]) delete groups[name];
+              // 清理备注
+              if (extension_settings[extensionName].presetNotes?.[name] !== undefined)
+                delete extension_settings[extensionName].presetNotes[name];
+              removePresetFromCustomOrder(name);
+              cfmPresetDetailExpandedNames.delete(name);
+              cfmPresetRegexExpandedNames.delete(name);
               // 也从被 detach 的 option 中移除（原生过滤可能已将其 detach）
               if (_presetDetachedOptions && _presetDetachedOptions.length > 0) {
                 _presetDetachedOptions = _presetDetachedOptions.filter(
@@ -10175,6 +10277,98 @@ jQuery(async () => {
     }
   }
 
+  async function duplicatePreset(sourcePreset) {
+    const sourceName = String(sourcePreset?.name || "").trim();
+    if (!sourceName) return;
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+
+    const presetData = getPresetDataForDetail(pm, sourceName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${sourceName}」的数据`);
+      return;
+    }
+
+    const newPresetName = buildDuplicatedPresetName(sourceName);
+    const sourceValue =
+      sourcePreset?.value ??
+      getCurrentPresets().find((preset) => preset.name === sourceName)?.value ??
+      pm.select?.val();
+
+    try {
+      await pm.savePreset(newPresetName, structuredClone(presetData));
+      const groups = extension_settings[extensionName].presetGroups;
+      if (groups && groups[sourceName]) {
+        groups[newPresetName] = groups[sourceName];
+      }
+      const notes = extension_settings[extensionName].presetNotes;
+      if (notes && notes[sourceName] !== undefined) {
+        notes[newPresetName] = notes[sourceName];
+      }
+      insertPresetAfterInCustomOrder(sourceName, newPresetName);
+      if (pm?.select) {
+        const restoreValue =
+          sourceValue ??
+          getCurrentPresets().find((preset) => preset.name === sourceName)?.value;
+        if (
+          restoreValue !== undefined &&
+          restoreValue !== null &&
+          String(restoreValue) !== ""
+        ) {
+          pm.select.val(restoreValue).trigger("change");
+        } else {
+          syncCurrentPresetSelection(pm, sourceName);
+        }
+      }
+      refreshPresetPanelView();
+      toastr.success(`已复制预设「${sourceName}」`);
+    } catch (error) {
+      console.error("[CFM] 复制预设失败:", error);
+      toastr.error(`复制失败: ${error.message || error}`);
+    }
+  }
+
+  async function deleteSinglePreset(presetName) {
+    const name = String(presetName || "").trim();
+    if (!name) return;
+    if (!confirm(`确定删除预设「${name}」？`)) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("预设管理器不可用");
+      return;
+    }
+
+    try {
+      const ok = await pm.deletePreset(name);
+      if (ok === false) {
+        toastr.error(`删除预设「${name}」失败`);
+        return;
+      }
+      const groups = extension_settings[extensionName].presetGroups;
+      if (groups && groups[name]) delete groups[name];
+      const notes = extension_settings[extensionName].presetNotes;
+      if (notes && notes[name] !== undefined) delete notes[name];
+      removePresetFromCustomOrder(name);
+      cfmPresetDetailExpandedNames.delete(name);
+      cfmPresetRegexExpandedNames.delete(name);
+      if (_presetDetachedOptions && _presetDetachedOptions.length > 0) {
+        _presetDetachedOptions = _presetDetachedOptions.filter(
+          (opt) => $(opt).text() !== name,
+        );
+      }
+      getContext().saveSettingsDebounced();
+      refreshPresetPanelView();
+      toastr.success(`已删除预设「${name}」`);
+    } catch (error) {
+      console.error("[CFM] 删除预设失败:", error);
+      toastr.error(`删除失败: ${error.message || error}`);
+    }
+  }
+
   async function togglePresetDetailFieldActivation(
     presetName,
     fieldKey,
@@ -11168,6 +11362,183 @@ jQuery(async () => {
     });
   }
 
+  function getPresetPromptOrderIdentifier(item) {
+    if (typeof item === "string") return item;
+    if (!item || typeof item !== "object") return "";
+    return String(
+      item.identifier ?? item.id ?? item.key ?? item.prompt ?? item.name ?? "",
+    );
+  }
+
+  function buildDuplicatedPresetPromptKey(promptMap, sourcePromptKey) {
+    const normalizedSource = String(sourcePromptKey || "").trim() || "prompt";
+    const baseKey = `${normalizedSource}_copy`;
+    let candidate = baseKey;
+    let index = 2;
+    while (Object.prototype.hasOwnProperty.call(promptMap, candidate)) {
+      candidate = `${baseKey}_${index}`;
+      index += 1;
+    }
+    return candidate;
+  }
+
+  function buildDuplicatedPresetPromptLabel(existingLabels, sourceLabel) {
+    const baseLabel = String(sourceLabel || "").trim() || "新条目";
+    let candidate = `${baseLabel} 副本`;
+    let index = 2;
+    while (existingLabels.has(candidate)) {
+      candidate = `${baseLabel} 副本${index}`;
+      index += 1;
+    }
+    return candidate;
+  }
+
+  async function duplicatePresetDetailField(presetName, fieldKey) {
+    if (!String(fieldKey || "").startsWith("prompts.")) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    if (!presetData.prompts || typeof presetData.prompts !== "object") {
+      presetData.prompts = {};
+    }
+
+    const promptKey = fieldKey.slice("prompts.".length);
+    const sourceField = getPresetDetailFields(presetData).find(
+      (item) => item.key === fieldKey,
+    );
+    if (!sourceField) {
+      toastr.error("未找到可复制的预设条目");
+      return;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(presetData.prompts, promptKey)) {
+      toastr.error("预设条目不存在，无法复制");
+      return;
+    }
+
+    const newPromptKey = buildDuplicatedPresetPromptKey(
+      presetData.prompts,
+      promptKey,
+    );
+    const existingLabels = new Set(
+      getPresetDetailFields(presetData)
+        .map((item) => String(item?.label || "").trim())
+        .filter(Boolean),
+    );
+    const newPromptLabel = buildDuplicatedPresetPromptLabel(
+      existingLabels,
+      sourceField.label,
+    );
+    const sourcePrompt = presetData.prompts[promptKey];
+    const duplicatedPrompt =
+      sourcePrompt && typeof sourcePrompt === "object"
+        ? structuredClone(sourcePrompt)
+        : sourcePrompt;
+
+    if (duplicatedPrompt && typeof duplicatedPrompt === "object") {
+      if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "name")) {
+        duplicatedPrompt.name = newPromptLabel;
+      } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "title")) {
+        duplicatedPrompt.title = newPromptLabel;
+      } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "label")) {
+        duplicatedPrompt.label = newPromptLabel;
+      } else {
+        duplicatedPrompt.name = newPromptLabel;
+      }
+    }
+
+    presetData.prompts[newPromptKey] = duplicatedPrompt;
+
+    if (!Array.isArray(presetData.prompt_order)) {
+      presetData.prompt_order = [];
+    }
+
+    const sourceOrderIndex = presetData.prompt_order.findIndex(
+      (item) => getPresetPromptOrderIdentifier(item) === promptKey,
+    );
+    const newOrderItem = {
+      identifier: newPromptKey,
+      enabled: sourceField.enabled !== false,
+      name: newPromptLabel,
+    };
+
+    if (sourceOrderIndex === -1) {
+      presetData.prompt_order.push(newOrderItem);
+    } else {
+      presetData.prompt_order.splice(sourceOrderIndex + 1, 0, newOrderItem);
+    }
+
+    try {
+      await pm.savePreset(presetName, presetData);
+      syncCurrentPresetSelection(pm, presetName);
+      toastr.success(`已复制预设条目「${sourceField.label}」`);
+      refreshPresetPanelView();
+    } catch (error) {
+      console.error("[CFM] 复制预设条目失败:", error);
+      toastr.error(`复制失败: ${error.message || error}`);
+    }
+  }
+
+  async function deletePresetDetailField(presetName, fieldKey) {
+    if (!String(fieldKey || "").startsWith("prompts.")) return;
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return;
+    }
+
+    const field = getPresetDetailFields(presetData).find(
+      (item) => item.key === fieldKey,
+    );
+    if (!field) {
+      toastr.error("未找到可删除的预设条目");
+      return;
+    }
+
+    if (!confirm(`确定删除预设条目「${field.label}」？`)) return;
+
+    const promptKey = fieldKey.slice("prompts.".length);
+    if (presetData.prompts && typeof presetData.prompts === "object") {
+      delete presetData.prompts[promptKey];
+    }
+    if (Array.isArray(presetData.prompt_order)) {
+      presetData.prompt_order = presetData.prompt_order.filter(
+        (item) => getPresetPromptOrderIdentifier(item) !== promptKey,
+      );
+    }
+    cfmPresetDetailBatchSelected.delete(fieldKey);
+    if (cfmPresetDetailBatchLastClicked === fieldKey) {
+      cfmPresetDetailBatchLastClicked = null;
+    }
+
+    try {
+      await pm.savePreset(presetName, presetData);
+      syncCurrentPresetSelection(pm, presetName);
+      toastr.success(`已删除预设条目「${field.label}」`);
+      refreshPresetPanelView();
+    } catch (error) {
+      console.error("[CFM] 删除预设条目失败:", error);
+      toastr.error(`删除失败: ${error.message || error}`);
+    }
+  }
+
   async function editPresetDetailField(presetName, fieldKey) {
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -11204,13 +11575,7 @@ jQuery(async () => {
       if (!Array.isArray(presetData.prompt_order)) presetData.prompt_order = [];
       if (
         !presetData.prompt_order.some((item) => {
-          const identifier =
-            item?.identifier ||
-            item?.id ||
-            item?.name ||
-            item?.key ||
-            item?.prompt;
-          return identifier === promptKey;
+          return getPresetPromptOrderIdentifier(item) === promptKey;
         })
       ) {
         presetData.prompt_order.push({ identifier: promptKey, enabled: true });
@@ -11832,6 +12197,8 @@ jQuery(async () => {
               <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(fieldKey)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
               <span class="cfm-preset-detail-label-text">${escapeHtml(field.label)}</span>
               <div class="cfm-chat-actions">
+                <div class="cfm-chat-action-btn cfm-preset-detail-copy" data-field="${escapeHtml(fieldKey)}" title="复制${escapeHtml(field.label)}"><i class="fa-solid fa-copy"></i></div>
+                <div class="cfm-chat-action-btn cfm-preset-detail-delete" data-field="${escapeHtml(fieldKey)}" title="删除${escapeHtml(field.label)}"><i class="fa-solid fa-trash-can"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
               </div>
             </div>
@@ -11878,6 +12245,20 @@ jQuery(async () => {
               el.data("pending", false);
             }
           });
+
+        row.find(".cfm-preset-detail-copy").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const currentFieldKey = $(e.currentTarget).data("field");
+          await duplicatePresetDetailField(preset.name, currentFieldKey);
+        });
+
+        row.find(".cfm-preset-detail-delete").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const currentFieldKey = $(e.currentTarget).data("field");
+          await deletePresetDetailField(preset.name, currentFieldKey);
+        });
 
         row.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
           e.preventDefault();
