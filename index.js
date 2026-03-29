@@ -840,6 +840,12 @@ jQuery(async () => {
     // 置顶聊天列表：[{ avatar, chatFileName }]
     if (!Array.isArray(extension_settings[extensionName].pinnedChats))
       extension_settings[extensionName].pinnedChats = [];
+    // User 聊天绑定记录：{ [personaAvatarId]: ["charAvatar::chatFileName"] }
+    if (
+      !extension_settings[extensionName].personaChatBindings ||
+      typeof extension_settings[extensionName].personaChatBindings !== "object"
+    )
+      extension_settings[extensionName].personaChatBindings = {};
   }
   ensureSettings();
 
@@ -7224,6 +7230,61 @@ jQuery(async () => {
       avatar: raw.slice(0, sepIdx),
       chatFileName: raw.slice(sepIdx + 2),
     };
+  }
+
+  function getPersonaChatBindingsStore() {
+    ensureSettings();
+    const settings = extension_settings[extensionName];
+    if (!settings.personaChatBindings || typeof settings.personaChatBindings !== "object") {
+      settings.personaChatBindings = {};
+    }
+    return settings.personaChatBindings;
+  }
+
+  function getPersonaChatBindKeys(avatarId, includeBindKey = "") {
+    const store = getPersonaChatBindingsStore();
+    const saved = Array.isArray(store[avatarId]) ? [...store[avatarId]] : [];
+    const extra = String(includeBindKey || "").trim();
+    if (extra && !saved.includes(extra)) saved.push(extra);
+    return [...new Set(saved)].filter(Boolean);
+  }
+
+  function syncPersonaChatBindingState(avatarId, bindKey, shouldBind) {
+    if (!avatarId || !bindKey) return;
+    const store = getPersonaChatBindingsStore();
+
+    for (const key of Object.keys(store)) {
+      const nextList = Array.isArray(store[key])
+        ? store[key].filter((item) => item && item !== bindKey)
+        : [];
+      if (nextList.length) store[key] = nextList;
+      else delete store[key];
+    }
+
+    if (shouldBind) {
+      if (!Array.isArray(store[avatarId])) store[avatarId] = [];
+      store[avatarId].push(bindKey);
+      store[avatarId] = [...new Set(store[avatarId])];
+    }
+
+    getContext().saveSettingsDebounced();
+  }
+
+  function buildPersonaChatBindHtml(avatarId, includeBindKey = "") {
+    const bindKeys = getPersonaChatBindKeys(avatarId, includeBindKey);
+    if (!bindKeys.length) return "";
+
+    const chars = getContext().characters || [];
+    return bindKeys
+      .map((bindKey) => {
+        const parsed = parseChatBindKey(bindKey);
+        const ch = chars.find((c) => c.avatar === parsed.avatar);
+        const charName = ch ? ch.name : parsed.avatar || "当前角色";
+        const chatName = parsed.chatFileName || bindKey;
+        const label = `${charName}-${chatName}`;
+        return `<div><span class="cfm-persona-conn-tag" style="margin-left:6px;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-all;align-items:flex-start;"><i class="fa-solid fa-comments"></i><span title="绑定聊天: ${escapeHtml(label)}">${escapeHtml(label)}</span></span></div>`;
+      })
+      .join("");
   }
 
   /**
@@ -31079,6 +31140,10 @@ jQuery(async () => {
     };
     const selector = buttonMap[bindType];
     if (!selector) return;
+
+    const currentChatBindKey = bindType === "chat" ? getCurrentChatBindKey() : null;
+    const wasChatBound = bindType === "chat" ? getPersonaBindStates(persona).chat : false;
+
     selectPersona(persona.avatarId);
     setTimeout(() => {
       const btn = $(selector);
@@ -31087,7 +31152,12 @@ jQuery(async () => {
         return;
       }
       btn.trigger("click");
-      setTimeout(() => refreshPersonaPanelView(), 80);
+      setTimeout(() => {
+        if (bindType === "chat" && currentChatBindKey) {
+          syncPersonaChatBindingState(persona.avatarId, currentChatBindKey, !wasChatBound);
+        }
+        refreshPersonaPanelView();
+      }, 80);
     }, 30);
   }
 
@@ -31286,8 +31356,21 @@ jQuery(async () => {
     const desc = persona?.description || "";
     const personaName = persona?.name || "User";
     const note = getPersonaNote(persona.avatarId) || "";
-    const connections = resolvePersonaConnections(persona?.connections || []);
     const bindStates = getPersonaBindStates(persona);
+    const characterBindHtml = buildPersonaConnHtml(persona?.connections || []);
+    const currentChatBindKey = bindStates.chat ? getCurrentChatBindKey() : "";
+    const chatBindHtml = buildPersonaChatBindHtml(
+      persona.avatarId,
+      currentChatBindKey,
+    );
+    const bindDetailHtml = [
+      characterBindHtml ? `<div>${characterBindHtml}</div>` : "",
+      chatBindHtml
+        ? `<div style="margin-top:6px;display:flex;flex-direction:column;align-items:flex-start;gap:6px;">${chatBindHtml}</div>`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
 
     const subList = $(
       '<div class="cfm-chat-sublist cfm-persona-sublist"></div>',
@@ -31333,7 +31416,7 @@ jQuery(async () => {
             <span class="cfm-persona-bind-text">聊天</span>
           </div>
         </div>
-        <div class="cfm-persona-detail-value">${connections.length ? buildPersonaConnHtml(persona.connections) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+        <div class="cfm-persona-detail-value">${bindDetailHtml || '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `);
 
