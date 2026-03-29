@@ -4986,6 +4986,24 @@ jQuery(async () => {
                 const fi = favs.indexOf(name);
                 if (fi !== -1) favs.splice(fi, 1);
               }
+              // 清理 QR 激活分组中的已删除引用
+              const qrPresets = getQrActivePresets ? getQrActivePresets() : [];
+              for (const qp of qrPresets) {
+                if (Array.isArray(qp.sets)) {
+                  qp.sets = qp.sets.filter((setName) => setName !== name);
+                }
+              }
+              const qrApplied =
+                extension_settings[extensionName]._qrAppliedPresetIndices;
+              if (Array.isArray(qrApplied)) {
+                extension_settings[extensionName]._qrAppliedPresetIndices =
+                  qrApplied.filter(
+                    (idx) =>
+                      qrPresets[idx] &&
+                      Array.isArray(qrPresets[idx].sets) &&
+                      qrPresets[idx].sets.length > 0,
+                  );
+              }
               // 清理展开状态
               if (qrItemExpandedSets) qrItemExpandedSets.delete(name);
               success++;
@@ -13626,7 +13644,7 @@ jQuery(async () => {
     const normalizedNames = Array.from(
       new Set(
         (Array.isArray(setNames) ? setNames : [])
-          .map((name) => String(name || ""))
+          .map((name) => String(name || "").trim())
           .filter(Boolean),
       ),
     );
@@ -13635,11 +13653,21 @@ jQuery(async () => {
       return false;
     }
 
+    const existingNameSet = getExistingQrSetNameSet();
+    const validNames = normalizedNames.filter((name) =>
+      existingNameSet.has(name),
+    );
+    if (!validNames.length) {
+      toastr.warning("所选快速回复集已不存在");
+      return false;
+    }
+
     const activeSet = getActiveQrSets();
     let changedCount = 0;
-    for (const name of normalizedNames) {
+    for (const name of validNames) {
       if (activeSet.has(name) === activate) continue;
-      await toggleQrSetActivation(name, activate);
+      const changed = await toggleQrSetActivation(name, activate);
+      if (!changed) continue;
       if (activate) activeSet.add(name);
       else activeSet.delete(name);
       syncQrPresetTrackingForManualToggle(name, activate);
@@ -28003,6 +28031,72 @@ jQuery(async () => {
     }
   }
 
+  function getExistingQrSetNameSet() {
+    return new Set(
+      Array.from(
+        new Set(
+          getQrSetNames()
+            .map((name) => String(name || "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    );
+  }
+
+  function filterExistingQrSetNames(setNames, existingNameSet) {
+    const validNameSet = existingNameSet || getExistingQrSetNameSet();
+    return Array.from(
+      new Set(
+        (Array.isArray(setNames) ? setNames : [])
+          .map((name) => String(name || "").trim())
+          .filter((name) => name && validNameSet.has(name)),
+      ),
+    );
+  }
+
+  function sanitizeQrActivePresetState(save = false) {
+    const presets = extension_settings[extensionName].qrActivePresets || [];
+    const existingNameSet = getExistingQrSetNameSet();
+    let presetChanged = false;
+    for (const preset of presets) {
+      if (!preset || typeof preset !== "object") continue;
+      const prevSets = Array.isArray(preset.sets) ? preset.sets : [];
+      const nextSets = filterExistingQrSetNames(prevSets, existingNameSet);
+      const sameSets =
+        prevSets.length === nextSets.length &&
+        prevSets.every((name, idx) => name === nextSets[idx]);
+      if (!sameSets || !Array.isArray(preset.sets)) {
+        preset.sets = nextSets;
+        presetChanged = true;
+      }
+    }
+    const applied = Array.isArray(
+      extension_settings[extensionName]._qrAppliedPresetIndices,
+    )
+      ? extension_settings[extensionName]._qrAppliedPresetIndices
+      : [];
+    const nextApplied = applied.filter(
+      (idx) =>
+        presets[idx] &&
+        Array.isArray(presets[idx].sets) &&
+        presets[idx].sets.length > 0,
+    );
+    const appliedChanged =
+      applied.length !== nextApplied.length ||
+      applied.some((idx, i) => idx !== nextApplied[i]);
+    if (appliedChanged) {
+      extension_settings[extensionName]._qrAppliedPresetIndices = nextApplied;
+    }
+    if (save && (presetChanged || appliedChanged)) {
+      getContext().saveSettingsDebounced();
+    }
+    return {
+      presets,
+      existingNameSet,
+      changed: presetChanged || appliedChanged,
+    };
+  }
+
   /**
    * 获取当前激活的快速回复集名称集合（全局 + 聊天级）
    */
@@ -28036,24 +28130,35 @@ jQuery(async () => {
    * 切换快速回复集的全局激活状态
    */
   async function toggleQrSetActivation(name, activate) {
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) return false;
+    const existingNameSet = getExistingQrSetNameSet();
+    if (!existingNameSet.has(normalizedName)) {
+      console.info(
+        `[CFM] 已跳过不存在的快速回复集激活切换：${normalizedName}`,
+      );
+      return false;
+    }
     try {
       const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
       if (!api) {
         toastr.error("快速回复 API 不可用");
-        return;
+        return false;
       }
       if (activate) {
-        if (api.addGlobalSet) await api.addGlobalSet(name);
+        if (api.addGlobalSet) await api.addGlobalSet(normalizedName);
         else if (api.globalSetList && api.globalSetList.addSet)
-          await api.globalSetList.addSet(name);
+          await api.globalSetList.addSet(normalizedName);
       } else {
-        if (api.removeGlobalSet) await api.removeGlobalSet(name);
+        if (api.removeGlobalSet) await api.removeGlobalSet(normalizedName);
         else if (api.globalSetList && api.globalSetList.removeSet)
-          await api.globalSetList.removeSet(name);
+          await api.globalSetList.removeSet(normalizedName);
       }
+      return true;
     } catch (e) {
       console.error("[CFM] 切换快速回复集激活状态失败", e);
       toastr.error("切换快速回复集激活失败");
+      return false;
     }
   }
 
@@ -28064,8 +28169,13 @@ jQuery(async () => {
     try {
       const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
       if (!api) return;
+      const { existingNameSet } = sanitizeQrActivePresetState(true);
+      const filteredSetNames = filterExistingQrSetNames(
+        setNames,
+        existingNameSet,
+      );
       const currentActive = getActiveQrSets();
-      const targetSet = new Set(setNames);
+      const targetSet = new Set(filteredSetNames);
       // 取消不在目标列表中的
       for (const name of currentActive) {
         if (!targetSet.has(name)) {
@@ -28073,7 +28183,7 @@ jQuery(async () => {
         }
       }
       // 激活目标列表中未激活的
-      for (const name of setNames) {
+      for (const name of filteredSetNames) {
         if (!currentActive.has(name)) {
           await toggleQrSetActivation(name, true);
         }
@@ -29358,6 +29468,7 @@ jQuery(async () => {
 
   // ==================== 快速回复分组预设管理 ====================
   function getQrActivePresets() {
+    sanitizeQrActivePresetState(true);
     return extension_settings[extensionName].qrActivePresets || [];
   }
   function saveQrActivePreset(name, sets, scope, bindChars, bindPresets) {
@@ -29624,6 +29735,7 @@ jQuery(async () => {
     const details = {};
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
+      if (!p || !Array.isArray(p.sets) || p.sets.length === 0) continue;
       if (p.scope === "global") continue;
       const hasBindings =
         (p.bindChars && p.bindChars.length > 0) ||
