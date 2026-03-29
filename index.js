@@ -30539,13 +30539,9 @@ jQuery(async () => {
     const connections = Array.isArray(desc.connections) ? desc.connections : [];
     const chatMeta =
       ctx.chatMetadata || window.chat_metadata || window.chatMetadata || {};
-    const chars = ctx.characters || [];
-    const currentChar =
-      typeof ctx.characterId === "number" && ctx.characterId >= 0
-        ? chars[ctx.characterId]?.avatar || null
-        : null;
+    const currentChar = getCurrentCharAvatar();
     const currentGroupId =
-      ctx.groupId || ctx.selectedGroup || window.selected_group || null;
+      ctx.groupId ?? ctx.selectedGroup ?? window.selected_group ?? null;
 
     return {
       default: pu.default_persona === persona.avatarId,
@@ -30569,6 +30565,12 @@ jQuery(async () => {
 
   async function showPersonaDetailFieldPopup(persona, field) {
     const map = {
+      name: {
+        title: "编辑User名称",
+        label: "名称",
+        placeholder: "输入User名称",
+        rows: 1,
+      },
       title: {
         title: "编辑User标题",
         label: "标题",
@@ -30586,7 +30588,9 @@ jQuery(async () => {
     if (!meta || !persona) return null;
 
     const entry = ensurePersonaDescriptionEntry(persona.avatarId);
-    const currentValue = String(entry?.[field] || "");
+    const currentValue = String(
+      field === "name" ? persona?.name || "" : entry?.[field] || "",
+    );
     const inputHtml =
       meta.rows > 1
         ? `<textarea class="cfm-edit-input" id="cfm-persona-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
@@ -30648,6 +30652,23 @@ jQuery(async () => {
   async function editPersonaDetailField(persona, field) {
     const value = await showPersonaDetailFieldPopup(persona, field);
     if (value === null) return;
+
+    const ctx = getContext();
+    const pu = ctx.powerUserSettings;
+    if (!pu) {
+      toastr.error("无法获取User设定数据");
+      return;
+    }
+
+    if (field === "name") {
+      if (!pu.personas) pu.personas = {};
+      pu.personas[persona.avatarId] = value || "[未命名User]";
+      getContext().saveSettingsDebounced();
+      toastr.success("已更新User名称");
+      refreshPersonaPanelView();
+      return;
+    }
+
     const entry = ensurePersonaDescriptionEntry(persona.avatarId);
     if (!entry) {
       toastr.error("无法获取User设定数据");
@@ -31263,7 +31284,7 @@ jQuery(async () => {
     personaRow.next(".cfm-chat-sublist").remove();
 
     const desc = persona?.description || "";
-    const title = persona?.title || "";
+    const personaName = persona?.name || "User";
     const note = getPersonaNote(persona.avatarId) || "";
     const connections = resolvePersonaConnections(persona?.connections || []);
     const bindStates = getPersonaBindStates(persona);
@@ -31277,12 +31298,12 @@ jQuery(async () => {
 
     detailCard.append(`
       <div class="cfm-persona-detail-section">
-        <div class="cfm-persona-detail-label">标题
+        <div class="cfm-persona-detail-label">名称
           <div class="cfm-chat-actions">
-            <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="title" title="编辑标题"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="name" title="编辑名称"><i class="fa-solid fa-pen-to-square"></i></div>
           </div>
         </div>
-        <div class="cfm-persona-detail-value">${title ? escapeHtml(title) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+        <div class="cfm-persona-detail-value">${escapeHtml(personaName)}</div>
       </div>
     `);
 
