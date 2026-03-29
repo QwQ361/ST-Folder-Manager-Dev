@@ -31517,8 +31517,40 @@ jQuery(async () => {
     }, 30);
   }
 
+  // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
   function triggerNativePersonaTool(persona) {
     if (!persona?.avatarId) return;
+
+    const bringNativePersonaToolPopupToFront = () => {
+      const shadow = $("#shadow_popup");
+      const popup = $("#dialogue_popup");
+      const holder = $("#dialogue_popup_holder");
+      const cfmOverlayZ = Number.parseInt($("#cfm-overlay").css("z-index"), 10);
+      const baseZ = Number.isFinite(cfmOverlayZ) ? cfmOverlayZ + 2 : 10002;
+      if (shadow.length) {
+        shadow.css("z-index", baseZ);
+      }
+      if (popup.length) {
+        popup.css("z-index", baseZ + 1);
+      }
+      if (holder.length) {
+        holder.css("position", "relative");
+        holder.css("z-index", baseZ + 2);
+      }
+      return shadow.length || popup.length || holder.length;
+    };
+
+    const scheduleBringToFront = () => {
+      let attempts = 0;
+      const maxAttempts = 12;
+      const timer = window.setInterval(() => {
+        attempts += 1;
+        const found = bringNativePersonaToolPopupToFront();
+        if (found || attempts >= maxAttempts) {
+          window.clearInterval(timer);
+        }
+      }, 80);
+    };
 
     const triggerToolBtn = () => {
       const btn = $(
@@ -31526,6 +31558,7 @@ jQuery(async () => {
       ).first();
       if (!btn.length) return false;
       btn.trigger("click");
+      scheduleBringToFront();
       return true;
     };
 
@@ -31555,6 +31588,7 @@ jQuery(async () => {
       }, 120);
     }, 30);
   }
+  // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
 
   function renderCharacterDetailSubList(charRow, char) {
     charRow.next(".cfm-char-detail-sublist").remove();
@@ -31811,6 +31845,7 @@ jQuery(async () => {
       </div>
     `);
 
+    // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
     detailCard.append(`
       <div class="cfm-persona-detail-section">
         <div class="cfm-persona-detail-label">具体设定
@@ -31822,6 +31857,7 @@ jQuery(async () => {
         <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `);
+    // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
 
     subList.append(detailCard);
     personaRow.after(subList);
@@ -31833,11 +31869,13 @@ jQuery(async () => {
       await editPersonaDetailField(persona, field);
     });
 
+    // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
     subList.find(".cfm-persona-detail-tool").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
       triggerNativePersonaTool(persona);
     });
+    // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
 
     subList
       .find(".cfm-persona-detail-description")
