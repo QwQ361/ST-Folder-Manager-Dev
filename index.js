@@ -348,26 +348,19 @@ jQuery(async () => {
   // 获取世界书列表（带缓存，优先从DOM读取避免网络延迟）
   let _worldInfoNamesCache = null;
   let _worldInfoPreloadPromise = null;
-  async function getWorldInfoNames(forceRefresh) {
-    if (_worldInfoNamesCache && !forceRefresh) return _worldInfoNamesCache;
-    // forceRefresh 时直接走API获取最新数据（导入后DOM可能未更新）
-    if (forceRefresh) {
-      try {
-        const resp = await fetch("/api/settings/get", {
-          method: "POST",
-          headers: getContext().getRequestHeaders(),
-          body: JSON.stringify({}),
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          _worldInfoNamesCache = data.world_names || [];
-          return _worldInfoNamesCache;
-        }
-      } catch (e) {
-        console.error("[CFM] 强制刷新世界书列表失败", e);
-      }
+  function normalizeWorldInfoNameList(names) {
+    const result = [];
+    const seen = new Set();
+    for (const rawName of Array.isArray(names) ? names : []) {
+      const name = String(rawName || "").trim();
+      if (!name || name === "--- 选择以编辑 ---" || seen.has(name)) continue;
+      seen.add(name);
+      result.push(name);
     }
-    // 非强制刷新时优先从DOM读取（同步，无延迟）
+    return result;
+  }
+
+  function collectWorldInfoNamesFromDom() {
     const names = [];
     $("#world_editor_select option").each(function () {
       const v = $(this).val();
@@ -382,6 +375,35 @@ jQuery(async () => {
         if (v !== "" && t !== "--- 选择以编辑 ---") names.push(t);
       }
     }
+    return normalizeWorldInfoNameList(names);
+  }
+
+  async function getWorldInfoNames(forceRefresh) {
+    if (Array.isArray(_worldInfoNamesCache) && !forceRefresh) {
+      _worldInfoNamesCache = normalizeWorldInfoNameList(_worldInfoNamesCache);
+      return _worldInfoNamesCache;
+    }
+    // forceRefresh 时直接走API获取最新数据（导入后DOM可能未更新）
+    if (forceRefresh) {
+      try {
+        const resp = await fetch("/api/settings/get", {
+          method: "POST",
+          headers: getContext().getRequestHeaders(),
+          body: JSON.stringify({}),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          _worldInfoNamesCache = normalizeWorldInfoNameList(
+            data.world_names || [],
+          );
+          return _worldInfoNamesCache;
+        }
+      } catch (e) {
+        console.error("[CFM] 强制刷新世界书列表失败", e);
+      }
+    }
+    // 非强制刷新时优先从DOM读取（同步，无延迟）
+    const names = collectWorldInfoNamesFromDom();
     if (names.length > 0) {
       _worldInfoNamesCache = names;
       return names;
@@ -395,7 +417,9 @@ jQuery(async () => {
       });
       if (resp.ok) {
         const data = await resp.json();
-        _worldInfoNamesCache = data.world_names || [];
+        _worldInfoNamesCache = normalizeWorldInfoNameList(
+          data.world_names || [],
+        );
         return _worldInfoNamesCache;
       }
     } catch (e) {}
@@ -27281,20 +27305,7 @@ jQuery(async () => {
     _worldInfoNamesCache = null;
     let names;
     // 优先从DOM同步读取（getWorldInfoNames内部会先尝试DOM）
-    const domNames = [];
-    $("#world_editor_select option").each(function () {
-      const v = $(this).val();
-      const t = $(this).text();
-      if (v !== "" && t !== "--- 选择以编辑 ---") domNames.push(t);
-    });
-    // 如果原生过滤激活，被 detach 的 option 也要加入（防止清理逻辑误删分组映射）
-    if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
-      for (const opt of _worldInfoDetachedOptions) {
-        const v = $(opt).val();
-        const t = $(opt).text();
-        if (v !== "" && t !== "--- 选择以编辑 ---") domNames.push(t);
-      }
-    }
+    const domNames = collectWorldInfoNamesFromDom();
     if (domNames.length > 0) {
       names = domNames;
       _worldInfoNamesCache = domNames;
@@ -37390,23 +37401,7 @@ jQuery(async () => {
             if (aid) allItems.push(aid);
           });
         } else {
-          allItems = [];
-          $("#world_editor_select option").each(function () {
-            const v = $(this).val();
-            const t = $(this).text();
-            if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
-          });
-          // 如果原生过滤激活，被 detach 的 option 也要加入
-          if (
-            _worldInfoDetachedOptions &&
-            _worldInfoDetachedOptions.length > 0
-          ) {
-            for (const opt of _worldInfoDetachedOptions) {
-              const v = $(opt).val();
-              const t = $(opt).text();
-              if (v !== "" && t !== "--- 选择以编辑 ---") allItems.push(t);
-            }
-          }
+          allItems = collectWorldInfoNamesFromDom();
         }
         uncatCount = allItems.filter((name) => {
           const grp = groups[name];
