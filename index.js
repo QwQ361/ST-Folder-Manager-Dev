@@ -31679,6 +31679,19 @@ jQuery(async () => {
       .on("click touchend", async (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const target = $(e.currentTarget);
+        const now = Date.now();
+        const lastTouchAt = Number(target.data("cfmPersonaDescTouchAt") || 0);
+        if (e.type === "touchend") {
+          target.data("cfmPersonaDescTouchAt", now);
+        } else if (lastTouchAt && now - lastTouchAt < 500) {
+          return;
+        }
+
+        if (!window.confirm("确认编辑这段具体设定吗？")) {
+          return;
+        }
+
         const descText = String(persona?.description || "");
         const clickedOffset = getTextOffsetFromPoint(e.currentTarget, e);
         await editPersonaDetailField(persona, "description", {
