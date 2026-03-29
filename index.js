@@ -31688,7 +31688,7 @@ jQuery(async () => {
           return;
         }
 
-        if (!window.confirm("确认编辑这段具体设定吗？")) {
+        if (!window.confirm("确认编辑Uesr设定吗？")) {
           return;
         }
 
