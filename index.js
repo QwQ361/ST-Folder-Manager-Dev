@@ -7282,7 +7282,7 @@ jQuery(async () => {
         const charName = ch ? ch.name : parsed.avatar || "当前角色";
         const chatName = parsed.chatFileName || bindKey;
         const label = `${charName}-${chatName}`;
-        return `<div><span class="cfm-persona-conn-tag" style="margin-left:6px;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-all;align-items:flex-start;"><i class="fa-solid fa-comments"></i><span title="绑定聊天: ${escapeHtml(label)}">${escapeHtml(label)}</span></span></div>`;
+        return `<div><span class="cfm-persona-conn-tag" style="margin-left:6px;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-all;align-items:flex-start;"><i class="fa-solid fa-comments" style="margin-top:2px;flex:0 0 auto;"></i><span title="绑定聊天: ${escapeHtml(label)}">${escapeHtml(label)}</span></span></div>`;
       })
       .join("");
   }
