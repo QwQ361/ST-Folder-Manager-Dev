@@ -3894,9 +3894,9 @@ option.cfm-nf-hidden {
 }
 
 /* ========== 用户(Persona)样式 ========== */
-/* 头像：圆形，略大 */
+/* 头像：与角色卡页一致，方形 */
 .cfm-persona-avatar {
-  border-radius: 50% !important;
+  border-radius: 6px !important;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -3904,7 +3904,7 @@ option.cfm-nf-hidden {
   width: 32px;
   height: 32px;
   object-fit: cover;
-  border-radius: 50%;
+  border-radius: 6px;
 }
 /* 名称 */
 .cfm-persona-name-text {
