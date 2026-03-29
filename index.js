@@ -31701,6 +31701,34 @@ jQuery(async () => {
         "data-avatar-id",
       ) || null;
 
+    if (!selectedPersonaFolder) {
+      const currentFolderId = currentUserAvatar
+        ? groups[currentUserAvatar] || null
+        : null;
+      if (currentFolderId && tree[currentFolderId]) {
+        let resolvedFolderId = currentFolderId;
+        const visitedFolderIds = new Set();
+        while (resolvedFolderId && tree[resolvedFolderId]) {
+          if (visitedFolderIds.has(resolvedFolderId)) break;
+          visitedFolderIds.add(resolvedFolderId);
+          const directItems = folderItems[resolvedFolderId] || [];
+          const childIds = sortResFolders(
+            "personas",
+            getResChildFolders("personas", resolvedFolderId),
+          );
+          if (directItems.length > 0 || childIds.length !== 1) break;
+          resolvedFolderId = childIds[0];
+        }
+        const fullPath = getResFolderPath("personas", resolvedFolderId);
+        for (let i = 0; i < fullPath.length - 1; i++) {
+          personaExpandedNodes.add(fullPath[i]);
+        }
+        selectedPersonaFolder = resolvedFolderId;
+      } else {
+        selectedPersonaFolder = "__ungrouped__";
+      }
+    }
+
     let displayItems = [];
     let displayTitle = "选择左侧文件夹查看内容";
     let childFolders = [];
@@ -31918,7 +31946,7 @@ jQuery(async () => {
       // User行（带头像 + 星标 + 多选支持 + 备注）
       for (const p of displayItems) {
         const isActive = p.avatarId === currentUserAvatar;
-        const bindStates = getPersonaBindingState(p);
+        const bindStates = getPersonaBindStates(p);
         const isDefaultPersona = !!bindStates.default;
         const fav = isResFavorite("personas", p.avatarId);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.avatarId);
@@ -32312,7 +32340,7 @@ jQuery(async () => {
 
       for (const p of matched) {
         const isActive = p.avatarId === currentUserAvatar;
-        const bindStates = getPersonaBindingState(p);
+        const bindStates = getPersonaBindStates(p);
         const isDefaultPersona = !!bindStates.default;
         const fav = isResFavorite("personas", p.avatarId);
         const thumbUrl = getThumbnailUrl("persona", p.avatarId);
