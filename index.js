@@ -11351,7 +11351,7 @@ jQuery(async () => {
         e.stopPropagation();
         toggleWorldInfoEntryDetail(normalizedName, entry.uid);
         setWorldInfoEntryBookExpanded(normalizedName, true);
-        refreshFn();
+        rerenderCurrentSubList();
       });
 
       detailCard.append(row);
