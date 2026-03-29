@@ -31517,6 +31517,45 @@ jQuery(async () => {
     }, 30);
   }
 
+  function triggerNativePersonaTool(persona) {
+    if (!persona?.avatarId) return;
+
+    const triggerToolBtn = () => {
+      const btn = $(
+        "#pw_persona_tool_btn, .menu_button[title='打开设定生成器']",
+      ).first();
+      if (!btn.length) return false;
+      btn.trigger("click");
+      return true;
+    };
+
+    const openPersonaManager = () => {
+      const btn = $(
+        "[title='用户设定管理'], [aria-label='用户设定管理'], [description='用户设定管理']",
+      ).first();
+      if (!btn.length) return false;
+      btn.trigger("click");
+      return true;
+    };
+
+    selectPersona(persona.avatarId);
+    setTimeout(() => {
+      if (triggerToolBtn()) return;
+      if (!openPersonaManager()) {
+        toastr.warning("未找到酒馆原生设定生成器按钮");
+        return;
+      }
+      setTimeout(() => {
+        selectPersona(persona.avatarId);
+        setTimeout(() => {
+          if (!triggerToolBtn()) {
+            toastr.warning("未找到酒馆原生设定生成器按钮");
+          }
+        }, 60);
+      }, 120);
+    }, 30);
+  }
+
   function renderCharacterDetailSubList(charRow, char) {
     charRow.next(".cfm-char-detail-sublist").remove();
 
@@ -31777,6 +31816,7 @@ jQuery(async () => {
         <div class="cfm-persona-detail-label">具体设定
           <div class="cfm-chat-actions">
             <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="description" title="编辑具体设定"><i class="fa-solid fa-pen-to-square"></i></div>
+            <div class="cfm-chat-action-btn cfm-persona-detail-tool" title="打开设定生成器"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
           </div>
         </div>
         <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
@@ -31791,6 +31831,12 @@ jQuery(async () => {
       e.stopPropagation();
       const field = $(e.currentTarget).data("field");
       await editPersonaDetailField(persona, field);
+    });
+
+    subList.find(".cfm-persona-detail-tool").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerNativePersonaTool(persona);
     });
 
     subList
