@@ -20232,6 +20232,11 @@ jQuery(async () => {
     const resetPanelExpandedStates = () => {
       cfmCharDetailExpandedAvatars.clear();
       personaItemExpandedIds.clear();
+      cfmPresetDetailExpandedNames.clear();
+      qrItemExpandedSets.clear();
+      cfmQrLastFocusedSetName = null;
+      closeWorldInfoEntryPanels();
+      cfmWorldInfoEntryLastFocusedName = null;
 
       cfmChatMode = false;
       cfmChatExpandedAvatars.clear();
