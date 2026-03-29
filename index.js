@@ -10982,10 +10982,12 @@ jQuery(async () => {
             cfmWorldInfoEntryExpandedNames.size > 0 ||
             cfmWorldInfoEntryOpenDetails.size > 0;
           if (!hasExpandedPanels) return;
+          const targetName = getLatestWorldInfoCollapseTargetName();
           e.preventDefault();
           e.stopImmediatePropagation();
           closeWorldInfoEntryPanels();
           refreshFn();
+          scrollWorldInfoRowIntoView(targetName);
         },
       );
   }
@@ -10994,21 +10996,30 @@ jQuery(async () => {
     bookRow,
     bookName,
     refreshFn = refreshWorldInfoPanelView,
+    renderOptions = null,
   ) {
-    bookRow.next(".cfm-worldinfo-entry-sublist").remove();
-    if (!isWorldInfoEntryBookExpanded(bookName)) return;
-
     const normalizedName = String(bookName || "");
     if (!normalizedName || !bookRow?.length) return;
 
-    const subList = $(
-      '<div class="cfm-chat-sublist cfm-preset-detail-sublist cfm-worldinfo-entry-sublist"></div>',
-    );
-    const detailCard = $(
-      '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-preset-detail-card cfm-worldinfo-entry-detail-card"></div>',
-    );
-    subList.append(detailCard);
-    bookRow.after(subList);
+    const existingSubList = bookRow.next(".cfm-worldinfo-entry-sublist");
+    if (!isWorldInfoEntryBookExpanded(bookName)) {
+      existingSubList.remove();
+      return;
+    }
+
+    const subList = existingSubList.length
+      ? existingSubList
+      : $(
+          '<div class="cfm-chat-sublist cfm-preset-detail-sublist cfm-worldinfo-entry-sublist"></div>',
+        );
+    const existingDetailCard = subList
+      .children(".cfm-worldinfo-entry-detail-card")
+      .first();
+    const detailCard = existingDetailCard.length
+      ? existingDetailCard
+      : $(
+          '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-preset-detail-card cfm-worldinfo-entry-detail-card"></div>',
+        );
 
     const renderMultiline = (value) =>
       escapeHtml(String(value || "")).replace(/\n/g, "<br>");
@@ -11021,23 +11032,49 @@ jQuery(async () => {
         : '<span class="cfm-persona-detail-empty">无</span>';
     };
 
+    const cachedEntries = Array.isArray(renderOptions?.cachedEntries)
+      ? renderOptions.cachedEntries
+      : null;
     let worldInfoData = null;
-    let entries = [];
+    let entries = cachedEntries ? Array.from(cachedEntries) : [];
+    const rerenderCurrentSubList = () => {
+      cfmWorldInfoEntryLastFocusedName = normalizedName;
+      renderWorldInfoEntrySubList(bookRow, normalizedName, refreshFn, {
+        cachedEntries: entries,
+      });
+    };
     try {
-      worldInfoData = await fetchWorldInfoDetailData(normalizedName);
-      entries = getWorldInfoEntriesForDetail(normalizedName, worldInfoData);
+      if (!cachedEntries) {
+        worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+        entries = getWorldInfoEntriesForDetail(normalizedName, worldInfoData);
+      }
     } catch (error) {
       console.error("[CFM] 加载世界书条目失败:", error);
+      if (!bookRow.parent().length) return;
       detailCard.append(`
         <div class="cfm-persona-detail-section cfm-preset-detail-section">
           <div class="cfm-persona-detail-label">世界书条目</div>
           <div class="cfm-persona-detail-value"><span class="cfm-persona-detail-empty">加载失败：${escapeHtml(error.message || String(error))}</span></div>
         </div>
       `);
+      detailCard.empty();
+      if (!existingDetailCard.length) {
+        subList.append(detailCard);
+      }
+      if (!existingSubList.length) {
+        bookRow.after(subList);
+      }
       return;
     }
 
     if (!bookRow.parent().length) return;
+    detailCard.empty();
+    if (!existingDetailCard.length) {
+      subList.append(detailCard);
+    }
+    if (!existingSubList.length) {
+      bookRow.after(subList);
+    }
 
     const isBatchOwner =
       cfmWorldInfoEntryBatchMode &&
@@ -11073,7 +11110,7 @@ jQuery(async () => {
           cfmWorldInfoEntryBatchLastClicked = null;
           setWorldInfoEntryBookExpanded(normalizedName, true);
         }
-        refreshFn();
+        rerenderCurrentSubList();
       });
     detailCard.append(detailToolbar);
 
@@ -11113,7 +11150,7 @@ jQuery(async () => {
           } else {
             entryKeys.forEach((key) => cfmWorldInfoEntryBatchSelected.add(key));
           }
-          refreshFn();
+          rerenderCurrentSubList();
         });
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-range")
@@ -11128,7 +11165,7 @@ jQuery(async () => {
           cfmWorldInfoEntryBatchRangeMode = !cfmWorldInfoEntryBatchRangeMode;
           if (cfmWorldInfoEntryBatchRangeMode)
             cfmWorldInfoEntryBatchLastClicked = null;
-          refreshFn();
+          rerenderCurrentSubList();
         });
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-activate")
@@ -11254,7 +11291,7 @@ jQuery(async () => {
             e.shiftKey,
             entries,
           );
-          refreshFn();
+          rerenderCurrentSubList();
         });
         row.find(".cfm-edit-checkbox").on("click touchend", (e) => {
           if (shouldIgnoreWorldInfoEntryTap(e)) {
@@ -11270,7 +11307,7 @@ jQuery(async () => {
             e.shiftKey,
             entries,
           );
-          refreshFn();
+          rerenderCurrentSubList();
         });
       }
 
@@ -12416,6 +12453,7 @@ jQuery(async () => {
   let cfmWorldInfoEntryBatchRangeMode = false; // 世界书条目框选模式
   let cfmWorldInfoEntryBatchLastClicked = null; // 世界书条目框选锚点
   let cfmWorldInfoEntryOpenDetails = new Map(); // 当前展开详情的世界书条目（按世界书名记录）
+  let cfmWorldInfoEntryLastFocusedName = null; // 最近一次操作/展开的世界书名（用于收起后回定位）
 
   // 正则批量操作状态
   let cfmRegexBatchMode = false; // 正则批量操作模式
@@ -14930,6 +14968,71 @@ jQuery(async () => {
     return typeof e?.clientX === "number" ? e.clientX : null;
   }
 
+  function scrollElementIntoViewCentered(target) {
+    const resolveTarget = () => {
+      if (typeof target === "function") return target();
+      if (target?.jquery) return target.get(0);
+      return target || null;
+    };
+    const getManagedScrollContainer = (node) => {
+      if (!node?.closest) return null;
+      return node.closest(
+        "#cfm-right-list, #cfm-preset-right-list, #cfm-worldinfo-right-list, #cfm-persona-right-list",
+      );
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const node = resolveTarget();
+        if (!node) return;
+        const container = getManagedScrollContainer(node);
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          const nodeRect = node.getBoundingClientRect();
+          const deltaTop =
+            nodeRect.top -
+            containerRect.top -
+            (container.clientHeight - nodeRect.height) / 2;
+          const maxScrollTop = Math.max(
+            0,
+            container.scrollHeight - container.clientHeight,
+          );
+          const nextScrollTop = Math.max(
+            0,
+            Math.min(maxScrollTop, container.scrollTop + deltaTop),
+          );
+          container.scrollTop = nextScrollTop;
+          return;
+        }
+        if (typeof node.scrollIntoView === "function") {
+          node.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
+    });
+  }
+
+  function getLatestWorldInfoCollapseTargetName() {
+    if (cfmWorldInfoEntryLastFocusedName)
+      return String(cfmWorldInfoEntryLastFocusedName);
+    const openDetailNames = Array.from(cfmWorldInfoEntryOpenDetails.keys());
+    if (openDetailNames.length > 0) {
+      return String(openDetailNames[openDetailNames.length - 1] || "");
+    }
+    const expandedNames = Array.from(cfmWorldInfoEntryExpandedNames);
+    return String(expandedNames[expandedNames.length - 1] || "");
+  }
+
+  function scrollWorldInfoRowIntoView(bookName) {
+    const normalizedName = String(bookName || "");
+    if (!normalizedName) return;
+    scrollElementIntoViewCentered(() =>
+      Array.from(
+        document.querySelectorAll(
+          "#cfm-worldinfo-right-list .cfm-row[data-res-id]",
+        ),
+      ).find((el) => el.getAttribute("data-res-id") === normalizedName),
+    );
+  }
+
   function tryCollapseSublistFromOuterGap(e) {
     const clientX = getEventClientX(e);
     if (typeof clientX !== "number") return false;
@@ -14961,6 +15064,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         toggle.trigger("click");
+        scrollElementIntoViewCentered(row);
         return true;
       }
     }
@@ -19352,6 +19456,7 @@ jQuery(async () => {
             }
             e.preventDefault();
             e.stopPropagation();
+            cfmWorldInfoEntryLastFocusedName = n;
             toggleWorldInfoEntryBookExpanded(n);
             refreshWorldInfoPanelView();
           });
@@ -27382,6 +27487,7 @@ jQuery(async () => {
           }
           e.preventDefault();
           e.stopPropagation();
+          cfmWorldInfoEntryLastFocusedName = n;
           toggleWorldInfoEntryBookExpanded(n);
           refreshWorldInfoPanelView();
         });
