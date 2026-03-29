@@ -32223,6 +32223,12 @@ jQuery(async () => {
   }
 
   // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
+  function hasNativePersonaToolEntry() {
+    return !!$(
+      "#pw_persona_tool_btn, .menu_button[title='打开设定生成器']",
+    ).length;
+  }
+
   function triggerNativePersonaTool(persona) {
     if (!persona?.avatarId) return;
 
@@ -32551,12 +32557,15 @@ jQuery(async () => {
     `);
 
     // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
+    const personaToolActionHtml = hasNativePersonaToolEntry()
+      ? '<div class="cfm-chat-action-btn cfm-persona-detail-tool" title="打开设定生成器"><i class="fa-solid fa-wand-magic-sparkles"></i></div>'
+      : "";
     detailCard.append(`
       <div class="cfm-persona-detail-section">
         <div class="cfm-persona-detail-label">具体设定
           <div class="cfm-chat-actions">
             <div class="cfm-chat-action-btn cfm-persona-detail-edit" data-field="description" title="编辑具体设定"><i class="fa-solid fa-pen-to-square"></i></div>
-            <div class="cfm-chat-action-btn cfm-persona-detail-tool" title="打开设定生成器"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            ${personaToolActionHtml}
           </div>
         </div>
         <div class="cfm-persona-detail-value cfm-persona-detail-description">${desc ? escapeHtml(desc).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
