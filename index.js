@@ -10025,6 +10025,221 @@ jQuery(async () => {
     }
   }
 
+  function refreshWorldInfoPanelView() {
+    const q = String($("#cfm-worldinfo-global-search").val() || "").trim();
+    if (q) executeWorldInfoSearch();
+    else renderWorldInfoView();
+  }
+
+  function getWorldInfoEntrySelectionKey(bookName, uid) {
+    return `${String(bookName || "")}::${String(uid ?? "")}`;
+  }
+
+  function getWorldInfoEntryOpenSet(bookName, create = false) {
+    const normalizedName = String(bookName || "");
+    if (!normalizedName) return null;
+    let openSet = cfmWorldInfoEntryOpenDetails.get(normalizedName);
+    if (!openSet && create) {
+      openSet = new Set();
+      cfmWorldInfoEntryOpenDetails.set(normalizedName, openSet);
+    }
+    return openSet || null;
+  }
+
+  function isWorldInfoEntryDetailOpen(bookName, uid) {
+    return !!getWorldInfoEntryOpenSet(bookName)?.has(String(uid ?? ""));
+  }
+
+  function toggleWorldInfoEntryDetail(bookName, uid) {
+    const normalizedName = String(bookName || "");
+    const normalizedUid = String(uid ?? "");
+    if (!normalizedName || !normalizedUid) return false;
+    const openSet = getWorldInfoEntryOpenSet(normalizedName, true);
+    const willOpen = !openSet.has(normalizedUid);
+    openSet.clear();
+    if (willOpen) {
+      openSet.add(normalizedUid);
+    } else {
+      cfmWorldInfoEntryOpenDetails.delete(normalizedName);
+    }
+    return willOpen;
+  }
+
+  function collapseWorldInfoEntryDetails(bookName = null) {
+    if (bookName === null || bookName === undefined) {
+      cfmWorldInfoEntryOpenDetails.clear();
+      return;
+    }
+    cfmWorldInfoEntryOpenDetails.delete(String(bookName || ""));
+  }
+
+  async function fetchWorldInfoDetailData(bookName) {
+    const normalizedName = String(bookName || "");
+    if (!normalizedName) return null;
+    const resp = await fetch("/api/worldinfo/get", {
+      method: "POST",
+      headers: getContext().getRequestHeaders(),
+      body: JSON.stringify({ name: normalizedName }),
+    });
+    if (!resp.ok) {
+      throw new Error(`获取世界书「${normalizedName}」失败`);
+    }
+    return await resp.json();
+  }
+
+  async function saveWorldInfoDetailData(bookName, worldInfoData) {
+    const normalizedName = String(bookName || "");
+    const resp = await fetch("/api/worldinfo/edit", {
+      method: "POST",
+      headers: getContext().getRequestHeaders(),
+      body: JSON.stringify({ name: normalizedName, data: worldInfoData }),
+    });
+    if (!resp.ok) {
+      throw new Error(`保存世界书「${normalizedName}」失败`);
+    }
+  }
+
+  function getWorldInfoEntriesForDetail(bookName, worldInfoData) {
+    const entryMap =
+      worldInfoData?.entries && typeof worldInfoData.entries === "object"
+        ? worldInfoData.entries
+        : {};
+    return Object.values(entryMap)
+      .filter((entry) => entry && typeof entry === "object")
+      .map((entry) => {
+        const uid = String(entry.uid ?? entry.id ?? "");
+        const primaryKeys = Array.isArray(entry.key)
+          ? entry.key.map((item) => String(item || "")).filter(Boolean)
+          : [];
+        const secondaryKeys = Array.isArray(entry.keysecondary)
+          ? entry.keysecondary.map((item) => String(item || "")).filter(Boolean)
+          : [];
+        const label = String(
+          entry.comment || primaryKeys[0] || `条目 ${uid || "未命名"}`,
+        );
+        return {
+          bookName: String(bookName || ""),
+          uid,
+          label,
+          comment: String(entry.comment || ""),
+          content: String(entry.content || ""),
+          primaryKeys,
+          secondaryKeys,
+          order: Number(entry.order ?? 0),
+          displayIndex: Number(entry.displayIndex ?? Number.MAX_SAFE_INTEGER),
+          depth: Number(entry.depth ?? 0),
+          constant: !!entry.constant,
+          enabled: !entry.disable,
+          raw: entry,
+        };
+      })
+      .sort((a, b) => {
+        const displayIndexDiff =
+          Number(a.displayIndex || 0) - Number(b.displayIndex || 0);
+        if (displayIndexDiff !== 0) return displayIndexDiff;
+
+        return String(a.uid).localeCompare(String(b.uid), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      });
+  }
+
+  function toggleWorldInfoEntryBatchItem(bookName, uid, shiftKey, entries) {
+    const normalizedUid = String(uid ?? "");
+    if (!normalizedUid) return;
+    const normalizedEntries = Array.isArray(entries) ? entries : [];
+    const visibleKeys = normalizedEntries
+      .map((entry) => getWorldInfoEntrySelectionKey(bookName, entry?.uid))
+      .filter((key) => !key.endsWith("::"));
+    const normalizedKey = getWorldInfoEntrySelectionKey(
+      bookName,
+      normalizedUid,
+    );
+
+    if (
+      (shiftKey || cfmWorldInfoEntryBatchRangeMode) &&
+      cfmWorldInfoEntryBatchLastClicked
+    ) {
+      const lastIdx = visibleKeys.indexOf(cfmWorldInfoEntryBatchLastClicked);
+      const curIdx = visibleKeys.indexOf(normalizedKey);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        for (let i = start; i <= end; i++) {
+          if (visibleKeys[i])
+            cfmWorldInfoEntryBatchSelected.add(visibleKeys[i]);
+        }
+      }
+    } else if (cfmWorldInfoEntryBatchSelected.has(normalizedKey)) {
+      cfmWorldInfoEntryBatchSelected.delete(normalizedKey);
+    } else {
+      cfmWorldInfoEntryBatchSelected.add(normalizedKey);
+    }
+
+    cfmWorldInfoEntryBatchLastClicked = normalizedKey;
+  }
+
+  async function toggleWorldInfoEntryActivation(bookName, uid, activate) {
+    const normalizedName = String(bookName || "");
+    const normalizedUid = String(uid ?? "");
+    if (!normalizedName || !normalizedUid) return false;
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    const targetEntry = worldInfoData?.entries?.[normalizedUid];
+    if (!targetEntry) {
+      throw new Error(`找不到世界书条目 UID=${normalizedUid}`);
+    }
+
+    targetEntry.disable = !activate;
+    targetEntry.enabled = activate;
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    return true;
+  }
+
+  async function applyWorldInfoEntryBatchActivation(
+    bookName,
+    selectionKeys,
+    activate,
+  ) {
+    const normalizedName = String(bookName || "");
+    const prefix = `${normalizedName}::`;
+    const targetUids = Array.from(
+      new Set(
+        (Array.isArray(selectionKeys) ? selectionKeys : [])
+          .map((key) => String(key || ""))
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length))
+          .filter(Boolean),
+      ),
+    );
+    if (!targetUids.length) {
+      toastr.warning("请先选择要操作的世界书条目");
+      return;
+    }
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    let changedCount = 0;
+    for (const uid of targetUids) {
+      const entry = worldInfoData?.entries?.[uid];
+      if (!entry) continue;
+      entry.disable = !activate;
+      entry.enabled = activate;
+      changedCount++;
+    }
+
+    if (!changedCount) {
+      toastr.warning("所选条目不支持批量激活操作");
+      return;
+    }
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    toastr.success(
+      `已${activate ? "激活" : "取消激活"} ${changedCount} 个世界书条目`,
+    );
+    refreshWorldInfoPanelView();
+  }
+
   function getPresetDetailActivePresets(presetName) {
     ensureSettings();
     const presetKey = String(presetName || "");
@@ -10689,6 +10904,358 @@ jQuery(async () => {
     } catch (error) {
       console.error("[CFM] 保存预设条目失败:", error);
       toastr.error(`保存失败: ${error.message || error}`);
+    }
+  }
+
+  function isWorldInfoEntryBookExpanded(bookName) {
+    return cfmWorldInfoEntryExpandedNames.has(String(bookName || ""));
+  }
+
+  function setWorldInfoEntryBookExpanded(bookName, expanded) {
+    const normalizedName = String(bookName || "");
+    if (!normalizedName) return false;
+    if (expanded) {
+      cfmWorldInfoEntryExpandedNames.add(normalizedName);
+    } else {
+      cfmWorldInfoEntryExpandedNames.delete(normalizedName);
+      collapseWorldInfoEntryDetails(normalizedName);
+      if (cfmWorldInfoEntryBatchOwnerName === normalizedName) {
+        cfmWorldInfoEntryBatchMode = false;
+        cfmWorldInfoEntryBatchOwnerName = null;
+        cfmWorldInfoEntryBatchSelected.clear();
+        cfmWorldInfoEntryBatchRangeMode = false;
+        cfmWorldInfoEntryBatchLastClicked = null;
+      }
+    }
+    return expanded;
+  }
+
+  function toggleWorldInfoEntryBookExpanded(bookName) {
+    const willExpand = !isWorldInfoEntryBookExpanded(bookName);
+    setWorldInfoEntryBookExpanded(bookName, willExpand);
+    return willExpand;
+  }
+
+  function closeWorldInfoEntryPanels() {
+    cfmWorldInfoEntryExpandedNames.clear();
+    collapseWorldInfoEntryDetails();
+    cfmWorldInfoEntryBatchMode = false;
+    cfmWorldInfoEntryBatchOwnerName = null;
+    cfmWorldInfoEntryBatchSelected.clear();
+    cfmWorldInfoEntryBatchRangeMode = false;
+    cfmWorldInfoEntryBatchLastClicked = null;
+  }
+
+  function bindWorldInfoEntryCollapseTargets(
+    refreshFn = refreshWorldInfoPanelView,
+  ) {
+    $("#cfm-worldinfo-left-tree, #cfm-worldinfo-right-list")
+      .off("click.cfmWorldInfoEntryCollapse")
+      .on("click.cfmWorldInfoEntryCollapse", (e) => {
+        if (
+          $(e.target).closest(
+            ".cfm-row, .cfm-preset-detail-row, .cfm-worldinfo-entry-detail-card, .cfm-tnode, .cfm-multisel-toolbar, .cfm-regex-toolbar, .cfm-regex-batch-toolbar",
+          ).length
+        ) {
+          return;
+        }
+        const hasExpandedPanels =
+          cfmWorldInfoEntryExpandedNames.size > 0 ||
+          cfmWorldInfoEntryOpenDetails.size > 0;
+        if (!hasExpandedPanels) return;
+        closeWorldInfoEntryPanels();
+        refreshFn();
+      });
+  }
+
+  async function renderWorldInfoEntrySubList(
+    bookRow,
+    bookName,
+    refreshFn = refreshWorldInfoPanelView,
+  ) {
+    bookRow.next(".cfm-worldinfo-entry-sublist").remove();
+    if (!isWorldInfoEntryBookExpanded(bookName)) return;
+
+    const normalizedName = String(bookName || "");
+    if (!normalizedName || !bookRow?.length) return;
+
+    const subList = $(
+      '<div class="cfm-chat-sublist cfm-preset-detail-sublist cfm-worldinfo-entry-sublist"></div>',
+    );
+    const detailCard = $(
+      '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-preset-detail-card cfm-worldinfo-entry-detail-card"></div>',
+    );
+    subList.append(detailCard);
+    bookRow.after(subList);
+
+    const renderMultiline = (value) =>
+      escapeHtml(String(value || "")).replace(/\n/g, "<br>");
+    const renderListValue = (values) => {
+      const normalized = Array.isArray(values)
+        ? values.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+      return normalized.length
+        ? renderMultiline(normalized.join("、"))
+        : '<span class="cfm-persona-detail-empty">无</span>';
+    };
+
+    let worldInfoData = null;
+    let entries = [];
+    try {
+      worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+      entries = getWorldInfoEntriesForDetail(normalizedName, worldInfoData);
+    } catch (error) {
+      console.error("[CFM] 加载世界书条目失败:", error);
+      detailCard.append(`
+        <div class="cfm-persona-detail-section cfm-preset-detail-section">
+          <div class="cfm-persona-detail-label">世界书条目</div>
+          <div class="cfm-persona-detail-value"><span class="cfm-persona-detail-empty">加载失败：${escapeHtml(error.message || String(error))}</span></div>
+        </div>
+      `);
+      return;
+    }
+
+    if (!bookRow.parent().length) return;
+
+    const isBatchOwner =
+      cfmWorldInfoEntryBatchMode &&
+      cfmWorldInfoEntryBatchOwnerName === normalizedName;
+    const detailToolbar = $(`
+      <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" ${entries.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
+        <span class="cfm-regex-count">${entries.length} 个条目</span>
+      </div>
+    `);
+    detailToolbar
+      .find(".cfm-worldinfo-entry-batch-toggle")
+      .on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!entries.length) return;
+        if (isBatchOwner) {
+          cfmWorldInfoEntryBatchMode = false;
+          cfmWorldInfoEntryBatchOwnerName = null;
+          cfmWorldInfoEntryBatchSelected.clear();
+          cfmWorldInfoEntryBatchRangeMode = false;
+          cfmWorldInfoEntryBatchLastClicked = null;
+        } else {
+          cfmWorldInfoEntryBatchMode = true;
+          cfmWorldInfoEntryBatchOwnerName = normalizedName;
+          cfmWorldInfoEntryBatchSelected.clear();
+          cfmWorldInfoEntryBatchRangeMode = false;
+          cfmWorldInfoEntryBatchLastClicked = null;
+          setWorldInfoEntryBookExpanded(normalizedName, true);
+        }
+        refreshFn();
+      });
+    detailCard.append(detailToolbar);
+
+    if (isBatchOwner && entries.length > 0) {
+      const entryKeys = entries.map((entry) =>
+        getWorldInfoEntrySelectionKey(normalizedName, entry.uid),
+      );
+      const allSel =
+        entryKeys.length > 0 &&
+        entryKeys.every((key) => cfmWorldInfoEntryBatchSelected.has(key));
+      const selCount = entryKeys.filter((key) =>
+        cfmWorldInfoEntryBatchSelected.has(key),
+      ).length;
+      const batchToolbar = $(`
+        <div class="cfm-regex-batch-toolbar">
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-selall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-range ${cfmWorldInfoEntryBatchRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmWorldInfoEntryBatchRangeMode ? "(开)" : ""}</button>
+          <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-activate"><i class="fa-solid fa-play"></i> 激活</button>
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-deactivate"><i class="fa-solid fa-stop"></i> 取消激活</button>
+        </div>
+      `);
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-selall")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (allSel) {
+            entryKeys.forEach((key) =>
+              cfmWorldInfoEntryBatchSelected.delete(key),
+            );
+          } else {
+            entryKeys.forEach((key) => cfmWorldInfoEntryBatchSelected.add(key));
+          }
+          refreshFn();
+        });
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-range")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmWorldInfoEntryBatchRangeMode = !cfmWorldInfoEntryBatchRangeMode;
+          if (cfmWorldInfoEntryBatchRangeMode)
+            cfmWorldInfoEntryBatchLastClicked = null;
+          refreshFn();
+        });
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-activate")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            await applyWorldInfoEntryBatchActivation(
+              normalizedName,
+              Array.from(cfmWorldInfoEntryBatchSelected),
+              true,
+            );
+          } catch (error) {
+            console.error("[CFM] 批量激活世界书条目失败:", error);
+            toastr.error(`保存失败: ${error.message || error}`);
+          }
+        });
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-deactivate")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          try {
+            await applyWorldInfoEntryBatchActivation(
+              normalizedName,
+              Array.from(cfmWorldInfoEntryBatchSelected),
+              false,
+            );
+          } catch (error) {
+            console.error("[CFM] 批量取消激活世界书条目失败:", error);
+            toastr.error(`保存失败: ${error.message || error}`);
+          }
+        });
+      detailCard.append(batchToolbar);
+    }
+
+    if (entries.length === 0) {
+      detailCard.append(`
+        <div class="cfm-persona-detail-section cfm-preset-detail-section">
+          <div class="cfm-persona-detail-label">世界书条目</div>
+          <div class="cfm-persona-detail-value"><span class="cfm-persona-detail-empty">暂无条目</span></div>
+        </div>
+      `);
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryKey = getWorldInfoEntrySelectionKey(normalizedName, entry.uid);
+      const isBatchSel =
+        isBatchOwner && cfmWorldInfoEntryBatchSelected.has(entryKey);
+      const isDetailOpen = isWorldInfoEntryDetailOpen(
+        normalizedName,
+        entry.uid,
+      );
+      const flags = [
+        entry.raw?.constant ? "常量" : null,
+        entry.raw?.vectorized ? "向量" : null,
+        entry.raw?.selective ? "选择性" : null,
+      ].filter(Boolean);
+      const row = $(`
+        <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-entry-uid="${escapeHtml(entry.uid)}">
+          <div class="cfm-persona-detail-label cfm-preset-detail-label">
+            ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+            <div class="cfm-wi-toggle cfm-worldinfo-entry-active-toggle ${entry.enabled ? "cfm-wi-toggle-on" : ""}" data-entry-uid="${escapeHtml(entry.uid)}" title="${entry.enabled ? "点击取消激活" : "点击激活"}"><i class="fa-solid fa-toggle-${entry.enabled ? "on" : "off"}"></i></div>
+            <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
+            <div class="cfm-chat-actions">
+              <div class="cfm-chat-action-btn cfm-worldinfo-entry-edit" data-entry-uid="${escapeHtml(entry.uid)}" title="${isDetailOpen ? "收起条目详情" : "查看条目详情"}"><i class="fa-solid fa-pen-to-square"></i></div>
+            </div>
+          </div>
+          ${
+            isDetailOpen
+              ? `
+            <div class="cfm-persona-detail-card cfm-preset-detail-card cfm-worldinfo-entry-detail-card">
+              <div class="cfm-persona-detail-section cfm-preset-detail-section">
+                <div class="cfm-persona-detail-label">条目备注</div>
+                <div class="cfm-persona-detail-value">${entry.comment ? renderMultiline(entry.comment) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+              </div>
+              <div class="cfm-persona-detail-section cfm-preset-detail-section">
+                <div class="cfm-persona-detail-label">主触发词</div>
+                <div class="cfm-persona-detail-value">${renderListValue(entry.primaryKeys)}</div>
+              </div>
+              <div class="cfm-persona-detail-section cfm-preset-detail-section">
+                <div class="cfm-persona-detail-label">次触发词</div>
+                <div class="cfm-persona-detail-value">${renderListValue(entry.secondaryKeys)}</div>
+              </div>
+              <div class="cfm-persona-detail-section cfm-preset-detail-section">
+                <div class="cfm-persona-detail-label">内容</div>
+                <div class="cfm-persona-detail-value">${entry.content ? renderMultiline(entry.content) : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+              </div>
+              <div class="cfm-persona-detail-section cfm-preset-detail-section">
+                <div class="cfm-persona-detail-label">元信息</div>
+                <div class="cfm-persona-detail-value">排序：${escapeHtml(String(entry.order))}${flags.length ? ` ｜ ${escapeHtml(flags.join(" · "))}` : ""}</div>
+              </div>
+            </div>
+          `
+              : ""
+          }
+        </div>
+      `);
+
+      if (isBatchOwner) {
+        row.on("click", (e) => {
+          if (
+            $(e.target).closest(
+              ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle",
+            ).length
+          ) {
+            return;
+          }
+          toggleWorldInfoEntryBatchItem(
+            normalizedName,
+            entry.uid,
+            e.shiftKey,
+            entries,
+          );
+          refreshFn();
+        });
+        row.find(".cfm-edit-checkbox").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleWorldInfoEntryBatchItem(
+            normalizedName,
+            entry.uid,
+            e.shiftKey,
+            entries,
+          );
+          refreshFn();
+        });
+      }
+
+      row
+        .find(".cfm-worldinfo-entry-active-toggle")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const el = $(e.currentTarget);
+          if (el.data("pending")) return;
+          const currentUid = String(el.data("entry-uid") || "");
+          const newState = !el.hasClass("cfm-wi-toggle-on");
+          el.data("pending", true);
+          try {
+            await toggleWorldInfoEntryActivation(
+              normalizedName,
+              currentUid,
+              newState,
+            );
+            refreshFn();
+          } catch (error) {
+            console.error("[CFM] 切换世界书条目激活失败:", error);
+            toastr.error(`保存失败: ${error.message || error}`);
+          } finally {
+            el.data("pending", false);
+          }
+        });
+
+      row.find(".cfm-worldinfo-entry-edit").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleWorldInfoEntryDetail(normalizedName, entry.uid);
+        setWorldInfoEntryBookExpanded(normalizedName, true);
+        refreshFn();
+      });
+
+      detailCard.append(row);
     }
   }
 
@@ -11780,6 +12347,13 @@ jQuery(async () => {
   let cfmPresetDetailBatchSelected = new Set(); // 当前批量选中的预设条目 key 集合
   let cfmPresetDetailBatchRangeMode = false; // 预设详情框选模式
   let cfmPresetDetailBatchLastClicked = null; // 预设详情框选锚点
+  let cfmWorldInfoEntryExpandedNames = new Set(); // 当前展开条目列表的世界书 name 集合
+  let cfmWorldInfoEntryBatchMode = false; // 世界书条目批量操作模式
+  let cfmWorldInfoEntryBatchOwnerName = null; // 当前条目批量操作所属世界书名
+  let cfmWorldInfoEntryBatchSelected = new Set(); // 当前批量选中的世界书条目 key 集合
+  let cfmWorldInfoEntryBatchRangeMode = false; // 世界书条目框选模式
+  let cfmWorldInfoEntryBatchLastClicked = null; // 世界书条目框选锚点
+  let cfmWorldInfoEntryOpenDetails = new Map(); // 当前展开详情的世界书条目（按世界书名记录）
 
   // 正则批量操作状态
   let cfmRegexBatchMode = false; // 正则批量操作模式
@@ -12217,18 +12791,16 @@ jQuery(async () => {
                   .prop("checked", false)
                   .trigger("input");
               });
-              scriptHtml
-                .find(".edit_existing_regex")
-                .on("click", function () {
-                  // 触发原生编辑对话框
-                  const id = scriptHtml.attr("id");
-                  const editBtn = $(
-                    "#" + $.escapeSelector(String(id)),
-                  ).find(".edit_existing_regex");
-                  if (editBtn.length && editBtn[0] !== this) {
-                    editBtn.trigger("click");
-                  }
-                });
+              scriptHtml.find(".edit_existing_regex").on("click", function () {
+                // 触发原生编辑对话框
+                const id = scriptHtml.attr("id");
+                const editBtn = $("#" + $.escapeSelector(String(id))).find(
+                  ".edit_existing_regex",
+                );
+                if (editBtn.length && editBtn[0] !== this) {
+                  editBtn.trigger("click");
+                }
+              });
               scriptHtml.find(".export_regex").on("click", function () {
                 const fileName = `regex-${(script.scriptName || "").replace(/[\s.<>:"/\\|?*\x00-\x1F\x7F]/g, "_").toLowerCase()}.json`;
                 const fileData = JSON.stringify(script, null, 4);
@@ -12242,17 +12814,13 @@ jQuery(async () => {
                 a.click();
                 URL.revokeObjectURL(url);
               });
-              scriptHtml
-                .find(".delete_regex")
-                .on("click", async function () {
-                  // 删除操作交由原生处理
-                  const nativeRow = $(
-                    "#" + $.escapeSelector(String(script.id)),
-                  );
-                  if (nativeRow.length) {
-                    nativeRow.find(".delete_regex").trigger("click");
-                  }
-                });
+              scriptHtml.find(".delete_regex").on("click", async function () {
+                // 删除操作交由原生处理
+                const nativeRow = $("#" + $.escapeSelector(String(script.id)));
+                if (nativeRow.length) {
+                  nativeRow.find(".delete_regex").trigger("click");
+                }
+              });
               container.append(scriptHtml);
             });
           }
@@ -18692,6 +19260,8 @@ jQuery(async () => {
           const singleRenameBtn = noModeActive
             ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
+          const isEntryExpanded = isWorldInfoEntryBookExpanded(n);
+          const expandHtml = `<div class="cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}" style="display:flex;align-items:center;justify-content:center;width:16px;min-width:16px;cursor:pointer;opacity:0.72;"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
           // 世界书激活开关
           const wiIsActive = wiActiveSet.has(n);
           const wiIsBound = wiCharBound.has(n);
@@ -18704,6 +19274,7 @@ jQuery(async () => {
           const row = $(`
             <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
+              ${expandHtml}
               ${toggleHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
               <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
@@ -18712,6 +19283,12 @@ jQuery(async () => {
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
           `);
+          row.find(".cfm-worldinfo-entry-expand").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleWorldInfoEntryBookExpanded(n);
+            refreshWorldInfoPanelView();
+          });
           // 世界书激活开关事件（搜索视图）
           row.find(".cfm-wi-toggle").on("click touchend", function (e) {
             e.preventDefault();
@@ -18761,7 +19338,7 @@ jQuery(async () => {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
-                ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle",
+                ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle, .cfm-worldinfo-entry-expand",
               ).length
             )
               return;
@@ -18805,6 +19382,8 @@ jQuery(async () => {
             return getMultiDragData(singleData);
           });
           rightList.append(row);
+          if (isEntryExpanded)
+            renderWorldInfoEntrySubList(row, n, refreshWorldInfoPanelView);
         }
 
         // 删除工具栏（搜索世界书）
@@ -18867,6 +19446,7 @@ jQuery(async () => {
             });
           rightList.prepend(toolbar);
         }
+        bindWorldInfoEntryCollapseTargets(refreshWorldInfoPanelView);
       });
     }
   }
@@ -26706,6 +27286,8 @@ jQuery(async () => {
         const singleRenameBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
+        const isEntryExpanded = isWorldInfoEntryBookExpanded(n);
+        const expandHtml = `<div class="cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}" style="display:flex;align-items:center;justify-content:center;width:16px;min-width:16px;cursor:pointer;opacity:0.72;"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
         // 世界书激活开关
         const wiIsActive = wiActiveSet.has(n);
         const wiIsBound = wiCharBound.has(n);
@@ -26718,6 +27300,7 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
+            ${expandHtml}
             ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
             <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
@@ -26726,6 +27309,12 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
+        row.find(".cfm-worldinfo-entry-expand").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleWorldInfoEntryBookExpanded(n);
+          refreshWorldInfoPanelView();
+        });
         // 世界书激活开关事件
         row.find(".cfm-wi-toggle").on("click touchend", function (e) {
           e.preventDefault();
@@ -26736,11 +27325,9 @@ jQuery(async () => {
           }
           const newState = !wiActiveSet.has(n);
           toggleWorldInfoActivation(n, newState).then(() => {
-            // 更新本地缓存
             if (newState) wiActiveSet.add(n);
             else wiActiveSet.delete(n);
             syncWiPresetTrackingForManualToggle(n, newState);
-            // 更新 toggle 按钮外观
             const el = $(this);
             el.toggleClass("cfm-wi-toggle-on", newState);
             el.find("i").attr(
@@ -26770,7 +27357,7 @@ jQuery(async () => {
             favCountEl.text(newCount);
           }
           if (selectedWorldInfoFolder === "__favorites__")
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
         });
         // 单个备注编辑按钮
         row.find(".cfm-row-note-btn").on("click touchend", (e) => {
@@ -26787,33 +27374,33 @@ jQuery(async () => {
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-wi-toggle, .cfm-worldinfo-entry-expand",
             ).length
           )
             return;
           if (cfmResDeleteMode) {
             toggleResDeleteItem(n, e.shiftKey);
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
             return;
           }
           if (cfmExportMode) {
             toggleExportItem(n, e.shiftKey);
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
             return;
           }
           if (cfmWorldInfoNoteMode) {
             toggleWorldInfoNoteItem(n, e.shiftKey);
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
             return;
           }
           if (cfmWorldInfoRenameMode) {
             toggleWorldInfoRenameItem(n, e.shiftKey);
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
             return;
           }
           if (cfmMultiSelectMode) {
             toggleMultiSelectItem(n, e.shiftKey);
-            renderWorldInfoView();
+            refreshWorldInfoPanelView();
             return;
           }
           openWorldInfoEditor(n);
@@ -26829,6 +27416,8 @@ jQuery(async () => {
           return getMultiDragData(singleData);
         });
         rightList.append(row);
+        if (isEntryExpanded)
+          renderWorldInfoEntrySubList(row, n, refreshWorldInfoPanelView);
       }
 
       // 删除工具栏（世界书文件夹视图）
@@ -26890,6 +27479,7 @@ jQuery(async () => {
           });
         rightList.prepend(toolbar);
       }
+      bindWorldInfoEntryCollapseTargets(refreshWorldInfoPanelView);
     }
 
     // 右侧列表本身也是拖放目标（拖到空白区域 = 放入当前文件夹）
