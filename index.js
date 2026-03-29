@@ -846,6 +846,9 @@ jQuery(async () => {
       typeof extension_settings[extensionName].personaChatBindings !== "object"
     )
       extension_settings[extensionName].personaChatBindings = {};
+    // User 自定义顺序：用于默认排序下保持手动/复制插入后的相对顺序
+    if (!Array.isArray(extension_settings[extensionName].personaCustomOrder))
+      extension_settings[extensionName].personaCustomOrder = [];
   }
   ensureSettings();
 
@@ -4887,6 +4890,12 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].personaGroups;
               if (groups && groups[avatarId]) delete groups[avatarId];
+              // 清理聊天绑定记录
+              const chatBindings =
+                extension_settings[extensionName].personaChatBindings;
+              if (chatBindings && chatBindings[avatarId]) delete chatBindings[avatarId];
+              // 清理自定义顺序
+              removePersonaFromCustomOrder(avatarId);
               // 清理备注
               const notes = extension_settings[extensionName].personaNotes;
               if (notes && notes[avatarId]) delete notes[avatarId];
@@ -30498,6 +30507,163 @@ jQuery(async () => {
   }
 
   // ==================== User视图渲染（双栏 + 树形嵌套） ====================
+  function getPersonaCustomOrderStore() {
+    ensureSettings();
+    const settings = extension_settings[extensionName];
+    if (!Array.isArray(settings.personaCustomOrder)) {
+      settings.personaCustomOrder = [];
+    }
+    return settings.personaCustomOrder;
+  }
+
+  function syncPersonaCustomOrder(avatarIds = []) {
+    const normalizedIds = [...new Set(
+      (Array.isArray(avatarIds) ? avatarIds : [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean),
+    )];
+    const currentOrder = getPersonaCustomOrderStore();
+    const normalizedOrder = [...new Set(
+      currentOrder.map((id) => String(id || "").trim()).filter(Boolean),
+    )];
+    const nextOrder = normalizedOrder.filter((id) => normalizedIds.includes(id));
+    for (const id of normalizedIds) {
+      if (!nextOrder.includes(id)) nextOrder.push(id);
+    }
+    const changed =
+      nextOrder.length !== currentOrder.length ||
+      nextOrder.some((id, idx) => id !== String(currentOrder[idx] || "").trim());
+    if (changed) {
+      extension_settings[extensionName].personaCustomOrder = nextOrder;
+      getContext().saveSettingsDebounced();
+    }
+    return nextOrder;
+  }
+
+  function insertPersonaAfterInCustomOrder(sourceAvatarId, newAvatarId) {
+    const sourceId = String(sourceAvatarId || "").trim();
+    const targetId = String(newAvatarId || "").trim();
+    if (!targetId) return;
+    const order = [...getPersonaCustomOrderStore()]
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+    const filtered = order.filter((id) => id !== targetId);
+    const sourceIndex = filtered.indexOf(sourceId);
+    if (sourceIndex === -1) filtered.push(targetId);
+    else filtered.splice(sourceIndex + 1, 0, targetId);
+    extension_settings[extensionName].personaCustomOrder = filtered;
+    getContext().saveSettingsDebounced();
+  }
+
+  function removePersonaFromCustomOrder(avatarId) {
+    const targetId = String(avatarId || "").trim();
+    if (!targetId) return;
+    const order = getPersonaCustomOrderStore();
+    const nextOrder = order.filter((id) => String(id || "").trim() !== targetId);
+    if (nextOrder.length === order.length) return;
+    extension_settings[extensionName].personaCustomOrder = nextOrder;
+    getContext().saveSettingsDebounced();
+  }
+
+  function buildDuplicatedPersonaName(baseName) {
+    const pu = getContext().powerUserSettings || {};
+    const existingNames = new Set(
+      Object.values(pu.personas || {})
+        .map((name) => String(name || "").trim())
+        .filter(Boolean),
+    );
+    const seed = String(baseName || "User").trim() || "User";
+    let candidate = `${seed} 副本`;
+    let idx = 2;
+    while (existingNames.has(candidate)) {
+      candidate = `${seed} 副本 ${idx}`;
+      idx += 1;
+    }
+    return candidate;
+  }
+
+  async function getPersonaDuplicateAvatarPayload(avatarId) {
+    const thumbUrl = getThumbnailUrl("persona", avatarId);
+    const candidateUrls = [thumbUrl, "img/user-default.png"].filter(Boolean);
+    for (const url of candidateUrls) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) continue;
+        const blob = await resp.blob();
+        const type = blob.type || "image/png";
+        let ext = "png";
+        if (type.includes("jpeg") || type.includes("jpg")) ext = "jpg";
+        else if (type.includes("webp")) ext = "webp";
+        return { blob, type, ext };
+      } catch (e) {
+        console.warn(`[CFM] 获取User头像资源失败: ${url}`, e);
+      }
+    }
+    return null;
+  }
+
+  async function duplicatePersona(sourcePersona) {
+    if (!sourcePersona || !sourcePersona.avatarId) return;
+    const ctx = getContext();
+    const pu = ctx.powerUserSettings;
+    if (!pu) {
+      toastr.error("无法获取User设定数据");
+      return;
+    }
+    if (!pu.personas) pu.personas = {};
+    if (!pu.persona_descriptions) pu.persona_descriptions = {};
+
+    const avatarPayload = await getPersonaDuplicateAvatarPayload(sourcePersona.avatarId);
+    if (!avatarPayload) {
+      toastr.error("复制User失败：无法获取头像资源");
+      return;
+    }
+
+    const makeIdBase = () =>
+      typeof ctx.uuidv4 === "function"
+        ? ctx.uuidv4()
+        : `persona-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    let newAvatarId = `${makeIdBase()}.${avatarPayload.ext}`;
+    while (pu.personas[newAvatarId]) {
+      newAvatarId = `${makeIdBase()}.${avatarPayload.ext}`;
+    }
+
+    const uploadFile = new File([avatarPayload.blob], `avatar.${avatarPayload.ext}`, {
+      type: avatarPayload.type,
+    });
+    const formData = new FormData();
+    formData.append("avatar", uploadFile);
+    formData.append("overwrite_name", newAvatarId);
+
+    const uploadResp = await fetch("/api/avatars/upload", {
+      method: "POST",
+      headers: ctx.getRequestHeaders({ omitContentType: true }),
+      body: formData,
+    });
+    if (!uploadResp.ok) {
+      toastr.error("复制User失败：头像创建失败");
+      return;
+    }
+
+    pu.personas[newAvatarId] = buildDuplicatedPersonaName(sourcePersona.name);
+    pu.persona_descriptions[newAvatarId] = {
+      description: String(sourcePersona.description || ""),
+      title: "",
+      connections: [],
+    };
+
+    const groups = getResourceGroups("personas");
+    if (groups && groups[sourcePersona.avatarId]) {
+      groups[newAvatarId] = groups[sourcePersona.avatarId];
+    }
+
+    insertPersonaAfterInCustomOrder(sourcePersona.avatarId, newAvatarId);
+    getContext().saveSettingsDebounced();
+    refreshPersonaPanelView();
+    toastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
+  }
+
   // 获取当前 persona 列表
   async function getCurrentPersonas() {
     try {
@@ -30510,7 +30676,8 @@ jQuery(async () => {
       if (!Array.isArray(avatarIds)) return [];
       const pu = getContext().powerUserSettings;
       if (!pu) return [];
-      return avatarIds.map((id) => ({
+      const orderedAvatarIds = syncPersonaCustomOrder(avatarIds);
+      return orderedAvatarIds.map((id) => ({
         avatarId: id,
         name: (pu.personas && pu.personas[id]) || "[未命名User]",
         description:
@@ -32095,6 +32262,9 @@ jQuery(async () => {
           !cfmResDeleteMode &&
           !cfmMultiSelectMode &&
           !cfmPersonaNoteMode;
+        const singleCopyBtn = noModeActive
+          ? `<div class="cfm-row-edit-btn cfm-row-copy-btn" title="复制人设"><i class="fa-solid fa-copy"></i></div>`
+          : "";
         const singleNoteBtn = noModeActive
           ? `<div class="cfm-row-edit-btn cfm-row-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></div>`
           : "";
@@ -32107,6 +32277,7 @@ jQuery(async () => {
             ${msCheckHtml}
             <div class="cfm-row-icon cfm-persona-avatar ${isDefaultPersona ? "cfm-persona-avatar-default" : ""}" title="${isDefaultPersona ? "默认 User" : ""}"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
+            ${singleCopyBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
@@ -32132,6 +32303,12 @@ jQuery(async () => {
             favCountEl.text(newCount);
           }
           if (selectedPersonaFolder === "__favorites__") renderPersonasView();
+        });
+        // 单个复制按钮
+        row.find(".cfm-row-copy-btn").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await duplicatePersona(p);
         });
         // 单个备注编辑按钮
         row.find(".cfm-row-note-btn").on("click touchend", (e) => {
@@ -32164,7 +32341,7 @@ jQuery(async () => {
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-persona-toggle",
+              ".cfm-row-star, .cfm-row-copy-btn, .cfm-row-note-btn, .cfm-persona-toggle",
             ).length
           )
             return;
@@ -32480,9 +32657,15 @@ jQuery(async () => {
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             <div class="cfm-row-icon cfm-persona-avatar ${isDefaultPersona ? "cfm-persona-avatar-default" : ""}" title="${isDefaultPersona ? "默认 User" : ""}"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
+            <div class="cfm-row-edit-btn cfm-row-copy-btn" title="复制人设"><i class="fa-solid fa-copy"></i></div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
+        row.find(".cfm-row-copy-btn").on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await duplicatePersona(p);
+        });
         row.find(".cfm-row-star").on("click touchend", (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -32512,7 +32695,11 @@ jQuery(async () => {
           }
         });
         row.on("click", (e) => {
-          if ($(e.target).closest(".cfm-row-star, .cfm-persona-toggle").length)
+          if (
+            $(e.target).closest(
+              ".cfm-row-star, .cfm-row-copy-btn, .cfm-persona-toggle",
+            ).length
+          )
             return;
           selectPersona(p.avatarId);
           rightList
