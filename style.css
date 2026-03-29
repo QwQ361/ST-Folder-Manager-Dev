@@ -3903,8 +3903,10 @@ option.cfm-nf-hidden {
   border: 1.6px solid transparent;
 }
 .cfm-persona-avatar.cfm-persona-avatar-default {
-  border-color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-color: rgba(249, 226, 175, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(249, 226, 175, 0.28),
+    0 0 8px rgba(249, 226, 175, 0.18);
 }
 .cfm-persona-avatar img {
   width: 32px;
