@@ -10946,26 +10946,48 @@ jQuery(async () => {
     cfmWorldInfoEntryBatchLastClicked = null;
   }
 
+  let cfmWorldInfoEntryLastTouchAt = 0;
+  function shouldIgnoreWorldInfoEntryTap(e) {
+    const eventType = e?.type || "";
+    if (eventType === "touchend") {
+      cfmWorldInfoEntryLastTouchAt = Date.now();
+      return false;
+    }
+    return (
+      eventType === "click" && Date.now() - cfmWorldInfoEntryLastTouchAt < 500
+    );
+  }
+
   function bindWorldInfoEntryCollapseTargets(
     refreshFn = refreshWorldInfoPanelView,
   ) {
     $("#cfm-worldinfo-left-tree, #cfm-worldinfo-right-list")
-      .off("click.cfmWorldInfoEntryCollapse")
-      .on("click.cfmWorldInfoEntryCollapse", (e) => {
-        if (
-          $(e.target).closest(
-            ".cfm-row, .cfm-preset-detail-row, .cfm-worldinfo-entry-detail-card, .cfm-tnode, .cfm-multisel-toolbar, .cfm-regex-toolbar, .cfm-regex-batch-toolbar",
-          ).length
-        ) {
-          return;
-        }
-        const hasExpandedPanels =
-          cfmWorldInfoEntryExpandedNames.size > 0 ||
-          cfmWorldInfoEntryOpenDetails.size > 0;
-        if (!hasExpandedPanels) return;
-        closeWorldInfoEntryPanels();
-        refreshFn();
-      });
+      .off("click.cfmWorldInfoEntryCollapse touchend.cfmWorldInfoEntryCollapse")
+      .on(
+        "click.cfmWorldInfoEntryCollapse touchend.cfmWorldInfoEntryCollapse",
+        (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          if (
+            $(e.target).closest(
+              ".cfm-row, .cfm-preset-detail-row, .cfm-tnode, .cfm-multisel-toolbar, .cfm-regex-toolbar, .cfm-regex-batch-toolbar, .cfm-chat-action-btn, .cfm-wi-toggle, .cfm-edit-checkbox, button, a, input, textarea, select, label",
+            ).length
+          ) {
+            return;
+          }
+          const hasExpandedPanels =
+            cfmWorldInfoEntryExpandedNames.size > 0 ||
+            cfmWorldInfoEntryOpenDetails.size > 0;
+          if (!hasExpandedPanels) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          closeWorldInfoEntryPanels();
+          refreshFn();
+        },
+      );
   }
 
   async function renderWorldInfoEntrySubList(
@@ -11029,6 +11051,11 @@ jQuery(async () => {
     detailToolbar
       .find(".cfm-worldinfo-entry-batch-toggle")
       .on("click touchend", (e) => {
+        if (shouldIgnoreWorldInfoEntryTap(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         if (!entries.length) return;
@@ -11072,6 +11099,11 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-selall")
         .on("click touchend", (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           if (allSel) {
@@ -11086,6 +11118,11 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-range")
         .on("click touchend", (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           cfmWorldInfoEntryBatchRangeMode = !cfmWorldInfoEntryBatchRangeMode;
@@ -11096,6 +11133,11 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-activate")
         .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           try {
@@ -11112,6 +11154,11 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-deactivate")
         .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           try {
@@ -11210,6 +11257,11 @@ jQuery(async () => {
           refreshFn();
         });
         row.find(".cfm-edit-checkbox").on("click touchend", (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           toggleWorldInfoEntryBatchItem(
@@ -11225,6 +11277,11 @@ jQuery(async () => {
       row
         .find(".cfm-worldinfo-entry-active-toggle")
         .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const el = $(e.currentTarget);
@@ -11248,6 +11305,11 @@ jQuery(async () => {
         });
 
       row.find(".cfm-worldinfo-entry-edit").on("click touchend", (e) => {
+        if (shouldIgnoreWorldInfoEntryTap(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         toggleWorldInfoEntryDetail(normalizedName, entry.uid);
@@ -19283,6 +19345,11 @@ jQuery(async () => {
             </div>
           `);
           row.find(".cfm-worldinfo-entry-expand").on("click touchend", (e) => {
+            if (shouldIgnoreWorldInfoEntryTap(e)) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             toggleWorldInfoEntryBookExpanded(n);
@@ -27308,6 +27375,11 @@ jQuery(async () => {
           </div>
         `);
         row.find(".cfm-worldinfo-entry-expand").on("click touchend", (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           toggleWorldInfoEntryBookExpanded(n);
