@@ -30856,6 +30856,109 @@ jQuery(async () => {
     return prefixRange.toString().length;
   }
 
+  function getTextareaCaretMetrics(textarea, caretIndex) {
+    if (!textarea || typeof caretIndex !== "number") return null;
+    const doc = textarea.ownerDocument;
+    if (!doc?.body) return null;
+
+    const value = String(textarea.value || "");
+    const safeCaret = Math.max(0, Math.min(Math.trunc(caretIndex), value.length));
+    const style = (doc.defaultView || window).getComputedStyle(textarea);
+    const mirror = doc.createElement("div");
+    const marker = doc.createElement("span");
+    const props = [
+      "box-sizing",
+      "width",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "letter-spacing",
+      "text-transform",
+      "word-spacing",
+      "text-indent",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+      "border-top-width",
+      "border-right-width",
+      "border-bottom-width",
+      "border-left-width",
+      "line-height",
+      "text-align",
+      "tab-size",
+    ];
+
+    mirror.style.position = "absolute";
+    mirror.style.visibility = "hidden";
+    mirror.style.pointerEvents = "none";
+    mirror.style.left = "-9999px";
+    mirror.style.top = "0";
+    mirror.style.whiteSpace = "pre-wrap";
+    mirror.style.wordWrap = "break-word";
+    mirror.style.overflowWrap = "break-word";
+    mirror.style.overflow = "hidden";
+    props.forEach((prop) => {
+      mirror.style.setProperty(prop, style.getPropertyValue(prop));
+    });
+
+    mirror.textContent = value.slice(0, safeCaret);
+    marker.textContent = value.slice(safeCaret, safeCaret + 1) || "\u200b";
+    mirror.appendChild(marker);
+    doc.body.appendChild(mirror);
+
+    const metrics = {
+      top: marker.offsetTop,
+      left: marker.offsetLeft,
+      lineHeight:
+        parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4 || 20,
+    };
+    mirror.remove();
+    return metrics;
+  }
+
+  function revealTextareaCaret(textarea, caretIndex) {
+    const metrics = getTextareaCaretMetrics(textarea, caretIndex);
+    if (!metrics) return null;
+
+    textarea.scrollTop = Math.max(
+      0,
+      metrics.top - textarea.clientHeight / 2 + metrics.lineHeight / 2,
+    );
+    textarea.scrollLeft = Math.max(0, metrics.left - textarea.clientWidth / 3);
+    return metrics;
+  }
+
+  function flashTextareaCaretSelection(textarea, caretIndex) {
+    if (!textarea || typeof textarea.setSelectionRange !== "function") return;
+    const value = String(textarea.value || "");
+    const safeCaret = Math.max(0, Math.min(Math.trunc(caretIndex), value.length));
+
+    if (!value.length) {
+      textarea.setSelectionRange(0, 0);
+      return;
+    }
+
+    const lineStart = Math.max(value.lastIndexOf("\n", Math.max(0, safeCaret - 1)) + 1, 0);
+    const nextLineBreak = value.indexOf("\n", safeCaret);
+    const lineEnd = nextLineBreak === -1 ? value.length : nextLineBreak;
+    const highlightStart = Math.min(lineStart, value.length);
+    const highlightEnd = Math.max(
+      highlightStart,
+      Math.min(value.length, lineEnd > highlightStart ? lineEnd : highlightStart + 1),
+    );
+
+    textarea.focus();
+    textarea.setSelectionRange(highlightStart, highlightEnd);
+
+    setTimeout(() => {
+      if (!textarea.isConnected) return;
+      textarea.focus();
+      textarea.setSelectionRange(safeCaret, safeCaret);
+    }, 1000);
+  }
+
   async function showPersonaDetailFieldPopup(persona, field, options = {}) {
     const map = {
       name: {
@@ -30908,29 +31011,45 @@ jQuery(async () => {
     `);
     $("body").append(overlay);
     const input = overlay.find("#cfm-persona-detail-input");
-    input.trigger("focus");
     const caretIndex = Number.isFinite(options?.caretIndex)
       ? Math.max(0, Math.trunc(options.caretIndex))
       : null;
     const node = input[0];
+    input.trigger("focus");
     if (node && typeof node.selectionStart === "number") {
       const nextCaret = Math.min(
         caretIndex === null ? node.value.length : caretIndex,
         node.value.length,
       );
       node.selectionStart = node.selectionEnd = nextCaret;
+      if (input.is("textarea") && caretIndex !== null) {
+        setTimeout(() => {
+          if (!node.isConnected) return;
+          revealTextareaCaret(node, nextCaret);
+          flashTextareaCaretSelection(node, nextCaret);
+        }, 0);
+      }
     }
 
     return new Promise((resolve) => {
+      let overlayPressStarted = false;
       const close = (result) => {
         overlay.remove();
         resolve(result);
       };
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
-      overlay.on("click", (e) => {
-        if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
+      overlay.on("mousedown touchstart", (e) => {
+        overlayPressStarted = $(e.target).hasClass("cfm-edit-popup-overlay");
       });
-      overlay.find(".cfm-edit-popup-clear").on("click", () => close(""));
+      overlay.on("click", (e) => {
+        const clickedOverlay = $(e.target).hasClass("cfm-edit-popup-overlay");
+        if (clickedOverlay && overlayPressStarted) close(null);
+        overlayPressStarted = false;
+      });
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm(`确认清空${meta.label}吗？`)) return;
+        close("");
+      });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         close(String(input.val() || "").trim());
       });
