@@ -21260,6 +21260,10 @@ jQuery(async () => {
         renderRightPane();
       }
     });
+    let suppressRowClickUntil = 0;
+    const suppressNextRowClick = () => {
+      suppressRowClickUntil = Date.now() + 450;
+    };
     // 单个铅笔按钮点击事件
     row.find(".cfm-row-edit-btn").on("click touchend", (e) => {
       e.preventDefault();
@@ -21270,6 +21274,7 @@ jQuery(async () => {
     row.find(".cfm-chat-toggle").on("click touchend", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmChatExpandedAvatars.has(avatar)) {
         // 折叠
@@ -21300,6 +21305,7 @@ jQuery(async () => {
     row.find(".cfm-regex-toggle").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmCharRegexExpandedAvatars.has(avatar)) {
         // 折叠
@@ -21330,6 +21336,7 @@ jQuery(async () => {
     row.find(".cfm-char-detail-toggle").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmCharDetailExpandedAvatars.has(avatar)) {
         cfmCharDetailExpandedAvatars.delete(avatar);
@@ -21356,6 +21363,7 @@ jQuery(async () => {
     // 点击行为：多选模式下切换选中，否则打开角色聊天
     row.on("click", (e) => {
       e.preventDefault();
+      if (Date.now() < suppressRowClickUntil) return;
       if ($(e.target).closest(".cfm-row-star").length) return;
       if ($(e.target).closest(".cfm-row-edit-btn").length) return;
       if ($(e.target).closest(".cfm-char-detail-toggle").length) return;
