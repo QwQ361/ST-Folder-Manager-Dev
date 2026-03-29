@@ -3899,6 +3899,12 @@ option.cfm-nf-hidden {
   border-radius: 6px !important;
   overflow: hidden;
   flex-shrink: 0;
+  box-sizing: border-box;
+  border: 1.6px solid transparent;
+}
+.cfm-persona-avatar.cfm-persona-avatar-default {
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 .cfm-persona-avatar img {
   width: 32px;

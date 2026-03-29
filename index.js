@@ -15093,9 +15093,9 @@ jQuery(async () => {
     renderLeftTree();
     renderRightPane();
     scrollElementIntoViewCentered(() =>
-      Array.from(document.querySelectorAll("#cfm-right-list .cfm-row[data-avatar]")).find(
-        (el) => el.getAttribute("data-avatar") === avatar,
-      ),
+      Array.from(
+        document.querySelectorAll("#cfm-right-list .cfm-row[data-avatar]"),
+      ).find((el) => el.getAttribute("data-avatar") === avatar),
     );
     return true;
   }
@@ -15119,7 +15119,9 @@ jQuery(async () => {
     renderPresetsView();
     scrollElementIntoViewCentered(() =>
       Array.from(
-        document.querySelectorAll("#cfm-preset-right-list .cfm-row[data-res-id]"),
+        document.querySelectorAll(
+          "#cfm-preset-right-list .cfm-row[data-res-id]",
+        ),
       ).find((el) => el.getAttribute("data-res-id") === presetName),
     );
     return true;
@@ -15144,7 +15146,9 @@ jQuery(async () => {
     renderPersonasView();
     scrollElementIntoViewCentered(() =>
       Array.from(
-        document.querySelectorAll("#cfm-persona-right-list .cfm-row[data-res-id]"),
+        document.querySelectorAll(
+          "#cfm-persona-right-list .cfm-row[data-res-id]",
+        ),
       ).find((el) => el.getAttribute("data-res-id") === avatarId),
     );
     return true;
@@ -31914,6 +31918,8 @@ jQuery(async () => {
       // User行（带头像 + 星标 + 多选支持 + 备注）
       for (const p of displayItems) {
         const isActive = p.avatarId === currentUserAvatar;
+        const bindStates = getPersonaBindingState(p);
+        const isDefaultPersona = !!bindStates.default;
         const fav = isResFavorite("personas", p.avatarId);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(p.avatarId);
         const isExpSel = cfmExportMode && cfmExportSelected.has(p.avatarId);
@@ -31953,7 +31959,7 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
             ${msCheckHtml}
-            <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
+            <div class="cfm-row-icon cfm-persona-avatar ${isDefaultPersona ? "cfm-persona-avatar-default" : ""}" title="${isDefaultPersona ? "默认 User" : ""}"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}</div>
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -32306,6 +32312,8 @@ jQuery(async () => {
 
       for (const p of matched) {
         const isActive = p.avatarId === currentUserAvatar;
+        const bindStates = getPersonaBindingState(p);
+        const isDefaultPersona = !!bindStates.default;
         const fav = isResFavorite("personas", p.avatarId);
         const thumbUrl = getThumbnailUrl("persona", p.avatarId);
         const personaNote = getPersonaNote(p.avatarId);
@@ -32324,7 +32332,7 @@ jQuery(async () => {
         const detailToggleHtml = `<div class="cfm-char-detail-toggle cfm-persona-toggle" title="展开/折叠User设定"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char ${isActive ? "cfm-rv-item-active" : ""}" data-avatar-id="${escapeHtml(p.avatarId)}" data-res-id="${escapeHtml(p.avatarId)}" draggable="true">
-            <div class="cfm-row-icon cfm-persona-avatar"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
+            <div class="cfm-row-icon cfm-persona-avatar ${isDefaultPersona ? "cfm-persona-avatar-default" : ""}" title="${isDefaultPersona ? "默认 User" : ""}"><img src="${thumbUrl}" alt="avatar" onerror="this.src='/img/ai4.png'"></div>
             <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline">${detailToggleHtml}<span class="cfm-persona-name-text">${escapeHtml(p.name)}</span></span>${p.title ? `<span class="cfm-persona-title">${escapeHtml(p.title)}</span>` : ""}${noteHtml}${connHtml}${pathHtml}</div>
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
