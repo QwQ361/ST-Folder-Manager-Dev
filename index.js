@@ -30809,7 +30809,54 @@ jQuery(async () => {
     else renderPersonasView();
   }
 
-  async function showPersonaDetailFieldPopup(persona, field) {
+  function getPointerClientPoint(evt) {
+    const originalEvent = evt?.originalEvent || evt;
+    const touch =
+      originalEvent?.changedTouches?.[0] || originalEvent?.touches?.[0] || null;
+    if (touch) {
+      return { x: touch.clientX, y: touch.clientY };
+    }
+    if (
+      typeof originalEvent?.clientX === "number" &&
+      typeof originalEvent?.clientY === "number"
+    ) {
+      return { x: originalEvent.clientX, y: originalEvent.clientY };
+    }
+    return null;
+  }
+
+  function getTextOffsetFromPoint(container, evt) {
+    if (!container || !container.ownerDocument) return null;
+    const point = getPointerClientPoint(evt);
+    if (!point) return null;
+
+    const doc = container.ownerDocument;
+    let caretRange = null;
+
+    if (typeof doc.caretPositionFromPoint === "function") {
+      const pos = doc.caretPositionFromPoint(point.x, point.y);
+      if (pos?.offsetNode) {
+        caretRange = doc.createRange();
+        caretRange.setStart(pos.offsetNode, pos.offset);
+        caretRange.setEnd(pos.offsetNode, pos.offset);
+      }
+    } else if (typeof doc.caretRangeFromPoint === "function") {
+      caretRange = doc.caretRangeFromPoint(point.x, point.y);
+    }
+
+    if (!caretRange) return null;
+
+    const prefixRange = doc.createRange();
+    prefixRange.selectNodeContents(container);
+    try {
+      prefixRange.setEnd(caretRange.startContainer, caretRange.startOffset);
+    } catch (_) {
+      return null;
+    }
+    return prefixRange.toString().length;
+  }
+
+  async function showPersonaDetailFieldPopup(persona, field, options = {}) {
     const map = {
       name: {
         title: "编辑User名称",
@@ -30862,11 +30909,16 @@ jQuery(async () => {
     $("body").append(overlay);
     const input = overlay.find("#cfm-persona-detail-input");
     input.trigger("focus");
-    if (input.is("textarea")) {
-      const node = input[0];
-      if (node && typeof node.selectionStart === "number") {
-        node.selectionStart = node.selectionEnd = node.value.length;
-      }
+    const caretIndex = Number.isFinite(options?.caretIndex)
+      ? Math.max(0, Math.trunc(options.caretIndex))
+      : null;
+    const node = input[0];
+    if (node && typeof node.selectionStart === "number") {
+      const nextCaret = Math.min(
+        caretIndex === null ? node.value.length : caretIndex,
+        node.value.length,
+      );
+      node.selectionStart = node.selectionEnd = nextCaret;
     }
 
     return new Promise((resolve) => {
@@ -30895,8 +30947,8 @@ jQuery(async () => {
     });
   }
 
-  async function editPersonaDetailField(persona, field) {
-    const value = await showPersonaDetailFieldPopup(persona, field);
+  async function editPersonaDetailField(persona, field, options = {}) {
+    const value = await showPersonaDetailFieldPopup(persona, field, options);
     if (value === null) return;
 
     const ctx = getContext();
@@ -31621,6 +31673,20 @@ jQuery(async () => {
       const field = $(e.currentTarget).data("field");
       await editPersonaDetailField(persona, field);
     });
+
+    subList
+      .find(".cfm-persona-detail-description")
+      .on("click touchend", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const descText = String(persona?.description || "");
+        const clickedOffset = getTextOffsetFromPoint(e.currentTarget, e);
+        await editPersonaDetailField(persona, "description", {
+          caretIndex: Number.isFinite(clickedOffset)
+            ? clickedOffset
+            : descText.length,
+        });
+      });
 
     subList.find(".cfm-persona-bind-btn").on("click touchend", (e) => {
       e.preventDefault();
