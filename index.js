@@ -5428,6 +5428,7 @@ jQuery(async () => {
     dialog.find("#cfm-defbg-clear").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (!window.confirm("确认清除默认背景吗？")) return;
       extension_settings[extensionName].defaultBackground = "";
       getContext().saveSettingsDebounced();
       toastr.info("已清除默认背景");
@@ -5600,6 +5601,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -5924,6 +5926,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", orient: "", clear: true });
       });
@@ -6883,6 +6886,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -7074,6 +7078,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -8880,6 +8885,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -9075,6 +9081,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -11345,7 +11352,10 @@ jQuery(async () => {
       overlay.on("click", (e) => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
-      overlay.find(".cfm-edit-popup-clear").on("click", () => close(""));
+      overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm(`确认清空${field.label}吗？`)) return;
+        close("");
+      });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
         close(String(input.val() || "").trim());
       });
@@ -14931,6 +14941,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        if (!window.confirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve("");
       });
@@ -22428,6 +22439,7 @@ jQuery(async () => {
     // 清除按钮
     iconSection.find("#cfm-icon-clear").on("click touchend", (e) => {
       e.preventDefault();
+      if (!window.confirm("确认清除自定义图标吗？")) return;
       $("#cfm-icon-url-input").val("");
       extension_settings[extensionName].customTopbarIcon = "";
       getContext().saveSettingsDebounced();
@@ -31928,6 +31940,11 @@ jQuery(async () => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
+        const confirmMessage =
+          field === "alt_greetings"
+            ? "确认删除这条开场白吗？"
+            : `确认清空${meta.label}吗？`;
+        if (!window.confirm(confirmMessage)) return;
         close({
           action: field === "alt_greetings" ? "delete" : "clear",
           value: "",
