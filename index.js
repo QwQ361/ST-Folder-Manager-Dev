@@ -7243,9 +7243,27 @@ jQuery(async () => {
 
   function getPersonaChatBindKeys(avatarId, includeBindKey = "") {
     const store = getPersonaChatBindingsStore();
-    const saved = Array.isArray(store[avatarId]) ? [...store[avatarId]] : [];
-    const extra = String(includeBindKey || "").trim();
-    if (extra && !saved.includes(extra)) saved.push(extra);
+    const avatarKey = String(avatarId || "");
+    const saved = Array.isArray(store[avatarKey]) ? [...store[avatarKey]] : [];
+    const chatMeta =
+      getContext().chatMetadata || window.chat_metadata || window.chatMetadata || {};
+    const livePersonaAvatar = String(chatMeta?.persona || "");
+    const liveBindKey =
+      livePersonaAvatar && livePersonaAvatar === avatarKey
+        ? String(getCurrentChatBindKey() || "").trim()
+        : "";
+    const extras = [includeBindKey, liveBindKey]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+
+    for (const extra of extras) {
+      if (!saved.includes(extra)) saved.push(extra);
+    }
+
+    if (saved.length) {
+      store[avatarKey] = [...new Set(saved)];
+    }
+
     return [...new Set(saved)].filter(Boolean);
   }
 
@@ -30606,7 +30624,7 @@ jQuery(async () => {
 
     return {
       default: pu.default_persona === persona.avatarId,
-      chat: chatMeta?.persona === persona.avatarId,
+      chat: String(chatMeta?.persona || "") === String(persona.avatarId || ""),
       character: connections.some(
         (c) =>
           c &&
@@ -31358,11 +31376,7 @@ jQuery(async () => {
     const note = getPersonaNote(persona.avatarId) || "";
     const bindStates = getPersonaBindStates(persona);
     const characterBindHtml = buildPersonaConnHtml(persona?.connections || []);
-    const currentChatBindKey = bindStates.chat ? getCurrentChatBindKey() : "";
-    const chatBindHtml = buildPersonaChatBindHtml(
-      persona.avatarId,
-      currentChatBindKey,
-    );
+    const chatBindHtml = buildPersonaChatBindHtml(persona.avatarId);
     const bindDetailHtml = [
       characterBindHtml ? `<div>${characterBindHtml}</div>` : "",
       chatBindHtml
