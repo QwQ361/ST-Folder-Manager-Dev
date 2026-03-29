@@ -19261,7 +19261,7 @@ jQuery(async () => {
             ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
             : "";
           const isEntryExpanded = isWorldInfoEntryBookExpanded(n);
-          const expandHtml = `<div class="cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}" style="display:flex;align-items:center;justify-content:center;width:16px;min-width:16px;cursor:pointer;opacity:0.72;"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
+          const expandHtml = `<div class="cfm-char-detail-toggle cfm-preset-detail-toggle cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
           // 世界书激活开关
           const wiIsActive = wiActiveSet.has(n);
           const wiIsBound = wiCharBound.has(n);
@@ -19274,10 +19274,9 @@ jQuery(async () => {
           const row = $(`
             <div class="cfm-row cfm-row-char cfm-search-result ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}">
               ${msCheckHtml}
-              ${expandHtml}
               ${toggleHtml}
               <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
-              <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
+              <div class="cfm-row-name"><span class="cfm-char-name-inline">${expandHtml}<span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span></span>${noteHtml}${wFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(wFolderPath)}</div>` : ""}</div>
               ${singleRenameBtn}
               ${singleNoteBtn}
               <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -27287,7 +27286,7 @@ jQuery(async () => {
           ? `<div class="cfm-row-edit-btn cfm-row-rename-btn" title="重命名"><i class="fa-solid fa-i-cursor"></i></div>`
           : "";
         const isEntryExpanded = isWorldInfoEntryBookExpanded(n);
-        const expandHtml = `<div class="cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}" style="display:flex;align-items:center;justify-content:center;width:16px;min-width:16px;cursor:pointer;opacity:0.72;"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
+        const expandHtml = `<div class="cfm-char-detail-toggle cfm-preset-detail-toggle cfm-worldinfo-entry-expand" title="${isEntryExpanded ? "收起条目" : "展开条目"}"><i class="fa-solid fa-caret-${isEntryExpanded ? "down" : "right"}"></i></div>`;
         // 世界书激活开关
         const wiIsActive = wiActiveSet.has(n);
         const wiIsBound = wiCharBound.has(n);
@@ -27300,10 +27299,9 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-row cfm-row-char ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(n)}" draggable="true">
             ${msCheckHtml}
-            ${expandHtml}
             ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span>${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline">${expandHtml}<span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span></span>${noteHtml}</div>
             ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
