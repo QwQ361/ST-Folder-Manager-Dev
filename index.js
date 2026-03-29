@@ -7171,6 +7171,21 @@ jQuery(async () => {
   }
 
   /**
+   * 获取当前激活的 User avatar 标识
+   */
+  function getCurrentPersonaAvatar() {
+    try {
+      return (
+        $("#user_avatar_block .avatar-container.selected").attr(
+          "data-avatar-id",
+        ) || null
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * 获取当前聊天文件名（不含扩展名）
    */
   function getCurrentChatFileName() {
@@ -15050,6 +15065,98 @@ jQuery(async () => {
     );
   }
 
+  function revealCurrentCharFromTabClick() {
+    const avatar = getCurrentCharAvatar();
+    if (!avatar) return false;
+
+    const tagMap = getTagMap();
+    const charTags = tagMap[avatar] || [];
+    const folderIds = getFolderTagIds();
+    const charFolderTags = charTags.filter((t) => folderIds.includes(t));
+    if (charFolderTags.length > 0) {
+      let deepest = charFolderTags[0];
+      let maxDepth = getFolderPath(deepest).length;
+      for (let i = 1; i < charFolderTags.length; i++) {
+        const depth = getFolderPath(charFolderTags[i]).length;
+        if (depth > maxDepth) {
+          deepest = charFolderTags[i];
+          maxDepth = depth;
+        }
+      }
+      for (const pid of getFolderPath(deepest)) expandedNodes.add(pid);
+      selectedTreeNode = deepest;
+    } else {
+      selectedTreeNode = "__uncategorized__";
+    }
+
+    cfmCharDetailExpandedAvatars.add(avatar);
+    renderLeftTree();
+    renderRightPane();
+    scrollElementIntoViewCentered(() =>
+      Array.from(document.querySelectorAll("#cfm-right-list .cfm-row[data-avatar]")).find(
+        (el) => el.getAttribute("data-avatar") === avatar,
+      ),
+    );
+    return true;
+  }
+
+  function revealCurrentPresetFromTabClick() {
+    const presetName = getCurrentPresetName();
+    if (!presetName) return false;
+
+    const groups = getResourceGroups("presets");
+    const tree = getResFolderTree("presets");
+    const folderId = groups[presetName];
+    if (folderId && tree[folderId]) {
+      const path = getResFolderPath("presets", folderId);
+      for (const pid of path) presetExpandedNodes.add(pid);
+      selectedPresetFolder = folderId;
+    } else {
+      selectedPresetFolder = "__ungrouped__";
+    }
+
+    cfmPresetDetailExpandedNames.add(presetName);
+    renderPresetsView();
+    scrollElementIntoViewCentered(() =>
+      Array.from(
+        document.querySelectorAll("#cfm-preset-right-list .cfm-row[data-res-id]"),
+      ).find((el) => el.getAttribute("data-res-id") === presetName),
+    );
+    return true;
+  }
+
+  function revealCurrentPersonaFromTabClick() {
+    const avatarId = getCurrentPersonaAvatar();
+    if (!avatarId) return false;
+
+    const groups = getResourceGroups("personas");
+    const tree = getResFolderTree("personas");
+    const folderId = groups[avatarId];
+    if (folderId && tree[folderId]) {
+      const path = getResFolderPath("personas", folderId);
+      for (const pid of path) personaExpandedNodes.add(pid);
+      selectedPersonaFolder = folderId;
+    } else {
+      selectedPersonaFolder = "__ungrouped__";
+    }
+
+    personaItemExpandedIds.add(avatarId);
+    renderPersonasView();
+    scrollElementIntoViewCentered(() =>
+      Array.from(
+        document.querySelectorAll("#cfm-persona-right-list .cfm-row[data-res-id]"),
+      ).find((el) => el.getAttribute("data-res-id") === avatarId),
+    );
+    return true;
+  }
+
+  function handleCurrentTabRelocate(tab) {
+    if (tab === "chars") return revealCurrentCharFromTabClick();
+    if (tab === "presets") return revealCurrentPresetFromTabClick();
+    if (tab === "personas") return revealCurrentPersonaFromTabClick();
+    return false;
+  }
+
   function tryCollapseSublistFromOuterGap(e) {
     const clientX = getEventClientX(e);
     if (typeof clientX !== "number") return false;
@@ -16191,7 +16298,10 @@ jQuery(async () => {
     popup.find(".cfm-tab").on("click touchend", function (e) {
       e.preventDefault();
       const tab = $(this).data("tab");
-      if (tab === currentResourceType) return;
+      if (tab === currentResourceType) {
+        handleCurrentTabRelocate(tab);
+        return;
+      }
       currentResourceType = tab;
       popup.find(".cfm-tab").removeClass("cfm-tab-active");
       $(this).addClass("cfm-tab-active");
@@ -21316,7 +21426,10 @@ jQuery(async () => {
         tabsContainer.find(".cfm-tab").on("click touchend", function (e) {
           e.preventDefault();
           const tab = $(this).data("tab");
-          if (tab === currentResourceType) return;
+          if (tab === currentResourceType) {
+            handleCurrentTabRelocate(tab);
+            return;
+          }
           currentResourceType = tab;
           $("#cfm-overlay .cfm-tab").removeClass("cfm-tab-active");
           $(this).addClass("cfm-tab-active");
