@@ -5027,6 +5027,24 @@ jQuery(async () => {
               // 清理文件夹分配
               const groups = extension_settings[extensionName].worldInfoGroups;
               if (groups && groups[name]) delete groups[name];
+              // 清理世界书激活分组中的已删除引用
+              const wiPresets = getWiActivePresets ? getWiActivePresets() : [];
+              for (const wp of wiPresets) {
+                if (Array.isArray(wp.books)) {
+                  wp.books = wp.books.filter((bookName) => bookName !== name);
+                }
+              }
+              const wiApplied =
+                extension_settings[extensionName]._wiAppliedPresetIndices;
+              if (Array.isArray(wiApplied)) {
+                extension_settings[extensionName]._wiAppliedPresetIndices =
+                  wiApplied.filter(
+                    (idx) =>
+                      wiPresets[idx] &&
+                      Array.isArray(wiPresets[idx].books) &&
+                      wiPresets[idx].books.length > 0,
+                  );
+              }
               // 从酒馆原生DOM中移除对应option（防止renderWorldInfoView从DOM读到已删除的世界书）
               $("#world_editor_select option")
                 .filter(function () {
@@ -7048,32 +7066,124 @@ jQuery(async () => {
     }
   }
 
+  function getExistingWorldInfoNameSet() {
+    const names = [];
+    try {
+      if (Array.isArray(_worldInfoNamesCache)) {
+        for (const name of _worldInfoNamesCache) {
+          const normalizedName = String(name || "").trim();
+          if (normalizedName) names.push(normalizedName);
+        }
+      }
+      $("#world_editor_select option").each(function () {
+        const name = $(this).text().trim();
+        if (name) names.push(name);
+      });
+      $("#world_info option").each(function () {
+        const name = $(this).text().trim();
+        if (name) names.push(name);
+      });
+      if (_worldInfoDetachedOptions && _worldInfoDetachedOptions.length > 0) {
+        for (const opt of _worldInfoDetachedOptions) {
+          const name = $(opt).text().trim();
+          if (name) names.push(name);
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 获取世界书列表失败", e);
+    }
+    return new Set(names.filter(Boolean));
+  }
+
+  function filterExistingWorldInfoNames(bookNames, existingNameSet) {
+    const validNameSet = existingNameSet || getExistingWorldInfoNameSet();
+    return Array.from(
+      new Set(
+        (Array.isArray(bookNames) ? bookNames : [])
+          .map((name) => String(name || "").trim())
+          .filter((name) => name && validNameSet.has(name)),
+      ),
+    );
+  }
+
+  function sanitizeWiActivePresetState(save = false) {
+    const presets = extension_settings[extensionName].wiActivePresets || [];
+    const existingNameSet = getExistingWorldInfoNameSet();
+    let presetChanged = false;
+    for (const preset of presets) {
+      if (!preset || typeof preset !== "object") continue;
+      const prevBooks = Array.isArray(preset.books) ? preset.books : [];
+      const nextBooks = filterExistingWorldInfoNames(prevBooks, existingNameSet);
+      const sameBooks =
+        prevBooks.length === nextBooks.length &&
+        prevBooks.every((name, idx) => name === nextBooks[idx]);
+      if (!sameBooks || !Array.isArray(preset.books)) {
+        preset.books = nextBooks;
+        presetChanged = true;
+      }
+    }
+    const applied = Array.isArray(
+      extension_settings[extensionName]._wiAppliedPresetIndices,
+    )
+      ? extension_settings[extensionName]._wiAppliedPresetIndices
+      : [];
+    const nextApplied = applied.filter(
+      (idx) =>
+        presets[idx] &&
+        Array.isArray(presets[idx].books) &&
+        presets[idx].books.length > 0,
+    );
+    const appliedChanged =
+      applied.length !== nextApplied.length ||
+      applied.some((idx, i) => idx !== nextApplied[i]);
+    if (appliedChanged) {
+      extension_settings[extensionName]._wiAppliedPresetIndices = nextApplied;
+    }
+    if (save && (presetChanged || appliedChanged)) {
+      getContext().saveSettingsDebounced();
+    }
+    return {
+      presets,
+      existingNameSet,
+      changed: presetChanged || appliedChanged,
+    };
+  }
+
   /**
    * 切换世界书的全局激活状态
    * @param {string} name - 世界书名称
    * @param {boolean} activate - true=激活, false=取消激活
    */
   async function toggleWorldInfoActivation(name, activate) {
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) return false;
+    const existingNameSet = getExistingWorldInfoNameSet();
+    if (!existingNameSet.has(normalizedName)) {
+      console.info(`[CFM] 已跳过不存在的世界书激活切换：${normalizedName}`);
+      return false;
+    }
     try {
       const wiModule = await import("../../../world-info.js");
       const selectedWI = wiModule.selected_world_info;
       const worldNames = wiModule.world_names;
-      const idx = selectedWI.indexOf(name);
+      const idx = selectedWI.indexOf(normalizedName);
       if (activate && idx === -1) {
-        selectedWI.push(name);
+        selectedWI.push(normalizedName);
       } else if (!activate && idx !== -1) {
         selectedWI.splice(idx, 1);
       }
       // 同步 DOM: 更新 #world_info option 的 selected 状态
-      const wiIdx = worldNames.indexOf(name);
+      const wiIdx = worldNames.indexOf(normalizedName);
       if (wiIdx !== -1) {
         $("#world_info")
           .find(`option[value='${wiIdx}']`)
           .prop("selected", activate);
       }
       $("#world_info").trigger("change");
+      return true;
     } catch (e) {
       console.error("[CFM] 切换世界书激活状态失败", e);
+      return false;
     }
   }
 
@@ -7087,17 +7197,28 @@ jQuery(async () => {
       const wiModule = await import("../../../world-info.js");
       const selectedWI = wiModule.selected_world_info;
       const worldNames = wiModule.world_names;
-      const targetSet = new Set(bookNames);
-      // 先取消所有非角色关联的世界书
-      const toRemove = [];
+      const existingNameSet = getExistingWorldInfoNameSet();
+      for (const name of Array.isArray(worldNames) ? worldNames : []) {
+        const normalizedName = String(name || "").trim();
+        if (normalizedName) existingNameSet.add(normalizedName);
+      }
+      const filteredBookNames = filterExistingWorldInfoNames(
+        bookNames,
+        existingNameSet,
+      );
+      const targetSet = new Set(filteredBookNames);
+      // 先取消所有非角色关联的世界书，以及已经不存在的世界书
       for (let i = selectedWI.length - 1; i >= 0; i--) {
-        if (!charBound.has(selectedWI[i]) && !targetSet.has(selectedWI[i])) {
-          toRemove.push(selectedWI[i]);
+        const selectedName = String(selectedWI[i] || "").trim();
+        if (
+          !existingNameSet.has(selectedName) ||
+          (!charBound.has(selectedName) && !targetSet.has(selectedName))
+        ) {
           selectedWI.splice(i, 1);
         }
       }
       // 再激活目标列表中未激活的
-      for (const name of bookNames) {
+      for (const name of filteredBookNames) {
         if (!charBound.has(name) && !selectedWI.includes(name)) {
           selectedWI.push(name);
         }
@@ -7106,7 +7227,7 @@ jQuery(async () => {
       $("#world_info")
         .find("option")
         .each(function () {
-          const optName = $(this).text();
+          const optName = $(this).text().trim();
           if (charBound.has(optName)) return; // 不动角色关联的
           $(this).prop("selected", selectedWI.includes(optName));
         });
@@ -7118,6 +7239,7 @@ jQuery(async () => {
 
   // ==================== 世界书分组预设管理 ====================
   function getWiActivePresets() {
+    sanitizeWiActivePresetState(true);
     return extension_settings[extensionName].wiActivePresets || [];
   }
   function saveWiActivePreset(name, books, scope, bindChars, bindPresets) {
@@ -7445,6 +7567,7 @@ jQuery(async () => {
     const details = {};
     for (let i = 0; i < presets.length; i++) {
       const p = presets[i];
+      if (!p || !Array.isArray(p.books) || p.books.length === 0) continue;
       if (p.scope === "global") continue;
       const hasBindings =
         (p.bindChars && p.bindChars.length > 0) ||
@@ -10411,6 +10534,55 @@ jQuery(async () => {
     );
   }
 
+  function getAvailablePresetDetailFieldKeySet(presetData) {
+    return new Set(
+      getPresetDetailFields(presetData)
+        .filter((field) => String(field?.key || "").startsWith("prompts."))
+        .map((field) => String(field.key || ""))
+        .filter(Boolean),
+    );
+  }
+
+  function sanitizePresetDetailGroupState(presetName, presetData, save = false) {
+    const presets = getPresetDetailActivePresets(presetName);
+    const validFieldKeySet = getAvailablePresetDetailFieldKeySet(presetData);
+    let presetChanged = false;
+    for (const preset of presets) {
+      if (!preset || typeof preset !== "object") continue;
+      const prevFields = normalizePresetDetailFieldKeys(preset.fields);
+      const nextFields = prevFields.filter((fieldKey) =>
+        validFieldKeySet.has(fieldKey),
+      );
+      const sameFields =
+        prevFields.length === nextFields.length &&
+        prevFields.every((fieldKey, idx) => fieldKey === nextFields[idx]);
+      if (!sameFields || !Array.isArray(preset.fields)) {
+        preset.fields = nextFields;
+        presetChanged = true;
+      }
+    }
+    const applied = getPresetDetailAppliedPresetIndices(presetName);
+    const nextApplied = applied.filter(
+      (idx) =>
+        presets[idx] &&
+        Array.isArray(presets[idx].fields) &&
+        normalizePresetDetailFieldKeys(presets[idx].fields).length > 0,
+    );
+    const appliedChanged =
+      applied.length !== nextApplied.length ||
+      applied.some((idx, i) => idx !== nextApplied[i]);
+    if (appliedChanged) {
+      setPresetDetailAppliedPresetIndices(presetName, nextApplied);
+    } else if (save && presetChanged) {
+      getContext().saveSettingsDebounced();
+    }
+    return {
+      presets,
+      validFieldKeySet,
+      changed: presetChanged || appliedChanged,
+    };
+  }
+
   function savePresetDetailActivePreset(presetName, name, fieldKeys) {
     const presets = getPresetDetailActivePresets(presetName);
     const normalizedKeys = normalizePresetDetailFieldKeys(fieldKeys);
@@ -10483,7 +10655,11 @@ jQuery(async () => {
       String(field?.key || "").startsWith("prompts."),
     );
     const enabledIds = getEnabledPresetDetailFieldKeys(presetData);
-    const presets = getPresetDetailActivePresets(presetName);
+    const { presets } = sanitizePresetDetailGroupState(
+      presetName,
+      presetData,
+      true,
+    );
     const enabledSet = new Set(enabledIds);
     let matchedPresetName = null;
     for (const p of presets) {
@@ -34510,7 +34686,70 @@ jQuery(async () => {
   }
 
   // ==================== 正则激活分组管理 ====================
+  function getExistingRegexScriptIdSet() {
+    return new Set(
+      (extension_settings.regex ?? [])
+        .map((script) => String(script?.id || "").trim())
+        .filter(Boolean),
+    );
+  }
+
+  function filterExistingRegexScriptIds(scriptIds, existingIdSet) {
+    const validIdSet = existingIdSet || getExistingRegexScriptIdSet();
+    return Array.from(
+      new Set(
+        (Array.isArray(scriptIds) ? scriptIds : [])
+          .map((scriptId) => String(scriptId || "").trim())
+          .filter((scriptId) => scriptId && validIdSet.has(scriptId)),
+      ),
+    );
+  }
+
+  function sanitizeRegexActivePresetState(save = false) {
+    const presets = extension_settings[extensionName].regexActivePresets || [];
+    const existingIdSet = getExistingRegexScriptIdSet();
+    let presetChanged = false;
+    for (const preset of presets) {
+      if (!preset || typeof preset !== "object") continue;
+      const prevScripts = Array.isArray(preset.scripts) ? preset.scripts : [];
+      const nextScripts = filterExistingRegexScriptIds(prevScripts, existingIdSet);
+      const sameScripts =
+        prevScripts.length === nextScripts.length &&
+        prevScripts.every((scriptId, idx) => scriptId === nextScripts[idx]);
+      if (!sameScripts || !Array.isArray(preset.scripts)) {
+        preset.scripts = nextScripts;
+        presetChanged = true;
+      }
+    }
+    const applied = Array.isArray(
+      extension_settings[extensionName]._regexAppliedPresetIndices,
+    )
+      ? extension_settings[extensionName]._regexAppliedPresetIndices
+      : [];
+    const nextApplied = applied.filter(
+      (idx) =>
+        presets[idx] &&
+        Array.isArray(presets[idx].scripts) &&
+        presets[idx].scripts.length > 0,
+    );
+    const appliedChanged =
+      applied.length !== nextApplied.length ||
+      applied.some((idx, i) => idx !== nextApplied[i]);
+    if (appliedChanged) {
+      extension_settings[extensionName]._regexAppliedPresetIndices = nextApplied;
+    }
+    if (save && (presetChanged || appliedChanged)) {
+      getContext().saveSettingsDebounced();
+    }
+    return {
+      presets,
+      existingIdSet,
+      changed: presetChanged || appliedChanged,
+    };
+  }
+
   function getRegexActivePresets() {
+    sanitizeRegexActivePresetState(true);
     return extension_settings[extensionName].regexActivePresets || [];
   }
   function saveRegexActivePreset(name, scriptIds) {
@@ -34554,11 +34793,22 @@ jQuery(async () => {
    * @param {boolean} enable - true=启用, false=禁用
    */
   function toggleRegexScriptActivation(scriptId, enable) {
+    const normalizedScriptId = String(scriptId || "").trim();
+    if (!normalizedScriptId) return false;
+    const existingIdSet = getExistingRegexScriptIdSet();
+    if (!existingIdSet.has(normalizedScriptId)) {
+      console.info(
+        `[CFM] 已跳过不存在的正则脚本激活切换：${normalizedScriptId}`,
+      );
+      return false;
+    }
     const globalScripts = extension_settings.regex ?? [];
-    const script = globalScripts.find((s) => s.id === scriptId);
+    const script = globalScripts.find((s) => s.id === normalizedScriptId);
     if (script) {
       script.disabled = !enable;
+      return true;
     }
+    return false;
   }
 
   /**
