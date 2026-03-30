@@ -10114,6 +10114,15 @@ jQuery(async () => {
       return text || fallback;
     };
 
+    const promptSourceLabels = {
+      charDescription: "Character Description",
+      charPersonality: "Character Personality",
+      scenario: "Character Scenario",
+      personaDescription: "Persona Description",
+      worldInfoBefore: "World Info (↑Char)",
+      worldInfoAfter: "World Info (↓Char)",
+    };
+
     const addPromptField = (
       identifier,
       labelHint,
@@ -10129,6 +10138,7 @@ jQuery(async () => {
         label: normalizeLabel(labelHint, keyId),
         value: getPromptText(promptValue),
         enabled: enabledHint !== false,
+        sourceLabel: promptSourceLabels[keyId] || "",
       });
     };
 
@@ -11549,6 +11559,185 @@ jQuery(async () => {
     }
   }
 
+  function findNativePresetPromptRow(promptKey, promptLabel = "") {
+    const normalizedPromptKey = String(promptKey || "").trim();
+    const normalizedPromptLabel = String(promptLabel || "").trim();
+    const rows = $("#completion_prompt_manager .completion_prompt_manager_prompt");
+    if (!rows.length) return $();
+
+    if (normalizedPromptKey) {
+      const keyMatch = rows
+        .filter(function () {
+          return (
+            String($(this).attr("data-pm-identifier") || "") ===
+            normalizedPromptKey
+          );
+        })
+        .first();
+      if (keyMatch.length) return keyMatch;
+    }
+
+    if (normalizedPromptLabel) {
+      const labelMatch = rows
+        .filter(function () {
+          const row = $(this);
+          const dataName = String(
+            row.find(".completion_prompt_manager_prompt_name").attr("data-pm-name") ||
+              "",
+          ).trim();
+          const visibleName = String(
+            row.find(".completion_prompt_manager_prompt_name").text() || "",
+          )
+            .replace(/\s+/g, " ")
+            .trim();
+          return (
+            dataName === normalizedPromptLabel ||
+            visibleName.includes(normalizedPromptLabel)
+          );
+        })
+        .first();
+      if (labelMatch.length) return labelMatch;
+    }
+
+    return $();
+  }
+
+  function findPresetSelectValueByName(pm, presetName) {
+    const normalizedPresetName = String(presetName || "").trim();
+    if (!pm?.select || !normalizedPresetName) return null;
+
+    const optionPools = [pm.select.find("option").toArray()];
+    if (Array.isArray(_presetDetachedOptions) && _presetDetachedOptions.length) {
+      optionPools.push(_presetDetachedOptions);
+    }
+
+    for (const pool of optionPools) {
+      for (const option of pool) {
+        const $option = $(option);
+        const optionText = String($option.text() || "").trim();
+        if (optionText === normalizedPresetName) {
+          const optionValue = $option.val();
+          if (optionValue !== undefined && optionValue !== null && optionValue !== "") {
+            return String(optionValue);
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async function openNativePresetPromptEditor(
+    presetName,
+    promptKey,
+    promptLabel = "",
+  ) {
+    const normalizedPresetName = String(presetName || "").trim();
+    const normalizedPromptKey = String(promptKey || "").trim();
+    const normalizedPromptLabel = String(promptLabel || "").trim();
+    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel))
+      return false;
+
+    const pm = getContext().getPresetManager();
+    if (!pm?.select) return false;
+
+    const bringNativePresetPromptPopupToFront = () => {
+      const popupEl = document.getElementById("completion_prompt_manager_popup");
+      if (!popupEl) return false;
+
+      const overlayEl = document.getElementById("cfm-overlay");
+      const overlayZ = Number.parseInt(
+        overlayEl ? window.getComputedStyle(overlayEl).zIndex : "",
+        10,
+      );
+      let nextZ = Number.isFinite(overlayZ) ? overlayZ + 2 : 10002;
+
+      const applyLayerStyle = (el, { position = null } = {}) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (position) {
+          el.style.setProperty("position", position, "important");
+        }
+        el.style.setProperty("z-index", String(nextZ), "important");
+        nextZ += 1;
+        return true;
+      };
+
+      const wrapperEl = popupEl.parentElement;
+      let applied = false;
+
+      if (wrapperEl instanceof HTMLElement) {
+        applied = applyLayerStyle(wrapperEl, { position: "relative" }) || applied;
+      }
+
+      popupEl.style.setProperty("position", "fixed", "important");
+      popupEl.style.setProperty("top", "50%", "important");
+      popupEl.style.setProperty("left", "50%", "important");
+      popupEl.style.setProperty("right", "auto", "important");
+      popupEl.style.setProperty("bottom", "auto", "important");
+      popupEl.style.setProperty("transform", "translate(-50%, -50%)", "important");
+      popupEl.style.setProperty("margin", "0", "important");
+      popupEl.style.setProperty("max-height", `${Math.max(240, window.innerHeight - 24)}px`, "important");
+      popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
+      applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
+
+      return applied;
+    };
+
+    const scheduleBringNativePresetPromptPopupToFront = () => {
+      bringNativePresetPromptPopupToFront();
+      let attempts = 0;
+      const maxAttempts = 20;
+      const timer = window.setInterval(() => {
+        attempts += 1;
+        bringNativePresetPromptPopupToFront();
+        if (attempts >= maxAttempts) {
+          window.clearInterval(timer);
+        }
+      }, 50);
+    };
+
+    const clickNativeEditButton = () => {
+      const row = findNativePresetPromptRow(
+        normalizedPromptKey,
+        normalizedPromptLabel,
+      );
+      const editButton = row.find(".prompt-manager-edit-action").first();
+      const nativeButton = editButton.get(0);
+      if (!nativeButton) return false;
+      nativeButton.click();
+      nativeButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      scheduleBringNativePresetPromptPopupToFront();
+      return true;
+    };
+
+    if (clickNativeEditButton()) {
+      return true;
+    }
+
+    const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
+    const currentValue = String(pm.select.val() || "");
+
+    if (targetValue && currentValue !== targetValue) {
+      pm.select.val(targetValue);
+      pm.select.trigger("change");
+      pm.select.trigger("input");
+    } else {
+      syncCurrentPresetSelection(pm, normalizedPresetName);
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < 2500) {
+      if (clickNativeEditButton()) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    return false;
+  }
+
   async function editPresetDetailField(presetName, fieldKey) {
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -11569,38 +11758,19 @@ jQuery(async () => {
       return;
     }
 
-    const value = await showPresetDetailFieldPopup(presetName, field);
-    if (value === null) return;
-
-    if (fieldKey.startsWith("prompts.")) {
-      const promptKey = fieldKey.slice("prompts.".length);
-      if (!presetData.prompts || typeof presetData.prompts !== "object")
-        presetData.prompts = {};
-      const existingPrompt = presetData.prompts[promptKey];
-      if (existingPrompt && typeof existingPrompt === "object") {
-        existingPrompt.value = value;
-      } else {
-        presetData.prompts[promptKey] = value;
-      }
-      if (!Array.isArray(presetData.prompt_order)) presetData.prompt_order = [];
-      if (
-        !presetData.prompt_order.some((item) => {
-          return getPresetPromptOrderIdentifier(item) === promptKey;
-        })
-      ) {
-        presetData.prompt_order.push({ identifier: promptKey, enabled: true });
-      }
-    } else {
-      presetData[fieldKey] = value;
+    if (!String(fieldKey || "").startsWith("prompts.")) {
+      toastr.error("仅支持通过原生界面编辑预设条目");
+      return;
     }
 
-    try {
-      await pm.savePreset(presetName, presetData);
-      toastr.success(`已更新预设条目「${field.label}」`);
-      refreshPresetPanelView();
-    } catch (error) {
-      console.error("[CFM] 保存预设条目失败:", error);
-      toastr.error(`保存失败: ${error.message || error}`);
+    const promptKey = fieldKey.slice("prompts.".length);
+    const opened = await openNativePresetPromptEditor(
+      presetName,
+      promptKey,
+      field.label,
+    );
+    if (!opened) {
+      toastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
     }
   }
 
@@ -12197,7 +12367,10 @@ jQuery(async () => {
     } else {
       for (const field of fields) {
         const fieldKey = String(field.key || "");
-        const hasValue = !!String(field.value || "").trim();
+        const sourceLabel = String(field.sourceLabel || "").trim();
+        const sourceMetaHtml = sourceLabel
+          ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
+          : "";
         const isBatchSel =
           isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
         const row = $(`
@@ -12212,7 +12385,7 @@ jQuery(async () => {
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>
               </div>
             </div>
-            <div class="cfm-persona-detail-value cfm-preset-detail-value">${hasValue ? '<span class="cfm-preset-detail-filled">已填写</span>' : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+            ${sourceMetaHtml}
           </div>
         `);
 
