@@ -11635,11 +11635,109 @@ jQuery(async () => {
     const normalizedPresetName = String(presetName || "").trim();
     const normalizedPromptKey = String(promptKey || "").trim();
     const normalizedPromptLabel = String(promptLabel || "").trim();
-    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel))
+    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel)) {
       return false;
+    }
 
     const pm = getContext().getPresetManager();
     if (!pm?.select) return false;
+
+    const buildEditablePrompt = (sourceValue) => {
+      const draft =
+        sourceValue && typeof sourceValue === "object"
+          ? structuredClone(sourceValue)
+          : { content: typeof sourceValue === "string" ? sourceValue : "" };
+
+      draft.identifier = normalizedPromptKey;
+      draft.name = String(
+        draft.name ?? normalizedPromptLabel ?? normalizedPromptKey,
+      );
+      draft.role = String(draft.role || "system");
+      draft.content = String(
+        draft.content ?? draft.value ?? draft.text ?? "",
+      );
+      draft.injection_position = Number(draft.injection_position ?? 0);
+      draft.injection_depth = Number(draft.injection_depth ?? 4);
+      draft.injection_order = Number(draft.injection_order ?? 100);
+      draft.injection_trigger = Array.isArray(draft.injection_trigger)
+        ? [...draft.injection_trigger]
+        : [];
+      draft.forbid_overrides = Boolean(draft.forbid_overrides);
+      draft.system_prompt = Boolean(draft.system_prompt);
+      draft.marker = Boolean(draft.marker);
+      return draft;
+    };
+
+    const writeEditedPromptToPresetData = (targetPresetData, editedPrompt) => {
+      if (!targetPresetData.prompts || typeof targetPresetData.prompts !== "object") {
+        targetPresetData.prompts = {};
+      }
+
+      const currentValue = targetPresetData.prompts[normalizedPromptKey];
+      const baseValue =
+        currentValue && typeof currentValue === "object"
+          ? structuredClone(currentValue)
+          : {};
+
+      const nextValue = {
+        ...baseValue,
+        ...editedPrompt,
+        identifier: normalizedPromptKey,
+        name: String(
+          editedPrompt?.name ??
+            baseValue.name ??
+            normalizedPromptLabel ??
+            normalizedPromptKey,
+        ),
+        role: String(editedPrompt?.role || baseValue.role || "system"),
+        content: String(editedPrompt?.content ?? ""),
+        injection_position: Number(editedPrompt?.injection_position ?? 0),
+        injection_depth: Number(editedPrompt?.injection_depth ?? 4),
+        injection_order: Number(editedPrompt?.injection_order ?? 100),
+        injection_trigger: Array.isArray(editedPrompt?.injection_trigger)
+          ? [...editedPrompt.injection_trigger]
+          : [],
+        forbid_overrides: Boolean(editedPrompt?.forbid_overrides),
+        system_prompt: Boolean(editedPrompt?.system_prompt),
+        marker: Boolean(editedPrompt?.marker),
+      };
+
+      targetPresetData.prompts[normalizedPromptKey] = nextValue;
+    };
+
+    const applyResetPromptDefaults = (sourceValue) => {
+      const resetDraft = buildEditablePrompt(sourceValue);
+      switch (normalizedPromptKey) {
+        case "main":
+          resetDraft.name = "Main Prompt";
+          resetDraft.content = String(pm.configuration?.defaultPrompts?.main ?? "");
+          resetDraft.forbid_overrides = false;
+          break;
+        case "nsfw":
+          resetDraft.name = "Nsfw Prompt";
+          resetDraft.content = String(pm.configuration?.defaultPrompts?.nsfw ?? "");
+          break;
+        case "jailbreak":
+          resetDraft.name = "Jailbreak Prompt";
+          resetDraft.content = String(
+            pm.configuration?.defaultPrompts?.jailbreak ?? "",
+          );
+          resetDraft.forbid_overrides = false;
+          break;
+        case "enhanceDefinitions":
+          resetDraft.name = "Enhance Definitions";
+          resetDraft.content = String(
+            pm.configuration?.defaultPrompts?.enhanceDefinitions ?? "",
+          );
+          break;
+        default:
+          return resetDraft;
+      }
+
+      resetDraft.role = "system";
+      resetDraft.injection_trigger = [];
+      return resetDraft;
+    };
 
     const bringNativePresetPromptPopupToFront = () => {
       const popupEl = document.getElementById("completion_prompt_manager_popup");
@@ -11676,8 +11774,12 @@ jQuery(async () => {
       popupEl.style.setProperty("bottom", "auto", "important");
       popupEl.style.setProperty("transform", "translate(-50%, -50%)", "important");
       popupEl.style.setProperty("margin", "0", "important");
-      popupEl.style.setProperty("max-height", `${Math.max(240, window.innerHeight - 24)}px`, "important");
-      popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
+      popupEl.style.setProperty(
+        "max-height",
+        `${Math.max(240, window.innerHeight - 24)}px`,
+        "important",
+      );
+      popupEl.style.setProperty("max-width", "calc(100vw - 32px)", "important");
       applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
 
       return applied;
@@ -11712,30 +11814,172 @@ jQuery(async () => {
       return true;
     };
 
-    if (clickNativeEditButton()) {
-      return true;
-    }
-
-    const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
-    const currentValue = String(pm.select.val() || "");
-
-    if (targetValue && currentValue !== targetValue) {
-      pm.select.val(targetValue);
-      pm.select.trigger("change");
-      pm.select.trigger("input");
-    } else {
-      syncCurrentPresetSelection(pm, normalizedPresetName);
-    }
-
-    const startTime = Date.now();
-    while (Date.now() - startTime < 2500) {
+    const currentPresetName = String(getCurrentPresetName() || "").trim();
+    if (currentPresetName === normalizedPresetName) {
       if (clickNativeEditButton()) {
         return true;
       }
-      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      syncCurrentPresetSelection(pm, normalizedPresetName);
+      const startTime = Date.now();
+      while (Date.now() - startTime < 2500) {
+        if (clickNativeEditButton()) {
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      return false;
     }
 
-    return false;
+    const presetData = getPresetDataForDetail(pm, normalizedPresetName);
+    const promptMap =
+      presetData?.prompts && typeof presetData.prompts === "object"
+        ? presetData.prompts
+        : null;
+    if (!promptMap || !(normalizedPromptKey in promptMap)) {
+      return false;
+    }
+
+    if (typeof pm.loadPromptIntoEditForm !== "function") return false;
+    if (typeof pm.showPopup !== "function") return false;
+    if (typeof pm.updatePromptWithPromptEditForm !== "function") return false;
+
+    const prefix = String(pm.configuration?.prefix || "completion_");
+    const popupEl = document.getElementById(`${prefix}prompt_manager_popup`);
+    const saveButton = document.getElementById(
+      `${prefix}prompt_manager_popup_entry_form_save`,
+    );
+    const resetButton = document.getElementById(
+      `${prefix}prompt_manager_popup_entry_form_reset`,
+    );
+    const formCloseButton = document.getElementById(
+      `${prefix}prompt_manager_popup_entry_form_close`,
+    );
+    const popupCloseButton = document.getElementById(
+      `${prefix}prompt_manager_popup_close_button`,
+    );
+    if (!(popupEl instanceof HTMLElement)) return false;
+    if (!(saveButton instanceof HTMLElement)) return false;
+
+    if (typeof openNativePresetPromptEditor._cleanupRemoteSession === "function") {
+      try {
+        openNativePresetPromptEditor._cleanupRemoteSession();
+      } catch (error) {
+        console.warn("[CFM] 清理旧的预设条目远程编辑会话失败:", error);
+      }
+    }
+
+    let sessionActive = true;
+    let cleanupTimer = null;
+
+    const cleanup = () => {
+      if (!sessionActive) return;
+      sessionActive = false;
+      saveButton.removeEventListener("click", handleSaveCapture, true);
+      resetButton?.removeEventListener("click", handleResetCapture, true);
+      formCloseButton?.removeEventListener("click", handleCloseCapture, true);
+      popupCloseButton?.removeEventListener("click", handleCloseCapture, true);
+      if (cleanupTimer !== null) {
+        window.clearInterval(cleanupTimer);
+        cleanupTimer = null;
+      }
+      if (openNativePresetPromptEditor._cleanupRemoteSession === cleanup) {
+        openNativePresetPromptEditor._cleanupRemoteSession = null;
+      }
+    };
+
+    const closeAndClearPopup = () => {
+      if (typeof pm.hidePopup === "function") pm.hidePopup();
+      if (typeof pm.clearEditForm === "function") pm.clearEditForm();
+      if (typeof pm.clearInspectForm === "function") pm.clearInspectForm();
+    };
+
+    const handleSaveCapture = async (event) => {
+      if (!sessionActive) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      try {
+        const latestPresetData = getPresetDataForDetail(pm, normalizedPresetName);
+        if (!latestPresetData) {
+          throw new Error(`找不到预设「${normalizedPresetName}」的数据`);
+        }
+        if (
+          !latestPresetData.prompts ||
+          typeof latestPresetData.prompts !== "object" ||
+          !(normalizedPromptKey in latestPresetData.prompts)
+        ) {
+          throw new Error(`找不到预设条目「${normalizedPromptLabel || normalizedPromptKey}」`);
+        }
+
+        const editablePrompt = buildEditablePrompt(
+          latestPresetData.prompts[normalizedPromptKey],
+        );
+        pm.updatePromptWithPromptEditForm(editablePrompt);
+        writeEditedPromptToPresetData(latestPresetData, editablePrompt);
+        await pm.savePreset(normalizedPresetName, latestPresetData);
+        if (String(getCurrentPresetName() || "").trim() === normalizedPresetName) {
+          syncCurrentPresetSelection(pm, normalizedPresetName);
+        }
+        cleanup();
+        closeAndClearPopup();
+        refreshPresetPanelView();
+      } catch (error) {
+        console.error("[CFM] 保存其它预设条目失败:", error);
+        toastr.error(`保存失败: ${error.message || error}`);
+      }
+    };
+
+    const handleResetCapture = (event) => {
+      if (!sessionActive) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      try {
+        const latestPresetData = getPresetDataForDetail(pm, normalizedPresetName);
+        if (!latestPresetData?.prompts) return;
+        const resetDraft = applyResetPromptDefaults(
+          latestPresetData.prompts[normalizedPromptKey],
+        );
+        pm.loadPromptIntoEditForm(resetDraft);
+        scheduleBringNativePresetPromptPopupToFront();
+      } catch (error) {
+        console.error("[CFM] 重置其它预设条目失败:", error);
+        toastr.error(`重置失败: ${error.message || error}`);
+      }
+    };
+
+    const handleCloseCapture = () => {
+      cleanup();
+    };
+
+    saveButton.addEventListener("click", handleSaveCapture, true);
+    resetButton?.addEventListener("click", handleResetCapture, true);
+    formCloseButton?.addEventListener("click", handleCloseCapture, true);
+    popupCloseButton?.addEventListener("click", handleCloseCapture, true);
+
+    cleanupTimer = window.setInterval(() => {
+      if (!sessionActive) return;
+      const computedStyle = window.getComputedStyle(popupEl);
+      const isOpen =
+        popupEl.classList.contains("openDrawer") ||
+        computedStyle.display !== "none";
+      if (!isOpen) {
+        cleanup();
+      }
+    }, 150);
+
+    openNativePresetPromptEditor._cleanupRemoteSession = cleanup;
+
+    if (typeof pm.clearEditForm === "function") pm.clearEditForm();
+    if (typeof pm.clearInspectForm === "function") pm.clearInspectForm();
+    pm.loadPromptIntoEditForm(buildEditablePrompt(promptMap[normalizedPromptKey]));
+    pm.showPopup();
+    scheduleBringNativePresetPromptPopupToFront();
+    return true;
   }
 
   async function editPresetDetailField(presetName, fieldKey) {
