@@ -11635,103 +11635,15 @@ jQuery(async () => {
     const normalizedPresetName = String(presetName || "").trim();
     const normalizedPromptKey = String(promptKey || "").trim();
     const normalizedPromptLabel = String(promptLabel || "").trim();
-    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel)) {
+    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel))
       return false;
-    }
 
     const pm = getContext().getPresetManager();
-    if (
-      !pm ||
-      typeof pm.loadPromptIntoEditForm !== "function" ||
-      typeof pm.showPopup !== "function" ||
-      typeof pm.updatePromptWithPromptEditForm !== "function" ||
-      typeof pm.savePreset !== "function"
-    ) {
-      return false;
-    }
-
-    if (typeof openNativePresetPromptEditor._cleanup === "function") {
-      openNativePresetPromptEditor._cleanup();
-      openNativePresetPromptEditor._cleanup = null;
-    }
-
-    const popupPrefix = String(pm.configuration?.prefix || "completion_");
-    const popupId = `${popupPrefix}prompt_manager_popup`;
-    const popupEl = document.getElementById(popupId);
-    const popupSaveButton = document.getElementById(
-      `${popupPrefix}prompt_manager_popup_entry_form_save`,
-    );
-    const popupResetButton = document.getElementById(
-      `${popupPrefix}prompt_manager_popup_entry_form_reset`,
-    );
-    const popupCloseButtons = [
-      document.getElementById(
-        `${popupPrefix}prompt_manager_popup_entry_form_close`,
-      ),
-      document.getElementById(`${popupPrefix}prompt_manager_popup_close_button`),
-    ].filter((el) => el instanceof HTMLElement);
-
-    const applyPromptLabel = (target, nextLabel) => {
-      if (!target || typeof target !== "object") return;
-      const normalizedLabel = String(nextLabel || "").trim() || normalizedPromptKey;
-      if (
-        Object.prototype.hasOwnProperty.call(target, "name") ||
-        (!Object.prototype.hasOwnProperty.call(target, "title") &&
-          !Object.prototype.hasOwnProperty.call(target, "label"))
-      ) {
-        target.name = normalizedLabel;
-      } else if (Object.prototype.hasOwnProperty.call(target, "title")) {
-        target.title = normalizedLabel;
-      } else if (Object.prototype.hasOwnProperty.call(target, "label")) {
-        target.label = normalizedLabel;
-      }
-    };
-
-    const buildPromptDraft = () => {
-      const presetData = getPresetDataForDetail(pm, normalizedPresetName);
-      if (!presetData) return null;
-      const promptMap =
-        presetData.prompts && typeof presetData.prompts === "object"
-          ? presetData.prompts
-          : {};
-      const rawPromptValue = Object.prototype.hasOwnProperty.call(
-        promptMap,
-        normalizedPromptKey,
-      )
-        ? promptMap[normalizedPromptKey]
-        : null;
-
-      let draftPrompt;
-      if (rawPromptValue && typeof rawPromptValue === "object") {
-        draftPrompt = structuredClone(rawPromptValue);
-      } else {
-        draftPrompt = {
-          identifier: normalizedPromptKey,
-          name: normalizedPromptLabel || normalizedPromptKey,
-          role: "system",
-          content: typeof rawPromptValue === "string" ? rawPromptValue : "",
-          injection_position: 0,
-          injection_depth: 4,
-          injection_order: 100,
-          injection_trigger: [],
-          forbid_overrides: false,
-        };
-      }
-
-      draftPrompt.identifier = normalizedPromptKey;
-      if (!String(draftPrompt.name || "").trim()) {
-        draftPrompt.name = normalizedPromptLabel || normalizedPromptKey;
-      }
-      if (!String(draftPrompt.role || "").trim()) {
-        draftPrompt.role = "system";
-      }
-
-      return draftPrompt;
-    };
+    if (!pm?.select) return false;
 
     const bringNativePresetPromptPopupToFront = () => {
-      const popup = document.getElementById(popupId);
-      if (!(popup instanceof HTMLElement)) return false;
+      const popupEl = document.getElementById("completion_prompt_manager_popup");
+      if (!popupEl) return false;
 
       const overlayEl = document.getElementById("cfm-overlay");
       const overlayZ = Number.parseInt(
@@ -11750,27 +11662,23 @@ jQuery(async () => {
         return true;
       };
 
-      const wrapperEl = popup.parentElement;
+      const wrapperEl = popupEl.parentElement;
       let applied = false;
 
       if (wrapperEl instanceof HTMLElement) {
         applied = applyLayerStyle(wrapperEl, { position: "relative" }) || applied;
       }
 
-      popup.style.setProperty("position", "fixed", "important");
-      popup.style.setProperty("top", "50%", "important");
-      popup.style.setProperty("left", "50%", "important");
-      popup.style.setProperty("right", "auto", "important");
-      popup.style.setProperty("bottom", "auto", "important");
-      popup.style.setProperty("transform", "translate(-50%, -50%)", "important");
-      popup.style.setProperty("margin", "0", "important");
-      popup.style.setProperty(
-        "max-height",
-        `${Math.max(240, window.innerHeight - 24)}px`,
-        "important",
-      );
-      popup.style.setProperty("max-width", "calc(100vw - 32px)", "important");
-      applied = applyLayerStyle(popup, { position: "fixed" }) || applied;
+      popupEl.style.setProperty("position", "fixed", "important");
+      popupEl.style.setProperty("top", "50%", "important");
+      popupEl.style.setProperty("left", "50%", "important");
+      popupEl.style.setProperty("right", "auto", "important");
+      popupEl.style.setProperty("bottom", "auto", "important");
+      popupEl.style.setProperty("transform", "translate(-50%, -50%)", "important");
+      popupEl.style.setProperty("margin", "0", "important");
+      popupEl.style.setProperty("max-height", `${Math.max(240, window.innerHeight - 24)}px`, "important");
+      popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
+      applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
 
       return applied;
     };
@@ -11804,168 +11712,30 @@ jQuery(async () => {
       return true;
     };
 
-    const persistPromptToPreset = async () => {
-      const presetData = getPresetDataForDetail(pm, normalizedPresetName);
-      if (!presetData) {
-        throw new Error(`找不到预设「${normalizedPresetName}」的数据`);
-      }
-
-      if (!presetData.prompts || typeof presetData.prompts !== "object") {
-        presetData.prompts = {};
-      }
-
-      const currentPromptValue = Object.prototype.hasOwnProperty.call(
-        presetData.prompts,
-        normalizedPromptKey,
-      )
-        ? presetData.prompts[normalizedPromptKey]
-        : null;
-
-      const updatedPrompt =
-        currentPromptValue && typeof currentPromptValue === "object"
-          ? structuredClone(currentPromptValue)
-          : {
-              identifier: normalizedPromptKey,
-              name: normalizedPromptLabel || normalizedPromptKey,
-              role: "system",
-              content:
-                typeof currentPromptValue === "string" ? currentPromptValue : "",
-              injection_position: 0,
-              injection_depth: 4,
-              injection_order: 100,
-              injection_trigger: [],
-              forbid_overrides: false,
-            };
-
-      pm.updatePromptWithPromptEditForm(updatedPrompt);
-      updatedPrompt.identifier = normalizedPromptKey;
-      if (!String(updatedPrompt.role || "").trim()) {
-        updatedPrompt.role = "system";
-      }
-      const finalLabel =
-        String(updatedPrompt.name || "").trim() ||
-        normalizedPromptLabel ||
-        normalizedPromptKey;
-      applyPromptLabel(updatedPrompt, finalLabel);
-
-      presetData.prompts[normalizedPromptKey] = updatedPrompt;
-
-      if (Array.isArray(presetData.prompt_order)) {
-        for (const item of presetData.prompt_order) {
-          if (!item || typeof item !== "object") continue;
-          const identifier =
-            item.identifier ?? item.key ?? item.prompt ?? item.name ?? "";
-          if (String(identifier) !== normalizedPromptKey) continue;
-          applyPromptLabel(item, finalLabel);
-          break;
-        }
-      }
-
-      await pm.savePreset(normalizedPresetName, presetData);
-      syncCurrentPresetSelection(pm, normalizedPresetName);
-      refreshPresetPanelView();
-    };
-
-    const openPromptEditorWithoutSwitchingPreset = () => {
-      const draftPrompt = buildPromptDraft();
-      if (!draftPrompt || !(popupSaveButton instanceof HTMLElement)) {
-        return false;
-      }
-
-      pm.clearEditForm?.();
-      pm.clearInspectForm?.();
-      pm.loadPromptIntoEditForm(draftPrompt);
-
-      const originalResetDisplay =
-        popupResetButton instanceof HTMLElement ? popupResetButton.style.display : null;
-      if (popupResetButton instanceof HTMLElement) {
-        popupResetButton.style.display = "none";
-      }
-
-      let saveInFlight = false;
-      let cleanupTimer = null;
-
-      const cleanupCustomSession = () => {
-        popupSaveButton.removeEventListener("click", handleSaveOverride, true);
-        for (const button of popupCloseButtons) {
-          button.removeEventListener("click", handleCloseCleanup, true);
-        }
-        if (cleanupTimer !== null) {
-          window.clearInterval(cleanupTimer);
-          cleanupTimer = null;
-        }
-        if (popupResetButton instanceof HTMLElement && originalResetDisplay !== null) {
-          popupResetButton.style.display = originalResetDisplay;
-        }
-        if (popupSaveButton instanceof HTMLButtonElement) {
-          popupSaveButton.disabled = false;
-        }
-        if (openNativePresetPromptEditor._cleanup === cleanupCustomSession) {
-          openNativePresetPromptEditor._cleanup = null;
-        }
-      };
-
-      const handleCloseCleanup = () => {
-        window.setTimeout(() => {
-          cleanupCustomSession();
-        }, 0);
-      };
-
-      const handleSaveOverride = async (event) => {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (saveInFlight) return;
-        saveInFlight = true;
-
-        if (popupSaveButton instanceof HTMLButtonElement) {
-          popupSaveButton.disabled = true;
-        }
-
-        try {
-          await persistPromptToPreset();
-          pm.hidePopup?.();
-          pm.clearEditForm?.();
-          pm.clearInspectForm?.();
-        } catch (error) {
-          console.error("[CFM] 保存非当前预设条目失败:", error);
-          toastr.error(`保存失败: ${error.message || error}`);
-        } finally {
-          saveInFlight = false;
-          cleanupCustomSession();
-        }
-      };
-
-      popupSaveButton.addEventListener("click", handleSaveOverride, true);
-      for (const button of popupCloseButtons) {
-        button.addEventListener("click", handleCloseCleanup, true);
-      }
-      cleanupTimer = window.setInterval(() => {
-        const popup = document.getElementById(popupId);
-        if (!(popup instanceof HTMLElement)) {
-          cleanupCustomSession();
-          return;
-        }
-        const isHidden =
-          popup.classList.contains("ui-draggable") && !popup.classList.contains("openDrawer")
-            ? true
-            : window.getComputedStyle(popup).display === "none";
-        if (isHidden) {
-          cleanupCustomSession();
-        }
-      }, 150);
-
-      openNativePresetPromptEditor._cleanup = cleanupCustomSession;
-      pm.showPopup();
-      scheduleBringNativePresetPromptPopupToFront();
-      return true;
-    };
-
-    const currentPresetName = String(getCurrentPresetName() || "").trim();
-    if (currentPresetName === normalizedPresetName && clickNativeEditButton()) {
+    if (clickNativeEditButton()) {
       return true;
     }
 
-    return openPromptEditorWithoutSwitchingPreset();
+    const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
+    const currentValue = String(pm.select.val() || "");
+
+    if (targetValue && currentValue !== targetValue) {
+      pm.select.val(targetValue);
+      pm.select.trigger("change");
+      pm.select.trigger("input");
+    } else {
+      syncCurrentPresetSelection(pm, normalizedPresetName);
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < 2500) {
+      if (clickNativeEditButton()) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    return false;
   }
 
   async function editPresetDetailField(presetName, fieldKey) {
