@@ -10086,28 +10086,288 @@ jQuery(async () => {
     return getPresetDataForRename(pm, name);
   }
 
+  const PRESET_PROMPT_ORDER_DUMMY_ID = 100001;
+
+  function getPresetPromptIdentifier(prompt) {
+    if (!prompt || typeof prompt !== "object") return "";
+    return String(
+      prompt.identifier ?? prompt.id ?? prompt.key ?? prompt.prompt ?? "",
+    ).trim();
+  }
+
+  function getPresetPromptText(promptValue) {
+    if (typeof promptValue === "string") return promptValue;
+    if (promptValue && typeof promptValue === "object") {
+      return String(
+        promptValue.value ?? promptValue.content ?? promptValue.text ?? "",
+      );
+    }
+    return "";
+  }
+
+  function getPresetPromptLabel(promptValue, fallback = "") {
+    if (promptValue && typeof promptValue === "object") {
+      const label = String(
+        promptValue.name ??
+          promptValue.title ??
+          promptValue.label ??
+          fallback ??
+          "",
+      ).trim();
+      if (label) return label;
+    }
+    return String(fallback ?? "").trim();
+  }
+
+  function ensurePresetPromptList(presetData) {
+    if (!presetData || typeof presetData !== "object") return [];
+
+    const existingPrompts = presetData.prompts;
+    let normalizedPrompts = [];
+
+    if (Array.isArray(existingPrompts)) {
+      normalizedPrompts = existingPrompts
+        .filter((prompt) => prompt !== null && prompt !== undefined)
+        .map((prompt, index) => {
+          if (prompt && typeof prompt === "object") {
+            const identifier =
+              getPresetPromptIdentifier(prompt) || `prompt_${index + 1}`;
+            prompt.identifier = identifier;
+            return prompt;
+          }
+          return {
+            identifier: `prompt_${index + 1}`,
+            content: String(prompt ?? ""),
+          };
+        });
+    } else if (existingPrompts && typeof existingPrompts === "object") {
+      normalizedPrompts = Object.entries(existingPrompts)
+        .map(([identifier, prompt]) => {
+          const normalizedId = String(identifier || "").trim();
+          if (!normalizedId) return null;
+          if (prompt && typeof prompt === "object") {
+            prompt.identifier = getPresetPromptIdentifier(prompt) || normalizedId;
+            return prompt;
+          }
+          return {
+            identifier: normalizedId,
+            content: String(prompt ?? ""),
+          };
+        })
+        .filter(Boolean);
+    }
+
+    presetData.prompts = normalizedPrompts;
+    return presetData.prompts;
+  }
+
+  function normalizePresetPromptOrderItem(item) {
+    if (typeof item === "string") {
+      const identifier = String(item || "").trim();
+      return identifier ? { identifier } : null;
+    }
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const identifier = getPresetPromptOrderIdentifier(item);
+    if (!identifier) return null;
+    item.identifier = identifier;
+    return item;
+  }
+
+  function sanitizePresetPromptOrderEntries(
+    orderEntries,
+    validIdentifierSet = null,
+  ) {
+    const normalizedEntries = [];
+    const seen = new Set();
+
+    for (const item of Array.isArray(orderEntries) ? orderEntries : []) {
+      const normalizedItem = normalizePresetPromptOrderItem(item);
+      if (!normalizedItem) continue;
+      const identifier = getPresetPromptOrderIdentifier(normalizedItem);
+      if (!identifier) continue;
+      if (
+        validIdentifierSet instanceof Set &&
+        validIdentifierSet.size > 0 &&
+        !validIdentifierSet.has(identifier)
+      ) {
+        continue;
+      }
+      if (seen.has(identifier)) continue;
+      seen.add(identifier);
+      normalizedEntries.push(normalizedItem);
+    }
+
+    return normalizedEntries;
+  }
+
+  function ensurePresetPromptOrderContainers(presetData) {
+    if (!presetData || typeof presetData !== "object") return [];
+
+    const validIdentifierSet = new Set(
+      ensurePresetPromptList(presetData)
+        .map((prompt) => getPresetPromptIdentifier(prompt))
+        .filter(Boolean),
+    );
+
+    const existingPromptOrder = presetData.prompt_order;
+    if (!Array.isArray(existingPromptOrder)) {
+      presetData.prompt_order = [];
+      return presetData.prompt_order;
+    }
+
+    const hasContainerShape = existingPromptOrder.some(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        Array.isArray(item.order),
+    );
+
+    if (!hasContainerShape) {
+      const flatOrder = sanitizePresetPromptOrderEntries(
+        existingPromptOrder,
+        validIdentifierSet,
+      );
+      presetData.prompt_order = flatOrder.length
+        ? [
+            {
+              character_id: PRESET_PROMPT_ORDER_DUMMY_ID,
+              order: flatOrder,
+            },
+          ]
+        : [];
+      return presetData.prompt_order;
+    }
+
+    presetData.prompt_order = existingPromptOrder
+      .filter(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          Array.isArray(item.order),
+      )
+      .map((item) => {
+        item.order = sanitizePresetPromptOrderEntries(
+          item.order,
+          validIdentifierSet,
+        );
+        return item;
+      });
+
+    return presetData.prompt_order;
+  }
+
+  function sanitizePresetPromptStructure(presetData) {
+    if (!presetData || typeof presetData !== "object") return presetData;
+    ensurePresetPromptList(presetData);
+    ensurePresetPromptOrderContainers(presetData);
+    return presetData;
+  }
+
+  function getAllPresetPromptOrderContainers(presetData, create = false) {
+    const containers = ensurePresetPromptOrderContainers(presetData);
+    if (!containers.length && create) {
+      containers.push({
+        character_id: PRESET_PROMPT_ORDER_DUMMY_ID,
+        order: [],
+      });
+    }
+    return containers;
+  }
+
+  function getPresetPromptOrderContainer(presetData, create = false) {
+    const containers = getAllPresetPromptOrderContainers(presetData, create);
+    let container = containers.find(
+      (item) =>
+        String(item?.character_id ?? "") ===
+        String(PRESET_PROMPT_ORDER_DUMMY_ID),
+    );
+
+    if (!container && containers.length > 0) {
+      container = containers[0];
+    }
+
+    if (container && !Array.isArray(container.order)) {
+      container.order = [];
+    }
+
+    return container || null;
+  }
+
+  function getPresetPromptOrderEntries(presetData, create = false) {
+    return getPresetPromptOrderContainer(presetData, create)?.order ?? [];
+  }
+
+  function getAllPresetPromptOrderEntries(presetData) {
+    return getAllPresetPromptOrderContainers(presetData).flatMap((container) =>
+      Array.isArray(container?.order) ? container.order : [],
+    );
+  }
+
+  function findPresetPromptOrderEntryLocation(
+    presetData,
+    promptKey,
+    create = false,
+  ) {
+    const normalizedKey = String(promptKey || "").trim();
+    if (!normalizedKey) return null;
+
+    for (const container of getAllPresetPromptOrderContainers(presetData, create)) {
+      const order = Array.isArray(container?.order) ? container.order : [];
+      const index = order.findIndex(
+        (item) => getPresetPromptOrderIdentifier(item) === normalizedKey,
+      );
+      if (index !== -1) {
+        return {
+          container,
+          order,
+          index,
+          item: order[index],
+        };
+      }
+    }
+
+    if (!create) return null;
+    const fallbackContainer = getPresetPromptOrderContainer(presetData, true);
+    if (!fallbackContainer) return null;
+    return {
+      container: fallbackContainer,
+      order: fallbackContainer.order,
+      index: -1,
+      item: null,
+    };
+  }
+
+  function getPresetPromptMap(presetData) {
+    const promptMap = new Map();
+    for (const prompt of ensurePresetPromptList(presetData)) {
+      const identifier = getPresetPromptIdentifier(prompt);
+      if (!identifier) continue;
+      promptMap.set(identifier, prompt);
+    }
+    return promptMap;
+  }
+
+  function getPresetPromptByKey(presetData, promptKey) {
+    return getPresetPromptMap(presetData).get(String(promptKey || "")) ?? null;
+  }
+
+  function getPresetPromptIndexByKey(presetData, promptKey) {
+    const normalizedKey = String(promptKey || "").trim();
+    if (!normalizedKey) return -1;
+    return ensurePresetPromptList(presetData).findIndex(
+      (prompt) => getPresetPromptIdentifier(prompt) === normalizedKey,
+    );
+  }
+
   function getPresetDetailFields(preset) {
     if (!preset || typeof preset !== "object") return [];
 
-    const promptMap =
-      preset.prompts && typeof preset.prompts === "object"
-        ? preset.prompts
-        : {};
-    const promptOrder = Array.isArray(preset.prompt_order)
-      ? preset.prompt_order
-      : [];
+    const promptMap = getPresetPromptMap(preset);
+    const promptOrder = getAllPresetPromptOrderEntries(preset);
     const fields = [];
     const seen = new Set();
-
-    const getPromptText = (promptValue) => {
-      if (typeof promptValue === "string") return promptValue;
-      if (promptValue && typeof promptValue === "object") {
-        return String(
-          promptValue.value ?? promptValue.content ?? promptValue.text ?? "",
-        );
-      }
-      return "";
-    };
 
     const normalizeLabel = (label, fallback) => {
       const text = String(label ?? "").trim();
@@ -10136,80 +10396,42 @@ jQuery(async () => {
       fields.push({
         key: `prompts.${keyId}`,
         label: normalizeLabel(labelHint, keyId),
-        value: getPromptText(promptValue),
+        value: getPresetPromptText(promptValue),
         enabled: enabledHint !== false,
         sourceLabel: promptSourceLabels[keyId] || "",
       });
     };
 
-    // 仅显示“预设条目（prompts）”，不包含角色卡字段（描述/场景/性格等）
     for (const item of promptOrder) {
-      if (item == null) continue;
+      const identifier = getPresetPromptOrderIdentifier(item);
+      if (!identifier) continue;
 
-      // prompt_order 可能是字符串数组，也可能是对象数组
-      if (typeof item === "string") {
-        const promptValue = promptMap[item];
-        const promptLabel =
-          promptValue && typeof promptValue === "object"
-            ? (promptValue.name ??
-              promptValue.title ??
-              promptValue.label ??
-              item)
-            : item;
-        const promptEnabled =
-          promptValue &&
-          typeof promptValue === "object" &&
-          typeof promptValue.enabled === "boolean"
-            ? promptValue.enabled
-            : true;
-        addPromptField(item, promptLabel, promptValue, promptEnabled);
-        continue;
-      }
-
-      if (typeof item !== "object") continue;
-
-      const identifier =
-        item.identifier ?? item.key ?? item.prompt ?? item.name;
-      if (identifier === null || identifier === undefined || identifier === "")
-        continue;
-
-      const promptValue = promptMap[String(identifier)];
-      const promptLabel =
-        item.name ??
-        item.title ??
-        item.label ??
-        (promptValue && typeof promptValue === "object"
-          ? (promptValue.name ?? promptValue.title ?? promptValue.label)
-          : null) ??
-        String(identifier);
+      const promptValue = promptMap.get(identifier) ?? null;
+      const promptLabel = getPresetPromptLabel(
+        promptValue,
+        item?.name ?? item?.title ?? item?.label ?? identifier,
+      );
       const promptEnabled =
-        typeof item.enabled === "boolean"
+        typeof item?.enabled === "boolean"
           ? item.enabled
-          : promptValue &&
-              typeof promptValue === "object" &&
-              typeof promptValue.enabled === "boolean"
+          : typeof promptValue?.enabled === "boolean"
             ? promptValue.enabled
             : true;
 
       addPromptField(identifier, promptLabel, promptValue, promptEnabled);
     }
 
-    // 补充 prompt_order 未覆盖的 prompts 条目
-    for (const [identifier, promptValue] of Object.entries(promptMap)) {
-      const promptLabel =
-        promptValue && typeof promptValue === "object"
-          ? (promptValue.name ??
-            promptValue.title ??
-            promptValue.label ??
-            identifier)
-          : identifier;
+    for (const promptValue of promptMap.values()) {
+      const identifier = getPresetPromptIdentifier(promptValue);
+      if (!identifier) continue;
       const promptEnabled =
-        promptValue &&
-        typeof promptValue === "object" &&
-        typeof promptValue.enabled === "boolean"
-          ? promptValue.enabled
-          : true;
-      addPromptField(identifier, promptLabel, promptValue, promptEnabled);
+        typeof promptValue?.enabled === "boolean" ? promptValue.enabled : true;
+      addPromptField(
+        identifier,
+        getPresetPromptLabel(promptValue, identifier),
+        promptValue,
+        promptEnabled,
+      );
     }
 
     return fields;
@@ -10219,14 +10441,7 @@ jQuery(async () => {
     if (!preset || !fieldKey) return "";
     if (fieldKey.startsWith("prompts.")) {
       const promptKey = fieldKey.slice("prompts.".length);
-      const promptValue = preset.prompts?.[promptKey];
-      if (typeof promptValue === "string") return promptValue;
-      if (promptValue && typeof promptValue === "object") {
-        return String(
-          promptValue.value ?? promptValue.content ?? promptValue.text ?? "",
-        );
-      }
-      return "";
+      return getPresetPromptText(getPresetPromptByKey(preset, promptKey));
     }
     return String(preset[fieldKey] ?? "");
   }
@@ -10234,49 +10449,31 @@ jQuery(async () => {
   function setPresetPromptEnabled(presetData, promptKey, enabled) {
     if (!presetData || !promptKey) return;
 
-    if (!presetData.prompts || typeof presetData.prompts !== "object") {
-      presetData.prompts = {};
-    }
+    sanitizePresetPromptStructure(presetData);
+    const normalizedKey = String(promptKey || "").trim();
+    if (!normalizedKey) return;
 
-    const currentPrompt = presetData.prompts[promptKey];
+    const currentPrompt = getPresetPromptByKey(presetData, normalizedKey);
     if (currentPrompt && typeof currentPrompt === "object") {
       currentPrompt.enabled = !!enabled;
     }
 
-    if (!Array.isArray(presetData.prompt_order)) {
-      presetData.prompt_order = [];
+    const entryLocation = findPresetPromptOrderEntryLocation(
+      presetData,
+      normalizedKey,
+      true,
+    );
+    const existingEntry = entryLocation?.item ?? null;
+
+    if (existingEntry) {
+      existingEntry.enabled = !!enabled;
+      return;
     }
 
-    let found = false;
-    for (let i = 0; i < presetData.prompt_order.length; i++) {
-      const item = presetData.prompt_order[i];
-      if (typeof item === "string") {
-        if (item === promptKey) {
-          presetData.prompt_order[i] = {
-            identifier: promptKey,
-            enabled: !!enabled,
-          };
-          found = true;
-          break;
-        }
-        continue;
-      }
-      if (!item || typeof item !== "object") continue;
-      const identifier =
-        item.identifier ?? item.id ?? item.key ?? item.prompt ?? item.name;
-      if (String(identifier) === String(promptKey)) {
-        item.enabled = !!enabled;
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      presetData.prompt_order.push({
-        identifier: promptKey,
-        enabled: !!enabled,
-      });
-    }
+    entryLocation?.order?.push({
+      identifier: normalizedKey,
+      enabled: !!enabled,
+    });
   }
 
   function syncCurrentPresetSelection(pm, presetName) {
@@ -10292,6 +10489,52 @@ jQuery(async () => {
     } catch (e) {
       console.warn("[CFM] 同步当前预设状态失败", e);
     }
+  }
+
+  function sanitizeCurrentOpenAIPresetRuntimeState(save = false) {
+    try {
+      const context = getContext();
+      const pm = context?.getPresetManager?.();
+      if (!pm || String(pm.apiId || "") !== "openai") return false;
+
+      const presetList =
+        typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+      const runtimeSettings = presetList?.settings;
+      if (!runtimeSettings || typeof runtimeSettings !== "object") return false;
+
+      const beforeState = JSON.stringify({
+        prompts: runtimeSettings.prompts ?? null,
+        prompt_order: runtimeSettings.prompt_order ?? null,
+      });
+
+      sanitizePresetPromptStructure(runtimeSettings);
+
+      const afterState = JSON.stringify({
+        prompts: runtimeSettings.prompts ?? null,
+        prompt_order: runtimeSettings.prompt_order ?? null,
+      });
+      const changed = beforeState !== afterState;
+
+      if (
+        changed &&
+        save &&
+        typeof context.saveSettingsDebounced === "function"
+      ) {
+        context.saveSettingsDebounced();
+      }
+
+      return changed;
+    } catch (error) {
+      console.warn("[CFM] 清理当前 OpenAI 运行时预设状态失败", error);
+      return false;
+    }
+  }
+
+  async function saveNormalizedPresetData(pm, presetName, presetData) {
+    sanitizePresetPromptStructure(presetData);
+    await pm.savePreset(presetName, presetData);
+    syncCurrentPresetSelection(pm, presetName);
+    sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
 
   async function duplicatePreset(sourcePreset) {
@@ -10316,7 +10559,10 @@ jQuery(async () => {
       pm.select?.val();
 
     try {
-      await pm.savePreset(newPresetName, structuredClone(presetData));
+      const duplicatedPresetData = sanitizePresetPromptStructure(
+        structuredClone(presetData),
+      );
+      await pm.savePreset(newPresetName, duplicatedPresetData);
       const groups = extension_settings[extensionName].presetGroups;
       if (groups && groups[sourceName]) {
         groups[newPresetName] = groups[sourceName];
@@ -10409,8 +10655,7 @@ jQuery(async () => {
     setPresetPromptEnabled(presetData, promptKey, activate);
 
     try {
-      await pm.savePreset(presetName, presetData);
-      syncCurrentPresetSelection(pm, presetName);
+      await saveNormalizedPresetData(pm, presetName, presetData);
       refreshPresetPanelView();
     } catch (error) {
       console.error("[CFM] 切换预设条目激活状态失败:", error);
@@ -10493,8 +10738,7 @@ jQuery(async () => {
     }
 
     try {
-      await pm.savePreset(presetName, presetData);
-      syncCurrentPresetSelection(pm, presetName);
+      await saveNormalizedPresetData(pm, presetName, presetData);
       toastr.success(
         `已${activate ? "激活" : "取消激活"} ${changedCount} 个预设条目`,
       );
@@ -11075,8 +11319,7 @@ jQuery(async () => {
         }
 
         setPresetDetailFieldsEnabled(latestPresetData, presetFields, true);
-        await pm.savePreset(presetName, latestPresetData);
-        syncCurrentPresetSelection(pm, presetName);
+        await saveNormalizedPresetData(pm, presetName, latestPresetData);
 
         const newApplied =
           mode === "replace"
@@ -11144,8 +11387,7 @@ jQuery(async () => {
           }
         }
 
-        await pm.savePreset(presetName, latestPresetData);
-        syncCurrentPresetSelection(pm, presetName);
+        await saveNormalizedPresetData(pm, presetName, latestPresetData);
         setPresetDetailAppliedPresetIndices(presetName, otherApplied);
 
         toastr.success(
@@ -11390,12 +11632,22 @@ jQuery(async () => {
     );
   }
 
-  function buildDuplicatedPresetPromptKey(promptMap, sourcePromptKey) {
+  function buildDuplicatedPresetPromptKey(existingPromptIds, sourcePromptKey) {
     const normalizedSource = String(sourcePromptKey || "").trim() || "prompt";
+    const existingIds =
+      existingPromptIds instanceof Set
+        ? existingPromptIds
+        : new Set(
+            (Array.isArray(existingPromptIds)
+              ? existingPromptIds
+              : Object.keys(existingPromptIds || {}))
+              .map((item) => String(item || "").trim())
+              .filter(Boolean),
+          );
     const baseKey = `${normalizedSource}_copy`;
     let candidate = baseKey;
     let index = 2;
-    while (Object.prototype.hasOwnProperty.call(promptMap, candidate)) {
+    while (existingIds.has(candidate)) {
       candidate = `${baseKey}_${index}`;
       index += 1;
     }
@@ -11428,10 +11680,7 @@ jQuery(async () => {
       return;
     }
 
-    if (!presetData.prompts || typeof presetData.prompts !== "object") {
-      presetData.prompts = {};
-    }
-
+    const promptList = ensurePresetPromptList(presetData);
     const promptKey = fieldKey.slice("prompts.".length);
     const sourceField = getPresetDetailFields(presetData).find(
       (item) => item.key === fieldKey,
@@ -11441,13 +11690,18 @@ jQuery(async () => {
       return;
     }
 
-    if (!Object.prototype.hasOwnProperty.call(presetData.prompts, promptKey)) {
+    const sourcePrompt = getPresetPromptByKey(presetData, promptKey);
+    if (!sourcePrompt) {
       toastr.error("预设条目不存在，无法复制");
       return;
     }
 
     const newPromptKey = buildDuplicatedPresetPromptKey(
-      presetData.prompts,
+      new Set(
+        promptList
+          .map((prompt) => getPresetPromptIdentifier(prompt))
+          .filter(Boolean),
+      ),
       promptKey,
     );
     const existingLabels = new Set(
@@ -11459,48 +11713,92 @@ jQuery(async () => {
       existingLabels,
       sourceField.label,
     );
-    const sourcePrompt = presetData.prompts[promptKey];
-    const duplicatedPrompt =
+
+    let duplicatedPrompt =
       sourcePrompt && typeof sourcePrompt === "object"
         ? structuredClone(sourcePrompt)
-        : sourcePrompt;
+        : {
+            identifier: newPromptKey,
+            content: String(sourcePrompt ?? ""),
+          };
 
-    if (duplicatedPrompt && typeof duplicatedPrompt === "object") {
-      if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "name")) {
-        duplicatedPrompt.name = newPromptLabel;
-      } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "title")) {
-        duplicatedPrompt.title = newPromptLabel;
-      } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "label")) {
-        duplicatedPrompt.label = newPromptLabel;
-      } else {
-        duplicatedPrompt.name = newPromptLabel;
-      }
+    if (!duplicatedPrompt || typeof duplicatedPrompt !== "object") {
+      duplicatedPrompt = {
+        identifier: newPromptKey,
+        content: "",
+      };
     }
 
-    presetData.prompts[newPromptKey] = duplicatedPrompt;
-
-    if (!Array.isArray(presetData.prompt_order)) {
-      presetData.prompt_order = [];
+    duplicatedPrompt.identifier = newPromptKey;
+    if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "id")) {
+      duplicatedPrompt.id = newPromptKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "key")) {
+      duplicatedPrompt.key = newPromptKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "prompt")) {
+      duplicatedPrompt.prompt = newPromptKey;
     }
 
-    const sourceOrderIndex = presetData.prompt_order.findIndex(
-      (item) => getPresetPromptOrderIdentifier(item) === promptKey,
+    if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "name")) {
+      duplicatedPrompt.name = newPromptLabel;
+    } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "title")) {
+      duplicatedPrompt.title = newPromptLabel;
+    } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "label")) {
+      duplicatedPrompt.label = newPromptLabel;
+    } else {
+      duplicatedPrompt.name = newPromptLabel;
+    }
+
+    const sourcePromptIndex = getPresetPromptIndexByKey(presetData, promptKey);
+    if (sourcePromptIndex === -1) {
+      promptList.push(duplicatedPrompt);
+    } else {
+      promptList.splice(sourcePromptIndex + 1, 0, duplicatedPrompt);
+    }
+
+    const sourceOrderLocation = findPresetPromptOrderEntryLocation(
+      presetData,
+      promptKey,
+      true,
     );
-    const newOrderItem = {
-      identifier: newPromptKey,
-      enabled: sourceField.enabled !== false,
-      name: newPromptLabel,
-    };
+    const promptOrderEntries = sourceOrderLocation?.order ?? [];
+    const sourceOrderIndex = sourceOrderLocation?.index ?? -1;
+    const sourceOrderItem = sourceOrderLocation?.item ?? null;
+    const newOrderItem =
+      sourceOrderItem && typeof sourceOrderItem === "object"
+        ? structuredClone(sourceOrderItem)
+        : { identifier: newPromptKey };
+
+    newOrderItem.identifier = newPromptKey;
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "id")) {
+      newOrderItem.id = newPromptKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "key")) {
+      newOrderItem.key = newPromptKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "prompt")) {
+      newOrderItem.prompt = newPromptKey;
+    }
+    newOrderItem.enabled = sourceField.enabled !== false;
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "name")) {
+      newOrderItem.name = newPromptLabel;
+    }
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "title")) {
+      newOrderItem.title = newPromptLabel;
+    }
+    if (Object.prototype.hasOwnProperty.call(newOrderItem, "label")) {
+      newOrderItem.label = newPromptLabel;
+    }
 
     if (sourceOrderIndex === -1) {
-      presetData.prompt_order.push(newOrderItem);
+      promptOrderEntries.push(newOrderItem);
     } else {
-      presetData.prompt_order.splice(sourceOrderIndex + 1, 0, newOrderItem);
+      promptOrderEntries.splice(sourceOrderIndex + 1, 0, newOrderItem);
     }
 
     try {
-      await pm.savePreset(presetName, presetData);
-      syncCurrentPresetSelection(pm, presetName);
+      await saveNormalizedPresetData(pm, presetName, presetData);
       toastr.success(`已复制预设条目「${sourceField.label}」`);
       refreshPresetPanelView();
     } catch (error) {
@@ -11535,22 +11833,26 @@ jQuery(async () => {
     if (!confirm(`确定删除预设条目「${field.label}」？`)) return;
 
     const promptKey = fieldKey.slice("prompts.".length);
-    if (presetData.prompts && typeof presetData.prompts === "object") {
-      delete presetData.prompts[promptKey];
+    const promptList = ensurePresetPromptList(presetData);
+    const promptIndex = getPresetPromptIndexByKey(presetData, promptKey);
+    if (promptIndex !== -1) {
+      promptList.splice(promptIndex, 1);
     }
-    if (Array.isArray(presetData.prompt_order)) {
-      presetData.prompt_order = presetData.prompt_order.filter(
+
+    for (const container of ensurePresetPromptOrderContainers(presetData)) {
+      if (!Array.isArray(container?.order)) continue;
+      container.order = container.order.filter(
         (item) => getPresetPromptOrderIdentifier(item) !== promptKey,
       );
     }
+
     cfmPresetDetailBatchSelected.delete(fieldKey);
     if (cfmPresetDetailBatchLastClicked === fieldKey) {
       cfmPresetDetailBatchLastClicked = null;
     }
 
     try {
-      await pm.savePreset(presetName, presetData);
-      syncCurrentPresetSelection(pm, presetName);
+      await saveNormalizedPresetData(pm, presetName, presetData);
       toastr.success(`已删除预设条目「${field.label}」`);
       refreshPresetPanelView();
     } catch (error) {
@@ -39480,6 +39782,10 @@ jQuery(async () => {
   // 监听角色卡列表重新渲染事件，自动重新应用过滤
   const eventSource = getContext().eventSource;
   const event_types = getContext().eventTypes;
+  setTimeout(() => {
+    sanitizeCurrentOpenAIPresetRuntimeState(true);
+  }, 0);
+
   if (eventSource && event_types) {
     // 角色卡列表翻页/重新渲染后重新应用过滤（仅回退方案需要）
     // 当 entitiesFilter 可用时，过滤在数据层（分页前）完成，无需 DOM 级重新过滤
@@ -39563,11 +39869,13 @@ jQuery(async () => {
     // 预设切换时自动应用/关闭世界书分组和快速回复分组
     if (event_types.OAI_PRESET_CHANGED_AFTER) {
       eventSource.on(event_types.OAI_PRESET_CHANGED_AFTER, () => {
+        sanitizeCurrentOpenAIPresetRuntimeState(true);
         scheduleAutoApplyBoundGroups();
       });
     }
     if (event_types.PRESET_CHANGED) {
       eventSource.on(event_types.PRESET_CHANGED, () => {
+        sanitizeCurrentOpenAIPresetRuntimeState(true);
         scheduleAutoApplyBoundGroups();
       });
     }
