@@ -10365,7 +10365,7 @@ jQuery(async () => {
     if (!preset || typeof preset !== "object") return [];
 
     const promptMap = getPresetPromptMap(preset);
-    const promptOrder = getAllPresetPromptOrderEntries(preset);
+    const promptOrder = getPresetPromptOrderEntries(preset);
     const fields = [];
     const seen = new Set();
 
