@@ -13053,6 +13053,7 @@ jQuery(async () => {
             ui.item.addClass("cfm-regex-dragging");
           },
           stop: async (_event, ui) => {
+            const movedFieldKey = String(ui.item.data("field") || "").trim();
             ui.item.removeClass("cfm-regex-dragging");
             const orderedFieldKeys = detailCard
               .find('.cfm-preset-detail-row[data-field^="prompts."]')
@@ -13062,6 +13063,11 @@ jQuery(async () => {
               .get()
               .filter(Boolean);
             await savePresetDetailPromptOrder(preset.name, orderedFieldKeys);
+            if (movedFieldKey) {
+              flashDraggedElement(
+                `.cfm-preset-detail-row[data-field="${$.escapeSelector(movedFieldKey)}"]`,
+              );
+            }
           },
         });
         detailCard.disableSelection();
@@ -14854,6 +14860,7 @@ jQuery(async () => {
             ui.item.addClass("cfm-regex-dragging");
           },
           stop: async (_event, ui) => {
+            const movedScriptId = String(ui.item.data("script-id") || "").trim();
             ui.item.removeClass("cfm-regex-dragging");
             const orderedIds = subList
               .find(".cfm-regex-script-row")
@@ -14882,6 +14889,11 @@ jQuery(async () => {
             try {
               await saveCharRegexScripts(avatar, reorderedScripts);
               rerenderCurrentView();
+              if (movedScriptId) {
+                flashDraggedElement(
+                  `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+                );
+              }
             } catch (err) {
               console.error("[CFM] 正则拖拽排序失败:", err);
               toastr.error("排序失败: " + err.message);
@@ -15502,6 +15514,7 @@ jQuery(async () => {
             ui.item.addClass("cfm-regex-dragging");
           },
           stop: async (_event, ui) => {
+            const movedScriptId = String(ui.item.data("script-id") || "").trim();
             ui.item.removeClass("cfm-regex-dragging");
             const orderedIds = subList
               .find(".cfm-regex-script-row")
@@ -15530,6 +15543,11 @@ jQuery(async () => {
             try {
               await savePresetRegexScripts(reorderedScripts);
               rerenderCurrentView();
+              if (movedScriptId) {
+                flashDraggedElement(
+                  `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+                );
+              }
             } catch (err) {
               console.error("[CFM] 正则拖拽排序失败:", err);
               toastr.error("排序失败: " + err.message);
@@ -17226,11 +17244,165 @@ jQuery(async () => {
     }
   }
 
+  function ensureDragLocateHighlightStyle() {
+    if (document.getElementById("cfm-drag-highlight-style")) return;
+    const style = document.createElement("style");
+    style.id = "cfm-drag-highlight-style";
+    style.textContent = `
+      .cfm-drag-highlighted {
+        animation: cfmDragHighlightPulse 1s ease;
+        box-shadow: 0 0 0 1px rgba(249, 226, 175, 0.55), 0 0 0 4px rgba(249, 226, 175, 0.16) !important;
+        background: rgba(249, 226, 175, 0.14) !important;
+      }
+      @keyframes cfmDragHighlightPulse {
+        0% {
+          box-shadow: 0 0 0 1px rgba(249, 226, 175, 0.72), 0 0 0 8px rgba(249, 226, 175, 0.22) !important;
+          background: rgba(249, 226, 175, 0.22) !important;
+        }
+        100% {
+          box-shadow: 0 0 0 1px rgba(249, 226, 175, 0.08), 0 0 0 0 rgba(249, 226, 175, 0) !important;
+          background: rgba(249, 226, 175, 0.02) !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function buildDraggedHighlightSelector(dragData) {
+    if (!dragData || typeof dragData !== "object") return "";
+
+    const collectValues = (...values) =>
+      values
+        .flat()
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+
+    const buildSelector = (values, fragments) =>
+      collectValues(values)
+        .flatMap((value) => {
+          const escapedValue = $.escapeSelector(value);
+          return fragments.map((fragment) => fragment(escapedValue));
+        })
+        .join(", ");
+
+    switch (String(dragData.type || "").trim()) {
+      case "folder":
+      case "res-folder":
+        return buildSelector(dragData.id, [
+          (value) => `.cfm-tnode[data-id="${value}"]`,
+          (value) => `.cfm-row[data-folder-id="${value}"]`,
+        ]);
+      case "char":
+        return buildSelector(
+          dragData.multiSelect && Array.isArray(dragData.selectedIds)
+            ? dragData.selectedIds
+            : dragData.avatar,
+          [
+            (value) => `.cfm-row[data-avatar="${value}"]`,
+            (value) => `.cfm-row[data-res-id="${value}"]`,
+          ],
+        );
+      case "preset":
+        return buildSelector(
+          dragData.multiSelect && Array.isArray(dragData.selectedIds)
+            ? dragData.selectedIds
+            : [dragData.value, dragData.name],
+          [
+            (value) => `.cfm-row[data-value="${value}"]`,
+            (value) => `.cfm-row[data-res-id="${value}"]`,
+          ],
+        );
+      case "theme":
+      case "background":
+      case "worldinfo":
+      case "quickreply":
+        return buildSelector(
+          dragData.multiSelect && Array.isArray(dragData.selectedIds)
+            ? dragData.selectedIds
+            : dragData.name,
+          [(value) => `.cfm-row[data-res-id="${value}"]`],
+        );
+      case "persona":
+        return buildSelector(
+          dragData.multiSelect && Array.isArray(dragData.selectedIds)
+            ? dragData.selectedIds
+            : dragData.avatarId,
+          [
+            (value) => `.cfm-row[data-avatar-id="${value}"]`,
+            (value) => `.cfm-row[data-res-id="${value}"]`,
+          ],
+        );
+      case "regex-script":
+        return buildSelector(dragData.id, [
+          (value) => `.cfm-regex-script-row[data-script-id="${value}"]`,
+          (value) => `.cfm-sort-row[data-script-id="${value}"]`,
+        ]);
+      default:
+        return "";
+    }
+  }
+
+  function flashDraggedElement(target, duration = 1000, options = {}) {
+    ensureDragLocateHighlightStyle();
+    const maxAttempts = Number.isInteger(options.maxAttempts)
+      ? options.maxAttempts
+      : 24;
+    const interval = Number.isInteger(options.interval) ? options.interval : 80;
+
+    const normalizeElements = (value) => {
+      if (!value) return [];
+      if (value instanceof Element) return [value];
+      if (value?.jquery) return value.get().filter(Boolean);
+      if (Array.isArray(value)) {
+        return value.flatMap((item) => normalizeElements(item));
+      }
+      if (typeof value === "string") {
+        return Array.from(document.querySelectorAll(value));
+      }
+      return [];
+    };
+
+    let attempt = 0;
+    const tryHighlight = () => {
+      const resolvedTarget = typeof target === "function" ? target() : target;
+      const elements = normalizeElements(resolvedTarget).filter(
+        (element) => element?.isConnected,
+      );
+      if (!elements.length) {
+        if (attempt < maxAttempts) {
+          attempt += 1;
+          setTimeout(tryHighlight, interval);
+        }
+        return;
+      }
+
+      for (const element of elements) {
+        if (element.__cfmDragHighlightTimer) {
+          clearTimeout(element.__cfmDragHighlightTimer);
+        }
+        element.classList.remove("cfm-drag-highlighted");
+        void element.offsetWidth;
+        element.classList.add("cfm-drag-highlighted");
+        element.__cfmDragHighlightTimer = setTimeout(() => {
+          element.classList.remove("cfm-drag-highlighted");
+          element.__cfmDragHighlightTimer = null;
+        }, duration);
+      }
+    };
+
+    tryHighlight();
+  }
+
   // PC端dragend辅助：清除全局拖拽数据和视觉反馈
   function pcDragEnd() {
+    const dragData = _pcDragData;
     _pcDragData = null;
     // 清除所有右栏拖放高亮
     $(".cfm-right-list-drop-target").removeClass("cfm-right-list-drop-target");
+    const highlightSelector = buildDraggedHighlightSelector(dragData);
+    if (highlightSelector) {
+      flashDraggedElement(highlightSelector);
+    }
   }
 
   function showMainPopup() {
@@ -23428,6 +23600,7 @@ jQuery(async () => {
         stop: (_event, ui) => {
           ui.item.removeClass("cfm-layout-dragging");
           saveTabOrder();
+          flashDraggedElement(ui.item);
         },
       });
       tabsList.disableSelection();
@@ -23540,6 +23713,7 @@ jQuery(async () => {
         stop: (_event, ui) => {
           ui.item.removeClass("cfm-layout-dragging");
           saveActionOrder();
+          flashDraggedElement(ui.item);
         },
       });
       actionsSortableList.disableSelection();
@@ -36729,7 +36903,10 @@ jQuery(async () => {
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
-        stop: () => updateArrowStates(),
+        stop: (_event, ui) => {
+          updateArrowStates();
+          flashDraggedElement(ui.item);
+        },
       });
       sortList.disableSelection();
 
