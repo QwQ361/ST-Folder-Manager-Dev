@@ -14701,7 +14701,7 @@ jQuery(async () => {
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前角色，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}" ${isTarget ? 'draggable="true"' : ""}
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
                data-script-idx="${i}"
                data-script-type="1"
@@ -14819,48 +14819,56 @@ jQuery(async () => {
       }
 
       // 拖拽排序（仅目标角色）
-      if (isTarget) {
-        let dragSrcRegex = null;
-        subList.on("dragstart", ".cfm-regex-script-row", function (e) {
-          dragSrcRegex = this;
-          $(this).addClass("cfm-regex-dragging");
-          e.originalEvent.dataTransfer.effectAllowed = "move";
-        });
-        subList.on("dragover", ".cfm-regex-script-row", function (e) {
-          e.preventDefault();
-          e.originalEvent.dataTransfer.dropEffect = "move";
-          $(this).addClass("cfm-regex-dragover");
-        });
-        subList.on("dragleave", ".cfm-regex-script-row", function () {
-          $(this).removeClass("cfm-regex-dragover");
-        });
-        subList.on("drop", ".cfm-regex-script-row", async function (e) {
-          e.preventDefault();
-          $(this).removeClass("cfm-regex-dragover");
-          if (dragSrcRegex && dragSrcRegex !== this) {
-            const srcIdx = parseInt($(dragSrcRegex).data("script-idx"), 10);
-            const tgtIdx = parseInt($(this).data("script-idx"), 10);
-            if (!isNaN(srcIdx) && !isNaN(tgtIdx) && srcIdx !== tgtIdx) {
-              const [moved] = scripts.splice(srcIdx, 1);
-              scripts.splice(tgtIdx, 0, moved);
-              try {
-                await saveCharRegexScripts(avatar, scripts);
-                rerenderCurrentView();
-              } catch (err) {
-                console.error("[CFM] 正则拖拽排序失败:", err);
-                toastr.error("排序失败: " + err.message);
-                // 回滚
-                const [back] = scripts.splice(tgtIdx, 1);
-                scripts.splice(srcIdx, 0, back);
-              }
+      if (isTarget && typeof subList.sortable === "function") {
+        subList.sortable({
+          items: ".cfm-regex-script-row",
+          axis: "y",
+          tolerance: "pointer",
+          placeholder: "cfm-sort-placeholder",
+          forcePlaceholderSize: true,
+          distance: 4,
+          cancel:
+            ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
+          start: (_event, ui) => {
+            ui.item.addClass("cfm-regex-dragging");
+          },
+          stop: async (_event, ui) => {
+            ui.item.removeClass("cfm-regex-dragging");
+            const orderedIds = subList
+              .find(".cfm-regex-script-row")
+              .map(function () {
+                return String($(this).data("script-id") || "").trim();
+              })
+              .get()
+              .filter(Boolean);
+            const currentIds = scripts
+              .map((script) => String(script?.id || "").trim())
+              .filter(Boolean);
+            if (
+              orderedIds.length !== currentIds.length ||
+              orderedIds.every((id, index) => id === currentIds[index])
+            ) {
+              return;
             }
-          }
+            const scriptMap = new Map(
+              scripts
+                .map((script) => [String(script?.id || "").trim(), script])
+                .filter(([id]) => !!id),
+            );
+            const reorderedScripts = orderedIds
+              .map((id) => scriptMap.get(id))
+              .filter(Boolean);
+            try {
+              await saveCharRegexScripts(avatar, reorderedScripts);
+              rerenderCurrentView();
+            } catch (err) {
+              console.error("[CFM] 正则拖拽排序失败:", err);
+              toastr.error("排序失败: " + err.message);
+              rerenderCurrentView();
+            }
+          },
         });
-        subList.on("dragend", ".cfm-regex-script-row", function () {
-          $(this).removeClass("cfm-regex-dragging");
-          subList.find(".cfm-regex-dragover").removeClass("cfm-regex-dragover");
-          dragSrcRegex = null;
-        });
+        subList.disableSelection();
       }
     }
     charRow.after(subList);
@@ -15341,7 +15349,7 @@ jQuery(async () => {
           ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
           : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
-          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}" ${isTarget ? 'draggable="true"' : ""}
+          <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
                data-script-idx="${i}"
                data-script-type="2"
@@ -15459,47 +15467,56 @@ jQuery(async () => {
       }
 
       // 拖拽排序（仅目标预设）
-      if (isTarget) {
-        let dragSrcRegex = null;
-        subList.on("dragstart", ".cfm-regex-script-row", function (e) {
-          dragSrcRegex = this;
-          $(this).addClass("cfm-regex-dragging");
-          e.originalEvent.dataTransfer.effectAllowed = "move";
-        });
-        subList.on("dragover", ".cfm-regex-script-row", function (e) {
-          e.preventDefault();
-          e.originalEvent.dataTransfer.dropEffect = "move";
-          $(this).addClass("cfm-regex-dragover");
-        });
-        subList.on("dragleave", ".cfm-regex-script-row", function () {
-          $(this).removeClass("cfm-regex-dragover");
-        });
-        subList.on("drop", ".cfm-regex-script-row", async function (e) {
-          e.preventDefault();
-          $(this).removeClass("cfm-regex-dragover");
-          if (dragSrcRegex && dragSrcRegex !== this) {
-            const srcIdx = parseInt($(dragSrcRegex).data("script-idx"), 10);
-            const tgtIdx = parseInt($(this).data("script-idx"), 10);
-            if (!isNaN(srcIdx) && !isNaN(tgtIdx) && srcIdx !== tgtIdx) {
-              const [moved] = scripts.splice(srcIdx, 1);
-              scripts.splice(tgtIdx, 0, moved);
-              try {
-                await savePresetRegexScripts(scripts);
-                rerenderCurrentView();
-              } catch (err) {
-                console.error("[CFM] 正则拖拽排序失败:", err);
-                toastr.error("排序失败: " + err.message);
-                const [back] = scripts.splice(tgtIdx, 1);
-                scripts.splice(srcIdx, 0, back);
-              }
+      if (isTarget && typeof subList.sortable === "function") {
+        subList.sortable({
+          items: ".cfm-regex-script-row",
+          axis: "y",
+          tolerance: "pointer",
+          placeholder: "cfm-sort-placeholder",
+          forcePlaceholderSize: true,
+          distance: 4,
+          cancel:
+            ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
+          start: (_event, ui) => {
+            ui.item.addClass("cfm-regex-dragging");
+          },
+          stop: async (_event, ui) => {
+            ui.item.removeClass("cfm-regex-dragging");
+            const orderedIds = subList
+              .find(".cfm-regex-script-row")
+              .map(function () {
+                return String($(this).data("script-id") || "").trim();
+              })
+              .get()
+              .filter(Boolean);
+            const currentIds = scripts
+              .map((script) => String(script?.id || "").trim())
+              .filter(Boolean);
+            if (
+              orderedIds.length !== currentIds.length ||
+              orderedIds.every((id, index) => id === currentIds[index])
+            ) {
+              return;
             }
-          }
+            const scriptMap = new Map(
+              scripts
+                .map((script) => [String(script?.id || "").trim(), script])
+                .filter(([id]) => !!id),
+            );
+            const reorderedScripts = orderedIds
+              .map((id) => scriptMap.get(id))
+              .filter(Boolean);
+            try {
+              await savePresetRegexScripts(reorderedScripts);
+              rerenderCurrentView();
+            } catch (err) {
+              console.error("[CFM] 正则拖拽排序失败:", err);
+              toastr.error("排序失败: " + err.message);
+              rerenderCurrentView();
+            }
+          },
         });
-        subList.on("dragend", ".cfm-regex-script-row", function () {
-          $(this).removeClass("cfm-regex-dragging");
-          subList.find(".cfm-regex-dragover").removeClass("cfm-regex-dragover");
-          dragSrcRegex = null;
-        });
+        subList.disableSelection();
       }
     }
     presetRow.after(subList);
@@ -23286,7 +23303,7 @@ jQuery(async () => {
         const meta = CFM_TAB_META.find((m) => m.id === t.id);
         if (!meta) return "";
         const checked = t.visible !== false ? "checked" : "";
-        return `<div class="cfm-layout-item" data-id="${t.id}" draggable="true">
+        return `<div class="cfm-layout-item" data-id="${t.id}">
           <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
           <span class="cfm-layout-label">${meta.label}</span>
@@ -23373,46 +23390,27 @@ jQuery(async () => {
       });
 
     // 标签页拖拽排序
-    let dragSrcTab = null;
-    section
-      .find(".cfm-layout-tabs-list")
-      .on("dragstart", ".cfm-layout-item", function (e) {
-        dragSrcTab = this;
-        $(this).addClass("cfm-layout-dragging");
-        e.originalEvent.dataTransfer.effectAllowed = "move";
-      });
-    section
-      .find(".cfm-layout-tabs-list")
-      .on("dragover", ".cfm-layout-item", function (e) {
-        e.preventDefault();
-        e.originalEvent.dataTransfer.dropEffect = "move";
-        $(this).addClass("cfm-layout-dragover");
-      });
-    section
-      .find(".cfm-layout-tabs-list")
-      .on("dragleave", ".cfm-layout-item", function () {
-        $(this).removeClass("cfm-layout-dragover");
-      });
-    section
-      .find(".cfm-layout-tabs-list")
-      .on("drop", ".cfm-layout-item", function (e) {
-        e.preventDefault();
-        $(this).removeClass("cfm-layout-dragover");
-        if (dragSrcTab && dragSrcTab !== this) {
-          const srcIdx = $(dragSrcTab).index();
-          const tgtIdx = $(this).index();
-          if (srcIdx < tgtIdx) $(dragSrcTab).insertAfter(this);
-          else $(dragSrcTab).insertBefore(this);
+    const tabsList = section.find(".cfm-layout-tabs-list");
+    if (typeof tabsList.sortable === "function") {
+      tabsList.sortable({
+        items: ".cfm-layout-item",
+        handle: ".cfm-layout-drag",
+        axis: "y",
+        tolerance: "pointer",
+        placeholder: "cfm-sort-placeholder",
+        forcePlaceholderSize: true,
+        distance: 4,
+        cancel: ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
+        start: (_event, ui) => {
+          ui.item.addClass("cfm-layout-dragging");
+        },
+        stop: (_event, ui) => {
+          ui.item.removeClass("cfm-layout-dragging");
           saveTabOrder();
-        }
+        },
       });
-    section
-      .find(".cfm-layout-tabs-list")
-      .on("dragend", ".cfm-layout-item", function () {
-        $(this).removeClass("cfm-layout-dragging");
-        section.find(".cfm-layout-dragover").removeClass("cfm-layout-dragover");
-        dragSrcTab = null;
-      });
+      tabsList.disableSelection();
+    }
 
     // --- 子功能面板 ---
     let selectedLayoutTab =
@@ -23433,7 +23431,7 @@ jQuery(async () => {
         const meta = CFM_ACTION_META[a.id];
         if (!meta) return;
         const checked = a.visible !== false ? "checked" : "";
-        actionsList.append(`<div class="cfm-layout-item cfm-layout-action-item" data-id="${a.id}" draggable="true">
+        actionsList.append(`<div class="cfm-layout-item cfm-layout-action-item" data-id="${a.id}">
           <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
           <span class="cfm-layout-label">${meta.label}</span>
@@ -23504,46 +23502,27 @@ jQuery(async () => {
       });
 
     // 子功能拖拽排序
-    let dragSrcAction = null;
-    section
-      .find(".cfm-layout-actions-list")
-      .on("dragstart", ".cfm-layout-item", function (e) {
-        dragSrcAction = this;
-        $(this).addClass("cfm-layout-dragging");
-        e.originalEvent.dataTransfer.effectAllowed = "move";
-      });
-    section
-      .find(".cfm-layout-actions-list")
-      .on("dragover", ".cfm-layout-item", function (e) {
-        e.preventDefault();
-        e.originalEvent.dataTransfer.dropEffect = "move";
-        $(this).addClass("cfm-layout-dragover");
-      });
-    section
-      .find(".cfm-layout-actions-list")
-      .on("dragleave", ".cfm-layout-item", function () {
-        $(this).removeClass("cfm-layout-dragover");
-      });
-    section
-      .find(".cfm-layout-actions-list")
-      .on("drop", ".cfm-layout-item", function (e) {
-        e.preventDefault();
-        $(this).removeClass("cfm-layout-dragover");
-        if (dragSrcAction && dragSrcAction !== this) {
-          const srcIdx = $(dragSrcAction).index();
-          const tgtIdx = $(this).index();
-          if (srcIdx < tgtIdx) $(dragSrcAction).insertAfter(this);
-          else $(dragSrcAction).insertBefore(this);
+    const actionsSortableList = section.find(".cfm-layout-actions-list");
+    if (typeof actionsSortableList.sortable === "function") {
+      actionsSortableList.sortable({
+        items: ".cfm-layout-item",
+        handle: ".cfm-layout-drag",
+        axis: "y",
+        tolerance: "pointer",
+        placeholder: "cfm-sort-placeholder",
+        forcePlaceholderSize: true,
+        distance: 4,
+        cancel: ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
+        start: (_event, ui) => {
+          ui.item.addClass("cfm-layout-dragging");
+        },
+        stop: (_event, ui) => {
+          ui.item.removeClass("cfm-layout-dragging");
           saveActionOrder();
-        }
+        },
       });
-    section
-      .find(".cfm-layout-actions-list")
-      .on("dragend", ".cfm-layout-item", function () {
-        $(this).removeClass("cfm-layout-dragging");
-        section.find(".cfm-layout-dragover").removeClass("cfm-layout-dragover");
-        dragSrcAction = null;
-      });
+      actionsSortableList.disableSelection();
+    }
 
     // 点击标签页名称切换子功能面板
     section
