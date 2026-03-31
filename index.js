@@ -10548,9 +10548,10 @@ jQuery(async () => {
   }
 
   async function saveNormalizedPresetData(pm, presetName, presetData) {
+    const preservedSelectionValue = pm?.select ? $(pm.select).val() : null;
     sanitizePresetPromptStructure(presetData);
     await pm.savePreset(presetName, presetData);
-    await refreshPresetManagerList(pm);
+    await refreshPresetManagerList(pm, preservedSelectionValue);
     syncCurrentPresetSelection(pm, presetName);
     sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
@@ -13135,21 +13136,22 @@ jQuery(async () => {
   }
 
   // 刷新预设管理器的下拉列表
-  async function refreshPresetManagerList(pm) {
+  async function refreshPresetManagerList(pm, preservedValue = null) {
     try {
       // 触发设置重新加载以同步预设列表
       if (pm && pm.select) {
-        // 记住当前选中的值
         const currentVal = $(pm.select).val();
-        // 触发 SillyTavern 重新加载设置
+        const restoreVal =
+          preservedValue !== undefined && preservedValue !== null
+            ? preservedValue
+            : currentVal;
         const resp = await fetch("/api/settings/get", {
           method: "POST",
           headers: getContext().getRequestHeaders(),
           body: JSON.stringify({}),
         });
-        if (resp.ok) {
-          // 简单方式：通过触发change事件让ST更新
-          $(pm.select).trigger("change");
+        if (resp.ok && restoreVal !== undefined && restoreVal !== null) {
+          $(pm.select).val(restoreVal);
         }
       }
     } catch (e) {
