@@ -11702,19 +11702,12 @@ jQuery(async () => {
     return normalizedItem;
   }
 
-  async function reorderPresetDetailField(
-    presetName,
-    sourceFieldKey,
-    targetFieldKey,
-  ) {
-    const normalizedSourceFieldKey = String(sourceFieldKey || "").trim();
-    const normalizedTargetFieldKey = String(targetFieldKey || "").trim();
-    if (
-      !normalizedSourceFieldKey.startsWith("prompts.") ||
-      !normalizedTargetFieldKey.startsWith("prompts.")
-    ) {
-      return false;
-    }
+  async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
+    const normalizedOrderedFieldKeys = Array.isArray(orderedFieldKeys)
+      ? orderedFieldKeys
+          .map((item) => String(item || "").trim())
+          .filter((item) => item.startsWith("prompts."))
+      : [];
 
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -11730,26 +11723,37 @@ jQuery(async () => {
 
     sanitizePresetPromptStructure(presetData);
 
-    const orderedFieldKeys = getPresetDetailFields(presetData)
+    const currentOrderedFieldKeys = getPresetDetailFields(presetData)
       .map((item) => String(item?.key || "").trim())
       .filter((item) => item.startsWith("prompts."));
-    if (orderedFieldKeys.length < 2) return false;
+    if (currentOrderedFieldKeys.length < 2) return false;
 
-    const sourceIndex = orderedFieldKeys.indexOf(normalizedSourceFieldKey);
-    const targetIndex = orderedFieldKeys.indexOf(normalizedTargetFieldKey);
-    if (
-      sourceIndex === -1 ||
-      targetIndex === -1 ||
-      sourceIndex === targetIndex
-    ) {
-      return false;
+    const currentOrderedFieldKeySet = new Set(currentOrderedFieldKeys);
+    const seenFieldKeys = new Set();
+    const mergedOrderedFieldKeys = [];
+
+    for (const fieldKey of normalizedOrderedFieldKeys) {
+      if (!currentOrderedFieldKeySet.has(fieldKey) || seenFieldKeys.has(fieldKey)) {
+        continue;
+      }
+      seenFieldKeys.add(fieldKey);
+      mergedOrderedFieldKeys.push(fieldKey);
     }
 
-    const orderedPromptIds = orderedFieldKeys.map((item) =>
+    for (const fieldKey of currentOrderedFieldKeys) {
+      if (seenFieldKeys.has(fieldKey)) continue;
+      seenFieldKeys.add(fieldKey);
+      mergedOrderedFieldKeys.push(fieldKey);
+    }
+
+    const orderChanged = currentOrderedFieldKeys.some(
+      (fieldKey, index) => mergedOrderedFieldKeys[index] !== fieldKey,
+    );
+    if (!orderChanged) return false;
+
+    const orderedPromptIds = mergedOrderedFieldKeys.map((item) =>
       item.slice("prompts.".length),
     );
-    const [movedPromptId] = orderedPromptIds.splice(sourceIndex, 1);
-    orderedPromptIds.splice(targetIndex, 0, movedPromptId);
 
     const promptList = ensurePresetPromptList(presetData);
     const promptMap = new Map(
@@ -11820,6 +11824,42 @@ jQuery(async () => {
       toastr.error(`排序失败: ${error.message || error}`);
       return false;
     }
+  }
+
+  async function reorderPresetDetailField(
+    presetName,
+    sourceFieldKey,
+    targetFieldKey,
+  ) {
+    const normalizedSourceFieldKey = String(sourceFieldKey || "").trim();
+    const normalizedTargetFieldKey = String(targetFieldKey || "").trim();
+    if (
+      !normalizedSourceFieldKey.startsWith("prompts.") ||
+      !normalizedTargetFieldKey.startsWith("prompts.")
+    ) {
+      return false;
+    }
+
+    const pm = getContext().getPresetManager();
+    const presetData = pm ? getPresetDataForDetail(pm, presetName) : null;
+    if (!presetData) return false;
+
+    const orderedFieldKeys = getPresetDetailFields(presetData)
+      .map((item) => String(item?.key || "").trim())
+      .filter((item) => item.startsWith("prompts."));
+    const sourceIndex = orderedFieldKeys.indexOf(normalizedSourceFieldKey);
+    const targetIndex = orderedFieldKeys.indexOf(normalizedTargetFieldKey);
+    if (
+      sourceIndex === -1 ||
+      targetIndex === -1 ||
+      sourceIndex === targetIndex
+    ) {
+      return false;
+    }
+
+    const [movedFieldKey] = orderedFieldKeys.splice(sourceIndex, 1);
+    orderedFieldKeys.splice(targetIndex, 0, movedFieldKey);
+    return savePresetDetailPromptOrder(presetName, orderedFieldKeys);
   }
 
   async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
@@ -12860,8 +12900,6 @@ jQuery(async () => {
       `);
     } else {
       const canSortFields = fields.length > 1 && !isBatchOwner;
-      let dragSrcFieldKey = "";
-
       for (const [index, field] of fields.entries()) {
         const fieldKey = String(field.key || "");
         const sourceLabel = String(field.sourceLabel || "").trim();
@@ -12884,7 +12922,7 @@ jQuery(async () => {
         const isBatchSel =
           isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
         const row = $(`
-          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}" ${isSortableField ? 'draggable="true"' : ""}>
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}">
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
               ${sortButtonsHtml}
               ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
@@ -12980,78 +13018,32 @@ jQuery(async () => {
         detailCard.append(row);
       }
 
-      if (canSortFields) {
-        detailCard.on(
-          "dragstart",
-          ".cfm-preset-detail-row[draggable='true']",
-          function (e) {
-            if (
-              $(e.target).closest(
-                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn",
-              ).length
-            ) {
-              e.preventDefault();
-              return;
-            }
-            dragSrcFieldKey = String($(this).data("field") || "");
-            $(this).addClass("cfm-regex-dragging");
-            if (e.originalEvent?.dataTransfer) {
-              e.originalEvent.dataTransfer.effectAllowed = "move";
-              e.originalEvent.dataTransfer.setData(
-                "text/plain",
-                dragSrcFieldKey,
-              );
-            }
+      if (canSortFields && typeof detailCard.sortable === "function") {
+        detailCard.sortable({
+          items: '.cfm-preset-detail-row[data-field^="prompts."]',
+          axis: "y",
+          tolerance: "pointer",
+          placeholder: "cfm-sort-placeholder",
+          forcePlaceholderSize: true,
+          distance: 4,
+          cancel:
+            ".cfm-chat-actions, .cfm-chat-action-btn, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn, button, input, textarea, select, a",
+          start: (_event, ui) => {
+            ui.item.addClass("cfm-regex-dragging");
           },
-        );
-        detailCard.on(
-          "dragover",
-          ".cfm-preset-detail-row",
-          function (e) {
-            e.preventDefault();
-            e.originalEvent.dataTransfer.dropEffect = "move";
-            $(this).addClass("cfm-regex-dragover");
+          stop: async (_event, ui) => {
+            ui.item.removeClass("cfm-regex-dragging");
+            const orderedFieldKeys = detailCard
+              .find('.cfm-preset-detail-row[data-field^="prompts."]')
+              .map(function () {
+                return String($(this).data("field") || "").trim();
+              })
+              .get()
+              .filter(Boolean);
+            await savePresetDetailPromptOrder(preset.name, orderedFieldKeys);
           },
-        );
-        detailCard.on(
-          "dragleave",
-          ".cfm-preset-detail-row",
-          function () {
-            $(this).removeClass("cfm-regex-dragover");
-          },
-        );
-        detailCard.on(
-          "drop",
-          ".cfm-preset-detail-row",
-          async function (e) {
-            e.preventDefault();
-            $(this).removeClass("cfm-regex-dragover");
-            const targetFieldKey = String($(this).data("field") || "");
-            if (
-              !dragSrcFieldKey ||
-              !targetFieldKey ||
-              dragSrcFieldKey === targetFieldKey
-            ) {
-              return;
-            }
-            await reorderPresetDetailField(
-              preset.name,
-              dragSrcFieldKey,
-              targetFieldKey,
-            );
-          },
-        );
-        detailCard.on(
-          "dragend",
-          ".cfm-preset-detail-row[draggable='true']",
-          function () {
-            $(this).removeClass("cfm-regex-dragging");
-            detailCard
-              .find(".cfm-regex-dragover")
-              .removeClass("cfm-regex-dragover");
-            dragSrcFieldKey = "";
-          },
-        );
+        });
+        detailCard.disableSelection();
       }
     }
 
