@@ -12874,8 +12874,7 @@ jQuery(async () => {
           ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
           : "";
         const sortButtonsHtml = isSortableField
-          ? `<span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" draggable="true" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
-                <button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
+          ? `<button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
                 <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>`
           : "";
         const actionButtonsHtml = isExternalSourceField
@@ -12886,7 +12885,7 @@ jQuery(async () => {
         const isBatchSel =
           isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
         const row = $(`
-          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}">
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}" ${isSortableField ? 'draggable="true"' : ""}>
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
               ${sortButtonsHtml}
               ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
@@ -12904,7 +12903,7 @@ jQuery(async () => {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
-                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn, .cfm-sort-handle",
+                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn",
               ).length
             )
               return;
@@ -12985,11 +12984,18 @@ jQuery(async () => {
       if (canSortFields) {
         detailCard.on(
           "dragstart",
-          ".cfm-preset-detail-drag-handle[draggable='true']",
+          ".cfm-preset-detail-row[draggable='true']",
           function (e) {
-            const row = $(this).closest(".cfm-preset-detail-row");
-            dragSrcFieldKey = String(row.data("field") || "");
-            row.addClass("cfm-regex-dragging");
+            if (
+              $(e.target).closest(
+                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn",
+              ).length
+            ) {
+              e.preventDefault();
+              return;
+            }
+            dragSrcFieldKey = String($(this).data("field") || "");
+            $(this).addClass("cfm-regex-dragging");
             if (e.originalEvent?.dataTransfer) {
               e.originalEvent.dataTransfer.effectAllowed = "move";
               e.originalEvent.dataTransfer.setData(
@@ -13038,11 +13044,9 @@ jQuery(async () => {
         );
         detailCard.on(
           "dragend",
-          ".cfm-preset-detail-drag-handle[draggable='true']",
+          ".cfm-preset-detail-row[draggable='true']",
           function () {
-            $(this)
-              .closest(".cfm-preset-detail-row")
-              .removeClass("cfm-regex-dragging");
+            $(this).removeClass("cfm-regex-dragging");
             detailCard
               .find(".cfm-regex-dragover")
               .removeClass("cfm-regex-dragover");

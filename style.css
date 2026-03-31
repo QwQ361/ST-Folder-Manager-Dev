@@ -5162,6 +5162,14 @@ option.cfm-nf-hidden {
 .cfm-preset-detail-row {
   padding: 2px 0;
 }
+.cfm-preset-detail-row.cfm-regex-dragging {
+  opacity: 0.78;
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+.cfm-preset-detail-row.cfm-regex-dragover {
+  border-top: 1px solid rgba(203, 166, 247, 0.38) !important;
+  margin-top: -1px;
+}
 .cfm-preset-detail-label {
   width: 100%;
   justify-content: space-between;
