@@ -10123,10 +10123,9 @@ jQuery(async () => {
     if (!presetData || typeof presetData !== "object") return [];
 
     const existingPrompts = presetData.prompts;
-    let normalizedPrompts = [];
 
     if (Array.isArray(existingPrompts)) {
-      normalizedPrompts = existingPrompts
+      const normalizedPrompts = existingPrompts
         .filter((prompt) => prompt !== null && prompt !== undefined)
         .map((prompt, index) => {
           if (prompt && typeof prompt === "object") {
@@ -10140,7 +10139,15 @@ jQuery(async () => {
             content: String(prompt ?? ""),
           };
         });
-    } else if (existingPrompts && typeof existingPrompts === "object") {
+
+      existingPrompts.length = 0;
+      existingPrompts.push(...normalizedPrompts);
+      presetData.prompts = existingPrompts;
+      return existingPrompts;
+    }
+
+    let normalizedPrompts = [];
+    if (existingPrompts && typeof existingPrompts === "object") {
       normalizedPrompts = Object.entries(existingPrompts)
         .map(([identifier, prompt]) => {
           const normalizedId = String(identifier || "").trim();
@@ -10533,6 +10540,7 @@ jQuery(async () => {
   async function saveNormalizedPresetData(pm, presetName, presetData) {
     sanitizePresetPromptStructure(presetData);
     await pm.savePreset(presetName, presetData);
+    await refreshPresetManagerList(pm);
     syncCurrentPresetSelection(pm, presetName);
     sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
