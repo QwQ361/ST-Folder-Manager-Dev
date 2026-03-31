@@ -5208,6 +5208,11 @@ jQuery(async () => {
       if (success > 0) {
         toastr.success(
           `已删除 ${success} 个${typeLabel}${fail > 0 ? `，${fail} 个失败` : ""}`,
+          "",
+          {
+            timeOut: 2500,
+            extendedTimeOut: 800,
+          },
         );
         // 保存文件夹分配变更
         getContext().saveSettingsDebounced();
