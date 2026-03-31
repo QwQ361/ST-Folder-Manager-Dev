@@ -10548,10 +10548,8 @@ jQuery(async () => {
   }
 
   async function saveNormalizedPresetData(pm, presetName, presetData) {
-    const preservedSelectionValue = pm?.select ? $(pm.select).val() : null;
     sanitizePresetPromptStructure(presetData);
     await pm.savePreset(presetName, presetData);
-    await refreshPresetManagerList(pm, preservedSelectionValue);
     syncCurrentPresetSelection(pm, presetName);
     sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
