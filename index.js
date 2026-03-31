@@ -12874,13 +12874,13 @@ jQuery(async () => {
           ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
           : "";
         const sortButtonsHtml = isSortableField
-          ? `<button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
-                <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>
-                <span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>`
+          ? `<span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
+                <button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
+                <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>`
           : "";
         const actionButtonsHtml = isExternalSourceField
-          ? `${sortButtonsHtml}<div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`
-          : `${sortButtonsHtml}<div class="cfm-chat-action-btn cfm-preset-detail-copy" data-field="${escapeHtml(fieldKey)}" title="复制${escapeHtml(field.label)}"><i class="fa-solid fa-copy"></i></div>
+          ? `<div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : `<div class="cfm-chat-action-btn cfm-preset-detail-copy" data-field="${escapeHtml(fieldKey)}" title="复制${escapeHtml(field.label)}"><i class="fa-solid fa-copy"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-delete" data-field="${escapeHtml(fieldKey)}" title="删除${escapeHtml(field.label)}"><i class="fa-solid fa-trash-can"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`;
         const isBatchSel =
@@ -12888,6 +12888,7 @@ jQuery(async () => {
         const row = $(`
           <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}" ${isSortableField ? 'draggable="true"' : ""}>
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
+              ${sortButtonsHtml}
               ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
               <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(fieldKey)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
               <span class="cfm-preset-detail-label-text">${escapeHtml(field.label)}</span>
