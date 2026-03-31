@@ -11683,6 +11683,181 @@ jQuery(async () => {
     return candidate;
   }
 
+  function normalizePresetPromptOrderItemKeyFields(item, promptKey) {
+    const normalizedKey = String(promptKey || "").trim();
+    if (!normalizedKey) return item;
+    const normalizedItem =
+      item && typeof item === "object" ? item : { identifier: normalizedKey };
+
+    normalizedItem.identifier = normalizedKey;
+    if (Object.prototype.hasOwnProperty.call(normalizedItem, "id")) {
+      normalizedItem.id = normalizedKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(normalizedItem, "key")) {
+      normalizedItem.key = normalizedKey;
+    }
+    if (Object.prototype.hasOwnProperty.call(normalizedItem, "prompt")) {
+      normalizedItem.prompt = normalizedKey;
+    }
+
+    return normalizedItem;
+  }
+
+  async function reorderPresetDetailField(
+    presetName,
+    sourceFieldKey,
+    targetFieldKey,
+  ) {
+    const normalizedSourceFieldKey = String(sourceFieldKey || "").trim();
+    const normalizedTargetFieldKey = String(targetFieldKey || "").trim();
+    if (
+      !normalizedSourceFieldKey.startsWith("prompts.") ||
+      !normalizedTargetFieldKey.startsWith("prompts.")
+    ) {
+      return false;
+    }
+
+    const pm = getContext().getPresetManager();
+    if (!pm) {
+      toastr.error("无法获取预设管理器");
+      return false;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      toastr.error(`找不到预设「${presetName}」的数据`);
+      return false;
+    }
+
+    sanitizePresetPromptStructure(presetData);
+
+    const orderedFieldKeys = getPresetDetailFields(presetData)
+      .map((item) => String(item?.key || "").trim())
+      .filter((item) => item.startsWith("prompts."));
+    if (orderedFieldKeys.length < 2) return false;
+
+    const sourceIndex = orderedFieldKeys.indexOf(normalizedSourceFieldKey);
+    const targetIndex = orderedFieldKeys.indexOf(normalizedTargetFieldKey);
+    if (
+      sourceIndex === -1 ||
+      targetIndex === -1 ||
+      sourceIndex === targetIndex
+    ) {
+      return false;
+    }
+
+    const orderedPromptIds = orderedFieldKeys.map((item) =>
+      item.slice("prompts.".length),
+    );
+    const [movedPromptId] = orderedPromptIds.splice(sourceIndex, 1);
+    orderedPromptIds.splice(targetIndex, 0, movedPromptId);
+
+    const promptList = ensurePresetPromptList(presetData);
+    const promptMap = new Map(
+      promptList
+        .map((prompt) => [getPresetPromptIdentifier(prompt), prompt])
+        .filter(([identifier]) => !!identifier),
+    );
+    const reorderedPromptIdSet = new Set(orderedPromptIds);
+    const reorderedPrompts = orderedPromptIds
+      .map((promptId) => promptMap.get(promptId))
+      .filter(Boolean);
+    const leftoverPrompts = promptList.filter((prompt) => {
+      const identifier = getPresetPromptIdentifier(prompt);
+      return identifier && !reorderedPromptIdSet.has(identifier);
+    });
+    promptList.length = 0;
+    promptList.push(...reorderedPrompts, ...leftoverPrompts);
+
+    const existingOrderItemMap = new Map();
+    for (const item of getAllPresetPromptOrderEntries(presetData)) {
+      const identifier = getPresetPromptOrderIdentifier(item);
+      if (!identifier || existingOrderItemMap.has(identifier)) continue;
+      existingOrderItemMap.set(identifier, item);
+    }
+
+    const primaryOrderContainer = getPresetPromptOrderContainer(presetData, true);
+    const primaryOrder = Array.isArray(primaryOrderContainer?.order)
+      ? primaryOrderContainer.order
+      : (primaryOrderContainer.order = []);
+    primaryOrder.length = 0;
+
+    for (const promptId of orderedPromptIds) {
+      let orderItem = existingOrderItemMap.get(promptId);
+      orderItem =
+        orderItem && typeof orderItem === "object"
+          ? structuredClone(orderItem)
+          : { identifier: promptId };
+      orderItem = normalizePresetPromptOrderItemKeyFields(orderItem, promptId);
+
+      const promptValue = promptMap.get(promptId);
+      if (
+        promptValue &&
+        typeof orderItem?.enabled !== "boolean" &&
+        typeof promptValue?.enabled === "boolean"
+      ) {
+        orderItem.enabled = promptValue.enabled;
+      }
+
+      primaryOrder.push(orderItem);
+    }
+
+    for (const container of getAllPresetPromptOrderContainers(presetData)) {
+      if (container === primaryOrderContainer || !Array.isArray(container?.order)) {
+        continue;
+      }
+      container.order = container.order.filter(
+        (item) =>
+          !reorderedPromptIdSet.has(getPresetPromptOrderIdentifier(item)),
+      );
+    }
+
+    try {
+      await saveNormalizedPresetData(pm, presetName, presetData);
+      refreshPresetPanelView();
+      return true;
+    } catch (error) {
+      console.error("[CFM] 预设条目排序失败:", error);
+      toastr.error(`排序失败: ${error.message || error}`);
+      return false;
+    }
+  }
+
+  async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
+    const normalizedFieldKey = String(fieldKey || "").trim();
+    const normalizedStep = Number(step);
+    if (
+      !normalizedFieldKey.startsWith("prompts.") ||
+      !Number.isInteger(normalizedStep) ||
+      normalizedStep === 0
+    ) {
+      return false;
+    }
+
+    const pm = getContext().getPresetManager();
+    const presetData = pm ? getPresetDataForDetail(pm, presetName) : null;
+    if (!presetData) return false;
+
+    const orderedFieldKeys = getPresetDetailFields(presetData)
+      .map((item) => String(item?.key || "").trim())
+      .filter((item) => item.startsWith("prompts."));
+    const sourceIndex = orderedFieldKeys.indexOf(normalizedFieldKey);
+    const targetIndex = sourceIndex + normalizedStep;
+    if (
+      sourceIndex === -1 ||
+      targetIndex < 0 ||
+      targetIndex >= orderedFieldKeys.length
+    ) {
+      return false;
+    }
+
+    return reorderPresetDetailField(
+      presetName,
+      normalizedFieldKey,
+      orderedFieldKeys[targetIndex],
+    );
+  }
+
   async function duplicatePresetDetailField(presetName, fieldKey) {
     if (!String(fieldKey || "").startsWith("prompts.")) return;
 
@@ -12685,22 +12860,33 @@ jQuery(async () => {
         </div>
       `);
     } else {
-      for (const field of fields) {
+      const canSortFields = fields.length > 1 && !isBatchOwner;
+      let dragSrcFieldKey = "";
+
+      for (const [index, field] of fields.entries()) {
         const fieldKey = String(field.key || "");
         const sourceLabel = String(field.sourceLabel || "").trim();
         const isExternalSourceField = !!sourceLabel;
+        const isSortableField = canSortFields && fieldKey.startsWith("prompts.");
+        const canMoveUp = isSortableField && index > 0;
+        const canMoveDown = isSortableField && index < fields.length - 1;
         const sourceMetaHtml = sourceLabel
           ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
           : "";
+        const sortButtonsHtml = isSortableField
+          ? `<button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
+                <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>
+                <span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>`
+          : "";
         const actionButtonsHtml = isExternalSourceField
-          ? `<div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`
-          : `<div class="cfm-chat-action-btn cfm-preset-detail-copy" data-field="${escapeHtml(fieldKey)}" title="复制${escapeHtml(field.label)}"><i class="fa-solid fa-copy"></i></div>
+          ? `${sortButtonsHtml}<div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`
+          : `${sortButtonsHtml}<div class="cfm-chat-action-btn cfm-preset-detail-copy" data-field="${escapeHtml(fieldKey)}" title="复制${escapeHtml(field.label)}"><i class="fa-solid fa-copy"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-delete" data-field="${escapeHtml(fieldKey)}" title="删除${escapeHtml(field.label)}"><i class="fa-solid fa-trash-can"></i></div>
                 <div class="cfm-chat-action-btn cfm-preset-detail-edit" data-field="${escapeHtml(fieldKey)}" title="编辑${escapeHtml(field.label)}"><i class="fa-solid fa-pen-to-square"></i></div>`;
         const isBatchSel =
           isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
         const row = $(`
-          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}">
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}" ${isSortableField ? 'draggable="true"' : ""}>
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
               ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
               <div class="cfm-wi-toggle cfm-preset-field-active-toggle ${field.enabled ? "cfm-wi-toggle-on" : ""}" data-field="${escapeHtml(fieldKey)}" title="${field.enabled ? "点击禁用" : "点击启用"}"><i class="fa-solid fa-toggle-${field.enabled ? "on" : "off"}"></i></div>
@@ -12717,7 +12903,7 @@ jQuery(async () => {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
-                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle",
+                ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn, .cfm-sort-handle",
               ).length
             )
               return;
@@ -12753,6 +12939,24 @@ jQuery(async () => {
             }
           });
 
+        row
+          .find(".cfm-preset-detail-move-up")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentFieldKey = $(e.currentTarget).data("field");
+            await movePresetDetailFieldByStep(preset.name, currentFieldKey, -1);
+          });
+
+        row
+          .find(".cfm-preset-detail-move-down")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentFieldKey = $(e.currentTarget).data("field");
+            await movePresetDetailFieldByStep(preset.name, currentFieldKey, 1);
+          });
+
         row.find(".cfm-preset-detail-copy").on("click touchend", async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -12775,6 +12979,70 @@ jQuery(async () => {
         });
 
         detailCard.append(row);
+      }
+
+      if (canSortFields) {
+        detailCard.on(
+          "dragstart",
+          ".cfm-preset-detail-row[draggable='true']",
+          function (e) {
+            if (!$(e.target).closest(".cfm-preset-detail-drag-handle").length) {
+              e.preventDefault();
+              return;
+            }
+            dragSrcFieldKey = String($(this).data("field") || "");
+            $(this).addClass("cfm-regex-dragging");
+            e.originalEvent.dataTransfer.effectAllowed = "move";
+          },
+        );
+        detailCard.on(
+          "dragover",
+          ".cfm-preset-detail-row[draggable='true']",
+          function (e) {
+            e.preventDefault();
+            e.originalEvent.dataTransfer.dropEffect = "move";
+            $(this).addClass("cfm-regex-dragover");
+          },
+        );
+        detailCard.on(
+          "dragleave",
+          ".cfm-preset-detail-row[draggable='true']",
+          function () {
+            $(this).removeClass("cfm-regex-dragover");
+          },
+        );
+        detailCard.on(
+          "drop",
+          ".cfm-preset-detail-row[draggable='true']",
+          async function (e) {
+            e.preventDefault();
+            $(this).removeClass("cfm-regex-dragover");
+            const targetFieldKey = String($(this).data("field") || "");
+            if (
+              !dragSrcFieldKey ||
+              !targetFieldKey ||
+              dragSrcFieldKey === targetFieldKey
+            ) {
+              return;
+            }
+            await reorderPresetDetailField(
+              preset.name,
+              dragSrcFieldKey,
+              targetFieldKey,
+            );
+          },
+        );
+        detailCard.on(
+          "dragend",
+          ".cfm-preset-detail-row[draggable='true']",
+          function () {
+            $(this).removeClass("cfm-regex-dragging");
+            detailCard
+              .find(".cfm-regex-dragover")
+              .removeClass("cfm-regex-dragover");
+            dragSrcFieldKey = "";
+          },
+        );
       }
     }
 
