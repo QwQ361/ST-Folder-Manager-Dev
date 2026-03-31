@@ -10493,15 +10493,18 @@ jQuery(async () => {
     });
   }
 
-  function syncCurrentPresetSelection(pm, presetName) {
+  function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
     try {
       if (!pm?.select) return;
-      const currentValue = pm.select.val();
+      const effectiveValue =
+        preservedValue !== undefined && preservedValue !== null
+          ? preservedValue
+          : pm.select.val();
       const currentPreset = getCurrentPresets().find(
-        (p) => String(p.value) === String(currentValue),
+        (p) => String(p.value) === String(effectiveValue),
       );
       if (currentPreset?.name === presetName) {
-        pm.select.trigger("change");
+        pm.select.val(effectiveValue).trigger("change");
       }
     } catch (e) {
       console.warn("[CFM] 同步当前预设状态失败", e);
@@ -10549,8 +10552,26 @@ jQuery(async () => {
 
   async function saveNormalizedPresetData(pm, presetName, presetData) {
     sanitizePresetPromptStructure(presetData);
+
+    const preservedSelectValue = pm?.select?.val();
+    const preservedPreset = getCurrentPresets().find(
+      (p) => String(p.value) === String(preservedSelectValue),
+    );
+    const preservedPresetName = String(preservedPreset?.name || "").trim();
+
     await pm.savePreset(presetName, presetData);
-    syncCurrentPresetSelection(pm, presetName);
+
+    if (
+      pm?.select &&
+      preservedSelectValue !== undefined &&
+      preservedSelectValue !== null &&
+      String(preservedSelectValue) !== "" &&
+      String(pm.select.val()) !== String(preservedSelectValue)
+    ) {
+      pm.select.val(preservedSelectValue);
+    }
+
+    syncCurrentPresetSelection(pm, preservedPresetName, preservedSelectValue);
     sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
 
