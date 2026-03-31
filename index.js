@@ -13004,6 +13004,11 @@ jQuery(async () => {
             e.stopPropagation();
             const currentFieldKey = $(e.currentTarget).data("field");
             await movePresetDetailFieldByStep(preset.name, currentFieldKey, -1);
+            if (currentFieldKey) {
+              flashDraggedElement(
+                `.cfm-preset-detail-row[data-field="${$.escapeSelector(String(currentFieldKey))}"]`,
+              );
+            }
           });
 
         row
@@ -13013,6 +13018,11 @@ jQuery(async () => {
             e.stopPropagation();
             const currentFieldKey = $(e.currentTarget).data("field");
             await movePresetDetailFieldByStep(preset.name, currentFieldKey, 1);
+            if (currentFieldKey) {
+              flashDraggedElement(
+                `.cfm-preset-detail-row[data-field="${$.escapeSelector(String(currentFieldKey))}"]`,
+              );
+            }
           });
 
         row.find(".cfm-preset-detail-copy").on("click touchend", async (e) => {
@@ -14817,10 +14827,16 @@ jQuery(async () => {
           e.preventDefault();
           e.stopPropagation();
           if (i <= 0) return;
+          const movedScriptId = String(script?.id || "").trim();
           [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
           try {
             await saveCharRegexScripts(avatar, scripts);
             rerenderCurrentView();
+            if (movedScriptId) {
+              flashDraggedElement(
+                `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+              );
+            }
           } catch (err) {
             console.error("[CFM] 正则上移失败:", err);
             [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
@@ -14832,10 +14848,16 @@ jQuery(async () => {
           e.preventDefault();
           e.stopPropagation();
           if (i >= scripts.length - 1) return;
+          const movedScriptId = String(script?.id || "").trim();
           [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
           try {
             await saveCharRegexScripts(avatar, scripts);
             rerenderCurrentView();
+            if (movedScriptId) {
+              flashDraggedElement(
+                `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+              );
+            }
           } catch (err) {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
@@ -15471,10 +15493,16 @@ jQuery(async () => {
           e.preventDefault();
           e.stopPropagation();
           if (i <= 0) return;
+          const movedScriptId = String(script?.id || "").trim();
           [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
           try {
             await savePresetRegexScripts(scripts);
             rerenderCurrentView();
+            if (movedScriptId) {
+              flashDraggedElement(
+                `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+              );
+            }
           } catch (err) {
             console.error("[CFM] 正则上移失败:", err);
             [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
@@ -15486,10 +15514,16 @@ jQuery(async () => {
           e.preventDefault();
           e.stopPropagation();
           if (i >= scripts.length - 1) return;
+          const movedScriptId = String(script?.id || "").trim();
           [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
           try {
             await savePresetRegexScripts(scripts);
             rerenderCurrentView();
+            if (movedScriptId) {
+              flashDraggedElement(
+                `.cfm-regex-script-row[data-script-id="${$.escapeSelector(movedScriptId)}"]`,
+              );
+            }
           } catch (err) {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
@@ -23580,6 +23614,7 @@ jQuery(async () => {
           item.insertAfter(item.next());
         }
         saveTabOrder();
+        flashDraggedElement(item);
       });
 
     // 标签页拖拽排序
@@ -23693,6 +23728,7 @@ jQuery(async () => {
           item.insertAfter(item.next());
         }
         saveActionOrder();
+        flashDraggedElement(item);
       });
 
     // 子功能拖拽排序
@@ -36861,6 +36897,7 @@ jQuery(async () => {
           if (prev.length) {
             row.insertBefore(prev);
             updateArrowStates();
+            flashDraggedElement(row);
           }
         });
         // 下移按钮
@@ -36871,6 +36908,7 @@ jQuery(async () => {
           if (next.length) {
             row.insertAfter(next);
             updateArrowStates();
+            flashDraggedElement(row);
           }
         });
         sortList.append(row);
