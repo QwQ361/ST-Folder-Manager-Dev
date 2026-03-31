@@ -26564,16 +26564,25 @@ jQuery(async () => {
       rightList.on("dragover", (e) => {
         e.preventDefault();
         e.originalEvent.dataTransfer.dropEffect = "move";
+        if ($(e.target).closest(".cfm-preset-detail-sublist").length > 0) {
+          rightList.removeClass("cfm-right-list-drop-target");
+          return;
+        }
         if ($(e.target).closest(".cfm-row").length > 0) return;
         rightList.addClass("cfm-right-list-drop-target");
       });
       rightList.on("dragleave", (e) => {
+        if ($(e.target).closest(".cfm-preset-detail-sublist").length > 0) {
+          rightList.removeClass("cfm-right-list-drop-target");
+          return;
+        }
         if ($(e.relatedTarget).closest("#cfm-preset-right-list").length === 0) {
           rightList.removeClass("cfm-right-list-drop-target");
         }
       });
       rightList.on("drop", (e) => {
         rightList.removeClass("cfm-right-list-drop-target");
+        if ($(e.target).closest(".cfm-preset-detail-sublist").length > 0) return;
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
