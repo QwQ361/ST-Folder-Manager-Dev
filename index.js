@@ -287,6 +287,31 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
   }
 
+  async function flushFolderAssignmentSettings() {
+    const context = getContext();
+    try {
+      if (context && typeof context.saveSettings === "function") {
+        await context.saveSettings();
+        return;
+      }
+    } catch (err) {
+      console.warn("[CFM] context.saveSettings 持久化失败，回退到其他保存方式", err);
+    }
+
+    try {
+      if (typeof saveSettings === "function") {
+        await saveSettings();
+        return;
+      }
+    } catch (err) {
+      console.warn("[CFM] saveSettings 持久化失败，回退到 debounce 保存", err);
+    }
+
+    if (context && typeof context.saveSettingsDebounced === "function") {
+      context.saveSettingsDebounced();
+    }
+  }
+
   // 获取当前API的预设列表
   function getCurrentPresets() {
     const pm = getContext().getPresetManager();
@@ -20321,7 +20346,11 @@ jQuery(async () => {
         }
       }
 
-      // 调用SillyTavern原生的updateWorldInfoList来同步world_names变量和DOM
+      if (targetFolder && successCount > 0) {
+        await flushFolderAssignmentSettings();
+      }
+
+      // 调用SillyTavern原生的 updateWorldInfoList 来同步 world_names 变量和 DOM
       try {
         const ctx = getContext();
         if (typeof ctx.updateWorldInfoList === "function") {
@@ -20330,6 +20359,13 @@ jQuery(async () => {
       } catch (updateErr) {
         console.warn("[CFM] 调用updateWorldInfoList失败", updateErr);
       }
+
+      // updateWorldInfoList 之后原生 select 已重建，旧的 detach 缓存必须丢弃并按当前过滤重新应用，
+      // 否则旧 option 会被再次 append 回去，导致世界书在插件/原生过滤里出现重复项。
+      _worldInfoDetachedOptions = [];
+      _globalWIDetachedOptions = [];
+      applyWorldInfoFilter();
+      applyGlobalWorldInfoFilter();
 
       // 刷新插件内部的世界书名称缓存
       _worldInfoNamesCache = null;
@@ -28674,7 +28710,9 @@ jQuery(async () => {
   }
 
   // ==================== 世界书视图渲染（双栏 + 树形嵌套） ====================
+  let _worldInfoRenderVersion = 0;
   async function renderWorldInfoView() {
+    const renderVersion = ++_worldInfoRenderVersion;
     const leftTree = $("#cfm-worldinfo-left-tree");
     const rightList = $("#cfm-worldinfo-right-list");
     const pathEl = $("#cfm-worldinfo-rh-path");
@@ -28705,6 +28743,8 @@ jQuery(async () => {
     // 获取世界书激活状态和角色关联世界书（用于 toggle 开关）
     const wiActiveSet = await getActiveWorldInfoSet();
     const wiCharBound = await getCharBoundWorldBooks();
+
+    if (renderVersion !== _worldInfoRenderVersion) return;
 
     leftTree.empty();
     const tree = getResFolderTree("worldinfo");
