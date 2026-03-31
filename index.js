@@ -5082,15 +5082,20 @@ jQuery(async () => {
             const QRS =
               typeof globalThis !== "undefined" && globalThis.QuickReplySet;
             let deleted = false;
-            // 优先使用 QuickReplySet 实例的 delete 方法
-            if (QRS && QRS.list) {
+            // 优先使用酒馆原生 quickReplyApi.deleteSet，确保原生列表与运行时状态同步更新
+            if (api && typeof api.deleteSet === "function") {
+              await api.deleteSet(name);
+              deleted = true;
+            }
+            // 兼容旧版 QuickReplySet 实例的 delete 方法
+            if (!deleted && QRS && QRS.list) {
               const set = QRS.list.find((s) => s.name === name);
               if (set && typeof set.delete === "function") {
                 await set.delete();
                 deleted = true;
               }
             }
-            // 后备：直接调用 API
+            // 最后后备：直接调用后端 API
             if (!deleted) {
               const resp = await fetch("/api/quick-replies/delete", {
                 method: "POST",
@@ -29606,13 +29611,7 @@ jQuery(async () => {
     const countEl = $("#cfm-qr-rh-count");
 
     const names = getQrSetNames();
-    if (names.length === 0) {
-      leftTree.empty();
-      rightList.html(
-        '<div class="cfm-right-empty"><i class="fa-solid fa-circle-info"></i> 没有找到快速回复集<br><span style="font-size:12px;opacity:0.5;">请确保已安装并启用快速回复扩展</span></div>',
-      );
-      return;
-    }
+    const hasAnyQrSets = names.length > 0;
 
     // 获取快速回复激活状态
     const qrActiveSet = getActiveQrSets();
@@ -29981,7 +29980,9 @@ jQuery(async () => {
 
     if (!selectedQrFolder) {
       rightList.html(
-        '<div class="cfm-right-empty">← 点击左侧文件夹查看快速回复集</div>',
+        hasAnyQrSets
+          ? '<div class="cfm-right-empty">← 点击左侧文件夹查看快速回复集</div>'
+          : '<div class="cfm-right-empty"><i class="fa-solid fa-circle-info"></i> 没有找到快速回复集<br><span style="font-size:12px;opacity:0.5;">请确保已安装并启用快速回复扩展</span></div>',
       );
     } else if (selectedQrFolder === "__favorites__" && totalItems === 0) {
       rightList.html(
