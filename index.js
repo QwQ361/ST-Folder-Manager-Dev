@@ -12874,7 +12874,7 @@ jQuery(async () => {
           ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
           : "";
         const sortButtonsHtml = isSortableField
-          ? `<span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
+          ? `<span class="cfm-sort-handle cfm-preset-detail-drag-handle" data-field="${escapeHtml(fieldKey)}" draggable="true" title="拖拽排序"><i class="fa-solid fa-grip-vertical"></i></span>
                 <button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
                 <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>`
           : "";
@@ -12886,7 +12886,7 @@ jQuery(async () => {
         const isBatchSel =
           isBatchOwner && cfmPresetDetailBatchSelected.has(fieldKey);
         const row = $(`
-          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}" ${isSortableField ? 'draggable="true"' : ""}>
+          <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-field="${escapeHtml(fieldKey)}">
             <div class="cfm-persona-detail-label cfm-preset-detail-label">
               ${sortButtonsHtml}
               ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
@@ -12985,20 +12985,23 @@ jQuery(async () => {
       if (canSortFields) {
         detailCard.on(
           "dragstart",
-          ".cfm-preset-detail-row[draggable='true']",
+          ".cfm-preset-detail-drag-handle[draggable='true']",
           function (e) {
-            if (!$(e.target).closest(".cfm-preset-detail-drag-handle").length) {
-              e.preventDefault();
-              return;
+            const row = $(this).closest(".cfm-preset-detail-row");
+            dragSrcFieldKey = String(row.data("field") || "");
+            row.addClass("cfm-regex-dragging");
+            if (e.originalEvent?.dataTransfer) {
+              e.originalEvent.dataTransfer.effectAllowed = "move";
+              e.originalEvent.dataTransfer.setData(
+                "text/plain",
+                dragSrcFieldKey,
+              );
             }
-            dragSrcFieldKey = String($(this).data("field") || "");
-            $(this).addClass("cfm-regex-dragging");
-            e.originalEvent.dataTransfer.effectAllowed = "move";
           },
         );
         detailCard.on(
           "dragover",
-          ".cfm-preset-detail-row[draggable='true']",
+          ".cfm-preset-detail-row",
           function (e) {
             e.preventDefault();
             e.originalEvent.dataTransfer.dropEffect = "move";
@@ -13007,14 +13010,14 @@ jQuery(async () => {
         );
         detailCard.on(
           "dragleave",
-          ".cfm-preset-detail-row[draggable='true']",
+          ".cfm-preset-detail-row",
           function () {
             $(this).removeClass("cfm-regex-dragover");
           },
         );
         detailCard.on(
           "drop",
-          ".cfm-preset-detail-row[draggable='true']",
+          ".cfm-preset-detail-row",
           async function (e) {
             e.preventDefault();
             $(this).removeClass("cfm-regex-dragover");
@@ -13035,9 +13038,11 @@ jQuery(async () => {
         );
         detailCard.on(
           "dragend",
-          ".cfm-preset-detail-row[draggable='true']",
+          ".cfm-preset-detail-drag-handle[draggable='true']",
           function () {
-            $(this).removeClass("cfm-regex-dragging");
+            $(this)
+              .closest(".cfm-preset-detail-row")
+              .removeClass("cfm-regex-dragging");
             detailCard
               .find(".cfm-regex-dragover")
               .removeClass("cfm-regex-dragover");
