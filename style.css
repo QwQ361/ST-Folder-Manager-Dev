@@ -2537,10 +2537,7 @@
 
 /* 弹窗主体 */
 .cfm-sort-dialog {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
   z-index: 100001;
   width: min(560px, 90vw);
   max-height: 80vh;
