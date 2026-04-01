@@ -35,6 +35,8 @@ jQuery(async () => {
       extension_settings[extensionName].bgOrientations = {};
     if (!extension_settings[extensionName].themeBackgroundBindings)
       extension_settings[extensionName].themeBackgroundBindings = {};
+    if (!extension_settings[extensionName].worldInfoEntryDetailSortMode)
+      extension_settings[extensionName].worldInfoEntryDetailSortMode = "custom";
     // 默认背景图（切换到没有绑定背景的主题时使用，空字符串=不设置）
     if (extension_settings[extensionName].defaultBackground === undefined)
       extension_settings[extensionName].defaultBackground = "";
@@ -10954,50 +10956,81 @@ jQuery(async () => {
     }
   }
 
-  function getWorldInfoEntriesForDetail(bookName, worldInfoData) {
+  function getWorldInfoEntryDetailSortMode() {
+    ensureResourceSettings();
+    const mode = String(
+      extension_settings[extensionName].worldInfoEntryDetailSortMode || "custom",
+    );
+    return mode === "priority" ? "priority" : "custom";
+  }
+
+  function setWorldInfoEntryDetailSortMode(mode) {
+    ensureResourceSettings();
+    extension_settings[extensionName].worldInfoEntryDetailSortMode =
+      mode === "priority" ? "priority" : "custom";
+    getContext().saveSettingsDebounced();
+  }
+
+  function sortWorldInfoEntriesForDetail(entries, sortMode = "custom") {
+    const normalizedEntries = Array.isArray(entries) ? Array.from(entries) : [];
+    const normalizedMode =
+      String(sortMode || "custom") === "priority" ? "priority" : "custom";
+
+    return normalizedEntries.sort((a, b) => {
+      if (normalizedMode === "priority") {
+        const orderDiff = Number(b?.order ?? 0) - Number(a?.order ?? 0);
+        if (orderDiff !== 0) return orderDiff;
+      } else {
+        const displayIndexDiff =
+          Number(a?.displayIndex ?? Number.MAX_SAFE_INTEGER) -
+          Number(b?.displayIndex ?? Number.MAX_SAFE_INTEGER);
+        if (displayIndexDiff !== 0) return displayIndexDiff;
+      }
+
+      return String(a?.uid ?? "").localeCompare(String(b?.uid ?? ""), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+  }
+
+  function getWorldInfoEntriesForDetail(bookName, worldInfoData, sortMode = "custom") {
     const entryMap =
       worldInfoData?.entries && typeof worldInfoData.entries === "object"
         ? worldInfoData.entries
         : {};
-    return Object.values(entryMap)
-      .filter((entry) => entry && typeof entry === "object")
-      .map((entry) => {
-        const uid = String(entry.uid ?? entry.id ?? "");
-        const primaryKeys = Array.isArray(entry.key)
-          ? entry.key.map((item) => String(item || "")).filter(Boolean)
-          : [];
-        const secondaryKeys = Array.isArray(entry.keysecondary)
-          ? entry.keysecondary.map((item) => String(item || "")).filter(Boolean)
-          : [];
-        const label = String(
-          entry.comment || primaryKeys[0] || `条目 ${uid || "未命名"}`,
-        );
-        return {
-          bookName: String(bookName || ""),
-          uid,
-          label,
-          comment: String(entry.comment || ""),
-          content: String(entry.content || ""),
-          primaryKeys,
-          secondaryKeys,
-          order: Number(entry.order ?? 0),
-          displayIndex: Number(entry.displayIndex ?? Number.MAX_SAFE_INTEGER),
-          depth: Number(entry.depth ?? 0),
-          constant: !!entry.constant,
-          enabled: !entry.disable,
-          raw: entry,
-        };
-      })
-      .sort((a, b) => {
-        const displayIndexDiff =
-          Number(a.displayIndex || 0) - Number(b.displayIndex || 0);
-        if (displayIndexDiff !== 0) return displayIndexDiff;
-
-        return String(a.uid).localeCompare(String(b.uid), undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      });
+    return sortWorldInfoEntriesForDetail(
+      Object.values(entryMap)
+        .filter((entry) => entry && typeof entry === "object")
+        .map((entry) => {
+          const uid = String(entry.uid ?? entry.id ?? "");
+          const primaryKeys = Array.isArray(entry.key)
+            ? entry.key.map((item) => String(item || "")).filter(Boolean)
+            : [];
+          const secondaryKeys = Array.isArray(entry.keysecondary)
+            ? entry.keysecondary.map((item) => String(item || "")).filter(Boolean)
+            : [];
+          const label = String(
+            entry.comment || primaryKeys[0] || `条目 ${uid || "未命名"}`,
+          );
+          return {
+            bookName: String(bookName || ""),
+            uid,
+            label,
+            comment: String(entry.comment || ""),
+            content: String(entry.content || ""),
+            primaryKeys,
+            secondaryKeys,
+            order: Number(entry.order ?? 0),
+            displayIndex: Number(entry.displayIndex ?? Number.MAX_SAFE_INTEGER),
+            depth: Number(entry.depth ?? 0),
+            constant: !!entry.constant,
+            enabled: !entry.disable,
+            raw: entry,
+          };
+        }),
+      sortMode,
+    );
   }
 
   function toggleWorldInfoEntryBatchItem(bookName, uid, shiftKey, entries) {
@@ -12592,6 +12625,7 @@ jQuery(async () => {
     const cachedEntries = Array.isArray(renderOptions?.cachedEntries)
       ? renderOptions.cachedEntries
       : null;
+    const sortMode = getWorldInfoEntryDetailSortMode();
     let worldInfoData = null;
     let entries = cachedEntries ? Array.from(cachedEntries) : [];
     const rerenderCurrentSubList = () => {
@@ -12603,8 +12637,13 @@ jQuery(async () => {
     try {
       if (!cachedEntries) {
         worldInfoData = await fetchWorldInfoDetailData(normalizedName);
-        entries = getWorldInfoEntriesForDetail(normalizedName, worldInfoData);
+        entries = getWorldInfoEntriesForDetail(
+          normalizedName,
+          worldInfoData,
+          sortMode,
+        );
       }
+      entries = sortWorldInfoEntriesForDetail(entries, sortMode);
     } catch (error) {
       console.error("[CFM] 加载世界书条目失败:", error);
       if (!bookRow.parent().length) return;
@@ -12636,12 +12675,30 @@ jQuery(async () => {
     const isBatchOwner =
       cfmWorldInfoEntryBatchMode &&
       cfmWorldInfoEntryBatchOwnerName === normalizedName;
+    const sortLabel = sortMode === "priority" ? "优先级" : "自定义";
     const detailToolbar = $(`
       <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
+        <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-sort-toggle" ${entries.length === 0 ? "disabled" : ""}><i class="fa-solid fa-arrow-down-wide-short"></i> 排序：${sortLabel}</button>
         <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" ${entries.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
         <span class="cfm-regex-count">${entries.length} 个条目</span>
       </div>
     `);
+    detailToolbar
+      .find(".cfm-worldinfo-entry-sort-toggle")
+      .on("click touchend", (e) => {
+        if (shouldIgnoreWorldInfoEntryTap(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (!entries.length) return;
+        setWorldInfoEntryDetailSortMode(
+          sortMode === "priority" ? "custom" : "priority",
+        );
+        rerenderCurrentSubList();
+      });
     detailToolbar
       .find(".cfm-worldinfo-entry-batch-toggle")
       .on("click touchend", (e) => {
