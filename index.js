@@ -295,7 +295,10 @@ jQuery(async () => {
         return;
       }
     } catch (err) {
-      console.warn("[CFM] context.saveSettings 持久化失败，回退到其他保存方式", err);
+      console.warn(
+        "[CFM] context.saveSettings 持久化失败，回退到其他保存方式",
+        err,
+      );
     }
 
     try {
@@ -4903,7 +4906,10 @@ jQuery(async () => {
               const groups = extension_settings[extensionName].presetGroups;
               if (groups && groups[name]) delete groups[name];
               // 清理备注
-              if (extension_settings[extensionName].presetNotes?.[name] !== undefined)
+              if (
+                extension_settings[extensionName].presetNotes?.[name] !==
+                undefined
+              )
                 delete extension_settings[extensionName].presetNotes[name];
               removePresetFromCustomOrder(name);
               cfmPresetDetailExpandedNames.delete(name);
@@ -5044,7 +5050,8 @@ jQuery(async () => {
               // 清理聊天绑定记录
               const chatBindings =
                 extension_settings[extensionName].personaChatBindings;
-              if (chatBindings && chatBindings[avatarId]) delete chatBindings[avatarId];
+              if (chatBindings && chatBindings[avatarId])
+                delete chatBindings[avatarId];
               // 清理自定义顺序
               removePersonaFromCustomOrder(avatarId);
               // 清理备注
@@ -7279,7 +7286,10 @@ jQuery(async () => {
     for (const preset of presets) {
       if (!preset || typeof preset !== "object") continue;
       const prevBooks = Array.isArray(preset.books) ? preset.books : [];
-      const nextBooks = filterExistingWorldInfoNames(prevBooks, existingNameSet);
+      const nextBooks = filterExistingWorldInfoNames(
+        prevBooks,
+        existingNameSet,
+      );
       const sameBooks =
         prevBooks.length === nextBooks.length &&
         prevBooks.every((name, idx) => name === nextBooks[idx]);
@@ -7550,7 +7560,10 @@ jQuery(async () => {
   function getPersonaChatBindingsStore() {
     ensureSettings();
     const settings = extension_settings[extensionName];
-    if (!settings.personaChatBindings || typeof settings.personaChatBindings !== "object") {
+    if (
+      !settings.personaChatBindings ||
+      typeof settings.personaChatBindings !== "object"
+    ) {
       settings.personaChatBindings = {};
     }
     return settings.personaChatBindings;
@@ -7561,7 +7574,10 @@ jQuery(async () => {
     const avatarKey = String(avatarId || "");
     const saved = Array.isArray(store[avatarKey]) ? [...store[avatarKey]] : [];
     const chatMeta =
-      getContext().chatMetadata || window.chat_metadata || window.chatMetadata || {};
+      getContext().chatMetadata ||
+      window.chat_metadata ||
+      window.chatMetadata ||
+      {};
     const livePersonaAvatar = String(chatMeta?.persona || "");
     const liveBindKey =
       livePersonaAvatar && livePersonaAvatar === avatarKey
@@ -10188,7 +10204,8 @@ jQuery(async () => {
           const normalizedId = String(identifier || "").trim();
           if (!normalizedId) return null;
           if (prompt && typeof prompt === "object") {
-            prompt.identifier = getPresetPromptIdentifier(prompt) || normalizedId;
+            prompt.identifier =
+              getPresetPromptIdentifier(prompt) || normalizedId;
             return prompt;
           }
           return {
@@ -10355,7 +10372,10 @@ jQuery(async () => {
     const normalizedKey = String(promptKey || "").trim();
     if (!normalizedKey) return null;
 
-    for (const container of getAllPresetPromptOrderContainers(presetData, create)) {
+    for (const container of getAllPresetPromptOrderContainers(
+      presetData,
+      create,
+    )) {
       const order = Array.isArray(container?.order) ? container.order : [];
       const index = order.findIndex(
         (item) => getPresetPromptOrderIdentifier(item) === normalizedKey,
@@ -10638,7 +10658,8 @@ jQuery(async () => {
       if (pm?.select) {
         const restoreValue =
           sourceValue ??
-          getCurrentPresets().find((preset) => preset.name === sourceName)?.value;
+          getCurrentPresets().find((preset) => preset.name === sourceName)
+            ?.value;
         if (
           restoreValue !== undefined &&
           restoreValue !== null &&
@@ -11085,7 +11106,11 @@ jQuery(async () => {
     );
   }
 
-  function sanitizePresetDetailGroupState(presetName, presetData, save = false) {
+  function sanitizePresetDetailGroupState(
+    presetName,
+    presetData,
+    save = false,
+  ) {
     const presets = getPresetDetailActivePresets(presetName);
     const validFieldKeySet = getAvailablePresetDetailFieldKeySet(presetData);
     let presetChanged = false;
@@ -11703,7 +11728,8 @@ jQuery(async () => {
         : new Set(
             (Array.isArray(existingPromptIds)
               ? existingPromptIds
-              : Object.keys(existingPromptIds || {}))
+              : Object.keys(existingPromptIds || {})
+            )
               .map((item) => String(item || "").trim())
               .filter(Boolean),
           );
@@ -11779,7 +11805,10 @@ jQuery(async () => {
     const mergedOrderedFieldKeys = [];
 
     for (const fieldKey of normalizedOrderedFieldKeys) {
-      if (!currentOrderedFieldKeySet.has(fieldKey) || seenFieldKeys.has(fieldKey)) {
+      if (
+        !currentOrderedFieldKeySet.has(fieldKey) ||
+        seenFieldKeys.has(fieldKey)
+      ) {
         continue;
       }
       seenFieldKeys.add(fieldKey);
@@ -11825,7 +11854,10 @@ jQuery(async () => {
       existingOrderItemMap.set(identifier, item);
     }
 
-    const primaryOrderContainer = getPresetPromptOrderContainer(presetData, true);
+    const primaryOrderContainer = getPresetPromptOrderContainer(
+      presetData,
+      true,
+    );
     const primaryOrder = Array.isArray(primaryOrderContainer?.order)
       ? primaryOrderContainer.order
       : (primaryOrderContainer.order = []);
@@ -11852,7 +11884,10 @@ jQuery(async () => {
     }
 
     for (const container of getAllPresetPromptOrderContainers(presetData)) {
-      if (container === primaryOrderContainer || !Array.isArray(container?.order)) {
+      if (
+        container === primaryOrderContainer ||
+        !Array.isArray(container?.order)
+      ) {
         continue;
       }
       container.order = container.order.filter(
@@ -12020,9 +12055,13 @@ jQuery(async () => {
 
     if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "name")) {
       duplicatedPrompt.name = newPromptLabel;
-    } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "title")) {
+    } else if (
+      Object.prototype.hasOwnProperty.call(duplicatedPrompt, "title")
+    ) {
       duplicatedPrompt.title = newPromptLabel;
-    } else if (Object.prototype.hasOwnProperty.call(duplicatedPrompt, "label")) {
+    } else if (
+      Object.prototype.hasOwnProperty.call(duplicatedPrompt, "label")
+    ) {
       duplicatedPrompt.label = newPromptLabel;
     } else {
       duplicatedPrompt.name = newPromptLabel;
@@ -12142,7 +12181,9 @@ jQuery(async () => {
   function findNativePresetPromptRow(promptKey, promptLabel = "") {
     const normalizedPromptKey = String(promptKey || "").trim();
     const normalizedPromptLabel = String(promptLabel || "").trim();
-    const rows = $("#completion_prompt_manager .completion_prompt_manager_prompt");
+    const rows = $(
+      "#completion_prompt_manager .completion_prompt_manager_prompt",
+    );
     if (!rows.length) return $();
 
     if (normalizedPromptKey) {
@@ -12162,8 +12203,9 @@ jQuery(async () => {
         .filter(function () {
           const row = $(this);
           const dataName = String(
-            row.find(".completion_prompt_manager_prompt_name").attr("data-pm-name") ||
-              "",
+            row
+              .find(".completion_prompt_manager_prompt_name")
+              .attr("data-pm-name") || "",
           ).trim();
           const visibleName = String(
             row.find(".completion_prompt_manager_prompt_name").text() || "",
@@ -12187,7 +12229,10 @@ jQuery(async () => {
     if (!pm?.select || !normalizedPresetName) return null;
 
     const optionPools = [pm.select.find("option").toArray()];
-    if (Array.isArray(_presetDetachedOptions) && _presetDetachedOptions.length) {
+    if (
+      Array.isArray(_presetDetachedOptions) &&
+      _presetDetachedOptions.length
+    ) {
       optionPools.push(_presetDetachedOptions);
     }
 
@@ -12197,7 +12242,11 @@ jQuery(async () => {
         const optionText = String($option.text() || "").trim();
         if (optionText === normalizedPresetName) {
           const optionValue = $option.val();
-          if (optionValue !== undefined && optionValue !== null && optionValue !== "") {
+          if (
+            optionValue !== undefined &&
+            optionValue !== null &&
+            optionValue !== ""
+          ) {
             return String(optionValue);
           }
         }
@@ -12215,14 +12264,19 @@ jQuery(async () => {
     const normalizedPresetName = String(presetName || "").trim();
     const normalizedPromptKey = String(promptKey || "").trim();
     const normalizedPromptLabel = String(promptLabel || "").trim();
-    if (!normalizedPresetName || (!normalizedPromptKey && !normalizedPromptLabel))
+    if (
+      !normalizedPresetName ||
+      (!normalizedPromptKey && !normalizedPromptLabel)
+    )
       return false;
 
     const pm = getContext().getPresetManager();
     if (!pm?.select) return false;
 
     const bringNativePresetPromptPopupToFront = () => {
-      const popupEl = document.getElementById("completion_prompt_manager_popup");
+      const popupEl = document.getElementById(
+        "completion_prompt_manager_popup",
+      );
       if (!popupEl) return false;
 
       const overlayEl = document.getElementById("cfm-overlay");
@@ -12246,7 +12300,8 @@ jQuery(async () => {
       let applied = false;
 
       if (wrapperEl instanceof HTMLElement) {
-        applied = applyLayerStyle(wrapperEl, { position: "relative" }) || applied;
+        applied =
+          applyLayerStyle(wrapperEl, { position: "relative" }) || applied;
       }
 
       popupEl.style.setProperty("position", "fixed", "important");
@@ -12254,9 +12309,17 @@ jQuery(async () => {
       popupEl.style.setProperty("left", "50%", "important");
       popupEl.style.setProperty("right", "auto", "important");
       popupEl.style.setProperty("bottom", "auto", "important");
-      popupEl.style.setProperty("transform", "translate(-50%, -50%)", "important");
+      popupEl.style.setProperty(
+        "transform",
+        "translate(-50%, -50%)",
+        "important",
+      );
       popupEl.style.setProperty("margin", "0", "important");
-      popupEl.style.setProperty("max-height", `${Math.max(240, window.innerHeight - 24)}px`, "important");
+      popupEl.style.setProperty(
+        "max-height",
+        `${Math.max(240, window.innerHeight - 24)}px`,
+        "important",
+      );
       popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
       applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
 
@@ -12950,7 +13013,8 @@ jQuery(async () => {
         const fieldKey = String(field.key || "");
         const sourceLabel = String(field.sourceLabel || "").trim();
         const isExternalSourceField = !!sourceLabel;
-        const isSortableField = canSortFields && fieldKey.startsWith("prompts.");
+        const isSortableField =
+          canSortFields && fieldKey.startsWith("prompts.");
         const canMoveUp = isSortableField && index > 0;
         const canMoveDown = isSortableField && index < fields.length - 1;
         const sourceMetaHtml = sourceLabel
@@ -13057,12 +13121,14 @@ jQuery(async () => {
           await duplicatePresetDetailField(preset.name, currentFieldKey);
         });
 
-        row.find(".cfm-preset-detail-delete").on("click touchend", async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const currentFieldKey = $(e.currentTarget).data("field");
-          await deletePresetDetailField(preset.name, currentFieldKey);
-        });
+        row
+          .find(".cfm-preset-detail-delete")
+          .on("click touchend", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentFieldKey = $(e.currentTarget).data("field");
+            await deletePresetDetailField(preset.name, currentFieldKey);
+          });
 
         row.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
           e.preventDefault();
@@ -14907,7 +14973,9 @@ jQuery(async () => {
             ui.item.addClass("cfm-regex-dragging");
           },
           stop: async (_event, ui) => {
-            const movedScriptId = String(ui.item.data("script-id") || "").trim();
+            const movedScriptId = String(
+              ui.item.data("script-id") || "",
+            ).trim();
             ui.item.removeClass("cfm-regex-dragging");
             const orderedIds = subList
               .find(".cfm-regex-script-row")
@@ -15573,7 +15641,9 @@ jQuery(async () => {
             ui.item.addClass("cfm-regex-dragging");
           },
           stop: async (_event, ui) => {
-            const movedScriptId = String(ui.item.data("script-id") || "").trim();
+            const movedScriptId = String(
+              ui.item.data("script-id") || "",
+            ).trim();
             ui.item.removeClass("cfm-regex-dragging");
             const orderedIds = subList
               .find(".cfm-regex-script-row")
@@ -23664,7 +23734,8 @@ jQuery(async () => {
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
         distance: 4,
-        cancel: ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
+        cancel:
+          ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
           ui.item.addClass("cfm-layout-dragging");
         },
@@ -23778,7 +23849,8 @@ jQuery(async () => {
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
         distance: 4,
-        cancel: ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
+        cancel:
+          ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
           ui.item.addClass("cfm-layout-dragging");
         },
@@ -26820,7 +26892,8 @@ jQuery(async () => {
       });
       rightList.on("drop", (e) => {
         rightList.removeClass("cfm-right-list-drop-target");
-        if ($(e.target).closest(".cfm-preset-detail-sublist").length > 0) return;
+        if ($(e.target).closest(".cfm-preset-detail-sublist").length > 0)
+          return;
         if ($(e.target).closest(".cfm-row").length > 0) return;
         e.preventDefault();
         e.stopPropagation();
@@ -29740,9 +29813,7 @@ jQuery(async () => {
     if (!normalizedName) return false;
     const existingNameSet = getExistingQrSetNameSet();
     if (!existingNameSet.has(normalizedName)) {
-      console.info(
-        `[CFM] 已跳过不存在的快速回复集激活切换：${normalizedName}`,
-      );
+      console.info(`[CFM] 已跳过不存在的快速回复集激活切换：${normalizedName}`);
       return false;
     }
     try {
@@ -32239,22 +32310,30 @@ jQuery(async () => {
   }
 
   function syncPersonaCustomOrder(avatarIds = []) {
-    const normalizedIds = [...new Set(
-      (Array.isArray(avatarIds) ? avatarIds : [])
-        .map((id) => String(id || "").trim())
-        .filter(Boolean),
-    )];
+    const normalizedIds = [
+      ...new Set(
+        (Array.isArray(avatarIds) ? avatarIds : [])
+          .map((id) => String(id || "").trim())
+          .filter(Boolean),
+      ),
+    ];
     const currentOrder = getPersonaCustomOrderStore();
-    const normalizedOrder = [...new Set(
-      currentOrder.map((id) => String(id || "").trim()).filter(Boolean),
-    )];
-    const nextOrder = normalizedOrder.filter((id) => normalizedIds.includes(id));
+    const normalizedOrder = [
+      ...new Set(
+        currentOrder.map((id) => String(id || "").trim()).filter(Boolean),
+      ),
+    ];
+    const nextOrder = normalizedOrder.filter((id) =>
+      normalizedIds.includes(id),
+    );
     for (const id of normalizedIds) {
       if (!nextOrder.includes(id)) nextOrder.push(id);
     }
     const changed =
       nextOrder.length !== currentOrder.length ||
-      nextOrder.some((id, idx) => id !== String(currentOrder[idx] || "").trim());
+      nextOrder.some(
+        (id, idx) => id !== String(currentOrder[idx] || "").trim(),
+      );
     if (changed) {
       extension_settings[extensionName].personaCustomOrder = nextOrder;
       getContext().saveSettingsDebounced();
@@ -32281,7 +32360,9 @@ jQuery(async () => {
     const targetId = String(avatarId || "").trim();
     if (!targetId) return;
     const order = getPersonaCustomOrderStore();
-    const nextOrder = order.filter((id) => String(id || "").trim() !== targetId);
+    const nextOrder = order.filter(
+      (id) => String(id || "").trim() !== targetId,
+    );
     if (nextOrder.length === order.length) return;
     extension_settings[extensionName].personaCustomOrder = nextOrder;
     getContext().saveSettingsDebounced();
@@ -32335,7 +32416,9 @@ jQuery(async () => {
     if (!pu.personas) pu.personas = {};
     if (!pu.persona_descriptions) pu.persona_descriptions = {};
 
-    const avatarPayload = await getPersonaDuplicateAvatarPayload(sourcePersona.avatarId);
+    const avatarPayload = await getPersonaDuplicateAvatarPayload(
+      sourcePersona.avatarId,
+    );
     if (!avatarPayload) {
       toastr.error("复制User失败：无法获取头像资源");
       return;
@@ -32351,9 +32434,13 @@ jQuery(async () => {
       newAvatarId = `${makeIdBase()}.${avatarPayload.ext}`;
     }
 
-    const uploadFile = new File([avatarPayload.blob], `avatar.${avatarPayload.ext}`, {
-      type: avatarPayload.type,
-    });
+    const uploadFile = new File(
+      [avatarPayload.blob],
+      `avatar.${avatarPayload.ext}`,
+      {
+        type: avatarPayload.type,
+      },
+    );
     const formData = new FormData();
     formData.append("avatar", uploadFile);
     formData.append("overwrite_name", newAvatarId);
@@ -32584,7 +32671,10 @@ jQuery(async () => {
     if (!doc?.body) return null;
 
     const value = String(textarea.value || "");
-    const safeCaret = Math.max(0, Math.min(Math.trunc(caretIndex), value.length));
+    const safeCaret = Math.max(
+      0,
+      Math.min(Math.trunc(caretIndex), value.length),
+    );
     const style = (doc.defaultView || window).getComputedStyle(textarea);
     const mirror = doc.createElement("div");
     const marker = doc.createElement("span");
@@ -32655,20 +32745,29 @@ jQuery(async () => {
   function flashTextareaCaretSelection(textarea, caretIndex) {
     if (!textarea || typeof textarea.setSelectionRange !== "function") return;
     const value = String(textarea.value || "");
-    const safeCaret = Math.max(0, Math.min(Math.trunc(caretIndex), value.length));
+    const safeCaret = Math.max(
+      0,
+      Math.min(Math.trunc(caretIndex), value.length),
+    );
 
     if (!value.length) {
       textarea.setSelectionRange(0, 0);
       return;
     }
 
-    const lineStart = Math.max(value.lastIndexOf("\n", Math.max(0, safeCaret - 1)) + 1, 0);
+    const lineStart = Math.max(
+      value.lastIndexOf("\n", Math.max(0, safeCaret - 1)) + 1,
+      0,
+    );
     const nextLineBreak = value.indexOf("\n", safeCaret);
     const lineEnd = nextLineBreak === -1 ? value.length : nextLineBreak;
     const highlightStart = Math.min(lineStart, value.length);
     const highlightEnd = Math.max(
       highlightStart,
-      Math.min(value.length, lineEnd > highlightStart ? lineEnd : highlightStart + 1),
+      Math.min(
+        value.length,
+        lineEnd > highlightStart ? lineEnd : highlightStart + 1,
+      ),
     );
 
     textarea.focus();
@@ -33224,8 +33323,10 @@ jQuery(async () => {
     const selector = buttonMap[bindType];
     if (!selector) return;
 
-    const currentChatBindKey = bindType === "chat" ? getCurrentChatBindKey() : null;
-    const wasChatBound = bindType === "chat" ? getPersonaBindStates(persona).chat : false;
+    const currentChatBindKey =
+      bindType === "chat" ? getCurrentChatBindKey() : null;
+    const wasChatBound =
+      bindType === "chat" ? getPersonaBindStates(persona).chat : false;
 
     selectPersona(persona.avatarId);
     setTimeout(() => {
@@ -33237,7 +33338,11 @@ jQuery(async () => {
       btn.trigger("click");
       setTimeout(() => {
         if (bindType === "chat" && currentChatBindKey) {
-          syncPersonaChatBindingState(persona.avatarId, currentChatBindKey, !wasChatBound);
+          syncPersonaChatBindingState(
+            persona.avatarId,
+            currentChatBindKey,
+            !wasChatBound,
+          );
         }
         refreshPersonaPanelView();
       }, 80);
@@ -33246,9 +33351,8 @@ jQuery(async () => {
 
   // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
   function hasNativePersonaToolEntry() {
-    return !!$(
-      "#pw_persona_tool_btn, .menu_button[title='打开设定生成器']",
-    ).length;
+    return !!$("#pw_persona_tool_btn, .menu_button[title='打开设定生成器']")
+      .length;
   }
 
   function triggerNativePersonaTool(persona) {
@@ -36152,7 +36256,10 @@ jQuery(async () => {
     for (const preset of presets) {
       if (!preset || typeof preset !== "object") continue;
       const prevScripts = Array.isArray(preset.scripts) ? preset.scripts : [];
-      const nextScripts = filterExistingRegexScriptIds(prevScripts, existingIdSet);
+      const nextScripts = filterExistingRegexScriptIds(
+        prevScripts,
+        existingIdSet,
+      );
       const sameScripts =
         prevScripts.length === nextScripts.length &&
         prevScripts.every((scriptId, idx) => scriptId === nextScripts[idx]);
@@ -36176,7 +36283,8 @@ jQuery(async () => {
       applied.length !== nextApplied.length ||
       applied.some((idx, i) => idx !== nextApplied[i]);
     if (appliedChanged) {
-      extension_settings[extensionName]._regexAppliedPresetIndices = nextApplied;
+      extension_settings[extensionName]._regexAppliedPresetIndices =
+        nextApplied;
     }
     if (save && (presetChanged || appliedChanged)) {
       getContext().saveSettingsDebounced();
@@ -39425,6 +39533,9 @@ jQuery(async () => {
   let _bgDetachedElements = [];
   let _globalWIDetachedOptions = [];
 
+  // 缓存 select 原始 option 顺序（value 列表），用于恢复时保持原生排序
+  const _selectOriginalOrder = new Map();
+
   /**
    * 预设过滤：通过 detach/append option 实现过滤
    * 兼容原生 select、select2、以及第三方美化脚本
@@ -39436,6 +39547,9 @@ jQuery(async () => {
     const pm = getContext().getPresetManager();
     const targetSelect =
       pm && pm.select && pm.select.length ? pm.select : select;
+
+    // 保存原始 option 顺序（仅首次）
+    _saveSelectOriginalOrder(targetSelect);
 
     // 先恢复之前 detach 的 option
     if (_presetDetachedOptions.length > 0) {
@@ -39470,6 +39584,9 @@ jQuery(async () => {
   function applyWorldInfoFilter() {
     const select = $("#world_editor_select");
     if (!select.length) return;
+
+    // 保存原始 option 顺序（仅首次）
+    _saveSelectOriginalOrder(select);
 
     // 先恢复之前 detach 的 option
     if (_worldInfoDetachedOptions.length > 0) {
@@ -39527,6 +39644,9 @@ jQuery(async () => {
   function applyThemeFilter() {
     const select = $("#themes");
     if (!select.length) return;
+
+    // 保存原始 option 顺序（仅首次）
+    _saveSelectOriginalOrder(select);
 
     // 先恢复之前 detach 的 option
     if (_themeDetachedOptions.length > 0) {
@@ -39600,11 +39720,42 @@ jQuery(async () => {
       const v = $(this).val();
       return v !== "" && v !== "gui" && v !== "default";
     });
-    rest.sort(function (a, b) {
-      return $(a).text().trim().localeCompare($(b).text().trim());
-    });
+    // 优先按保存的原始顺序还原，保持与 SillyTavern 原生排序一致
+    const selId = selectEl.attr("id") || "";
+    const origOrder = _selectOriginalOrder.get(selId);
+    if (origOrder && origOrder.length > 0) {
+      const orderMap = new Map();
+      origOrder.forEach((v, i) => orderMap.set(v, i));
+      rest.sort(function (a, b) {
+        const va = $(a).val();
+        const vb = $(b).val();
+        const ia = orderMap.has(va) ? orderMap.get(va) : 999999;
+        const ib = orderMap.has(vb) ? orderMap.get(vb) : 999999;
+        if (ia !== ib) return ia - ib;
+        // 新增的 option（不在原始顺序中）按 localeCompare 排在末尾
+        return $(a).text().trim().localeCompare($(b).text().trim(), "zh-CN");
+      });
+    } else {
+      rest.sort(function (a, b) {
+        return $(a).text().trim().localeCompare($(b).text().trim(), "zh-CN");
+      });
+    }
     selectEl.append(placeholder);
     selectEl.append(rest);
+  }
+
+  /**
+   * 保存 select 的原始 option 顺序（仅首次保存）
+   */
+  function _saveSelectOriginalOrder(selectEl) {
+    const selId = selectEl.attr("id") || "";
+    if (!selId || _selectOriginalOrder.has(selId)) return;
+    const order = [];
+    selectEl.find("option").each(function () {
+      const v = $(this).val();
+      if (v !== "" && v !== "gui" && v !== "default") order.push(v);
+    });
+    if (order.length > 0) _selectOriginalOrder.set(selId, order);
   }
 
   /**
@@ -39885,6 +40036,9 @@ jQuery(async () => {
   function applyGlobalWorldInfoFilter() {
     const select = $("#world_info");
     if (!select.length) return;
+
+    // 保存原始 option 顺序（仅首次）
+    _saveSelectOriginalOrder(select);
 
     // 先 destroy select2
     const hasSelect2 = select.hasClass("select2-hidden-accessible");
