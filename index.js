@@ -11115,6 +11115,23 @@ jQuery(async () => {
     const originalEntry = structuredClone(worldInfoData.entries[normalizedUid]);
     delete originalEntry.uid;
 
+    // 给副本的 comment 加"副本"后缀（参考预设条目复制的命名逻辑）
+    const existingComments = new Set(
+      Object.values(worldInfoData.entries)
+        .filter((e) => e && typeof e === "object")
+        .map((e) => String(e.comment || ""))
+    );
+    const baseComment = String(originalEntry.comment || "").trim();
+    if (baseComment) {
+      let newComment = `${baseComment} 副本`;
+      let idx = 2;
+      while (existingComments.has(newComment)) {
+        newComment = `${baseComment} 副本${idx}`;
+        idx++;
+      }
+      originalEntry.comment = newComment;
+    }
+
     // 找到最大 UID 并分配新 UID
     const existingUids = Object.keys(worldInfoData.entries)
       .map(Number)
@@ -13064,9 +13081,9 @@ jQuery(async () => {
             <div class="cfm-wi-toggle cfm-worldinfo-entry-active-toggle ${entry.enabled ? "cfm-wi-toggle-on" : ""}" data-entry-uid="${escapeHtml(entry.uid)}" title="${entry.enabled ? "点击取消激活" : "点击激活"}"><i class="fa-solid fa-toggle-${entry.enabled ? "on" : "off"}"></i></div>
             <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
             <div class="cfm-chat-actions">
-              <div class="cfm-chat-action-btn cfm-worldinfo-entry-edit" data-entry-uid="${escapeHtml(entry.uid)}" title="${isDetailOpen ? "收起条目详情" : "查看条目详情"}"><i class="fa-solid fa-pen-to-square"></i></div>
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-delete" data-entry-uid="${escapeHtml(entry.uid)}" title="删除条目"><i class="fa-solid fa-trash-can"></i></div>
+              <div class="cfm-chat-action-btn cfm-worldinfo-entry-edit" data-entry-uid="${escapeHtml(entry.uid)}" title="${isDetailOpen ? "收起条目详情" : "查看条目详情"}"><i class="fa-solid fa-pen-to-square"></i></div>
             </div>
           </div>
           ${
