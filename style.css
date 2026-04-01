@@ -5424,6 +5424,12 @@ option.cfm-nf-hidden {
   background-color: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.85);
 }
+.cfm-worldinfo-entry-duplicate:hover {
+  color: #89b4fa;
+}
+.cfm-worldinfo-entry-delete:hover {
+  color: #f38ba8;
+}
 .cfm-chat-pin-btn:hover {
   color: #f9e2af;
 }

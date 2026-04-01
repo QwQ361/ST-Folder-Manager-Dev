@@ -10959,7 +10959,8 @@ jQuery(async () => {
   function getWorldInfoEntryDetailSortMode() {
     ensureResourceSettings();
     const mode = String(
-      extension_settings[extensionName].worldInfoEntryDetailSortMode || "custom",
+      extension_settings[extensionName].worldInfoEntryDetailSortMode ||
+        "custom",
     );
     return mode === "priority" ? "priority" : "custom";
   }
@@ -10977,7 +10978,8 @@ jQuery(async () => {
       String(sortMode || "custom") === "priority" ? "priority" : "custom";
 
     // Secondary and tertiary sorts (matching SillyTavern native behavior)
-    const secondarySort = (a, b) => Number(b?.order ?? 0) - Number(a?.order ?? 0);
+    const secondarySort = (a, b) =>
+      Number(b?.order ?? 0) - Number(a?.order ?? 0);
     const tertiarySort = (a, b) => Number(a?.uid ?? 0) - Number(b?.uid ?? 0);
 
     return normalizedEntries.sort((a, b) => {
@@ -10996,7 +10998,11 @@ jQuery(async () => {
     });
   }
 
-  function getWorldInfoEntriesForDetail(bookName, worldInfoData, sortMode = "custom") {
+  function getWorldInfoEntriesForDetail(
+    bookName,
+    worldInfoData,
+    sortMode = "custom",
+  ) {
     const entryMap =
       worldInfoData?.entries && typeof worldInfoData.entries === "object"
         ? worldInfoData.entries
@@ -11010,7 +11016,9 @@ jQuery(async () => {
             ? entry.key.map((item) => String(item || "")).filter(Boolean)
             : [];
           const secondaryKeys = Array.isArray(entry.keysecondary)
-            ? entry.keysecondary.map((item) => String(item || "")).filter(Boolean)
+            ? entry.keysecondary
+                .map((item) => String(item || ""))
+                .filter(Boolean)
             : [];
           const label = String(
             entry.comment || primaryKeys[0] || `条目 ${uid || "未命名"}`,
@@ -11085,6 +11093,204 @@ jQuery(async () => {
     targetEntry.enabled = activate;
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
     return true;
+  }
+
+  /**
+   * 复制世界书条目（在同一世界书内创建副本）
+   * @param {string} bookName - 世界书名称
+   * @param {string} uid - 要复制的条目 UID
+   * @returns {Promise<object|null>} 新创建的条目，失败返回 null
+   */
+  async function duplicateWorldInfoEntryInBook(bookName, uid) {
+    const normalizedName = String(bookName || "");
+    const normalizedUid = String(uid ?? "");
+    if (!normalizedName || !normalizedUid) return null;
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    if (!worldInfoData?.entries?.[normalizedUid]) {
+      throw new Error(`找不到世界书条目 UID=${normalizedUid}`);
+    }
+
+    // 深拷贝原条目数据
+    const originalEntry = structuredClone(worldInfoData.entries[normalizedUid]);
+    delete originalEntry.uid;
+
+    // 找到最大 UID 并分配新 UID
+    const existingUids = Object.keys(worldInfoData.entries)
+      .map(Number)
+      .filter((n) => !isNaN(n));
+    const newUid = existingUids.length > 0 ? Math.max(...existingUids) + 1 : 0;
+
+    // 创建新条目
+    const newEntry = { ...originalEntry, uid: newUid };
+    worldInfoData.entries[newUid] = newEntry;
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    return newEntry;
+  }
+
+  /**
+   * 删除世界书条目
+   * @param {string} bookName - 世界书名称
+   * @param {string} uid - 要删除的条目 UID
+   * @param {Object} [options] - 选项
+   * @param {boolean} [options.silent=false] - 是否跳过确认弹窗
+   * @returns {Promise<boolean>} 是否成功删除
+   */
+  async function deleteWorldInfoEntryInBook(
+    bookName,
+    uid,
+    { silent = false } = {},
+  ) {
+    const normalizedName = String(bookName || "");
+    const normalizedUid = String(uid ?? "");
+    if (!normalizedName || !normalizedUid) return false;
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    if (!worldInfoData?.entries?.[normalizedUid]) {
+      throw new Error(`找不到世界书条目 UID=${normalizedUid}`);
+    }
+
+    if (!silent) {
+      const entry = worldInfoData.entries[normalizedUid];
+      const entryLabel =
+        entry?.comment || (entry?.key || [])[0] || `UID ${normalizedUid}`;
+      const confirmed = confirm(
+        `确定要删除条目「${entryLabel}」吗？\n此操作不可撤销！`,
+      );
+      if (!confirmed) return false;
+    }
+
+    // 删除条目
+    delete worldInfoData.entries[normalizedUid];
+
+    // 清理 originalData（如果存在）
+    if (
+      worldInfoData.originalData &&
+      Array.isArray(worldInfoData.originalData.entries)
+    ) {
+      const originalIndex = worldInfoData.originalData.entries.findIndex(
+        (e) => e?.uid == normalizedUid,
+      );
+      if (originalIndex !== -1) {
+        worldInfoData.originalData.entries.splice(originalIndex, 1);
+      }
+    }
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    return true;
+  }
+
+  /**
+   * 批量复制世界书条目
+   * @param {string} bookName - 世界书名称
+   * @param {string[]} selectionKeys - 选中的条目 key 列表（格式：bookName::uid）
+   * @returns {Promise<number>} 成功复制的条目数
+   */
+  async function batchDuplicateWorldInfoEntries(bookName, selectionKeys) {
+    const normalizedName = String(bookName || "");
+    const prefix = `${normalizedName}::`;
+    const targetUids = Array.from(
+      new Set(
+        (Array.isArray(selectionKeys) ? selectionKeys : [])
+          .map((key) => String(key || ""))
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length))
+          .filter(Boolean),
+      ),
+    );
+    if (!targetUids.length) {
+      toastr.warning("请先选择要复制的世界书条目");
+      return 0;
+    }
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    const existingUids = Object.keys(worldInfoData.entries)
+      .map(Number)
+      .filter((n) => !isNaN(n));
+    let nextUid = existingUids.length > 0 ? Math.max(...existingUids) + 1 : 0;
+    let duplicatedCount = 0;
+
+    for (const uid of targetUids) {
+      const entry = worldInfoData?.entries?.[uid];
+      if (!entry) continue;
+      const cloned = structuredClone(entry);
+      delete cloned.uid;
+      cloned.uid = nextUid;
+      worldInfoData.entries[nextUid] = cloned;
+      nextUid++;
+      duplicatedCount++;
+    }
+
+    if (!duplicatedCount) {
+      toastr.warning("所选条目不支持复制操作");
+      return 0;
+    }
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    toastr.success(`已复制 ${duplicatedCount} 个世界书条目`);
+    refreshWorldInfoPanelView();
+    return duplicatedCount;
+  }
+
+  /**
+   * 批量删除世界书条目
+   * @param {string} bookName - 世界书名称
+   * @param {string[]} selectionKeys - 选中的条目 key 列表（格式：bookName::uid）
+   * @returns {Promise<number>} 成功删除的条目数
+   */
+  async function batchDeleteWorldInfoEntries(bookName, selectionKeys) {
+    const normalizedName = String(bookName || "");
+    const prefix = `${normalizedName}::`;
+    const targetUids = Array.from(
+      new Set(
+        (Array.isArray(selectionKeys) ? selectionKeys : [])
+          .map((key) => String(key || ""))
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length))
+          .filter(Boolean),
+      ),
+    );
+    if (!targetUids.length) {
+      toastr.warning("请先选择要删除的世界书条目");
+      return 0;
+    }
+
+    const confirmed = confirm(
+      `确定要删除选中的 ${targetUids.length} 个条目吗？\n此操作不可撤销！`,
+    );
+    if (!confirmed) return 0;
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    let deletedCount = 0;
+
+    for (const uid of targetUids) {
+      if (!worldInfoData?.entries?.[uid]) continue;
+      delete worldInfoData.entries[uid];
+      // 清理 originalData
+      if (
+        worldInfoData.originalData &&
+        Array.isArray(worldInfoData.originalData.entries)
+      ) {
+        const originalIndex = worldInfoData.originalData.entries.findIndex(
+          (e) => e?.uid == uid,
+        );
+        if (originalIndex !== -1) {
+          worldInfoData.originalData.entries.splice(originalIndex, 1);
+        }
+      }
+      deletedCount++;
+    }
+
+    if (!deletedCount) {
+      toastr.warning("所选条目不支持删除操作");
+      return 0;
+    }
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    toastr.success(`已删除 ${deletedCount} 个世界书条目`);
+    refreshWorldInfoPanelView();
+    return deletedCount;
   }
 
   async function applyWorldInfoEntryBatchActivation(
@@ -12859,6 +13065,8 @@ jQuery(async () => {
             <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
             <div class="cfm-chat-actions">
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-edit" data-entry-uid="${escapeHtml(entry.uid)}" title="${isDetailOpen ? "收起条目详情" : "查看条目详情"}"><i class="fa-solid fa-pen-to-square"></i></div>
+              <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
+              <div class="cfm-chat-action-btn cfm-worldinfo-entry-delete" data-entry-uid="${escapeHtml(entry.uid)}" title="删除条目"><i class="fa-solid fa-trash-can"></i></div>
             </div>
           </div>
           ${
@@ -12969,6 +13177,79 @@ jQuery(async () => {
         setWorldInfoEntryBookExpanded(normalizedName, true);
         rerenderCurrentSubList();
       });
+
+      // 复制条目按钮事件
+      row
+        .find(".cfm-worldinfo-entry-duplicate")
+        .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const el = $(e.currentTarget);
+          if (el.data("pending")) return;
+          el.data("pending", true);
+          try {
+            const newEntry = await duplicateWorldInfoEntryInBook(
+              normalizedName,
+              entry.uid,
+            );
+            if (newEntry) {
+              toastr.success(`已复制条目「${escapeHtml(entry.label)}」`);
+              // 清除缓存，强制重新获取数据
+              refreshFn();
+            }
+          } catch (error) {
+            console.error("[CFM] 复制世界书条目失败:", error);
+            toastr.error(`复制失败: ${error.message || error}`);
+          } finally {
+            el.data("pending", false);
+          }
+        });
+
+      // 删除条目按钮事件
+      row
+        .find(".cfm-worldinfo-entry-delete")
+        .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const el = $(e.currentTarget);
+          if (el.data("pending")) return;
+          el.data("pending", true);
+          try {
+            const deleted = await deleteWorldInfoEntryInBook(
+              normalizedName,
+              entry.uid,
+            );
+            if (deleted) {
+              toastr.success(`已删除条目「${escapeHtml(entry.label)}」`);
+              // 从批量选中集合中移除
+              const entryKey = getWorldInfoEntrySelectionKey(
+                normalizedName,
+                entry.uid,
+              );
+              cfmWorldInfoEntryBatchSelected.delete(entryKey);
+              // 关闭该条目的详情（如果已打开）
+              const openSet = getWorldInfoEntryOpenSet(normalizedName);
+              if (openSet) openSet.delete(String(entry.uid));
+              // 清除缓存，强制重新获取数据
+              refreshFn();
+            }
+          } catch (error) {
+            console.error("[CFM] 删除世界书条目失败:", error);
+            toastr.error(`删除失败: ${error.message || error}`);
+          } finally {
+            el.data("pending", false);
+          }
+        });
 
       detailCard.append(row);
     }
