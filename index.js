@@ -7209,11 +7209,22 @@ jQuery(async () => {
           bound.add(ch.data.extensions.world);
         }
       }
-      // charLore 中所有角色关联的世界书
+      // charLore 中当前角色关联的辅助世界书（只取当前角色，而非所有角色）
       if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
-        for (const entry of worldInfoObj.charLore) {
-          if (entry.extraBooks && Array.isArray(entry.extraBooks)) {
-            entry.extraBooks.forEach((b) => bound.add(b));
+        // 获取当前角色的 fileName（与酒馆 getCharaFilename 逻辑一致）
+        const characters = ctx.characters || getCharacters();
+        const currentChar =
+          charId !== undefined && charId !== null ? characters[charId] : null;
+        const fileName = currentChar?.avatar?.replace(/\.[^/.]+$/, "") ?? null;
+        if (fileName) {
+          const extraCharLore = worldInfoObj.charLore.find(
+            (e) => e.name === fileName,
+          );
+          if (
+            extraCharLore?.extraBooks &&
+            Array.isArray(extraCharLore.extraBooks)
+          ) {
+            extraCharLore.extraBooks.forEach((b) => bound.add(b));
           }
         }
       }
