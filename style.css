@@ -5248,11 +5248,19 @@ option.cfm-nf-hidden {
 }
 .cfm-preset-detail-label {
   width: 100%;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.cfm-preset-detail-label .cfm-preset-detail-label-text {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .cfm-preset-detail-label .cfm-chat-actions {
   margin-left: auto;
+  flex-shrink: 0;
 }
 .cfm-preset-detail-value {
   font-size: 11px;
