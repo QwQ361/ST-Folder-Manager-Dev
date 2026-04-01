@@ -10976,21 +10976,23 @@ jQuery(async () => {
     const normalizedMode =
       String(sortMode || "custom") === "priority" ? "priority" : "custom";
 
+    // Secondary and tertiary sorts (matching SillyTavern native behavior)
+    const secondarySort = (a, b) => Number(b?.order ?? 0) - Number(a?.order ?? 0);
+    const tertiarySort = (a, b) => Number(a?.uid ?? 0) - Number(b?.uid ?? 0);
+
     return normalizedEntries.sort((a, b) => {
+      let primaryResult;
       if (normalizedMode === "priority") {
-        const orderDiff = Number(b?.order ?? 0) - Number(a?.order ?? 0);
-        if (orderDiff !== 0) return orderDiff;
+        // Match SillyTavern native: constant first, then normal, then disabled
+        const aValue = a?.enabled === false ? 2 : a?.constant ? 0 : 1;
+        const bValue = b?.enabled === false ? 2 : b?.constant ? 0 : 1;
+        primaryResult = aValue - bValue;
       } else {
-        const displayIndexDiff =
+        primaryResult =
           Number(a?.displayIndex ?? Number.MAX_SAFE_INTEGER) -
           Number(b?.displayIndex ?? Number.MAX_SAFE_INTEGER);
-        if (displayIndexDiff !== 0) return displayIndexDiff;
       }
-
-      return String(a?.uid ?? "").localeCompare(String(b?.uid ?? ""), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      return primaryResult || secondarySort(a, b) || tertiarySort(a, b);
     });
   }
 
