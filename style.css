@@ -5262,14 +5262,16 @@ select.cfm-wi-ctrl {
 .cfm-preset-detail-label {
   width: 100%;
   justify-content: flex-start;
+  align-items: flex-start;
   gap: 6px;
 }
 .cfm-preset-detail-label .cfm-preset-detail-label-text {
   flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .cfm-preset-detail-label .cfm-chat-actions {
   margin-left: auto;
