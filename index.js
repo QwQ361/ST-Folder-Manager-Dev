@@ -13096,24 +13096,44 @@ jQuery(async () => {
       const rawRole = Number(entry.raw?.role ?? 0);
       const rawOrder = Number(entry.raw?.order ?? 0);
       const rawProb = Number(entry.raw?.probability ?? 100);
+      const rawLogic = Number(entry.raw?.selectiveLogic ?? 0);
       const isAtDepth = rawPos === 4;
-      // 构建 Position 下拉菜单选项
+      // 构建 Position 下拉菜单选项（中文标签与酒馆原生一致）
       const posOptions = [
-        { value: "0", role: "", label: "↑Char" },
-        { value: "1", role: "", label: "↓Char" },
-        { value: "5", role: "", label: "↑EM" },
-        { value: "6", role: "", label: "↓EM" },
-        { value: "2", role: "", label: "↑AN" },
-        { value: "3", role: "", label: "↓AN" },
-        { value: "4", role: "0", label: "@D ⚙️" },
-        { value: "4", role: "1", label: "@D 👤" },
-        { value: "4", role: "2", label: "@D 🤖" },
+        { value: "0", role: "", label: "角色定义之前" },
+        { value: "1", role: "", label: "角色定义之后" },
+        { value: "5", role: "", label: "示例消息前（↑EM）" },
+        { value: "6", role: "", label: "示例消息后（↓EM）" },
+        { value: "2", role: "", label: "作者注释之前" },
+        { value: "3", role: "", label: "作者注释之后" },
+        { value: "4", role: "0", label: "@D ⚙️ [系统]在深度" },
+        { value: "4", role: "1", label: "@D 👤 [用户]在深度" },
+        { value: "4", role: "2", label: "@D 🤖 [AI]在深度" },
         { value: "7", role: "", label: "➡️ Outlet" },
       ];
-      const posSelectHtml = posOptions.map(opt => {
-        const selected = (String(rawPos) === opt.value && (opt.value !== "4" || String(rawRole) === opt.role)) ? " selected" : "";
-        return `<option value="${opt.value}" data-role="${opt.role}"${selected}>${escapeHtml(opt.label)}</option>`;
-      }).join("");
+      const posSelectHtml = posOptions
+        .map((opt) => {
+          const selected =
+            String(rawPos) === opt.value &&
+            (opt.value !== "4" || String(rawRole) === opt.role)
+              ? " selected"
+              : "";
+          return `<option value="${opt.value}" data-role="${opt.role}"${selected}>${escapeHtml(opt.label)}</option>`;
+        })
+        .join("");
+      // 构建 SelectiveLogic（触发策略）下拉菜单选项
+      const logicOptions = [
+        { value: "0", label: "与任意" },
+        { value: "3", label: "与所有" },
+        { value: "1", label: "非所有" },
+        { value: "2", label: "非任何" },
+      ];
+      const logicSelectHtml = logicOptions
+        .map((opt) => {
+          const selected = String(rawLogic) === opt.value ? " selected" : "";
+          return `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
+        })
+        .join("");
       const row = $(`
         <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-entry-uid="${escapeHtml(entry.uid)}">
           <div class="cfm-persona-detail-label cfm-preset-detail-label">
@@ -13125,6 +13145,7 @@ jQuery(async () => {
               <input class="cfm-wi-ctrl cfm-wi-ctrl-depth" type="number" value="${rawDepth}" min="0" max="9999" title="深度" ${isAtDepth ? "" : "disabled"} />
               <input class="cfm-wi-ctrl cfm-wi-ctrl-order" type="number" value="${rawOrder}" min="0" max="9999" title="顺序" />
               <div class="cfm-wi-ctrl-prob-wrap"><input class="cfm-wi-ctrl cfm-wi-ctrl-prob" type="number" value="${rawProb}" min="0" max="100" title="触发概率%" /><span class="cfm-wi-ctrl-prob-suffix">%</span></div>
+              <select class="cfm-wi-ctrl cfm-wi-ctrl-logic" title="触发策略">${logicSelectHtml}</select>
             </div>
             <div class="cfm-chat-actions">
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
@@ -13167,8 +13188,8 @@ jQuery(async () => {
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-             ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle, .cfm-wi-entry-controls",
-           ).length
+              ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle, .cfm-wi-entry-controls",
+            ).length
           ) {
             return;
           }
@@ -13325,7 +13346,10 @@ jQuery(async () => {
         const sel = $(this);
         const selectedOption = sel.find("option:selected");
         const newPos = Number(selectedOption.val());
-        const newRole = selectedOption.data("role") !== "" ? Number(selectedOption.data("role")) : undefined;
+        const newRole =
+          selectedOption.data("role") !== ""
+            ? Number(selectedOption.data("role"))
+            : undefined;
         const depthInput = row.find(".cfm-wi-ctrl-depth");
         depthInput.prop("disabled", newPos !== 4);
         try {
@@ -13385,8 +13409,24 @@ jQuery(async () => {
           toastr.error(`保存失败: ${err.message || err}`);
         }
       });
+      row.find(".cfm-wi-ctrl-logic").on("change", async function (e) {
+        e.stopPropagation();
+        const val = Number($(this).val()) || 0;
+        try {
+          const wiData = await fetchWorldInfoDetailData(normalizedName);
+          const target = wiData?.entries?.[entry.uid];
+          if (!target) return;
+          target.selectiveLogic = val;
+          await saveWorldInfoDetailData(normalizedName, wiData);
+        } catch (err) {
+          console.error("[CFM] 保存触发策略失败:", err);
+          toastr.error(`保存失败: ${err.message || err}`);
+        }
+      });
       // 阻止控件区域的 click 冒泡（避免影响批量选择等）
-      row.find(".cfm-wi-entry-controls").on("click", (e) => e.stopPropagation());
+      row
+        .find(".cfm-wi-entry-controls")
+        .on("click", (e) => e.stopPropagation());
 
       detailCard.append(row);
     }
