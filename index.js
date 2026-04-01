@@ -12423,6 +12423,11 @@ jQuery(async () => {
       await saveNormalizedPresetData(pm, presetName, presetData);
       toastr.success(`已复制预设条目「${sourceField.label}」`);
       refreshPresetPanelView();
+      // 高亮闪烁新复制的预设条目
+      flashDraggedElement(
+        `.cfm-preset-detail-row[data-field="prompts.${$.escapeSelector(newPromptKey)}"]`,
+        1500,
+      );
     } catch (error) {
       console.error("[CFM] 复制预设条目失败:", error);
       toastr.error(`复制失败: ${error.message || error}`);
@@ -13218,6 +13223,11 @@ jQuery(async () => {
               toastr.success(`已复制条目「${escapeHtml(entry.label)}」`);
               // 清除缓存，强制重新获取数据
               refreshFn();
+              // 高亮闪烁新复制的条目
+              flashDraggedElement(
+                `.cfm-preset-detail-row[data-entry-uid="${newEntry.uid}"]`,
+                1500,
+              );
             }
           } catch (error) {
             console.error("[CFM] 复制世界书条目失败:", error);
@@ -32930,6 +32940,11 @@ jQuery(async () => {
     insertPersonaAfterInCustomOrder(sourcePersona.avatarId, newAvatarId);
     getContext().saveSettingsDebounced();
     refreshPersonaPanelView();
+    // 高亮闪烁新复制的 User
+    flashDraggedElement(
+      `.cfm-row[data-avatar-id="${$.escapeSelector(newAvatarId)}"]`,
+      1500,
+    );
     toastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
   }
 
