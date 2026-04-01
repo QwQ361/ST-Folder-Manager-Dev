@@ -16882,14 +16882,26 @@ jQuery(async () => {
   function tryCollapseSublistFromOuterGap(e) {
     const clientX = getEventClientX(e);
     if (typeof clientX !== "number") return false;
-    const selectors = [
-      ".cfm-char-detail-sublist",
-      ".cfm-preset-detail-sublist",
-      ".cfm-persona-sublist",
-      ".cfm-qr-sub-items",
+
+    // 每个条目：选择器 + 对应的 toggle 选择器
+    const entries = [
+      { sel: ".cfm-char-detail-sublist", toggle: ".cfm-char-detail-toggle" },
+      { sel: ".cfm-preset-detail-sublist", toggle: ".cfm-preset-detail-toggle" },
+      { sel: ".cfm-persona-sublist", toggle: ".cfm-persona-toggle" },
+      { sel: ".cfm-qr-sub-items", toggle: ".cfm-qr-expand-arrow", isQr: true },
+      { sel: ".cfm-regex-sublist", toggle: ".cfm-regex-toggle" },
+      {
+        sel: ".cfm-chat-sublist:not(.cfm-char-detail-sublist):not(.cfm-preset-detail-sublist):not(.cfm-persona-sublist)",
+        toggle: ".cfm-chat-toggle",
+      },
     ];
-    for (const selector of selectors) {
-      const nodes = $(selector).toArray();
+
+    // 收集所有匹配的候选，选择垂直范围最小（最精确）的
+    let bestMatch = null;
+    let bestHeight = Infinity;
+
+    for (const entry of entries) {
+      const nodes = $(entry.sel).toArray();
       for (const node of nodes) {
         const rect = node.getBoundingClientRect();
         const gapLeft = rect.left - 30;
@@ -16901,29 +16913,33 @@ jQuery(async () => {
 
         const subList = $(node);
         const row = subList.prevAll(".cfm-row").first();
-        const toggle = row
-          .find(
-            ".cfm-char-detail-toggle, .cfm-preset-detail-toggle, .cfm-persona-toggle, .cfm-qr-expand-arrow",
-          )
-          .first();
+        const toggle = row.find(entry.toggle).first();
         if (!toggle.length) continue;
 
-        e.preventDefault();
-        e.stopPropagation();
-        if (selector === ".cfm-qr-sub-items") {
-          const targetName =
-            row.attr("data-res-id") || getLatestQrCollapseTargetName();
-          if (targetName) cfmQrLastFocusedSetName = targetName;
-          toggle.trigger("click");
-          if (targetName) scrollQrRowIntoView(targetName);
-        } else {
-          toggle.trigger("click");
-          scrollElementIntoViewCentered(row);
+        const height = rect.height;
+        if (height < bestHeight) {
+          bestHeight = height;
+          bestMatch = { entry, node, subList, row, toggle };
         }
-        return true;
       }
     }
-    return false;
+
+    if (!bestMatch) return false;
+
+    e.preventDefault();
+    e.stopPropagation();
+    const { entry, row, toggle } = bestMatch;
+    if (entry.isQr) {
+      const targetName =
+        row.attr("data-res-id") || getLatestQrCollapseTargetName();
+      if (targetName) cfmQrLastFocusedSetName = targetName;
+      toggle.trigger("click");
+      if (targetName) scrollQrRowIntoView(targetName);
+    } else {
+      toggle.trigger("click");
+      scrollElementIntoViewCentered(row);
+    }
+    return true;
   }
 
   $(document)
