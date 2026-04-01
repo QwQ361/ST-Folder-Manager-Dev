@@ -13090,12 +13090,32 @@ jQuery(async () => {
         entry.raw?.vectorized ? "向量" : null,
         entry.raw?.selective ? "选择性" : null,
       ].filter(Boolean);
+      // 构建条目摘要标签
+      const positionMap = { 0: "↑Char", 1: "↓Char", 2: "↑AN", 3: "↓AN", 4: "@D", 5: "↑EM", 6: "↓EM", 7: "Outlet" };
+      const roleMap = { 0: "⚙️", 1: "👤", 2: "🤖" };
+      const logicMap = { 0: "AND ANY", 1: "NOT ALL", 2: "NOT ANY", 3: "AND ALL" };
+      const rawPos = Number(entry.raw?.position ?? 0);
+      const rawDepth = Number(entry.raw?.depth ?? 4);
+      const rawRole = Number(entry.raw?.role ?? 0);
+      const rawOrder = Number(entry.raw?.order ?? 0);
+      const rawProb = Number(entry.raw?.probability ?? 100);
+      const rawLogic = Number(entry.raw?.selectiveLogic ?? 0);
+      const isSelective = !!entry.raw?.selective;
+      let posLabel = positionMap[rawPos] || "?";
+      if (rawPos === 4) posLabel += " " + (roleMap[rawRole] || "⚙️");
+      const entryTags = [];
+      if (isSelective) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-logic" title="触发策略">${escapeHtml(logicMap[rawLogic] || "AND ANY")}</span>`);
+      entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-pos" title="插入位置">${escapeHtml(posLabel)}</span>`);
+      if (rawPos === 4) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-depth" title="深度">D${rawDepth}</span>`);
+      entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-order" title="顺序">O${rawOrder}</span>`);
+      if (rawProb < 100) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-prob" title="触发概率">${rawProb}%</span>`);
       const row = $(`
         <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-entry-uid="${escapeHtml(entry.uid)}">
           <div class="cfm-persona-detail-label cfm-preset-detail-label">
             ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             <div class="cfm-wi-toggle cfm-worldinfo-entry-active-toggle ${entry.enabled ? "cfm-wi-toggle-on" : ""}" data-entry-uid="${escapeHtml(entry.uid)}" title="${entry.enabled ? "点击取消激活" : "点击激活"}"><i class="fa-solid fa-toggle-${entry.enabled ? "on" : "off"}"></i></div>
             <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
+            <div class="cfm-wi-entry-tags">${entryTags.join("")}</div>
             <div class="cfm-chat-actions">
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-delete" data-entry-uid="${escapeHtml(entry.uid)}" title="删除条目"><i class="fa-solid fa-trash-can"></i></div>
