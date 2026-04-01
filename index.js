@@ -35824,11 +35824,9 @@ jQuery(async () => {
         .join("、");
       const previewSuffix =
         scriptsToInsert.length > 5 ? ` 等 ${scriptsToInsert.length} 项` : "";
-      const overlay = $(
-        '<div class="cfm-sort-dialog-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.12);z-index:100000;display:flex;align-items:center;justify-content:center;"></div>',
-      );
+      const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
       const dialog = $(`
-        <div class="cfm-sort-dialog cfm-sort-dialog-insert" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;z-index:100001;width:min(880px,calc(100vw - 32px));max-width:880px;max-height:calc(100vh - 32px);">
+        <div class="cfm-sort-dialog cfm-sort-dialog-insert">
           <div class="cfm-sort-dialog-header">
             <span class="cfm-sort-dialog-title"><i class="fa-solid fa-sort"></i> 正则脚本排序</span>
             <span class="cfm-sort-dialog-desc">准备将 <b>${scriptsToInsert.length}</b> 个正则脚本插入到 <b>${escapeHtml(getRegexTransferScopeLabel(targetScope))}</b>。点击分隔线中间的 <i class="fa-solid fa-plus"></i> 选择插入位置；点击跳过则默认追加到最后。${previewNames ? `<br>待插入：${escapeHtml(previewNames)}${escapeHtml(previewSuffix)}` : ""}</span>
