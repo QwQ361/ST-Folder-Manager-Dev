@@ -13158,15 +13158,18 @@ jQuery(async () => {
         detailCard.append(row);
       }
 
-      if (canSortFields && typeof detailCard.sortable === "function") {
+      if (
+        canSortFields &&
+        typeof detailCard.sortable === "function" &&
+        !cfmIsTouchDevice()
+      ) {
         detailCard.sortable({
           items: '.cfm-preset-detail-row[data-field^="prompts."]',
           axis: "y",
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: cfmIsTouchDevice() ? 10 : 4,
-          delay: cfmIsTouchDevice() ? 300 : 0,
+          distance: 4,
           cancel:
             ".cfm-chat-actions, .cfm-chat-action-btn, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn, button, input, textarea, select, a",
           start: (_event, ui) => {
@@ -14978,15 +14981,18 @@ jQuery(async () => {
       }
 
       // 拖拽排序（仅目标角色）
-      if (isTarget && typeof subList.sortable === "function") {
+      if (
+        isTarget &&
+        typeof subList.sortable === "function" &&
+        !cfmIsTouchDevice()
+      ) {
         subList.sortable({
           items: ".cfm-regex-script-row",
           axis: "y",
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: cfmIsTouchDevice() ? 10 : 4,
-          delay: cfmIsTouchDevice() ? 300 : 0,
+          distance: 4,
           cancel:
             ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
           start: (_event, ui) => {
@@ -15647,15 +15653,18 @@ jQuery(async () => {
       }
 
       // 拖拽排序（仅目标预设）
-      if (isTarget && typeof subList.sortable === "function") {
+      if (
+        isTarget &&
+        typeof subList.sortable === "function" &&
+        !cfmIsTouchDevice()
+      ) {
         subList.sortable({
           items: ".cfm-regex-script-row",
           axis: "y",
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: cfmIsTouchDevice() ? 10 : 4,
-          delay: cfmIsTouchDevice() ? 300 : 0,
+          distance: 4,
           cancel:
             ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
           start: (_event, ui) => {
@@ -23746,7 +23755,7 @@ jQuery(async () => {
 
     // 标签页拖拽排序
     const tabsList = section.find(".cfm-layout-tabs-list");
-    if (typeof tabsList.sortable === "function") {
+    if (typeof tabsList.sortable === "function" && !cfmIsTouchDevice()) {
       tabsList.sortable({
         items: ".cfm-layout-item",
         handle: ".cfm-layout-drag",
@@ -23754,8 +23763,7 @@ jQuery(async () => {
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
-        distance: cfmIsTouchDevice() ? 10 : 4,
-        delay: cfmIsTouchDevice() ? 300 : 0,
+        distance: 4,
         cancel:
           ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
@@ -23862,7 +23870,10 @@ jQuery(async () => {
 
     // 子功能拖拽排序
     const actionsSortableList = section.find(".cfm-layout-actions-list");
-    if (typeof actionsSortableList.sortable === "function") {
+    if (
+      typeof actionsSortableList.sortable === "function" &&
+      !cfmIsTouchDevice()
+    ) {
       actionsSortableList.sortable({
         items: ".cfm-layout-item",
         handle: ".cfm-layout-drag",
@@ -23870,8 +23881,7 @@ jQuery(async () => {
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
-        distance: cfmIsTouchDevice() ? 10 : 4,
-        delay: cfmIsTouchDevice() ? 300 : 0,
+        distance: 4,
         cancel:
           ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
@@ -37106,10 +37116,12 @@ jQuery(async () => {
       updateArrowStates();
 
       // 启用拖拽
+      if (cfmIsTouchDevice()) {
+        sortList.find(".cfm-sort-handle").css("display", "none");
+      }
       sortList.sortable({
         handle: ".cfm-sort-handle",
-        delay: cfmIsTouchDevice() ? 300 : 0,
-        distance: cfmIsTouchDevice() ? 10 : 0,
+        disabled: cfmIsTouchDevice(),
         axis: "y",
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
@@ -37119,7 +37131,7 @@ jQuery(async () => {
           flashDraggedElement(ui.item);
         },
       });
-      sortList.disableSelection();
+      if (!cfmIsTouchDevice()) sortList.disableSelection();
 
       // 确认排序
       dialog
