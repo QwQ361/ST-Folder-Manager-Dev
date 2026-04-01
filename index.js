@@ -13090,32 +13090,42 @@ jQuery(async () => {
         entry.raw?.vectorized ? "向量" : null,
         entry.raw?.selective ? "选择性" : null,
       ].filter(Boolean);
-      // 构建条目摘要标签
-      const positionMap = { 0: "↑Char", 1: "↓Char", 2: "↑AN", 3: "↓AN", 4: "@D", 5: "↑EM", 6: "↓EM", 7: "Outlet" };
-      const roleMap = { 0: "⚙️", 1: "👤", 2: "🤖" };
-      const logicMap = { 0: "AND ANY", 1: "NOT ALL", 2: "NOT ANY", 3: "AND ALL" };
+      // 构建条目可编辑控件
       const rawPos = Number(entry.raw?.position ?? 0);
       const rawDepth = Number(entry.raw?.depth ?? 4);
       const rawRole = Number(entry.raw?.role ?? 0);
       const rawOrder = Number(entry.raw?.order ?? 0);
       const rawProb = Number(entry.raw?.probability ?? 100);
-      const rawLogic = Number(entry.raw?.selectiveLogic ?? 0);
-      const isSelective = !!entry.raw?.selective;
-      let posLabel = positionMap[rawPos] || "?";
-      if (rawPos === 4) posLabel += " " + (roleMap[rawRole] || "⚙️");
-      const entryTags = [];
-      if (isSelective) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-logic" title="触发策略">${escapeHtml(logicMap[rawLogic] || "AND ANY")}</span>`);
-      entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-pos" title="插入位置">${escapeHtml(posLabel)}</span>`);
-      if (rawPos === 4) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-depth" title="深度">D${rawDepth}</span>`);
-      entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-order" title="顺序">O${rawOrder}</span>`);
-      if (rawProb < 100) entryTags.push(`<span class="cfm-wi-tag cfm-wi-tag-prob" title="触发概率">${rawProb}%</span>`);
+      const isAtDepth = rawPos === 4;
+      // 构建 Position 下拉菜单选项
+      const posOptions = [
+        { value: "0", role: "", label: "↑Char" },
+        { value: "1", role: "", label: "↓Char" },
+        { value: "5", role: "", label: "↑EM" },
+        { value: "6", role: "", label: "↓EM" },
+        { value: "2", role: "", label: "↑AN" },
+        { value: "3", role: "", label: "↓AN" },
+        { value: "4", role: "0", label: "@D ⚙️" },
+        { value: "4", role: "1", label: "@D 👤" },
+        { value: "4", role: "2", label: "@D 🤖" },
+        { value: "7", role: "", label: "➡️ Outlet" },
+      ];
+      const posSelectHtml = posOptions.map(opt => {
+        const selected = (String(rawPos) === opt.value && (opt.value !== "4" || String(rawRole) === opt.role)) ? " selected" : "";
+        return `<option value="${opt.value}" data-role="${opt.role}"${selected}>${escapeHtml(opt.label)}</option>`;
+      }).join("");
       const row = $(`
         <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-entry-uid="${escapeHtml(entry.uid)}">
           <div class="cfm-persona-detail-label cfm-preset-detail-label">
             ${isBatchOwner ? `<div class="cfm-edit-checkbox ${isBatchSel ? "cfm-edit-checked" : ""}"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             <div class="cfm-wi-toggle cfm-worldinfo-entry-active-toggle ${entry.enabled ? "cfm-wi-toggle-on" : ""}" data-entry-uid="${escapeHtml(entry.uid)}" title="${entry.enabled ? "点击取消激活" : "点击激活"}"><i class="fa-solid fa-toggle-${entry.enabled ? "on" : "off"}"></i></div>
             <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
-            <div class="cfm-wi-entry-tags">${entryTags.join("")}</div>
+            <div class="cfm-wi-entry-controls">
+              <select class="cfm-wi-ctrl cfm-wi-ctrl-position" title="插入位置">${posSelectHtml}</select>
+              <input class="cfm-wi-ctrl cfm-wi-ctrl-depth" type="number" value="${rawDepth}" min="0" max="9999" title="深度" ${isAtDepth ? "" : "disabled"} />
+              <input class="cfm-wi-ctrl cfm-wi-ctrl-order" type="number" value="${rawOrder}" min="0" max="9999" title="顺序" />
+              <div class="cfm-wi-ctrl-prob-wrap"><input class="cfm-wi-ctrl cfm-wi-ctrl-prob" type="number" value="${rawProb}" min="0" max="100" title="触发概率%" /><span class="cfm-wi-ctrl-prob-suffix">%</span></div>
+            </div>
             <div class="cfm-chat-actions">
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-delete" data-entry-uid="${escapeHtml(entry.uid)}" title="删除条目"><i class="fa-solid fa-trash-can"></i></div>
@@ -13157,8 +13167,8 @@ jQuery(async () => {
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle",
-            ).length
+             ".cfm-chat-actions, .cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle, .cfm-wi-entry-controls",
+           ).length
           ) {
             return;
           }
@@ -13308,6 +13318,75 @@ jQuery(async () => {
             el.data("pending", false);
           }
         });
+
+      // 世界书条目行内编辑控件事件
+      row.find(".cfm-wi-ctrl-position").on("change", async function (e) {
+        e.stopPropagation();
+        const sel = $(this);
+        const selectedOption = sel.find("option:selected");
+        const newPos = Number(selectedOption.val());
+        const newRole = selectedOption.data("role") !== "" ? Number(selectedOption.data("role")) : undefined;
+        const depthInput = row.find(".cfm-wi-ctrl-depth");
+        depthInput.prop("disabled", newPos !== 4);
+        try {
+          const wiData = await fetchWorldInfoDetailData(normalizedName);
+          const target = wiData?.entries?.[entry.uid];
+          if (!target) return;
+          target.position = newPos;
+          if (newRole !== undefined) target.role = newRole;
+          await saveWorldInfoDetailData(normalizedName, wiData);
+        } catch (err) {
+          console.error("[CFM] 保存插入位置失败:", err);
+          toastr.error(`保存失败: ${err.message || err}`);
+        }
+      });
+      row.find(".cfm-wi-ctrl-depth").on("change", async function (e) {
+        e.stopPropagation();
+        const val = Number($(this).val()) || 0;
+        try {
+          const wiData = await fetchWorldInfoDetailData(normalizedName);
+          const target = wiData?.entries?.[entry.uid];
+          if (!target) return;
+          target.depth = val;
+          await saveWorldInfoDetailData(normalizedName, wiData);
+        } catch (err) {
+          console.error("[CFM] 保存深度失败:", err);
+          toastr.error(`保存失败: ${err.message || err}`);
+        }
+      });
+      row.find(".cfm-wi-ctrl-order").on("change", async function (e) {
+        e.stopPropagation();
+        const val = Number($(this).val()) || 0;
+        try {
+          const wiData = await fetchWorldInfoDetailData(normalizedName);
+          const target = wiData?.entries?.[entry.uid];
+          if (!target) return;
+          target.order = val;
+          await saveWorldInfoDetailData(normalizedName, wiData);
+        } catch (err) {
+          console.error("[CFM] 保存顺序失败:", err);
+          toastr.error(`保存失败: ${err.message || err}`);
+        }
+      });
+      row.find(".cfm-wi-ctrl-prob").on("change", async function (e) {
+        e.stopPropagation();
+        let val = Number($(this).val());
+        if (isNaN(val)) val = 100;
+        val = Math.max(0, Math.min(100, val));
+        $(this).val(val);
+        try {
+          const wiData = await fetchWorldInfoDetailData(normalizedName);
+          const target = wiData?.entries?.[entry.uid];
+          if (!target) return;
+          target.probability = val;
+          await saveWorldInfoDetailData(normalizedName, wiData);
+        } catch (err) {
+          console.error("[CFM] 保存触发概率失败:", err);
+          toastr.error(`保存失败: ${err.message || err}`);
+        }
+      });
+      // 阻止控件区域的 click 冒泡（避免影响批量选择等）
+      row.find(".cfm-wi-entry-controls").on("click", (e) => e.stopPropagation());
 
       detailCard.append(row);
     }
