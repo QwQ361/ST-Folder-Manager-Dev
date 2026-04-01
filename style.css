@@ -2526,10 +2526,10 @@
 
 /* 遮罩层 */
 .cfm-sort-dialog-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  z-index: 200;
+  z-index: 100000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2537,12 +2537,12 @@
 
 /* 弹窗主体 */
 .cfm-sort-dialog {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 201;
-  width: min(560px, 90%);
+  z-index: 100001;
+  width: min(560px, 90vw);
   max-height: 80vh;
   display: flex;
   flex-direction: column;
