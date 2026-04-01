@@ -10621,20 +10621,48 @@ jQuery(async () => {
       (p) => String(p.value) === String(preservedSelectValue),
     );
     const preservedPresetName = String(preservedPreset?.name || "").trim();
+    const isCurrentPreset = preservedPresetName === presetName;
 
-    await pm.savePreset(presetName, presetData);
+    if (isCurrentPreset) {
+      // 当前预设：正常保存并触发 updateList（含 change 事件）
+      await pm.savePreset(presetName, presetData);
 
-    if (
-      pm?.select &&
-      preservedSelectValue !== undefined &&
-      preservedSelectValue !== null &&
-      String(preservedSelectValue) !== "" &&
-      String(pm.select.val()) !== String(preservedSelectValue)
-    ) {
-      pm.select.val(preservedSelectValue);
+      if (
+        pm?.select &&
+        preservedSelectValue !== undefined &&
+        preservedSelectValue !== null &&
+        String(preservedSelectValue) !== "" &&
+        String(pm.select.val()) !== String(preservedSelectValue)
+      ) {
+        pm.select.val(preservedSelectValue);
+      }
+
+      syncCurrentPresetSelection(pm, preservedPresetName, preservedSelectValue);
+    } else {
+      // 非当前预设：使用 skipUpdate 避免触发 PRESET_CHANGED 事件，
+      // 然后手动更新内存中的预设数据
+      await pm.savePreset(presetName, presetData, { skipUpdate: true });
+
+      // 手动更新内存中的预设列表数据
+      try {
+        const presetList = typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+        if (presetList) {
+          const { presets, preset_names } = presetList;
+          if (Array.isArray(presets) && preset_names) {
+            const isKeyed = Array.isArray(preset_names);
+            if (isKeyed) {
+              const idx = preset_names.indexOf(presetName);
+              if (idx >= 0) presets[idx] = presetData;
+            } else {
+              const val = preset_names[presetName];
+              if (val !== undefined) presets[val] = presetData;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[CFM] 手动更新非当前预设内存数据失败", e);
+      }
     }
-
-    syncCurrentPresetSelection(pm, preservedPresetName, preservedSelectValue);
     sanitizeCurrentOpenAIPresetRuntimeState(true);
   }
 
