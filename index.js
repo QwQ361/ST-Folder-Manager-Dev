@@ -10645,7 +10645,8 @@ jQuery(async () => {
 
       // 手动更新内存中的预设列表数据
       try {
-        const presetList = typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+        const presetList =
+          typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
         if (presetList) {
           const { presets, preset_names } = presetList;
           if (Array.isArray(presets) && preset_names) {
@@ -16886,7 +16887,10 @@ jQuery(async () => {
     // 每个条目：选择器 + 对应的 toggle 选择器
     const entries = [
       { sel: ".cfm-char-detail-sublist", toggle: ".cfm-char-detail-toggle" },
-      { sel: ".cfm-preset-detail-sublist", toggle: ".cfm-preset-detail-toggle" },
+      {
+        sel: ".cfm-preset-detail-sublist",
+        toggle: ".cfm-preset-detail-toggle",
+      },
       { sel: ".cfm-persona-sublist", toggle: ".cfm-persona-toggle" },
       { sel: ".cfm-qr-sub-items", toggle: ".cfm-qr-expand-arrow", isQr: true },
       { sel: ".cfm-regex-sublist", toggle: ".cfm-regex-toggle" },
@@ -33536,25 +33540,9 @@ jQuery(async () => {
     const data = char?.data || {};
     const description =
       typeof data.description === "string" ? data.description.trim() : "";
-    const personality =
-      typeof data.personality === "string" ? data.personality.trim() : "";
-    const scenario =
-      typeof data.scenario === "string" ? data.scenario.trim() : "";
     const firstMes =
       typeof data.first_mes === "string" ? data.first_mes.trim() : "";
     const alternateGreetings = normalizeGreetingItems(data.alternate_greetings);
-    const mesExample =
-      typeof data.mes_example === "string" ? data.mes_example.trim() : "";
-    const creatorNotes =
-      typeof data.creator_notes === "string" ? data.creator_notes.trim() : "";
-    const systemPrompt =
-      typeof data.system_prompt === "string" ? data.system_prompt.trim() : "";
-    const postHistoryInstructions =
-      typeof data.post_history_instructions === "string"
-        ? data.post_history_instructions.trim()
-        : "";
-    const tags = Array.isArray(data.tags) ? data.tags.filter(Boolean) : [];
-    const hasLorebook = !!data.character_book;
 
     const sectionHtml = (label, value, extraClass = "", field = "") => `
       <div class="cfm-persona-detail-section cfm-char-detail-section ${extraClass}">
@@ -33577,18 +33565,7 @@ jQuery(async () => {
       '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-char-detail-card"></div>',
     );
 
-    detailCard.append(`
-      <div class="cfm-persona-detail-section cfm-char-detail-section">
-        <div class="cfm-persona-detail-label">角色设定概览</div>
-        <div class="cfm-persona-detail-value cfm-char-detail-meta">
-          ${tags.length ? `<span class="cfm-char-detail-meta-item">标签：${escapeHtml(tags.join(" / "))}</span>` : '<span class="cfm-char-detail-meta-item cfm-persona-detail-empty">标签：无</span>'}
-          <span class="cfm-char-detail-meta-item">内嵌世界书：${hasLorebook ? "有" : "无"}</span>
-        </div>
-      </div>
-    `);
     detailCard.append(sectionHtml("描述", description, "", "description"));
-    detailCard.append(sectionHtml("性格", personality, "", "personality"));
-    detailCard.append(sectionHtml("场景", scenario, "", "scenario"));
 
     // 第一条消息（主开场白）：只有编辑按钮，不能切换
     detailCard.append(
@@ -33619,36 +33596,6 @@ jQuery(async () => {
       // 没有其它开场时，显示空状态，仍可通过编辑按钮新增
       detailCard.append(
         sectionHtml("其它开场", "", "cfm-char-detail-block", "alt_greetings"),
-      );
-    }
-
-    detailCard.append(
-      sectionHtml(
-        "示例对话",
-        mesExample,
-        "cfm-char-detail-block",
-        "mes_example",
-      ),
-    );
-    if (creatorNotes || systemPrompt || postHistoryInstructions) {
-      detailCard.append(
-        sectionHtml("作者备注", creatorNotes, "", "creator_notes"),
-      );
-      detailCard.append(
-        sectionHtml(
-          "系统提示词",
-          systemPrompt,
-          "cfm-char-detail-block",
-          "system_prompt",
-        ),
-      );
-      detailCard.append(
-        sectionHtml(
-          "历史后指令",
-          postHistoryInstructions,
-          "cfm-char-detail-block",
-          "post_history_instructions",
-        ),
       );
     }
 
