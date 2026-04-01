@@ -4222,6 +4222,8 @@ option.cfm-nf-hidden {
   outline: none;
   height: 22px;
   line-height: 20px;
+  box-sizing: border-box;
+  vertical-align: middle;
 }
 .cfm-wi-ctrl:focus {
   border-color: rgba(137, 180, 250, 0.5);
@@ -4231,25 +4233,35 @@ option.cfm-nf-hidden {
   opacity: 0.35;
   cursor: not-allowed;
 }
+select.cfm-wi-ctrl {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  padding: 1px 4px;
+  height: 22px;
+  line-height: 20px;
+}
 .cfm-wi-ctrl-state {
   width: auto;
   min-width: 32px;
   max-width: 44px;
-  cursor: pointer;
-  padding: 1px 2px;
+  padding-left: 2px;
+  padding-right: 2px;
   text-align: center;
 }
 .cfm-wi-ctrl-position {
   width: auto;
   min-width: 60px;
   max-width: 150px;
-  cursor: pointer;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 .cfm-wi-ctrl-depth,
 .cfm-wi-ctrl-order {
   width: 52px;
   text-align: center;
-  -moz-appearance: textfield;
+  appearance: textfield;
 }
 .cfm-wi-ctrl-depth::-webkit-inner-spin-button,
 .cfm-wi-ctrl-depth::-webkit-outer-spin-button,
@@ -4266,7 +4278,7 @@ option.cfm-nf-hidden {
 .cfm-wi-ctrl-prob {
   width: 44px;
   text-align: center;
-  -moz-appearance: textfield;
+  appearance: textfield;
 }
 .cfm-wi-ctrl-prob::-webkit-inner-spin-button,
 .cfm-wi-ctrl-prob::-webkit-outer-spin-button {
