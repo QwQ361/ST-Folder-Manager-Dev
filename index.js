@@ -19814,6 +19814,28 @@ jQuery(async () => {
               if (!saveResp.ok) {
                 throw new Error(`保存完整数据失败: ${saveResp.statusText}`);
               }
+
+              // 同步当前页面内存中的 QR Set，避免仍然保留 createSet 生成的空集
+              const liveSet =
+                (api.getSetByName && api.getSetByName(finalName)) ||
+                (QRS && QRS.list
+                  ? QRS.list.find((s) => s.name === finalName)
+                  : null);
+              if (liveSet) {
+                liveSet.name = finalName;
+                liveSet.qrList = Array.isArray(saveData.qrList)
+                  ? JSON.parse(JSON.stringify(saveData.qrList))
+                  : [];
+                if ("disableSend" in saveData) {
+                  liveSet.disableSend = !!saveData.disableSend;
+                }
+                if ("placeBeforeInput" in saveData) {
+                  liveSet.placeBeforeInput = !!saveData.placeBeforeInput;
+                }
+                if ("injectInput" in saveData) {
+                  liveSet.injectInput = !!saveData.injectInput;
+                }
+              }
             } catch (createErr) {
               console.warn(
                 `[CFM] api.createSet 失败，回退到直接保存`,
