@@ -13096,8 +13096,19 @@ jQuery(async () => {
       const rawRole = Number(entry.raw?.role ?? 0);
       const rawOrder = Number(entry.raw?.order ?? 0);
       const rawProb = Number(entry.raw?.probability ?? 100);
-      const rawLogic = Number(entry.raw?.selectiveLogic ?? 0);
       const isAtDepth = rawPos === 4;
+      // 计算条目状态：constant > vectorized > normal
+      const entryState = entry.raw?.constant ? "constant" : (entry.raw?.vectorized ? "vectorized" : "normal");
+      // 构建条目状态下拉菜单选项（🔵常量 / 🟢普通 / 🔗向量化）
+      const stateOptions = [
+        { value: "constant", label: "🔵" },
+        { value: "normal", label: "🟢" },
+        { value: "vectorized", label: "🔗" },
+      ];
+      const stateSelectHtml = stateOptions.map(opt => {
+        const selected = entryState === opt.value ? " selected" : "";
+        return `<option value="${opt.value}"${selected}>${opt.label}</option>`;
+      }).join("");
       // 构建 Position 下拉菜单选项（中文标签与酒馆原生一致）
       const posOptions = [
         { value: "0", role: "", label: "角色定义之前" },
@@ -13121,19 +13132,6 @@ jQuery(async () => {
           return `<option value="${opt.value}" data-role="${opt.role}"${selected}>${escapeHtml(opt.label)}</option>`;
         })
         .join("");
-      // 构建 SelectiveLogic（触发策略）下拉菜单选项
-      const logicOptions = [
-        { value: "0", label: "与任意" },
-        { value: "3", label: "与所有" },
-        { value: "1", label: "非所有" },
-        { value: "2", label: "非任何" },
-      ];
-      const logicSelectHtml = logicOptions
-        .map((opt) => {
-          const selected = String(rawLogic) === opt.value ? " selected" : "";
-          return `<option value="${opt.value}"${selected}>${escapeHtml(opt.label)}</option>`;
-        })
-        .join("");
       const row = $(`
         <div class="cfm-persona-detail-section cfm-preset-detail-section cfm-preset-detail-row ${isBatchSel ? "cfm-edit-row-selected" : ""}" data-entry-uid="${escapeHtml(entry.uid)}">
           <div class="cfm-persona-detail-label cfm-preset-detail-label">
@@ -13141,11 +13139,11 @@ jQuery(async () => {
             <div class="cfm-wi-toggle cfm-worldinfo-entry-active-toggle ${entry.enabled ? "cfm-wi-toggle-on" : ""}" data-entry-uid="${escapeHtml(entry.uid)}" title="${entry.enabled ? "点击取消激活" : "点击激活"}"><i class="fa-solid fa-toggle-${entry.enabled ? "on" : "off"}"></i></div>
             <span class="cfm-preset-detail-label-text">${escapeHtml(entry.label)}</span>
             <div class="cfm-wi-entry-controls">
+              <select class="cfm-wi-ctrl cfm-wi-ctrl-state" title="条目状态：🔵常量 🟢普通 🔗向量化">${stateSelectHtml}</select>
               <select class="cfm-wi-ctrl cfm-wi-ctrl-position" title="插入位置">${posSelectHtml}</select>
               <input class="cfm-wi-ctrl cfm-wi-ctrl-depth" type="number" value="${rawDepth}" min="0" max="9999" title="深度" ${isAtDepth ? "" : "disabled"} />
               <input class="cfm-wi-ctrl cfm-wi-ctrl-order" type="number" value="${rawOrder}" min="0" max="9999" title="顺序" />
               <div class="cfm-wi-ctrl-prob-wrap"><input class="cfm-wi-ctrl cfm-wi-ctrl-prob" type="number" value="${rawProb}" min="0" max="100" title="触发概率%" /><span class="cfm-wi-ctrl-prob-suffix">%</span></div>
-              <select class="cfm-wi-ctrl cfm-wi-ctrl-logic" title="触发策略">${logicSelectHtml}</select>
             </div>
             <div class="cfm-chat-actions">
               <div class="cfm-chat-action-btn cfm-worldinfo-entry-duplicate" data-entry-uid="${escapeHtml(entry.uid)}" title="复制条目"><i class="fa-solid fa-paste"></i></div>
@@ -13409,17 +13407,19 @@ jQuery(async () => {
           toastr.error(`保存失败: ${err.message || err}`);
         }
       });
-      row.find(".cfm-wi-ctrl-logic").on("change", async function (e) {
+      row.find(".cfm-wi-ctrl-state").on("change", async function (e) {
         e.stopPropagation();
-        const val = Number($(this).val()) || 0;
+        const val = $(this).val();
         try {
           const wiData = await fetchWorldInfoDetailData(normalizedName);
           const target = wiData?.entries?.[entry.uid];
           if (!target) return;
-          target.selectiveLogic = val;
+          // 根据选择的状态设置 constant 和 vectorized
+          target.constant = val === "constant";
+          target.vectorized = val === "vectorized";
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
-          console.error("[CFM] 保存触发策略失败:", err);
+          console.error("[CFM] 保存条目状态失败:", err);
           toastr.error(`保存失败: ${err.message || err}`);
         }
       });
