@@ -4241,6 +4241,7 @@ select.cfm-wi-ctrl {
   padding: 1px 4px;
   height: 22px;
   line-height: 20px;
+  margin: 0;
 }
 .cfm-wi-ctrl-state {
   width: auto;
