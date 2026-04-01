@@ -11119,7 +11119,7 @@ jQuery(async () => {
     const existingComments = new Set(
       Object.values(worldInfoData.entries)
         .filter((e) => e && typeof e === "object")
-        .map((e) => String(e.comment || ""))
+        .map((e) => String(e.comment || "")),
     );
     const baseComment = String(originalEntry.comment || "").trim();
     if (baseComment) {
@@ -12426,7 +12426,7 @@ jQuery(async () => {
       // 高亮闪烁新复制的预设条目
       flashDraggedElement(
         `.cfm-preset-detail-row[data-field="prompts.${$.escapeSelector(newPromptKey)}"]`,
-        1500,
+        300,
       );
     } catch (error) {
       console.error("[CFM] 复制预设条目失败:", error);
@@ -13226,7 +13226,7 @@ jQuery(async () => {
               // 高亮闪烁新复制的条目
               flashDraggedElement(
                 `.cfm-preset-detail-row[data-entry-uid="${newEntry.uid}"]`,
-                1500,
+                300,
               );
             }
           } catch (error) {
@@ -32943,7 +32943,7 @@ jQuery(async () => {
     // 高亮闪烁新复制的 User
     flashDraggedElement(
       `.cfm-row[data-avatar-id="${$.escapeSelector(newAvatarId)}"]`,
-      1500,
+      300,
     );
     toastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
   }
