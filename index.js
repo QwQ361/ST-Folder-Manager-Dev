@@ -1746,6 +1746,7 @@ jQuery(async () => {
     _startX: 0,
     _startY: 0,
     _lastTarget: null,
+    _touchEnded: false,
 
     /** 为元素注册触摸拖拽（长按500ms启动） */
     bind(el, getDataFn) {
@@ -1768,8 +1769,12 @@ jQuery(async () => {
           sy = t.clientY;
           mgr._startX = sx;
           mgr._startY = sy;
+          mgr._touchEnded = false;
 
           mgr._timer = setTimeout(() => {
+            mgr._timer = null;
+            // 竞态保护：如果 touchend 已经触发，不再启动拖拽
+            if (mgr._touchEnded) return;
             const data = getDataFn();
             if (!data) return;
             mgr.active = true;
@@ -1834,6 +1839,7 @@ jQuery(async () => {
       dom.addEventListener(
         "touchend",
         (e) => {
+          mgr._touchEnded = true;
           mgr._cancelTimer();
           if (!mgr.active) return;
           e.preventDefault();
@@ -1845,6 +1851,7 @@ jQuery(async () => {
       );
 
       dom.addEventListener("touchcancel", () => {
+        mgr._touchEnded = true;
         mgr._cancelTimer();
         if (mgr.active) mgr._cleanup();
       });
@@ -3262,11 +3269,13 @@ jQuery(async () => {
     // 移动端：触摸长按拖拽（使用原生事件 + passive:false）
     const btnEl = btn[0];
     let tSx, tSy;
+    let btnTouchEnded = false;
     btnEl.addEventListener(
       "touchstart",
       (e) => {
         hasMoved = false;
         longPressTriggered = false;
+        btnTouchEnded = false;
         const t = e.touches[0];
         tSx = t.clientX;
         tSy = t.clientY;
@@ -3274,6 +3283,9 @@ jQuery(async () => {
         offset.x = t.pageX - pos.left;
         offset.y = t.pageY - pos.top;
         longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          // 竞态保护：如果 touchend 已经触发，不再启动长按拖拽
+          if (btnTouchEnded) return;
           longPressTriggered = true;
           isDragging = true;
           btn.addClass("cfm-long-press-ready");
@@ -3314,6 +3326,7 @@ jQuery(async () => {
     btnEl.addEventListener(
       "touchend",
       (e) => {
+        btnTouchEnded = true;
         if (longPressTimer) {
           clearTimeout(longPressTimer);
           longPressTimer = null;
@@ -3339,6 +3352,7 @@ jQuery(async () => {
     );
 
     btnEl.addEventListener("touchcancel", () => {
+      btnTouchEnded = true;
       if (longPressTimer) {
         clearTimeout(longPressTimer);
         longPressTimer = null;
