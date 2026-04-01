@@ -1736,6 +1736,10 @@ jQuery(async () => {
     });
   }
 
+  // ==================== 触摸设备检测 ====================
+  const cfmIsTouchDevice = () =>
+    "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
   // ==================== 移动端触摸拖拽管理器 ====================
   const touchDragMgr = {
     active: false,
@@ -13161,7 +13165,8 @@ jQuery(async () => {
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: 4,
+          distance: cfmIsTouchDevice() ? 10 : 4,
+          delay: cfmIsTouchDevice() ? 300 : 0,
           cancel:
             ".cfm-chat-actions, .cfm-chat-action-btn, .cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-sort-arrow-btn, button, input, textarea, select, a",
           start: (_event, ui) => {
@@ -14980,7 +14985,8 @@ jQuery(async () => {
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: 4,
+          distance: cfmIsTouchDevice() ? 10 : 4,
+          delay: cfmIsTouchDevice() ? 300 : 0,
           cancel:
             ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
           start: (_event, ui) => {
@@ -15648,7 +15654,8 @@ jQuery(async () => {
           tolerance: "pointer",
           placeholder: "cfm-sort-placeholder",
           forcePlaceholderSize: true,
-          distance: 4,
+          distance: cfmIsTouchDevice() ? 10 : 4,
+          delay: cfmIsTouchDevice() ? 300 : 0,
           cancel:
             ".cfm-chat-actions, .cfm-regex-batch-check, .cfm-wi-toggle, .cfm-regex-edit-btn, .cfm-regex-move-up-btn, .cfm-regex-move-down-btn, button, input, textarea, select, a, label",
           start: (_event, ui) => {
@@ -23747,7 +23754,8 @@ jQuery(async () => {
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
-        distance: 4,
+        distance: cfmIsTouchDevice() ? 10 : 4,
+        delay: cfmIsTouchDevice() ? 300 : 0,
         cancel:
           ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
@@ -23862,7 +23870,8 @@ jQuery(async () => {
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
         forcePlaceholderSize: true,
-        distance: 4,
+        distance: cfmIsTouchDevice() ? 10 : 4,
+        delay: cfmIsTouchDevice() ? 300 : 0,
         cancel:
           ".cfm-layout-toggle, .cfm-layout-arrow, button, input, textarea, select, a, label",
         start: (_event, ui) => {
@@ -37099,6 +37108,8 @@ jQuery(async () => {
       // 启用拖拽
       sortList.sortable({
         handle: ".cfm-sort-handle",
+        delay: cfmIsTouchDevice() ? 300 : 0,
+        distance: cfmIsTouchDevice() ? 10 : 0,
         axis: "y",
         tolerance: "pointer",
         placeholder: "cfm-sort-placeholder",
