@@ -12547,11 +12547,6 @@ jQuery(async () => {
         (meta) => meta.identifier === normalizedPromptKey,
       );
       if (exactKeyMatch) return exactKeyMatch.row;
-
-      const partialKeyMatch = metas.find(
-        (meta) => meta.identifier && meta.identifier.includes(normalizedPromptKey),
-      );
-      if (partialKeyMatch) return partialKeyMatch.row;
     }
 
     if (normalizedPromptLabel) {
@@ -12564,16 +12559,6 @@ jQuery(async () => {
         (meta) => meta.visibleName === normalizedPromptLabel,
       );
       if (exactVisibleNameMatch) return exactVisibleNameMatch.row;
-
-      const includeVisibleNameMatch = metas.find(
-        (meta) => meta.visibleName.includes(normalizedPromptLabel),
-      );
-      if (includeVisibleNameMatch) return includeVisibleNameMatch.row;
-
-      const includeRowTextMatch = metas.find(
-        (meta) => meta.rowText.includes(normalizedPromptLabel),
-      );
-      if (includeRowTextMatch) return includeRowTextMatch.row;
     }
 
     return $();
@@ -12924,7 +12909,20 @@ jQuery(async () => {
         return targetValue;
       };
 
-      if (clickNativeEditButton()) {
+      const currentPresetValue = String(pm.select.val() || "");
+      const currentPresetName = String(
+        pm.select.find("option:selected").text() || "",
+      ).trim();
+      const isOtherPresetRequest =
+        normalizedPresetName &&
+        !!(
+          (currentPresetName && currentPresetName !== normalizedPresetName) ||
+          (findPresetSelectValueByName(pm, normalizedPresetName) &&
+            String(findPresetSelectValueByName(pm, normalizedPresetName)) !==
+              currentPresetValue)
+        );
+
+      if (!isOtherPresetRequest && clickNativeEditButton()) {
         return true;
       }
 
@@ -12936,14 +12934,17 @@ jQuery(async () => {
       ) => {
         const {
           minSelectionStableMs = 100,
+          minListStableMs = 180,
           minRowStableMs = 140,
           clickConfirmMs = 220,
           pollIntervalMs = 45,
         } = options;
         const startTime = Date.now();
         let stableSelectionSeenAt = 0;
+        let stableListSeenAt = 0;
         let stableRowSeenAt = 0;
         let clickIssuedAt = 0;
+        let lastListSignature = "";
         let lastRowSignature = "";
         while (Date.now() - startTime < timeoutMs) {
           if (hasVisibleNativePresetPromptPopup()) {
@@ -12957,11 +12958,54 @@ jQuery(async () => {
             }
           } else {
             stableSelectionSeenAt = 0;
+            stableListSeenAt = 0;
             stableRowSeenAt = 0;
             clickIssuedAt = 0;
+            lastListSignature = "";
             lastRowSignature = "";
             await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
             continue;
+          }
+
+          const promptRows = $("#completion_prompt_manager .completion_prompt_manager_prompt");
+          const listSignature = promptRows
+            .map((_, el) => {
+              const row = $(el);
+              const identifier = String(row.attr("data-pm-identifier") || "").trim();
+              const name = String(
+                row.find(".completion_prompt_manager_prompt_name").first().attr("data-pm-name") ||
+                  row.find(".completion_prompt_manager_prompt_name").first().text() ||
+                  "",
+              )
+                .replace(/\s+/g, " ")
+                .trim();
+              return `${identifier}::${name}`;
+            })
+            .get()
+            .join("||");
+          const listContainsRequestedPrompt = !!promptRows.filter((_, el) => {
+            const row = $(el);
+            const identifier = String(row.attr("data-pm-identifier") || "").trim();
+            const name = String(
+              row.find(".completion_prompt_manager_prompt_name").first().attr("data-pm-name") ||
+                row.find(".completion_prompt_manager_prompt_name").first().text() ||
+                "",
+            )
+              .replace(/\s+/g, " ")
+              .trim();
+            return (
+              (!!normalizedPromptKey && identifier === normalizedPromptKey) ||
+              (!!normalizedPromptLabel && name === normalizedPromptLabel)
+            );
+          }).length;
+
+          if (listSignature !== lastListSignature) {
+            lastListSignature = listSignature;
+            stableListSeenAt = Date.now();
+            stableRowSeenAt = 0;
+            clickIssuedAt = 0;
+          } else if (!stableListSeenAt) {
+            stableListSeenAt = Date.now();
           }
 
           const rowState = getNativePromptRowState();
@@ -12984,13 +13028,14 @@ jQuery(async () => {
           const rowSignature = `${rowIdentifier}::${rowName}`;
           const matchesRequestedPrompt =
             (!!normalizedPromptKey && rowIdentifier === normalizedPromptKey) ||
-            (!!normalizedPromptLabel &&
-              (rowName === normalizedPromptLabel ||
-                rowName.includes(normalizedPromptLabel)));
+            (!!normalizedPromptLabel && rowName === normalizedPromptLabel);
 
           if (
             stableSelectionSeenAt &&
             Date.now() - stableSelectionSeenAt >= minSelectionStableMs &&
+            stableListSeenAt &&
+            Date.now() - stableListSeenAt >= minListStableMs &&
+            listContainsRequestedPrompt &&
             rowState.row.length &&
             rowState.nativeButton &&
             matchesRequestedPrompt
@@ -13024,26 +13069,41 @@ jQuery(async () => {
         return hasVisibleNativePresetPromptPopup();
       };
 
-      if (
-        await tryOpenAfterSelectionSettles(1600, {
-          minSelectionStableMs: 60,
-          minRowStableMs: 90,
-          clickConfirmMs: 180,
-          pollIntervalMs: 35,
-        })
-      ) {
-        return true;
-      }
+      if (isOtherPresetRequest) {
+        if (
+          await tryOpenAfterSelectionSettles(4200, {
+            minSelectionStableMs: 320,
+            minListStableMs: 700,
+            minRowStableMs: 700,
+            clickConfirmMs: 360,
+            pollIntervalMs: 70,
+          })
+        ) {
+          return true;
+        }
+      } else {
+        if (
+          await tryOpenAfterSelectionSettles(1600, {
+            minSelectionStableMs: 60,
+            minRowStableMs: 90,
+            clickConfirmMs: 180,
+            pollIntervalMs: 35,
+          })
+        ) {
+          return true;
+        }
 
-      if (
-        await tryOpenAfterSelectionSettles(3200, {
-          minSelectionStableMs: 180,
-          minRowStableMs: 420,
-          clickConfirmMs: 300,
-          pollIntervalMs: 60,
-        })
-      ) {
-        return true;
+        if (
+          await tryOpenAfterSelectionSettles(3200, {
+            minSelectionStableMs: 180,
+            minListStableMs: 260,
+            minRowStableMs: 420,
+            clickConfirmMs: 300,
+            pollIntervalMs: 60,
+          })
+        ) {
+          return true;
+        }
       }
 
       // 兜底：仅当目标预设实际上未切换到位时，才补触发一次同步和短暂重试，
