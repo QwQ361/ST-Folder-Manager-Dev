@@ -12715,11 +12715,17 @@ jQuery(async () => {
       if (!pm?.select) return;
       const currentValue = String(pm.select.val() || "");
       if (currentValue !== valueToRestore) {
-        pm.select.val(valueToRestore);
-        pm.select.trigger("change");
+        beginSuppressPresetRegexToast();
+        try {
+          pm.select.val(valueToRestore);
+          pm.select.trigger("change");
+        } finally {
+          window.setTimeout(() => endSuppressPresetRegexToast(), 300);
+        }
       }
     } catch (e) {
       console.warn("[CFM] 恢复预设选择失败", e);
+      endSuppressPresetRegexToast();
     }
   }
 
