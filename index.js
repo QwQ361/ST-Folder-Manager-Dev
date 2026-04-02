@@ -12689,6 +12689,59 @@ jQuery(async () => {
    * 在原生弹窗的关闭/保存按钮上绑定清理事件（仅绑定一次）。
    * 当用户点击关闭或保存后，延迟清理 bringNativePresetPromptPopupToFront 遗留的 inline style。
    */
+  async function persistCurrentPresetAfterNativePromptSave() {
+    try {
+      const context = getContext();
+      const pm = context?.getPresetManager?.();
+      if (!pm || String(pm.apiId || "") !== "openai") return false;
+
+      const presetName = String(
+        pm.select?.find("option:selected").text() || "",
+      ).trim();
+      if (!presetName) return false;
+
+      const runtimePresetList =
+        typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+      const runtimeSettings = runtimePresetList?.settings;
+      if (!runtimeSettings || typeof runtimeSettings !== "object") {
+        return false;
+      }
+
+      const runtimePresetData = structuredClone(runtimeSettings);
+      sanitizePresetPromptStructure(runtimePresetData);
+      await pm.savePreset(presetName, runtimePresetData, { skipUpdate: true });
+
+      try {
+        const presetList =
+          typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+        if (presetList) {
+          const { presets, preset_names } = presetList;
+          if (Array.isArray(presets) && preset_names) {
+            const nextPresetData = structuredClone(runtimePresetData);
+            if (Array.isArray(preset_names)) {
+              const idx = preset_names.indexOf(presetName);
+              if (idx !== -1) {
+                presets[idx] = nextPresetData;
+              }
+            } else {
+              const idx = preset_names[presetName];
+              if (Number.isInteger(idx) && idx >= 0 && idx < presets.length) {
+                presets[idx] = nextPresetData;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("[CFM] 同步已保存预设到内存列表失败", error);
+      }
+
+      return true;
+    } catch (error) {
+      console.warn("[CFM] 持久化原生预设条目编辑结果失败", error);
+      return false;
+    }
+  }
+
   function bindNativePopupCleanup() {
     if (_nativePopupCleanupBound) return;
     const popupEl = document.getElementById(
@@ -12697,20 +12750,34 @@ jQuery(async () => {
     if (!popupEl) return;
     _nativePopupCleanupBound = true;
 
+    const saveButtonId = "completion_prompt_manager_popup_entry_form_save";
     const closeButtonIds = [
       "completion_prompt_manager_popup_close_button",
       "completion_prompt_manager_popup_entry_form_close",
-      "completion_prompt_manager_popup_entry_form_save",
+      saveButtonId,
     ];
     for (const btnId of closeButtonIds) {
       const btn = document.getElementById(btnId);
       if (btn) {
+        const isSaveButton = btnId === saveButtonId;
         btn.addEventListener("click", () => {
-          // 延迟清理，等原生代码先完成弹窗隐藏
-          setTimeout(() => {
+          // 对于保存按钮，需要等原生 handleSavePrompt 完成，
+          // 再把当前运行时设置静默写回到当前选中的预设文件，
+          // 最后才恢复原来的预设选择。
+          // 对于关闭按钮，等弹窗隐藏后即可恢复。
+          const delay = isSaveButton ? 600 : 200;
+          setTimeout(async () => {
             resetNativePresetPromptPopupStyles();
+            if (isSaveButton) {
+              const persisted = await persistCurrentPresetAfterNativePromptSave();
+              if (!persisted) {
+                toastr.error(
+                  "预设条目已在运行时更新，但写回预设文件失败，请手动点击“更新当前预设”",
+                );
+              }
+            }
             restorePresetSelectionAfterEdit();
-          }, 100);
+          }, delay);
         });
       }
     }
@@ -12893,15 +12960,49 @@ jQuery(async () => {
         return true;
       };
 
-      const syncTargetPresetSelection = () => {
+      const syncTargetPresetSelection = async () => {
         const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
         const currentValue = String(pm.select.val() || "");
 
         if (targetValue && currentValue !== targetValue) {
           // 保存原始预设值，弹窗关闭后恢复
           _presetValueToRestore = currentValue;
+
+          // 等待原生 OAI_PRESET_CHANGED_AFTER 事件，确保 PromptManager 内部
+          // serviceSettings.prompts 已完全切换到目标预设的数据
+          const presetChangedPromise = new Promise((resolve) => {
+            const ctx = getContext();
+            const evtSource = ctx?.eventSource;
+            const evtTypes = ctx?.eventTypes;
+            const eventType = evtTypes?.OAI_PRESET_CHANGED_AFTER;
+            if (!eventType || !evtSource) {
+              // 无法监听事件，退回到固定延时
+              window.setTimeout(resolve, 800);
+              return;
+            }
+            let resolved = false;
+            const handler = () => {
+              if (resolved) return;
+              resolved = true;
+              try { evtSource.removeListener(eventType, handler); } catch {}
+              // 额外等待一帧，确保 PromptManager 的 renderDebounced 也已执行
+              window.setTimeout(resolve, 120);
+            };
+            evtSource.once(eventType, handler);
+            // 超时兜底
+            window.setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                try { evtSource.removeListener(eventType, handler); } catch {}
+                resolve();
+              }
+            }, 3000);
+          });
+
           pm.select.val(targetValue);
           pm.select.trigger("change");
+
+          await presetChangedPromise;
         } else if (!targetValue) {
           syncCurrentPresetSelection(pm, normalizedPresetName);
         }
@@ -12926,7 +13027,7 @@ jQuery(async () => {
         return true;
       }
 
-      const targetValue = syncTargetPresetSelection();
+      const targetValue = await syncTargetPresetSelection();
 
       const tryOpenAfterSelectionSettles = async (
         timeoutMs = 4200,
@@ -13109,7 +13210,7 @@ jQuery(async () => {
       // 兜底：仅当目标预设实际上未切换到位时，才补触发一次同步和短暂重试，
       // 避免移动端对带正则的预设重复触发原生 toast。
       if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
-        syncTargetPresetSelection();
+        await syncTargetPresetSelection();
         if (
           await tryOpenAfterSelectionSettles(2600, {
             minSelectionStableMs: 180,
