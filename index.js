@@ -12745,6 +12745,11 @@ jQuery(async () => {
       }, 50);
     };
 
+    const isPresetSelectionStable = (targetValue) => {
+      if (!pm?.select || !targetValue) return false;
+      return String(pm.select.val() || "") === String(targetValue);
+    };
+
     const hasStableNativePromptRow = () => {
       const row = findNativePresetPromptRow(
         normalizedPromptKey,
@@ -12753,8 +12758,7 @@ jQuery(async () => {
       if (!row.length) return false;
       const editButton = row.find(".prompt-manager-edit-action").first();
       const nativeButton = editButton.get(0);
-      if (!(nativeButton instanceof HTMLElement)) return false;
-      return nativeButton.offsetParent !== null || row.is(":visible");
+      return !!nativeButton;
     };
 
     const clickNativeEditButton = () => {
@@ -12792,23 +12796,62 @@ jQuery(async () => {
       syncCurrentPresetSelection(pm, normalizedPresetName);
     }
 
-    const startTime = Date.now();
-    let stableRowSeenAt = 0;
-    while (Date.now() - startTime < 2500) {
-      if (hasStableNativePromptRow()) {
-        if (!stableRowSeenAt) {
-          stableRowSeenAt = Date.now();
+    const tryOpenAfterSelectionSettles = async (timeoutMs = 2500) => {
+      const startTime = Date.now();
+      let stableSelectionSeenAt = 0;
+      let stableRowSeenAt = 0;
+      while (Date.now() - startTime < timeoutMs) {
+        if (!targetValue || isPresetSelectionStable(targetValue)) {
+          if (!stableSelectionSeenAt) {
+            stableSelectionSeenAt = Date.now();
+          }
+        } else {
+          stableSelectionSeenAt = 0;
+          stableRowSeenAt = 0;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          continue;
         }
-        // 目标行稳定存在一小段时间后再点击，避免切换预设后原生数据尚未填充完成
-        if (Date.now() - stableRowSeenAt >= 120 && clickNativeEditButton()) {
-          return true;
+
+        if (
+          stableSelectionSeenAt &&
+          Date.now() - stableSelectionSeenAt >= 80 &&
+          hasStableNativePromptRow()
+        ) {
+          if (!stableRowSeenAt) {
+            stableRowSeenAt = Date.now();
+          }
+          // 保持最小等待，避免切换后立刻点击导致弹窗内容为空
+          if (Date.now() - stableRowSeenAt >= 100 && clickNativeEditButton()) {
+            return true;
+          }
+        } else {
+          stableRowSeenAt = 0;
         }
-      } else {
-        stableRowSeenAt = 0;
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      return false;
+    };
+
+    if (await tryOpenAfterSelectionSettles()) {
+      return true;
     }
 
+    // 兜底：再次同步目标预设并短暂重试，尽量不引入更严格的失败判定
+    if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
+      pm.select.val(targetValue);
+    }
+    if (targetValue) {
+      pm.select.trigger("change");
+      pm.select.trigger("input");
+    } else {
+      syncCurrentPresetSelection(pm, normalizedPresetName);
+    }
+
+    if (await tryOpenAfterSelectionSettles(1800)) {
+      return true;
+    }
+
+    restorePresetSelectionAfterEdit();
     return false;
   }
 
