@@ -12524,49 +12524,59 @@ jQuery(async () => {
     );
     if (!rows.length) return $();
 
-    const scoreRowMatch = (rowEl) => {
+    const getRowMeta = (rowEl) => {
       const row = $(rowEl);
-      let score = 0;
-      const identifier = String(row.attr("data-pm-identifier") || "").trim();
       const nameEl = row.find(".completion_prompt_manager_prompt_name").first();
-      const dataName = String(nameEl.attr("data-pm-name") || "").trim();
-      const visibleName = String(nameEl.text() || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      const rowText = String(row.text() || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      const editButton = row.find(".prompt-manager-edit-action").first();
-      const isVisible = row.is(":visible") || rowEl?.offsetParent !== null;
-
-      if (normalizedPromptKey) {
-        if (identifier === normalizedPromptKey) score += 100;
-        else if (identifier.includes(normalizedPromptKey)) score += 60;
-      }
-
-      if (normalizedPromptLabel) {
-        if (dataName === normalizedPromptLabel) score += 80;
-        else if (visibleName === normalizedPromptLabel) score += 70;
-        else if (visibleName.includes(normalizedPromptLabel)) score += 40;
-        else if (rowText.includes(normalizedPromptLabel)) score += 20;
-      }
-
-      if (editButton.length) score += 15;
-      if (isVisible) score += 10;
-      return score;
+      return {
+        row,
+        identifier: String(row.attr("data-pm-identifier") || "").trim(),
+        dataName: String(nameEl.attr("data-pm-name") || "").trim(),
+        visibleName: String(nameEl.text() || "")
+          .replace(/\s+/g, " ")
+          .trim(),
+        rowText: String(row.text() || "")
+          .replace(/\s+/g, " ")
+          .trim(),
+      };
     };
 
-    let bestRow = null;
-    let bestScore = 0;
-    rows.each(function () {
-      const score = scoreRowMatch(this);
-      if (score > bestScore) {
-        bestScore = score;
-        bestRow = this;
-      }
-    });
+    const metas = rows.toArray().map(getRowMeta);
 
-    return bestRow && bestScore > 0 ? $(bestRow) : $();
+    if (normalizedPromptKey) {
+      const exactKeyMatch = metas.find(
+        (meta) => meta.identifier === normalizedPromptKey,
+      );
+      if (exactKeyMatch) return exactKeyMatch.row;
+
+      const partialKeyMatch = metas.find(
+        (meta) => meta.identifier && meta.identifier.includes(normalizedPromptKey),
+      );
+      if (partialKeyMatch) return partialKeyMatch.row;
+    }
+
+    if (normalizedPromptLabel) {
+      const exactDataNameMatch = metas.find(
+        (meta) => meta.dataName === normalizedPromptLabel,
+      );
+      if (exactDataNameMatch) return exactDataNameMatch.row;
+
+      const exactVisibleNameMatch = metas.find(
+        (meta) => meta.visibleName === normalizedPromptLabel,
+      );
+      if (exactVisibleNameMatch) return exactVisibleNameMatch.row;
+
+      const includeVisibleNameMatch = metas.find(
+        (meta) => meta.visibleName.includes(normalizedPromptLabel),
+      );
+      if (includeVisibleNameMatch) return includeVisibleNameMatch.row;
+
+      const includeRowTextMatch = metas.find(
+        (meta) => meta.rowText.includes(normalizedPromptLabel),
+      );
+      if (includeRowTextMatch) return includeRowTextMatch.row;
+    }
+
+    return $();
   }
 
   function findPresetSelectValueByName(pm, presetName) {
