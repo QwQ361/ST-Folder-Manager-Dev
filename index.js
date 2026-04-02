@@ -19781,6 +19781,92 @@ jQuery(async () => {
 
     bindMobilePanePathDrag();
 
+    const bindMobileTapGuard = () => {
+      if (window.innerWidth > 768) return;
+      const MOVE_THRESHOLD = 12;
+      const interactiveSelector = [
+        "button",
+        ".cfm-tab",
+        ".cfm-tnode",
+        ".cfm-tree-item",
+        ".cfm-row",
+        ".cfm-row-action-btn",
+        ".cfm-sort-trigger",
+        ".cfm-multisel-toggle",
+        ".cfm-import-btn",
+        ".cfm-export-btn",
+        ".cfm-res-delete-btn",
+        ".cfm-edit-char-btn",
+        ".cfm-chat-mode-btn",
+        ".cfm-regex-create-btn",
+        ".cfm-regex-sort-btn",
+        ".cfm-config-arrow",
+        ".cfm-worldinfo-entry-expand",
+        ".cfm-worldinfo-entry-edit",
+        ".cfm-worldinfo-entry-duplicate",
+        ".cfm-worldinfo-entry-delete",
+        ".cfm-preset-detail-edit",
+        ".cfm-preset-detail-copy",
+        ".cfm-preset-detail-delete",
+      ].join(", ");
+
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchMoved = false;
+      let suppressTapUntil = 0;
+
+      popup[0].addEventListener(
+        "touchstart",
+        (ev) => {
+          const touch = ev.touches?.[0];
+          if (!touch) return;
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          touchMoved = false;
+        },
+        { passive: true },
+      );
+
+      popup[0].addEventListener(
+        "touchmove",
+        (ev) => {
+          const touch = ev.touches?.[0];
+          if (!touch || touchMoved) return;
+          const deltaX = Math.abs(touch.clientX - touchStartX);
+          const deltaY = Math.abs(touch.clientY - touchStartY);
+          if (deltaX > MOVE_THRESHOLD || deltaY > MOVE_THRESHOLD) {
+            touchMoved = true;
+            suppressTapUntil = Date.now() + 250;
+          }
+        },
+        { passive: true },
+      );
+
+      popup[0].addEventListener(
+        "touchend",
+        () => {
+          if (touchMoved) {
+            suppressTapUntil = Date.now() + 250;
+          }
+        },
+        { passive: true },
+      );
+
+      popup[0].addEventListener(
+        "click",
+        (ev) => {
+          if (Date.now() > suppressTapUntil) return;
+          if (!ev.target.closest(interactiveSelector)) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          ev.stopImmediatePropagation();
+        },
+        true,
+      );
+    };
+
+    bindMobileTapGuard();
+
     // 如果初始tab不是chars，动态切换tab/视图/搜索栏的显示状态
     if (initialTab !== "chars") {
       popup.find(".cfm-tab").removeClass("cfm-tab-active");
