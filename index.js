@@ -12617,19 +12617,25 @@ jQuery(async () => {
   let _presetValueToRestore = null;
   /** 临时静默“切换带正则预设时要求重载聊天”的原生 toast */
   let _suppressPresetRegexToastDepth = 0;
+  let _suppressPresetRegexToastUntil = 0;
   let _originalToastrFnsForPresetRegexToast = null;
 
   function shouldSuppressPresetRegexToast(message) {
     const text = String(message || "");
     return (
       _suppressPresetRegexToastDepth > 0 &&
+      Date.now() <= _suppressPresetRegexToastUntil &&
       text.includes("包含被启用的正则脚本") &&
       text.includes("重新加载聊天以使正则生效")
     );
   }
 
-  function beginSuppressPresetRegexToast() {
+  function beginSuppressPresetRegexToast(durationMs = 2600) {
     _suppressPresetRegexToastDepth += 1;
+    _suppressPresetRegexToastUntil = Math.max(
+      _suppressPresetRegexToastUntil,
+      Date.now() + Math.max(0, Number(durationMs) || 0),
+    );
     if (_suppressPresetRegexToastDepth !== 1) return;
     if (!window.toastr) return;
 
@@ -12649,19 +12655,29 @@ jQuery(async () => {
     }
   }
 
-  function endSuppressPresetRegexToast() {
-    if (_suppressPresetRegexToastDepth > 0) {
-      _suppressPresetRegexToastDepth -= 1;
-    }
-    if (_suppressPresetRegexToastDepth !== 0) return;
-    if (_originalToastrFnsForPresetRegexToast && window.toastr) {
-      for (const [level, originalFn] of Object.entries(
-        _originalToastrFnsForPresetRegexToast,
-      )) {
-        window.toastr[level] = originalFn;
+  function endSuppressPresetRegexToast(delayMs = 0) {
+    const finalize = () => {
+      if (_suppressPresetRegexToastDepth > 0) {
+        _suppressPresetRegexToastDepth -= 1;
       }
+      if (_suppressPresetRegexToastDepth !== 0) return;
+      if (_originalToastrFnsForPresetRegexToast && window.toastr) {
+        for (const [level, originalFn] of Object.entries(
+          _originalToastrFnsForPresetRegexToast,
+        )) {
+          window.toastr[level] = originalFn;
+        }
+      }
+      _originalToastrFnsForPresetRegexToast = null;
+      _suppressPresetRegexToastUntil = 0;
+    };
+
+    const delay = Math.max(0, Number(delayMs) || 0);
+    if (delay > 0) {
+      window.setTimeout(finalize, delay);
+      return;
     }
-    _originalToastrFnsForPresetRegexToast = null;
+    finalize();
   }
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById(
