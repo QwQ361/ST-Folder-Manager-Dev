@@ -12606,13 +12606,28 @@ jQuery(async () => {
   let _originalToastrFnsForPresetRegexToast = null;
 
   function shouldSuppressPresetRegexToast(message) {
-    const text = String(message || "");
-    return (
-      _suppressPresetRegexToastDepth > 0 &&
-      Date.now() <= _suppressPresetRegexToastUntil &&
-      text.includes("包含被启用的正则脚本") &&
-      text.includes("重新加载聊天以使正则生效")
-    );
+    const text = String(message || "").trim();
+    if (
+      _suppressPresetRegexToastDepth <= 0 ||
+      Date.now() > _suppressPresetRegexToastUntil ||
+      !text
+    ) {
+      return false;
+    }
+
+    const normalized = text.toLowerCase();
+    const hasRegexHint =
+      text.includes("正则") ||
+      normalized.includes("regex") ||
+      text.includes("脚本");
+    const hasReloadHint =
+      text.includes("重新加载聊天") ||
+      text.includes("重载聊天") ||
+      text.includes("重新加载") ||
+      text.includes("重载") ||
+      normalized.includes("reload");
+
+    return hasRegexHint && hasReloadHint;
   }
 
   function beginSuppressPresetRegexToast(durationMs = 2600) {
@@ -13004,9 +13019,9 @@ jQuery(async () => {
 
           await presetChangedPromise;
         } else if (targetValue && currentValue === targetValue) {
-          // 当前预设已选中，但原生 prompt 列表可能未渲染（移动端常见）。
-          // 直接调用 PromptManager 的 render 方法（跳过 tryGenerate）来快速渲染列表，
-          // 而不是走完整的 preset change 流程（避免副作用和 1000ms debounce 延迟）。
+          // 当前预设已选中，但移动端首开时原生 prompt 列表/按钮经常晚一拍才出现。
+          // 先主动触发一次渲染并等待列表出现，再给一次“直接点击”的二次机会，
+          // 尽量在进入严格稳定性轮询前就打开原生编辑弹窗。
           const rows = $("#completion_prompt_manager .completion_prompt_manager_prompt");
           if (!rows.length) {
             if (typeof pm.render === "function") {
@@ -13014,14 +13029,22 @@ jQuery(async () => {
             } else if (typeof pm.renderDebounced === "function") {
               pm.renderDebounced();
             }
-            // 等待 render 完成（render 内部有 waitUntilCondition 然后异步渲染）
             const renderWaitStart = Date.now();
-            const renderWaitTimeout = 1500;
+            const renderWaitTimeout = 2200;
             while (Date.now() - renderWaitStart < renderWaitTimeout) {
               await new Promise((resolve) => window.setTimeout(resolve, 80));
               if ($("#completion_prompt_manager .completion_prompt_manager_prompt").length) {
                 break;
               }
+            }
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 180));
+          if (clickNativeEditButton()) {
+            await new Promise((resolve) => window.setTimeout(resolve, 260));
+            if (hasVisibleNativePresetPromptPopup()) {
+              scheduleBringNativePresetPromptPopupToFront();
+              return true;
             }
           }
         } else if (!targetValue) {
@@ -13205,23 +13228,24 @@ jQuery(async () => {
         }
       } else {
         if (
-          await tryOpenAfterSelectionSettles(1600, {
-            minSelectionStableMs: 60,
-            minRowStableMs: 90,
-            clickConfirmMs: 180,
-            pollIntervalMs: 35,
+          await tryOpenAfterSelectionSettles(2400, {
+            minSelectionStableMs: 80,
+            minListStableMs: 120,
+            minRowStableMs: 140,
+            clickConfirmMs: 260,
+            pollIntervalMs: 40,
           })
         ) {
           return true;
         }
 
         if (
-          await tryOpenAfterSelectionSettles(3200, {
-            minSelectionStableMs: 180,
-            minListStableMs: 260,
-            minRowStableMs: 420,
-            clickConfirmMs: 300,
-            pollIntervalMs: 60,
+          await tryOpenAfterSelectionSettles(4200, {
+            minSelectionStableMs: 220,
+            minListStableMs: 320,
+            minRowStableMs: 520,
+            clickConfirmMs: 360,
+            pollIntervalMs: 70,
           })
         ) {
           return true;
