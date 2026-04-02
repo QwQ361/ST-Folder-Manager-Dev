@@ -471,6 +471,9 @@ jQuery(async () => {
   // 获取世界书列表（带缓存，优先从DOM读取避免网络延迟）
   let _worldInfoNamesCache = null;
   let _worldInfoPreloadPromise = null;
+  let _personaListCache = null;
+  let _personaListCacheTime = 0;
+  const PERSONA_LIST_CACHE_TTL = 5000;
   function normalizeWorldInfoNameList(names) {
     const result = [];
     const seen = new Set();
@@ -18822,9 +18825,8 @@ jQuery(async () => {
       }
     }
 
-    // 清除世界书缓存，确保每次打开弹窗都获取最新数据（与酒馆原生界面同步）
-    _worldInfoNamesCache = null;
     // 预加载世界书数据，保存 Promise 以便切换标签时直接复用
+    // 不再每次打开都清空缓存，避免世界书页反复白屏等待
     _worldInfoPreloadPromise = getWorldInfoNames();
 
     const overlay = $('<div id="cfm-overlay"></div>');
@@ -29988,8 +29990,6 @@ jQuery(async () => {
     const pathEl = $("#cfm-worldinfo-rh-path");
     const countEl = $("#cfm-worldinfo-rh-count");
 
-    // 每次渲染时清除缓存以确保与酒馆原生界面保持同步
-    _worldInfoNamesCache = null;
     let names;
     // 优先从DOM同步读取（getWorldInfoNames内部会先尝试DOM）
     const domNames = collectWorldInfoNamesFromDom();
@@ -33676,7 +33676,15 @@ jQuery(async () => {
   }
 
   // 获取当前 persona 列表
-  async function getCurrentPersonas() {
+  async function getCurrentPersonas(forceRefresh = false) {
+    const now = Date.now();
+    if (
+      !forceRefresh &&
+      Array.isArray(_personaListCache) &&
+      now - _personaListCacheTime < PERSONA_LIST_CACHE_TTL
+    ) {
+      return _personaListCache;
+    }
     try {
       const resp = await fetch("/api/avatars/get", {
         method: "POST",
@@ -33688,7 +33696,7 @@ jQuery(async () => {
       const pu = getContext().powerUserSettings;
       if (!pu) return [];
       const orderedAvatarIds = syncPersonaCustomOrder(avatarIds);
-      return orderedAvatarIds.map((id) => ({
+      const personas = orderedAvatarIds.map((id) => ({
         avatarId: id,
         name: (pu.personas && pu.personas[id]) || "[未命名User]",
         description:
@@ -33707,9 +33715,12 @@ jQuery(async () => {
             pu.persona_descriptions[id].connections) ||
           [],
       }));
+      _personaListCache = personas;
+      _personaListCacheTime = now;
+      return personas;
     } catch (e) {
       console.error("[CFM] 获取User列表失败", e);
-      return [];
+      return Array.isArray(_personaListCache) ? _personaListCache : [];
     }
   }
 
