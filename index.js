@@ -12615,6 +12615,42 @@ jQuery(async () => {
   let _nativePopupCleanupBound = false;
   /** 编辑非当前预设条目时，保存原始预设选择值以便弹窗关闭后恢复 */
   let _presetValueToRestore = null;
+  /** 临时静默“切换带正则预设时要求重载聊天”的原生 toast */
+  let _suppressPresetRegexToastDepth = 0;
+  let _originalToastrInfoForPresetRegexToast = null;
+
+  function shouldSuppressPresetRegexToast(message) {
+    const text = String(message || "");
+    return (
+      _suppressPresetRegexToastDepth > 0 &&
+      text.includes("包含被启用的正则脚本") &&
+      text.includes("重新加载聊天以使正则生效")
+    );
+  }
+
+  function beginSuppressPresetRegexToast() {
+    _suppressPresetRegexToastDepth += 1;
+    if (_suppressPresetRegexToastDepth !== 1) return;
+    if (!window.toastr || typeof window.toastr.info !== "function") return;
+    _originalToastrInfoForPresetRegexToast = window.toastr.info.bind(window.toastr);
+    window.toastr.info = function (...args) {
+      if (shouldSuppressPresetRegexToast(args[0])) {
+        return null;
+      }
+      return _originalToastrInfoForPresetRegexToast(...args);
+    };
+  }
+
+  function endSuppressPresetRegexToast() {
+    if (_suppressPresetRegexToastDepth > 0) {
+      _suppressPresetRegexToastDepth -= 1;
+    }
+    if (_suppressPresetRegexToastDepth !== 0) return;
+    if (_originalToastrInfoForPresetRegexToast && window.toastr) {
+      window.toastr.info = _originalToastrInfoForPresetRegexToast;
+    }
+    _originalToastrInfoForPresetRegexToast = null;
+  }
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById(
       "completion_prompt_manager_popup",
@@ -12704,231 +12740,267 @@ jQuery(async () => {
     const pm = getContext().getPresetManager();
     if (!pm?.select) return false;
 
-    const hasVisibleNativePresetPromptPopup = () => {
-      const popupEl = document.getElementById(
-        "completion_prompt_manager_popup",
-      );
-      if (!(popupEl instanceof HTMLElement)) return false;
-      const style = window.getComputedStyle(popupEl);
-      return (
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        popupEl.getBoundingClientRect().height > 0 &&
-        popupEl.getBoundingClientRect().width > 0
-      );
-    };
+    beginSuppressPresetRegexToast();
+    try {
+      const hasVisibleNativePresetPromptPopup = () => {
+        const popupEl = document.getElementById(
+          "completion_prompt_manager_popup",
+        );
+        if (!(popupEl instanceof HTMLElement)) return false;
+        const style = window.getComputedStyle(popupEl);
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          popupEl.getBoundingClientRect().height > 0 &&
+          popupEl.getBoundingClientRect().width > 0
+        );
+      };
 
-    const bringNativePresetPromptPopupToFront = () => {
-      const popupEl = document.getElementById(
-        "completion_prompt_manager_popup",
-      );
-      if (!popupEl) return false;
+      const bringNativePresetPromptPopupToFront = () => {
+        const popupEl = document.getElementById(
+          "completion_prompt_manager_popup",
+        );
+        if (!popupEl) return false;
 
-      const overlayEl = document.getElementById("cfm-overlay");
-      const overlayZ = Number.parseInt(
-        overlayEl ? window.getComputedStyle(overlayEl).zIndex : "",
-        10,
-      );
-      const nextZ = Number.isFinite(overlayZ) ? overlayZ + 2 : 10002;
+        const overlayEl = document.getElementById("cfm-overlay");
+        const overlayZ = Number.parseInt(
+          overlayEl ? window.getComputedStyle(overlayEl).zIndex : "",
+          10,
+        );
+        const nextZ = Number.isFinite(overlayZ) ? overlayZ + 2 : 10002;
 
-      // 只提升 z-index，不改变 position/layout 属性
-      // 原生弹窗使用 position:absolute 并依赖父元素来确定尺寸，
-      // 强制改为 position:fixed 会导致移动端弹窗高度塌陷变得不可见
-      const wrapperEl = popupEl.parentElement;
-      if (wrapperEl instanceof HTMLElement) {
-        wrapperEl.style.setProperty("z-index", String(nextZ), "important");
-      }
-      popupEl.style.setProperty("z-index", String(nextZ + 1), "important");
-
-      // 绑定关闭/保存按钮的清理事件（仅绑定一次）
-      bindNativePopupCleanup();
-
-      return true;
-    };
-
-    const focusNativePresetPromptPopupField = () => {
-      const popupEl = document.getElementById(
-        "completion_prompt_manager_popup",
-      );
-      if (!popupEl) return false;
-      const field = popupEl.querySelector(
-        "textarea, .ace_text-input, input[type='text'], [contenteditable='true']",
-      );
-      if (!(field instanceof HTMLElement)) return false;
-      try {
-        field.focus({ preventScroll: true });
-      } catch {
-        field.focus();
-      }
-      if (
-        field instanceof HTMLTextAreaElement ||
-        field instanceof HTMLInputElement
-      ) {
-        const value = field.value;
-        if (typeof value === "string") {
-          const pos = value.length;
-          try {
-            field.setSelectionRange(pos, pos);
-          } catch {
-            // ignore
-          }
+        // 只提升 z-index，不改变 position/layout 属性
+        // 原生弹窗使用 position:absolute 并依赖父元素来确定尺寸，
+        // 强制改为 position:fixed 会导致移动端弹窗高度塌陷变得不可见
+        const wrapperEl = popupEl.parentElement;
+        if (wrapperEl instanceof HTMLElement) {
+          wrapperEl.style.setProperty("z-index", String(nextZ), "important");
         }
-      }
-      field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      field.dispatchEvent(new Event("change", { bubbles: true }));
-      return true;
-    };
+        popupEl.style.setProperty("z-index", String(nextZ + 1), "important");
 
-    const scheduleBringNativePresetPromptPopupToFront = () => {
-      bringNativePresetPromptPopupToFront();
-      let attempts = 0;
-      const maxAttempts = 32;
-      const timer = window.setInterval(() => {
-        attempts += 1;
-        bringNativePresetPromptPopupToFront();
-        if (attempts === 3 || attempts === 8 || attempts === 14) {
-          focusNativePresetPromptPopupField();
-        }
-        if (attempts >= maxAttempts || hasVisibleNativePresetPromptPopup()) {
-          window.clearInterval(timer);
-        }
-      }, 50);
-    };
+        // 绑定关闭/保存按钮的清理事件（仅绑定一次）
+        bindNativePopupCleanup();
 
-    const isPresetSelectionStable = (targetValue) => {
-      if (!pm?.select || !targetValue) return false;
-      return String(pm.select.val() || "") === String(targetValue);
-    };
+        return true;
+      };
 
-    const getNativePromptRowState = () => {
-      const row = findNativePresetPromptRow(
-        normalizedPromptKey,
-        normalizedPromptLabel,
-      );
-      if (!row.length) {
-        return { row, editButton: $(), nativeButton: null, visible: false };
-      }
-      const editButton = row.find(".prompt-manager-edit-action").first();
-      const nativeButton = editButton.get(0);
-      const rowEl = row.get(0);
-      const visible =
-        row.is(":visible") ||
-        (!!rowEl && rowEl instanceof HTMLElement && rowEl.offsetParent !== null);
-      return { row, editButton, nativeButton, visible };
-    };
-
-    const clickNativeEditButton = () => {
-      const { row, nativeButton } = getNativePromptRowState();
-      if (!row.length || !nativeButton) return false;
-      if (row.length && row.get(0)?.scrollIntoView) {
+      const focusNativePresetPromptPopupField = () => {
+        const popupEl = document.getElementById(
+          "completion_prompt_manager_popup",
+        );
+        if (!popupEl) return false;
+        const field = popupEl.querySelector(
+          "textarea, .ace_text-input, input[type='text'], [contenteditable='true']",
+        );
+        if (!(field instanceof HTMLElement)) return false;
         try {
-          row.get(0).scrollIntoView({ block: "center", inline: "nearest" });
+          field.focus({ preventScroll: true });
         } catch {
-          row.get(0).scrollIntoView();
+          field.focus();
         }
-      }
-      nativeButton.click();
-      scheduleBringNativePresetPromptPopupToFront();
-      window.setTimeout(() => focusNativePresetPromptPopupField(), 120);
-      window.setTimeout(() => focusNativePresetPromptPopupField(), 260);
-      window.setTimeout(() => focusNativePresetPromptPopupField(), 420);
-      return true;
-    };
-
-    const syncTargetPresetSelection = () => {
-      const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
-      const currentValue = String(pm.select.val() || "");
-
-      if (targetValue && currentValue !== targetValue) {
-        // 保存原始预设值，弹窗关闭后恢复
-        _presetValueToRestore = currentValue;
-        pm.select.val(targetValue);
-        pm.select.trigger("change");
-        pm.select.trigger("input");
-      } else if (!targetValue) {
-        syncCurrentPresetSelection(pm, normalizedPresetName);
-      }
-
-      return targetValue;
-    };
-
-    if (clickNativeEditButton()) {
-      return true;
-    }
-
-    const targetValue = syncTargetPresetSelection();
-
-    const tryOpenAfterSelectionSettles = async (timeoutMs = 4200) => {
-      const startTime = Date.now();
-      let stableSelectionSeenAt = 0;
-      let stableRowSeenAt = 0;
-      let clickIssuedAt = 0;
-      while (Date.now() - startTime < timeoutMs) {
-        if (hasVisibleNativePresetPromptPopup()) {
-          scheduleBringNativePresetPromptPopupToFront();
-          return true;
-        }
-
-        if (!targetValue || isPresetSelectionStable(targetValue)) {
-          if (!stableSelectionSeenAt) {
-            stableSelectionSeenAt = Date.now();
-          }
-        } else {
-          stableSelectionSeenAt = 0;
-          stableRowSeenAt = 0;
-          clickIssuedAt = 0;
-          await new Promise((resolve) => setTimeout(resolve, 60));
-          continue;
-        }
-
-        const rowState = getNativePromptRowState();
         if (
-          stableSelectionSeenAt &&
-          Date.now() - stableSelectionSeenAt >= 120 &&
-          rowState.row.length &&
-          rowState.nativeButton
+          field instanceof HTMLTextAreaElement ||
+          field instanceof HTMLInputElement
         ) {
-          if (!stableRowSeenAt) {
-            stableRowSeenAt = Date.now();
-          }
-          // 移动端渲染较慢，给行与按钮更多稳定时间。
-          if (!clickIssuedAt && Date.now() - stableRowSeenAt >= 220) {
-            if (clickNativeEditButton()) {
-              clickIssuedAt = Date.now();
+          const value = field.value;
+          if (typeof value === "string") {
+            const pos = value.length;
+            try {
+              field.setSelectionRange(pos, pos);
+            } catch {
+              // ignore
             }
           }
-        } else {
-          stableRowSeenAt = 0;
+        }
+        field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      };
+
+      const scheduleBringNativePresetPromptPopupToFront = () => {
+        bringNativePresetPromptPopupToFront();
+        let attempts = 0;
+        const maxAttempts = 32;
+        const timer = window.setInterval(() => {
+          attempts += 1;
+          bringNativePresetPromptPopupToFront();
+          if (attempts === 3 || attempts === 8 || attempts === 14) {
+            focusNativePresetPromptPopupField();
+          }
+          if (attempts >= maxAttempts || hasVisibleNativePresetPromptPopup()) {
+            window.clearInterval(timer);
+          }
+        }, 50);
+      };
+
+      const isPresetSelectionStable = (targetValue) => {
+        if (!pm?.select || !targetValue) return false;
+        return String(pm.select.val() || "") === String(targetValue);
+      };
+
+      const getNativePromptRowState = () => {
+        const row = findNativePresetPromptRow(
+          normalizedPromptKey,
+          normalizedPromptLabel,
+        );
+        if (!row.length) {
+          return { row, editButton: $(), nativeButton: null, visible: false };
+        }
+        const editButton = row.find(".prompt-manager-edit-action").first();
+        const nativeButton = editButton.get(0);
+        const rowEl = row.get(0);
+        const visible =
+          row.is(":visible") ||
+          (!!rowEl && rowEl instanceof HTMLElement && rowEl.offsetParent !== null);
+        return { row, editButton, nativeButton, visible };
+      };
+
+      const clickNativeEditButton = () => {
+        const { row, nativeButton } = getNativePromptRowState();
+        if (!row.length || !nativeButton) return false;
+        if (row.length && row.get(0)?.scrollIntoView) {
+          try {
+            row.get(0).scrollIntoView({ block: "center", inline: "nearest" });
+          } catch {
+            row.get(0).scrollIntoView();
+          }
+        }
+        nativeButton.click();
+        scheduleBringNativePresetPromptPopupToFront();
+        window.setTimeout(() => focusNativePresetPromptPopupField(), 120);
+        window.setTimeout(() => focusNativePresetPromptPopupField(), 260);
+        window.setTimeout(() => focusNativePresetPromptPopupField(), 420);
+        return true;
+      };
+
+      const syncTargetPresetSelection = () => {
+        const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
+        const currentValue = String(pm.select.val() || "");
+
+        if (targetValue && currentValue !== targetValue) {
+          // 保存原始预设值，弹窗关闭后恢复
+          _presetValueToRestore = currentValue;
+          pm.select.val(targetValue);
+          pm.select.trigger("change");
+          pm.select.trigger("input");
+        } else if (!targetValue) {
+          syncCurrentPresetSelection(pm, normalizedPresetName);
         }
 
-        if (clickIssuedAt && Date.now() - clickIssuedAt >= 240) {
+        return targetValue;
+      };
+
+      if (clickNativeEditButton()) {
+        return true;
+      }
+
+      const targetValue = syncTargetPresetSelection();
+
+      const tryOpenAfterSelectionSettles = async (timeoutMs = 4200) => {
+        const startTime = Date.now();
+        let stableSelectionSeenAt = 0;
+        let stableRowSeenAt = 0;
+        let clickIssuedAt = 0;
+        let lastRowSignature = "";
+        while (Date.now() - startTime < timeoutMs) {
           if (hasVisibleNativePresetPromptPopup()) {
             scheduleBringNativePresetPromptPopupToFront();
             return true;
           }
+
+          if (!targetValue || isPresetSelectionStable(targetValue)) {
+            if (!stableSelectionSeenAt) {
+              stableSelectionSeenAt = Date.now();
+            }
+          } else {
+            stableSelectionSeenAt = 0;
+            stableRowSeenAt = 0;
+            clickIssuedAt = 0;
+            lastRowSignature = "";
+            await new Promise((resolve) => setTimeout(resolve, 60));
+            continue;
+          }
+
+          const rowState = getNativePromptRowState();
+          const rowIdentifier = String(
+            rowState.row.attr("data-pm-identifier") || "",
+          ).trim();
+          const rowName = String(
+            rowState.row
+              .find(".completion_prompt_manager_prompt_name")
+              .first()
+              .attr("data-pm-name") ||
+              rowState.row
+                .find(".completion_prompt_manager_prompt_name")
+                .first()
+                .text() ||
+              "",
+          )
+            .replace(/\s+/g, " ")
+            .trim();
+          const rowSignature = `${rowIdentifier}::${rowName}`;
+          const matchesRequestedPrompt =
+            (!!normalizedPromptKey && rowIdentifier === normalizedPromptKey) ||
+            (!!normalizedPromptLabel &&
+              (rowName === normalizedPromptLabel ||
+                rowName.includes(normalizedPromptLabel)));
+
+          if (
+            stableSelectionSeenAt &&
+            Date.now() - stableSelectionSeenAt >= 180 &&
+            rowState.row.length &&
+            rowState.nativeButton &&
+            matchesRequestedPrompt
+          ) {
+            if (rowSignature !== lastRowSignature) {
+              lastRowSignature = rowSignature;
+              stableRowSeenAt = Date.now();
+            } else if (!stableRowSeenAt) {
+              stableRowSeenAt = Date.now();
+            }
+
+            // 给原生 PromptManager 更多时间完成“预设切换 -> 内部数据同步 -> 行绑定”。
+            if (!clickIssuedAt && Date.now() - stableRowSeenAt >= 420) {
+              if (clickNativeEditButton()) {
+                clickIssuedAt = Date.now();
+              }
+            }
+          } else {
+            stableRowSeenAt = 0;
+            lastRowSignature = rowSignature;
+          }
+
+          if (clickIssuedAt && Date.now() - clickIssuedAt >= 300) {
+            if (hasVisibleNativePresetPromptPopup()) {
+              scheduleBringNativePresetPromptPopupToFront();
+              return true;
+            }
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 60));
         }
+        return hasVisibleNativePresetPromptPopup();
+      };
 
-        await new Promise((resolve) => setTimeout(resolve, 60));
-      }
-      return hasVisibleNativePresetPromptPopup();
-    };
-
-    if (await tryOpenAfterSelectionSettles()) {
-      return true;
-    }
-
-    // 兜底：仅当目标预设实际上未切换到位时，才补触发一次同步和短暂重试，
-    // 避免移动端对带正则的预设重复触发原生 toast。
-    if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
-      syncTargetPresetSelection();
-      if (await tryOpenAfterSelectionSettles(2600)) {
+      if (await tryOpenAfterSelectionSettles()) {
         return true;
       }
-    }
 
-    // 失败时不立即恢复当前预设，避免再触发一次原生 regex toast。
-    return false;
+      // 兜底：仅当目标预设实际上未切换到位时，才补触发一次同步和短暂重试，
+      // 避免移动端对带正则的预设重复触发原生 toast。
+      if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
+        syncTargetPresetSelection();
+        if (await tryOpenAfterSelectionSettles(2600)) {
+          return true;
+        }
+      }
+
+      // 失败时不立即恢复当前预设，避免再触发一次原生 regex toast。
+      return false;
+    } finally {
+      endSuppressPresetRegexToast();
+    }
   }
 
   async function editPresetDetailField(presetName, fieldKey) {
