@@ -19723,6 +19723,64 @@ jQuery(async () => {
     overlay.append(popup);
     $("body").append(overlay);
 
+    const bindMobilePanePathDrag = () => {
+      if (window.innerWidth > 768) return;
+      const MIN_LEFT_PANE_HEIGHT = 160;
+      const MIN_RIGHT_PANE_HEIGHT = 220;
+      popup.find(".cfm-dual-pane").each(function () {
+        const dualPane = this;
+        const $dualPane = $(dualPane);
+        const leftPane = dualPane.querySelector(".cfm-left-pane");
+        const rightPane = dualPane.querySelector(".cfm-right-pane");
+        const pathEl = dualPane.querySelector(".cfm-right-header .cfm-rh-path");
+        if (!leftPane || !rightPane || !pathEl || pathEl.dataset.cfmPaneDragBound === "1") {
+          return;
+        }
+        pathEl.dataset.cfmPaneDragBound = "1";
+        pathEl.style.touchAction = "none";
+
+        let dragging = false;
+        let startY = 0;
+        let startLeftHeight = 0;
+
+        const stopDrag = () => {
+          if (!dragging) return;
+          dragging = false;
+          pathEl.classList.remove("cfm-rh-path-dragging");
+          document.removeEventListener("pointermove", onPointerMove);
+          document.removeEventListener("pointerup", stopDrag);
+          document.removeEventListener("pointercancel", stopDrag);
+        };
+
+        const onPointerMove = (ev) => {
+          if (!dragging) return;
+          ev.preventDefault();
+          const rect = $dualPane[0].getBoundingClientRect();
+          const totalHeight = rect.height;
+          const deltaY = ev.clientY - startY;
+          const nextLeftHeight = Math.min(
+            Math.max(startLeftHeight + deltaY, MIN_LEFT_PANE_HEIGHT),
+            Math.max(MIN_LEFT_PANE_HEIGHT, totalHeight - MIN_RIGHT_PANE_HEIGHT),
+          );
+          leftPane.style.height = `${nextLeftHeight}px`;
+          leftPane.style.maxHeight = `${nextLeftHeight}px`;
+        };
+
+        pathEl.addEventListener("pointerdown", (ev) => {
+          if (window.innerWidth > 768) return;
+          dragging = true;
+          startY = ev.clientY;
+          startLeftHeight = leftPane.getBoundingClientRect().height;
+          pathEl.classList.add("cfm-rh-path-dragging");
+          document.addEventListener("pointermove", onPointerMove, { passive: false });
+          document.addEventListener("pointerup", stopDrag);
+          document.addEventListener("pointercancel", stopDrag);
+        });
+      });
+    };
+
+    bindMobilePanePathDrag();
+
     // 如果初始tab不是chars，动态切换tab/视图/搜索栏的显示状态
     if (initialTab !== "chars") {
       popup.find(".cfm-tab").removeClass("cfm-tab-active");

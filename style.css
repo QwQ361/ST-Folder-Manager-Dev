@@ -322,6 +322,10 @@
   border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
   background-color: rgba(0, 0, 0, 0.05);
 }
+.cfm-right-header .cfm-rh-path.cfm-rh-path-dragging {
+  opacity: 1;
+  color: var(--SmartThemeQuoteColor, #89b4fa);
+}
 .cfm-right-header .cfm-rh-path {
   flex: 1;
   opacity: 0.6;
@@ -1736,6 +1740,7 @@
     border-bottom: 2px solid var(--SmartThemeBorderColor, #45475a);
     resize: vertical;
     overflow: hidden;
+    position: relative;
   }
 
   /* 右侧内容区域 */
@@ -1908,6 +1913,7 @@
     background: var(--SmartThemeBorderColor, #45475a);
     border-radius: 2px;
     opacity: 0.5;
+    pointer-events: none;
   }
 }
 
