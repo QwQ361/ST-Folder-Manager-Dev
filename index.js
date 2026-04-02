@@ -12524,42 +12524,49 @@ jQuery(async () => {
     );
     if (!rows.length) return $();
 
-    if (normalizedPromptKey) {
-      const keyMatch = rows
-        .filter(function () {
-          return (
-            String($(this).attr("data-pm-identifier") || "") ===
-            normalizedPromptKey
-          );
-        })
-        .first();
-      if (keyMatch.length) return keyMatch;
-    }
+    const scoreRowMatch = (rowEl) => {
+      const row = $(rowEl);
+      let score = 0;
+      const identifier = String(row.attr("data-pm-identifier") || "").trim();
+      const nameEl = row.find(".completion_prompt_manager_prompt_name").first();
+      const dataName = String(nameEl.attr("data-pm-name") || "").trim();
+      const visibleName = String(nameEl.text() || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const rowText = String(row.text() || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const editButton = row.find(".prompt-manager-edit-action").first();
+      const isVisible = row.is(":visible") || rowEl?.offsetParent !== null;
 
-    if (normalizedPromptLabel) {
-      const labelMatch = rows
-        .filter(function () {
-          const row = $(this);
-          const dataName = String(
-            row
-              .find(".completion_prompt_manager_prompt_name")
-              .attr("data-pm-name") || "",
-          ).trim();
-          const visibleName = String(
-            row.find(".completion_prompt_manager_prompt_name").text() || "",
-          )
-            .replace(/\s+/g, " ")
-            .trim();
-          return (
-            dataName === normalizedPromptLabel ||
-            visibleName.includes(normalizedPromptLabel)
-          );
-        })
-        .first();
-      if (labelMatch.length) return labelMatch;
-    }
+      if (normalizedPromptKey) {
+        if (identifier === normalizedPromptKey) score += 100;
+        else if (identifier.includes(normalizedPromptKey)) score += 60;
+      }
 
-    return $();
+      if (normalizedPromptLabel) {
+        if (dataName === normalizedPromptLabel) score += 80;
+        else if (visibleName === normalizedPromptLabel) score += 70;
+        else if (visibleName.includes(normalizedPromptLabel)) score += 40;
+        else if (rowText.includes(normalizedPromptLabel)) score += 20;
+      }
+
+      if (editButton.length) score += 15;
+      if (isVisible) score += 10;
+      return score;
+    };
+
+    let bestRow = null;
+    let bestScore = 0;
+    rows.each(function () {
+      const score = scoreRowMatch(this);
+      if (score > bestScore) {
+        bestScore = score;
+        bestRow = this;
+      }
+    });
+
+    return bestRow && bestScore > 0 ? $(bestRow) : $();
   }
 
   function findPresetSelectValueByName(pm, presetName) {
@@ -12687,6 +12694,20 @@ jQuery(async () => {
     const pm = getContext().getPresetManager();
     if (!pm?.select) return false;
 
+    const hasVisibleNativePresetPromptPopup = () => {
+      const popupEl = document.getElementById(
+        "completion_prompt_manager_popup",
+      );
+      if (!(popupEl instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(popupEl);
+      return (
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        popupEl.getBoundingClientRect().height > 0 &&
+        popupEl.getBoundingClientRect().width > 0
+      );
+    };
+
     const bringNativePresetPromptPopupToFront = () => {
       const popupEl = document.getElementById(
         "completion_prompt_manager_popup",
@@ -12752,14 +12773,14 @@ jQuery(async () => {
     const scheduleBringNativePresetPromptPopupToFront = () => {
       bringNativePresetPromptPopupToFront();
       let attempts = 0;
-      const maxAttempts = 20;
+      const maxAttempts = 32;
       const timer = window.setInterval(() => {
         attempts += 1;
         bringNativePresetPromptPopupToFront();
-        if (attempts === 3 || attempts === 8) {
+        if (attempts === 3 || attempts === 8 || attempts === 14) {
           focusNativePresetPromptPopupField();
         }
-        if (attempts >= maxAttempts) {
+        if (attempts >= maxAttempts || hasVisibleNativePresetPromptPopup()) {
           window.clearInterval(timer);
         }
       }, 50);
@@ -12770,29 +12791,38 @@ jQuery(async () => {
       return String(pm.select.val() || "") === String(targetValue);
     };
 
-    const hasStableNativePromptRow = () => {
+    const getNativePromptRowState = () => {
       const row = findNativePresetPromptRow(
         normalizedPromptKey,
         normalizedPromptLabel,
       );
-      if (!row.length) return false;
+      if (!row.length) {
+        return { row, editButton: $(), nativeButton: null, visible: false };
+      }
       const editButton = row.find(".prompt-manager-edit-action").first();
       const nativeButton = editButton.get(0);
-      return !!nativeButton;
+      const rowEl = row.get(0);
+      const visible =
+        row.is(":visible") ||
+        (!!rowEl && rowEl instanceof HTMLElement && rowEl.offsetParent !== null);
+      return { row, editButton, nativeButton, visible };
     };
 
     const clickNativeEditButton = () => {
-      const row = findNativePresetPromptRow(
-        normalizedPromptKey,
-        normalizedPromptLabel,
-      );
-      const editButton = row.find(".prompt-manager-edit-action").first();
-      const nativeButton = editButton.get(0);
-      if (!nativeButton) return false;
+      const { row, nativeButton } = getNativePromptRowState();
+      if (!row.length || !nativeButton) return false;
+      if (row.length && row.get(0)?.scrollIntoView) {
+        try {
+          row.get(0).scrollIntoView({ block: "center", inline: "nearest" });
+        } catch {
+          row.get(0).scrollIntoView();
+        }
+      }
       nativeButton.click();
       scheduleBringNativePresetPromptPopupToFront();
       window.setTimeout(() => focusNativePresetPromptPopupField(), 120);
       window.setTimeout(() => focusNativePresetPromptPopupField(), 260);
+      window.setTimeout(() => focusNativePresetPromptPopupField(), 420);
       return true;
     };
 
@@ -12819,11 +12849,17 @@ jQuery(async () => {
 
     const targetValue = syncTargetPresetSelection();
 
-    const tryOpenAfterSelectionSettles = async (timeoutMs = 2500) => {
+    const tryOpenAfterSelectionSettles = async (timeoutMs = 4200) => {
       const startTime = Date.now();
       let stableSelectionSeenAt = 0;
       let stableRowSeenAt = 0;
+      let clickIssuedAt = 0;
       while (Date.now() - startTime < timeoutMs) {
+        if (hasVisibleNativePresetPromptPopup()) {
+          scheduleBringNativePresetPromptPopupToFront();
+          return true;
+        }
+
         if (!targetValue || isPresetSelectionStable(targetValue)) {
           if (!stableSelectionSeenAt) {
             stableSelectionSeenAt = Date.now();
@@ -12831,28 +12867,41 @@ jQuery(async () => {
         } else {
           stableSelectionSeenAt = 0;
           stableRowSeenAt = 0;
-          await new Promise((resolve) => setTimeout(resolve, 50));
+          clickIssuedAt = 0;
+          await new Promise((resolve) => setTimeout(resolve, 60));
           continue;
         }
 
+        const rowState = getNativePromptRowState();
         if (
           stableSelectionSeenAt &&
-          Date.now() - stableSelectionSeenAt >= 80 &&
-          hasStableNativePromptRow()
+          Date.now() - stableSelectionSeenAt >= 120 &&
+          rowState.row.length &&
+          rowState.nativeButton
         ) {
           if (!stableRowSeenAt) {
             stableRowSeenAt = Date.now();
           }
-          // 保持最小等待，避免切换后立刻点击导致弹窗内容为空
-          if (Date.now() - stableRowSeenAt >= 100 && clickNativeEditButton()) {
-            return true;
+          // 移动端渲染较慢，给行与按钮更多稳定时间。
+          if (!clickIssuedAt && Date.now() - stableRowSeenAt >= 220) {
+            if (clickNativeEditButton()) {
+              clickIssuedAt = Date.now();
+            }
           }
         } else {
           stableRowSeenAt = 0;
         }
-        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        if (clickIssuedAt && Date.now() - clickIssuedAt >= 240) {
+          if (hasVisibleNativePresetPromptPopup()) {
+            scheduleBringNativePresetPromptPopupToFront();
+            return true;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 60));
       }
-      return false;
+      return hasVisibleNativePresetPromptPopup();
     };
 
     if (await tryOpenAfterSelectionSettles()) {
@@ -12863,12 +12912,12 @@ jQuery(async () => {
     // 避免移动端对带正则的预设重复触发原生 toast。
     if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
       syncTargetPresetSelection();
-      if (await tryOpenAfterSelectionSettles(1800)) {
+      if (await tryOpenAfterSelectionSettles(2600)) {
         return true;
       }
     }
 
-    restorePresetSelectionAfterEdit();
+    // 失败时不立即恢复当前预设，避免再触发一次原生 regex toast。
     return false;
   }
 
