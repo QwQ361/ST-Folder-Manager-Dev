@@ -12577,6 +12577,56 @@ jQuery(async () => {
     return null;
   }
 
+  /** 清理 bringNativePresetPromptPopupToFront 设置的所有 inline style */
+  let _nativePopupCleanupBound = false;
+  function resetNativePresetPromptPopupStyles() {
+    const popupEl = document.getElementById(
+      "completion_prompt_manager_popup",
+    );
+    if (popupEl) {
+      const propsToRemove = [
+        "position", "top", "left", "right", "bottom",
+        "transform", "margin", "max-height", "max-width", "z-index",
+      ];
+      for (const prop of propsToRemove) {
+        popupEl.style.removeProperty(prop);
+      }
+    }
+    const wrapperEl = popupEl?.parentElement;
+    if (wrapperEl instanceof HTMLElement) {
+      wrapperEl.style.removeProperty("position");
+      wrapperEl.style.removeProperty("z-index");
+    }
+  }
+
+  /**
+   * 在原生弹窗的关闭/保存按钮上绑定清理事件（仅绑定一次）。
+   * 当用户点击关闭或保存后，延迟清理 bringNativePresetPromptPopupToFront 遗留的 inline style。
+   */
+  function bindNativePopupCleanup() {
+    if (_nativePopupCleanupBound) return;
+    const popupEl = document.getElementById(
+      "completion_prompt_manager_popup",
+    );
+    if (!popupEl) return;
+    _nativePopupCleanupBound = true;
+
+    const closeButtonIds = [
+      "completion_prompt_manager_popup_close_button",
+      "completion_prompt_manager_popup_entry_form_close",
+      "completion_prompt_manager_popup_entry_form_save",
+    ];
+    for (const btnId of closeButtonIds) {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.addEventListener("click", () => {
+          // 延迟清理，等原生代码先完成弹窗隐藏
+          setTimeout(() => resetNativePresetPromptPopupStyles(), 100);
+        });
+      }
+    }
+  }
+
   async function openNativePresetPromptEditor(
     presetName,
     promptKey,
@@ -12643,6 +12693,9 @@ jQuery(async () => {
       );
       popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
       applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
+
+      // 绑定关闭/保存按钮的清理事件（仅绑定一次）
+      bindNativePopupCleanup();
 
       return applied;
     };
@@ -23105,6 +23158,7 @@ jQuery(async () => {
       cfmQrLastFocusedSetName = null;
       closeWorldInfoEntryPanels();
       cfmWorldInfoEntryLastFocusedName = null;
+      resetNativePresetPromptPopupStyles();
 
       cfmChatMode = false;
       cfmChatExpandedAvatars.clear();
