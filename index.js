@@ -12617,7 +12617,7 @@ jQuery(async () => {
   let _presetValueToRestore = null;
   /** 临时静默“切换带正则预设时要求重载聊天”的原生 toast */
   let _suppressPresetRegexToastDepth = 0;
-  let _originalToastrInfoForPresetRegexToast = null;
+  let _originalToastrFnsForPresetRegexToast = null;
 
   function shouldSuppressPresetRegexToast(message) {
     const text = String(message || "");
@@ -12631,14 +12631,22 @@ jQuery(async () => {
   function beginSuppressPresetRegexToast() {
     _suppressPresetRegexToastDepth += 1;
     if (_suppressPresetRegexToastDepth !== 1) return;
-    if (!window.toastr || typeof window.toastr.info !== "function") return;
-    _originalToastrInfoForPresetRegexToast = window.toastr.info.bind(window.toastr);
-    window.toastr.info = function (...args) {
-      if (shouldSuppressPresetRegexToast(args[0])) {
-        return null;
-      }
-      return _originalToastrInfoForPresetRegexToast(...args);
-    };
+    if (!window.toastr) return;
+
+    const toastLevels = ["info", "warning", "success", "error"];
+    _originalToastrFnsForPresetRegexToast = {};
+
+    for (const level of toastLevels) {
+      if (typeof window.toastr[level] !== "function") continue;
+      const originalFn = window.toastr[level].bind(window.toastr);
+      _originalToastrFnsForPresetRegexToast[level] = originalFn;
+      window.toastr[level] = function (...args) {
+        if (shouldSuppressPresetRegexToast(args[0])) {
+          return null;
+        }
+        return originalFn(...args);
+      };
+    }
   }
 
   function endSuppressPresetRegexToast() {
@@ -12646,10 +12654,14 @@ jQuery(async () => {
       _suppressPresetRegexToastDepth -= 1;
     }
     if (_suppressPresetRegexToastDepth !== 0) return;
-    if (_originalToastrInfoForPresetRegexToast && window.toastr) {
-      window.toastr.info = _originalToastrInfoForPresetRegexToast;
+    if (_originalToastrFnsForPresetRegexToast && window.toastr) {
+      for (const [level, originalFn] of Object.entries(
+        _originalToastrFnsForPresetRegexToast,
+      )) {
+        window.toastr[level] = originalFn;
+      }
     }
-    _originalToastrInfoForPresetRegexToast = null;
+    _originalToastrFnsForPresetRegexToast = null;
   }
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById(
