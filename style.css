@@ -1749,6 +1749,13 @@
     min-height: 0;
   }
 
+  .cfm-right-header .cfm-rh-path {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* 增大触摸目标尺寸 */
   .cfm-tnode {
     padding: 10px 12px;
