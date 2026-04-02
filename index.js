@@ -474,6 +474,20 @@ jQuery(async () => {
   let _personaListCache = null;
   let _personaListCacheTime = 0;
   const PERSONA_LIST_CACHE_TTL = 5000;
+  // world-info.js 模块缓存：首次 import 后缓存引用，后续同步读取避免 await 延迟
+  let _wiModuleCache = null;
+  // 预加载 persona 数据的 Promise
+  let _personasPreloadPromise = null;
+  /** 获取已缓存的 world-info.js 模块引用（同步），返回 null 如果尚未缓存 */
+  function getWiModuleSync() {
+    return _wiModuleCache;
+  }
+  /** 确保 world-info.js 模块已缓存（异步），返回模块引用 */
+  async function ensureWiModule() {
+    if (_wiModuleCache) return _wiModuleCache;
+    _wiModuleCache = await import("../../../world-info.js");
+    return _wiModuleCache;
+  }
   function normalizeWorldInfoNameList(names) {
     const result = [];
     const seen = new Set();
@@ -7194,14 +7208,14 @@ jQuery(async () => {
 
   // ==================== 世界书激活状态管理 ====================
   /**
-   * 获取当前角色关联的世界书名称集合（主绑定 + charLore辅助世界书）
+   * 获取当前角色关联的世界书名称集合（同步优先，主绑定 + charLore辅助世界书）
    * 这些世界书的 toggle 应锁定不可操作
    */
-  async function getCharBoundWorldBooks() {
+  function getCharBoundWorldBooks() {
     const bound = new Set();
     try {
-      const wiModule = await import("../../../world-info.js");
-      const worldInfoObj = wiModule.world_info;
+      const wiMod = getWiModuleSync();
+      const worldInfoObj = wiMod ? wiMod.world_info : null;
       // 当前角色的主绑定世界书
       const ctx = getContext();
       const charId = ctx.characterId;
@@ -7238,39 +7252,39 @@ jQuery(async () => {
   }
 
   /**
-   * 判断世界书是否已在全局激活列表中
+   * 判断世界书是否已在全局激活列表中（同步优先）
    */
-  async function isWorldInfoActive(name) {
-    try {
-      const wiModule = await import("../../../world-info.js");
-      return wiModule.selected_world_info.includes(name);
-    } catch (e) {
-      // fallback: 从 DOM 读取
-      const select = $("#world_info");
-      const selectedNames = [];
-      select.find("option:selected").each(function () {
-        selectedNames.push($(this).text());
-      });
-      return selectedNames.includes(name);
+  function isWorldInfoActive(name) {
+    const wiMod = getWiModuleSync();
+    if (wiMod && Array.isArray(wiMod.selected_world_info)) {
+      return wiMod.selected_world_info.includes(name);
     }
+    // fallback: 从 DOM 读取
+    const select = $("#world_info");
+    const selectedNames = [];
+    select.find("option:selected").each(function () {
+      selectedNames.push($(this).text());
+    });
+    return selectedNames.includes(name);
   }
 
   /**
-   * 批量获取所有世界书的激活状态
+   * 批量获取所有世界书的激活状态（同步优先）
    * @returns {Set<string>} 当前激活的世界书名称集合
    */
-  async function getActiveWorldInfoSet() {
-    try {
-      const wiModule = await import("../../../world-info.js");
-      return new Set(wiModule.selected_world_info);
-    } catch (e) {
-      const select = $("#world_info");
-      const names = new Set();
-      select.find("option:selected").each(function () {
-        names.add($(this).text());
-      });
-      return names;
+  function getActiveWorldInfoSet() {
+    // 优先从已缓存的模块同步读取
+    const wiMod = getWiModuleSync();
+    if (wiMod && Array.isArray(wiMod.selected_world_info)) {
+      return new Set(wiMod.selected_world_info);
     }
+    // 回退：从 DOM 读取
+    const select = $("#world_info");
+    const names = new Set();
+    select.find("option:selected").each(function () {
+      names.add($(this).text());
+    });
+    return names;
   }
 
   function getExistingWorldInfoNameSet() {
@@ -7373,7 +7387,7 @@ jQuery(async () => {
       return false;
     }
     try {
-      const wiModule = await import("../../../world-info.js");
+      const wiModule = await ensureWiModule();
       const selectedWI = wiModule.selected_world_info;
       const worldNames = wiModule.world_names;
       const idx = selectedWI.indexOf(normalizedName);
@@ -7404,7 +7418,7 @@ jQuery(async () => {
    */
   async function applyWorldInfoPreset(bookNames, charBound) {
     try {
-      const wiModule = await import("../../../world-info.js");
+      const wiModule = await ensureWiModule();
       const selectedWI = wiModule.selected_world_info;
       const worldNames = wiModule.world_names;
       const existingNameSet = getExistingWorldInfoNameSet();
@@ -14382,7 +14396,7 @@ jQuery(async () => {
     }
     // 同步更新 world_names 数组（内存中的世界书名称列表）
     try {
-      const wiModule = await import("../../../world-info.js");
+      const wiModule = await ensureWiModule();
       const wNames = wiModule.world_names;
       if (Array.isArray(wNames)) {
         const oldIdx = wNames.indexOf(oldName);
@@ -14833,7 +14847,7 @@ jQuery(async () => {
 
     // 2. 更新辅助世界书 (world_info.charLore[].extraBooks)
     try {
-      const wiModule = await import("../../../world-info.js");
+      const wiModule = await ensureWiModule();
       const worldInfoObj = wiModule.world_info;
       if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
         let changed = false;
@@ -18828,6 +18842,10 @@ jQuery(async () => {
     // 预加载世界书数据，保存 Promise 以便切换标签时直接复用
     // 不再每次打开都清空缓存，避免世界书页反复白屏等待
     _worldInfoPreloadPromise = getWorldInfoNames();
+    // 预加载 world-info.js 模块（后台，不阻塞），使后续 getActiveWorldInfoSet/getCharBoundWorldBooks 能同步读取
+    ensureWiModule();
+    // 预加载 persona 列表（后台，不阻塞），使切到 User 标签时缓存已可用
+    _personasPreloadPromise = getCurrentPersonas();
 
     const overlay = $('<div id="cfm-overlay"></div>');
     const popup = $(`
@@ -29993,11 +30011,14 @@ jQuery(async () => {
     let names;
     const hasExistingWorldInfoUi =
       leftTree.children().length > 0 || rightList.children().length > 0;
-    // 优先从DOM同步读取（getWorldInfoNames内部会先尝试DOM）
+    // 优先从DOM同步读取（最快路径，无 await）
     const domNames = collectWorldInfoNamesFromDom();
     if (domNames.length > 0) {
       names = domNames;
       _worldInfoNamesCache = domNames;
+    } else if (Array.isArray(_worldInfoNamesCache) && _worldInfoNamesCache.length > 0) {
+      // 缓存命中也走同步路径
+      names = _worldInfoNamesCache;
     } else {
       if (!hasExistingWorldInfoUi) {
         leftTree.empty();
@@ -30008,11 +30029,9 @@ jQuery(async () => {
       names = await (_worldInfoPreloadPromise || getWorldInfoNames());
     }
 
-    // 并行获取世界书激活状态和角色关联世界书，减少串行等待
-    const [wiActiveSet, wiCharBound] = await Promise.all([
-      getActiveWorldInfoSet(),
-      getCharBoundWorldBooks(),
-    ]);
+    // 同步获取世界书激活状态和角色关联世界书（已改为同步函数，无需 await）
+    const wiActiveSet = getActiveWorldInfoSet();
+    const wiCharBound = getCharBoundWorldBooks();
 
     if (renderVersion !== _worldInfoRenderVersion) return;
 
@@ -34922,12 +34941,15 @@ jQuery(async () => {
 
     const hasExistingPersonaUi =
       leftTree.children().length > 0 || rightList.children().length > 0;
+    // 优先使用预加载的 promise（打开弹窗时已开始加载），避免重复请求
+    const personaPromise = _personasPreloadPromise || getCurrentPersonas();
+    _personasPreloadPromise = null; // 消费后清空，下次重新请求
     if (!hasExistingPersonaUi) {
       rightList.html(
         '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
       );
     }
-    const personas = await getCurrentPersonas();
+    const personas = await personaPromise;
 
     // 如果在 await 期间有新的渲染被触发，放弃当前渲染
     if (thisRenderId !== renderPersonasView._renderId) return;
