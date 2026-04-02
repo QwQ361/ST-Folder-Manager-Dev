@@ -12917,7 +12917,6 @@ jQuery(async () => {
           _presetValueToRestore = currentValue;
           pm.select.val(targetValue);
           pm.select.trigger("change");
-          pm.select.trigger("input");
         } else if (!targetValue) {
           syncCurrentPresetSelection(pm, normalizedPresetName);
         }
@@ -12931,7 +12930,16 @@ jQuery(async () => {
 
       const targetValue = syncTargetPresetSelection();
 
-      const tryOpenAfterSelectionSettles = async (timeoutMs = 4200) => {
+      const tryOpenAfterSelectionSettles = async (
+        timeoutMs = 4200,
+        options = {},
+      ) => {
+        const {
+          minSelectionStableMs = 100,
+          minRowStableMs = 140,
+          clickConfirmMs = 220,
+          pollIntervalMs = 45,
+        } = options;
         const startTime = Date.now();
         let stableSelectionSeenAt = 0;
         let stableRowSeenAt = 0;
@@ -12952,7 +12960,7 @@ jQuery(async () => {
             stableRowSeenAt = 0;
             clickIssuedAt = 0;
             lastRowSignature = "";
-            await new Promise((resolve) => setTimeout(resolve, 60));
+            await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
             continue;
           }
 
@@ -12982,7 +12990,7 @@ jQuery(async () => {
 
           if (
             stableSelectionSeenAt &&
-            Date.now() - stableSelectionSeenAt >= 180 &&
+            Date.now() - stableSelectionSeenAt >= minSelectionStableMs &&
             rowState.row.length &&
             rowState.nativeButton &&
             matchesRequestedPrompt
@@ -12994,8 +13002,7 @@ jQuery(async () => {
               stableRowSeenAt = Date.now();
             }
 
-            // 给原生 PromptManager 更多时间完成“预设切换 -> 内部数据同步 -> 行绑定”。
-            if (!clickIssuedAt && Date.now() - stableRowSeenAt >= 420) {
+            if (!clickIssuedAt && Date.now() - stableRowSeenAt >= minRowStableMs) {
               if (clickNativeEditButton()) {
                 clickIssuedAt = Date.now();
               }
@@ -13005,19 +13012,37 @@ jQuery(async () => {
             lastRowSignature = rowSignature;
           }
 
-          if (clickIssuedAt && Date.now() - clickIssuedAt >= 300) {
+          if (clickIssuedAt && Date.now() - clickIssuedAt >= clickConfirmMs) {
             if (hasVisibleNativePresetPromptPopup()) {
               scheduleBringNativePresetPromptPopupToFront();
               return true;
             }
           }
 
-          await new Promise((resolve) => setTimeout(resolve, 60));
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
         }
         return hasVisibleNativePresetPromptPopup();
       };
 
-      if (await tryOpenAfterSelectionSettles()) {
+      if (
+        await tryOpenAfterSelectionSettles(1600, {
+          minSelectionStableMs: 60,
+          minRowStableMs: 90,
+          clickConfirmMs: 180,
+          pollIntervalMs: 35,
+        })
+      ) {
+        return true;
+      }
+
+      if (
+        await tryOpenAfterSelectionSettles(3200, {
+          minSelectionStableMs: 180,
+          minRowStableMs: 420,
+          clickConfirmMs: 300,
+          pollIntervalMs: 60,
+        })
+      ) {
         return true;
       }
 
@@ -13025,7 +13050,14 @@ jQuery(async () => {
       // 避免移动端对带正则的预设重复触发原生 toast。
       if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
         syncTargetPresetSelection();
-        if (await tryOpenAfterSelectionSettles(2600)) {
+        if (
+          await tryOpenAfterSelectionSettles(2600, {
+            minSelectionStableMs: 180,
+            minRowStableMs: 420,
+            clickConfirmMs: 300,
+            pollIntervalMs: 60,
+          })
+        ) {
           return true;
         }
       }
@@ -13035,6 +13067,38 @@ jQuery(async () => {
     } finally {
       endSuppressPresetRegexToast();
     }
+  }
+
+  function showPresetEditorOpeningLoading(fieldKey, label = "") {
+    const normalizedFieldKey = String(fieldKey || "").trim();
+    if (!normalizedFieldKey) return null;
+
+    const row = $(
+      `.cfm-preset-detail-row[data-field="${$.escapeSelector(normalizedFieldKey)}"]`,
+    ).first();
+    const card = row.closest(".cfm-preset-detail-card");
+    const host = card.length ? card : $("#cfm-overlay .cfm-preset-detail-sublist").first();
+    if (!host.length) return null;
+
+    host.addClass("cfm-preset-detail-loading-host");
+    host.find(".cfm-preset-detail-opening-loading").remove();
+
+    const loading = $(`
+      <div class="cfm-preset-detail-opening-loading" aria-live="polite" aria-busy="true">
+        <div class="cfm-preset-detail-opening-loading-box">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>正在打开编辑器${label ? `：${escapeHtml(label)}` : "..."}</span>
+        </div>
+      </div>
+    `);
+
+    host.append(loading);
+    return () => {
+      loading.remove();
+      if (!host.find(".cfm-preset-detail-opening-loading").length) {
+        host.removeClass("cfm-preset-detail-loading-host");
+      }
+    };
   }
 
   async function editPresetDetailField(presetName, fieldKey) {
@@ -13063,13 +13127,18 @@ jQuery(async () => {
     }
 
     const promptKey = fieldKey.slice("prompts.".length);
-    const opened = await openNativePresetPromptEditor(
-      presetName,
-      promptKey,
-      field.label,
-    );
-    if (!opened) {
-      toastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
+    const hideLoading = showPresetEditorOpeningLoading(fieldKey, field.label);
+    try {
+      const opened = await openNativePresetPromptEditor(
+        presetName,
+        promptKey,
+        field.label,
+      );
+      if (!opened) {
+        toastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
+      }
+    } finally {
+      hideLoading?.();
     }
   }
 
