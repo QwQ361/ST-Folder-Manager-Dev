@@ -29991,28 +29991,28 @@ jQuery(async () => {
     const countEl = $("#cfm-worldinfo-rh-count");
 
     let names;
+    const hasExistingWorldInfoUi =
+      leftTree.children().length > 0 || rightList.children().length > 0;
     // 优先从DOM同步读取（getWorldInfoNames内部会先尝试DOM）
     const domNames = collectWorldInfoNamesFromDom();
     if (domNames.length > 0) {
       names = domNames;
       _worldInfoNamesCache = domNames;
-    } else if (_worldInfoPreloadPromise) {
-      leftTree.empty();
-      rightList.html(
-        '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
-      );
-      names = await _worldInfoPreloadPromise;
     } else {
-      leftTree.empty();
-      rightList.html(
-        '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
-      );
-      names = await getWorldInfoNames();
+      if (!hasExistingWorldInfoUi) {
+        leftTree.empty();
+        rightList.html(
+          '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
+        );
+      }
+      names = await (_worldInfoPreloadPromise || getWorldInfoNames());
     }
 
-    // 获取世界书激活状态和角色关联世界书（用于 toggle 开关）
-    const wiActiveSet = await getActiveWorldInfoSet();
-    const wiCharBound = await getCharBoundWorldBooks();
+    // 并行获取世界书激活状态和角色关联世界书，减少串行等待
+    const [wiActiveSet, wiCharBound] = await Promise.all([
+      getActiveWorldInfoSet(),
+      getCharBoundWorldBooks(),
+    ]);
 
     if (renderVersion !== _worldInfoRenderVersion) return;
 
@@ -34918,6 +34918,13 @@ jQuery(async () => {
     if (!renderPersonasView._renderId) renderPersonasView._renderId = 0;
     const thisRenderId = ++renderPersonasView._renderId;
 
+    const hasExistingPersonaUi =
+      leftTree.children().length > 0 || rightList.children().length > 0;
+    if (!hasExistingPersonaUi) {
+      rightList.html(
+        '<div class="cfm-right-empty"><i class="fa-solid fa-spinner fa-spin"></i> 加载中...</div>',
+      );
+    }
     const personas = await getCurrentPersonas();
 
     // 如果在 await 期间有新的渲染被触发，放弃当前渲染
