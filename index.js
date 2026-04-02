@@ -12729,7 +12729,10 @@ jQuery(async () => {
       } catch {
         field.focus();
       }
-      if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) {
+      if (
+        field instanceof HTMLTextAreaElement ||
+        field instanceof HTMLInputElement
+      ) {
         const value = field.value;
         if (typeof value === "string") {
           const pos = value.length;
@@ -12787,31 +12790,34 @@ jQuery(async () => {
       const nativeButton = editButton.get(0);
       if (!nativeButton) return false;
       nativeButton.click();
-      nativeButton.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
       scheduleBringNativePresetPromptPopupToFront();
       window.setTimeout(() => focusNativePresetPromptPopupField(), 120);
       window.setTimeout(() => focusNativePresetPromptPopupField(), 260);
       return true;
     };
 
+    const syncTargetPresetSelection = () => {
+      const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
+      const currentValue = String(pm.select.val() || "");
+
+      if (targetValue && currentValue !== targetValue) {
+        // 保存原始预设值，弹窗关闭后恢复
+        _presetValueToRestore = currentValue;
+        pm.select.val(targetValue);
+        pm.select.trigger("change");
+        pm.select.trigger("input");
+      } else if (!targetValue) {
+        syncCurrentPresetSelection(pm, normalizedPresetName);
+      }
+
+      return targetValue;
+    };
+
     if (clickNativeEditButton()) {
       return true;
     }
 
-    const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
-    const currentValue = String(pm.select.val() || "");
-
-    if (targetValue && currentValue !== targetValue) {
-      // 保存原始预设值，弹窗关闭后恢复
-      _presetValueToRestore = currentValue;
-      pm.select.val(targetValue);
-      pm.select.trigger("change");
-      pm.select.trigger("input");
-    } else {
-      syncCurrentPresetSelection(pm, normalizedPresetName);
-    }
+    const targetValue = syncTargetPresetSelection();
 
     const tryOpenAfterSelectionSettles = async (timeoutMs = 2500) => {
       const startTime = Date.now();
@@ -12853,19 +12859,13 @@ jQuery(async () => {
       return true;
     }
 
-    // 兜底：再次同步目标预设并短暂重试，尽量不引入更严格的失败判定
+    // 兜底：仅当目标预设实际上未切换到位时，才补触发一次同步和短暂重试，
+    // 避免移动端对带正则的预设重复触发原生 toast。
     if (targetValue && String(pm.select.val() || "") !== String(targetValue)) {
-      pm.select.val(targetValue);
-    }
-    if (targetValue) {
-      pm.select.trigger("change");
-      pm.select.trigger("input");
-    } else {
-      syncCurrentPresetSelection(pm, normalizedPresetName);
-    }
-
-    if (await tryOpenAfterSelectionSettles(1800)) {
-      return true;
+      syncTargetPresetSelection();
+      if (await tryOpenAfterSelectionSettles(1800)) {
+        return true;
+      }
     }
 
     restorePresetSelectionAfterEdit();
