@@ -30016,7 +30016,6 @@ jQuery(async () => {
 
     if (renderVersion !== _worldInfoRenderVersion) return;
 
-    leftTree.empty();
     const tree = getResFolderTree("worldinfo");
     const allFolderIds = getResFolderIds("worldinfo");
     const groups = getResourceGroups("worldinfo");
@@ -30048,7 +30047,7 @@ jQuery(async () => {
       }
     }
 
-    leftTree.empty();
+    const newLeftTree = $("<div></div>");
 
     // 递归渲染左侧树节点
     function renderWiTreeNode(container, folderId, depth) {
@@ -30264,13 +30263,13 @@ jQuery(async () => {
       selectedWorldInfoFolder = "__favorites__";
       renderWorldInfoView();
     });
-    leftTree.append(wiFavNode);
+    newLeftTree.append(wiFavNode);
 
     const topFolders = sortResFolders(
       "worldinfo",
       getResTopLevelFolders("worldinfo"),
     );
-    for (const fid of topFolders) renderWiTreeNode(leftTree, fid, 0);
+    for (const fid of topFolders) renderWiTreeNode(newLeftTree, fid, 0);
 
     // 未归类入口
     const uncatNode = $(`
@@ -30326,7 +30325,7 @@ jQuery(async () => {
         );
       }
     });
-    leftTree.append(uncatNode);
+    newLeftTree.append(uncatNode);
 
     if (topFolders.length === 0) {
       uncatNode.before(
@@ -30342,7 +30341,7 @@ jQuery(async () => {
       return;
     }
 
-    rightList.empty();
+    const newRightList = $("<div></div>");
 
     let displayItems = [];
     let displayTitle = "选择左侧文件夹查看内容";
@@ -30388,23 +30387,23 @@ jQuery(async () => {
     }
 
     if (!selectedWorldInfoFolder) {
-      rightList.html(
+      newRightList.append(
         '<div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>',
       );
     } else if (
       selectedWorldInfoFolder === "__favorites__" &&
       totalItems === 0
     ) {
-      rightList.html(
+      newRightList.append(
         '<div class="cfm-right-empty">还没有收藏任何世界书<br><span style="font-size:12px;opacity:0.5;">点击世界书行右侧的 ☆ 按钮添加收藏</span></div>',
       );
     } else if (
       selectedWorldInfoFolder === "__ungrouped__" &&
       totalItems === 0
     ) {
-      rightList.html('<div class="cfm-right-empty">没有未归类的世界书</div>');
+      newRightList.append('<div class="cfm-right-empty">没有未归类的世界书</div>');
     } else if (totalItems === 0) {
-      rightList.html('<div class="cfm-right-empty">此文件夹为空</div>');
+      newRightList.append('<div class="cfm-right-empty">此文件夹为空</div>');
     } else {
       // 子文件夹行
       for (const childId of childFolders) {
@@ -30564,7 +30563,7 @@ jQuery(async () => {
           id: childId,
           name: getResFolderDisplayName("worldinfo", childId),
         }));
-        rightList.append(row);
+        newRightList.append(row);
       }
       // 世界书行（带星标 + 多选支持 + 备注 + 激活开关）
       for (const n of displayItems) {
@@ -30739,19 +30738,19 @@ jQuery(async () => {
           const singleData = { type: "worldinfo", name: n };
           return getMultiDragData(singleData);
         });
-        rightList.append(row);
+        newRightList.append(row);
         if (isEntryExpanded)
           renderWorldInfoEntrySubList(row, n, refreshWorldInfoPanelView);
       }
 
       // 删除工具栏（世界书文件夹视图）
-      prependResDeleteToolbar(rightList, renderWorldInfoView);
+      prependResDeleteToolbar(newRightList, renderWorldInfoView);
       // 导出工具栏（世界书文件夹视图）
-      prependExportToolbar(rightList, renderWorldInfoView);
+      prependExportToolbar(newRightList, renderWorldInfoView);
       // 备注编辑工具栏（世界书）
-      prependWorldInfoNoteToolbar(rightList, renderWorldInfoView);
+      prependWorldInfoNoteToolbar(newRightList, renderWorldInfoView);
       // 重命名工具栏（世界书）
-      prependWorldInfoRenameToolbar(rightList, renderWorldInfoView);
+      prependWorldInfoRenameToolbar(newRightList, renderWorldInfoView);
       // 多选工具栏（世界书）
       if (cfmMultiSelectMode && selectedWorldInfoFolder) {
         const visible = getVisibleResourceIds();
@@ -30801,7 +30800,7 @@ jQuery(async () => {
             );
             if (changed) renderWorldInfoView();
           });
-        rightList.prepend(toolbar);
+        newRightList.prepend(toolbar);
       }
       bindWorldInfoEntryCollapseTargets(refreshWorldInfoPanelView);
     }
@@ -30866,6 +30865,9 @@ jQuery(async () => {
         }
       });
     }
+
+    leftTree.empty().append(newLeftTree.children());
+    rightList.empty().append(newRightList.children());
   }
 
   // ==================== 快速回复激活状态管理 ====================
@@ -34930,7 +34932,6 @@ jQuery(async () => {
     // 如果在 await 期间有新的渲染被触发，放弃当前渲染
     if (thisRenderId !== renderPersonasView._renderId) return;
 
-    leftTree.empty();
     const tree = getResFolderTree("personas");
     const allFolderIds = getResFolderIds("personas");
 
@@ -34983,7 +34984,8 @@ jQuery(async () => {
       selectedPersonaFolder = "__favorites__";
       renderPersonasView();
     });
-    leftTree.append(personaFavNode);
+    const newLeftTree = $("<div></div>");
+    newLeftTree.append(personaFavNode);
 
     // 递归渲染左侧树节点
     function renderResTreeNode(container, folderId, depth) {
@@ -35190,7 +35192,7 @@ jQuery(async () => {
       "personas",
       getResTopLevelFolders("personas"),
     );
-    for (const fid of topFolders) renderResTreeNode(leftTree, fid, 0);
+    for (const fid of topFolders) renderResTreeNode(newLeftTree, fid, 0);
 
     // 未归类入口
     const uncatNode = $(`
@@ -35248,7 +35250,7 @@ jQuery(async () => {
         }
       }
     });
-    leftTree.append(uncatNode);
+    newLeftTree.append(uncatNode);
 
     if (topFolders.length === 0) {
       uncatNode.before(
@@ -35264,7 +35266,7 @@ jQuery(async () => {
       return;
     }
 
-    rightList.empty();
+    const newRightList = $("<div></div>");
 
     const currentUserAvatar =
       $("#user_avatar_block .avatar-container.selected").attr(
@@ -35341,17 +35343,17 @@ jQuery(async () => {
     }
 
     if (!selectedPersonaFolder) {
-      rightList.html(
+      newRightList.append(
         '<div class="cfm-right-empty">← 点击左侧文件夹查看内容</div>',
       );
     } else if (selectedPersonaFolder === "__favorites__" && totalItems === 0) {
-      rightList.html(
+      newRightList.append(
         '<div class="cfm-right-empty">还没有收藏任何User<br><span style="font-size:12px;opacity:0.5;">点击User行右侧的 ☆ 按钮添加收藏</span></div>',
       );
     } else if (selectedPersonaFolder === "__ungrouped__" && totalItems === 0) {
-      rightList.html('<div class="cfm-right-empty">没有未归类的User</div>');
+      newRightList.append('<div class="cfm-right-empty">没有未归类的User</div>');
     } else if (totalItems === 0) {
-      rightList.html('<div class="cfm-right-empty">此文件夹为空</div>');
+      newRightList.append('<div class="cfm-right-empty">此文件夹为空</div>');
     } else {
       // 子文件夹行
       for (const childId of childFolders) {
@@ -35511,7 +35513,7 @@ jQuery(async () => {
           id: childId,
           name: getResFolderDisplayName("personas", childId),
         }));
-        rightList.append(row);
+        newRightList.append(row);
       }
       // User行（带头像 + 星标 + 多选支持 + 备注）
       for (const p of displayItems) {
@@ -35675,18 +35677,18 @@ jQuery(async () => {
           };
           return getMultiDragData(singleData);
         });
-        rightList.append(row);
+        newRightList.append(row);
         if (personaItemExpandedIds.has(p.avatarId)) {
           renderPersonaDetailSubList(row, p);
         }
       }
 
       // 删除工具栏
-      prependResDeleteToolbar(rightList, renderPersonasView);
+      prependResDeleteToolbar(newRightList, renderPersonasView);
       // 导出工具栏
-      prependExportToolbar(rightList, renderPersonasView);
+      prependExportToolbar(newRightList, renderPersonasView);
       // User备注工具栏
-      prependPersonaNoteToolbar(rightList, renderPersonasView);
+      prependPersonaNoteToolbar(newRightList, renderPersonasView);
       // 多选工具栏
       if (cfmMultiSelectMode && selectedPersonaFolder) {
         const visible = getVisibleResourceIds();
@@ -35712,7 +35714,7 @@ jQuery(async () => {
           if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
           renderPersonasView();
         });
-        rightList.prepend(toolbar);
+        newRightList.prepend(toolbar);
       }
     }
 
@@ -35776,6 +35778,9 @@ jQuery(async () => {
         }
       });
     }
+
+    leftTree.empty().append(newLeftTree.children());
+    rightList.empty().append(newRightList.children());
   }
 
   // User搜索
