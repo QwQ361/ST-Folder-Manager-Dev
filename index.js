@@ -13003,6 +13003,27 @@ jQuery(async () => {
           pm.select.trigger("change");
 
           await presetChangedPromise;
+        } else if (targetValue && currentValue === targetValue) {
+          // 当前预设已选中，但原生 prompt 列表可能未渲染（移动端常见）。
+          // 直接调用 PromptManager 的 render 方法（跳过 tryGenerate）来快速渲染列表，
+          // 而不是走完整的 preset change 流程（避免副作用和 1000ms debounce 延迟）。
+          const rows = $("#completion_prompt_manager .completion_prompt_manager_prompt");
+          if (!rows.length) {
+            if (typeof pm.render === "function") {
+              pm.render(false);
+            } else if (typeof pm.renderDebounced === "function") {
+              pm.renderDebounced();
+            }
+            // 等待 render 完成（render 内部有 waitUntilCondition 然后异步渲染）
+            const renderWaitStart = Date.now();
+            const renderWaitTimeout = 1500;
+            while (Date.now() - renderWaitStart < renderWaitTimeout) {
+              await new Promise((resolve) => window.setTimeout(resolve, 80));
+              if ($("#completion_prompt_manager .completion_prompt_manager_prompt").length) {
+                break;
+              }
+            }
+          }
         } else if (!targetValue) {
           syncCurrentPresetSelection(pm, normalizedPresetName);
         }
