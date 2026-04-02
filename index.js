@@ -13268,6 +13268,33 @@ jQuery(async () => {
         }
       }
 
+      // 最终兜底：移动端偶发会在点击后稍晚才真正显示弹窗，
+      // 或目标 row 晚一拍才可点击。这里在彻底失败前再做一次短时救援，
+      // 避免第一次点已经接近成功却过早返回 false。
+      await new Promise((resolve) => window.setTimeout(resolve, 260));
+      if (hasVisibleNativePresetPromptPopup()) {
+        scheduleBringNativePresetPromptPopupToFront();
+        return true;
+      }
+
+      const finalRescueStart = Date.now();
+      const finalRescueTimeout = 1200;
+      while (Date.now() - finalRescueStart < finalRescueTimeout) {
+        if (clickNativeEditButton()) {
+          await new Promise((resolve) => window.setTimeout(resolve, 260));
+          if (hasVisibleNativePresetPromptPopup()) {
+            scheduleBringNativePresetPromptPopupToFront();
+            return true;
+          }
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+        if (hasVisibleNativePresetPromptPopup()) {
+          scheduleBringNativePresetPromptPopupToFront();
+          return true;
+        }
+      }
+
       // 失败时不立即恢复当前预设，避免再触发一次原生 regex toast。
       return false;
     } finally {
