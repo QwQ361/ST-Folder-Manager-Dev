@@ -12698,6 +12698,37 @@ jQuery(async () => {
       return true;
     };
 
+    const focusNativePresetPromptPopupField = () => {
+      const popupEl = document.getElementById(
+        "completion_prompt_manager_popup",
+      );
+      if (!popupEl) return false;
+      const field = popupEl.querySelector(
+        "textarea, .ace_text-input, input[type='text'], [contenteditable='true']",
+      );
+      if (!(field instanceof HTMLElement)) return false;
+      try {
+        field.focus({ preventScroll: true });
+      } catch {
+        field.focus();
+      }
+      if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) {
+        const value = field.value;
+        if (typeof value === "string") {
+          const pos = value.length;
+          try {
+            field.setSelectionRange(pos, pos);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    };
+
     const scheduleBringNativePresetPromptPopupToFront = () => {
       bringNativePresetPromptPopupToFront();
       let attempts = 0;
@@ -12705,10 +12736,25 @@ jQuery(async () => {
       const timer = window.setInterval(() => {
         attempts += 1;
         bringNativePresetPromptPopupToFront();
+        if (attempts === 3 || attempts === 8) {
+          focusNativePresetPromptPopupField();
+        }
         if (attempts >= maxAttempts) {
           window.clearInterval(timer);
         }
       }, 50);
+    };
+
+    const hasStableNativePromptRow = () => {
+      const row = findNativePresetPromptRow(
+        normalizedPromptKey,
+        normalizedPromptLabel,
+      );
+      if (!row.length) return false;
+      const editButton = row.find(".prompt-manager-edit-action").first();
+      const nativeButton = editButton.get(0);
+      if (!(nativeButton instanceof HTMLElement)) return false;
+      return nativeButton.offsetParent !== null || row.is(":visible");
     };
 
     const clickNativeEditButton = () => {
@@ -12724,6 +12770,8 @@ jQuery(async () => {
         new MouseEvent("click", { bubbles: true, cancelable: true }),
       );
       scheduleBringNativePresetPromptPopupToFront();
+      window.setTimeout(() => focusNativePresetPromptPopupField(), 120);
+      window.setTimeout(() => focusNativePresetPromptPopupField(), 260);
       return true;
     };
 
@@ -12745,9 +12793,18 @@ jQuery(async () => {
     }
 
     const startTime = Date.now();
+    let stableRowSeenAt = 0;
     while (Date.now() - startTime < 2500) {
-      if (clickNativeEditButton()) {
-        return true;
+      if (hasStableNativePromptRow()) {
+        if (!stableRowSeenAt) {
+          stableRowSeenAt = Date.now();
+        }
+        // 目标行稳定存在一小段时间后再点击，避免切换预设后原生数据尚未填充完成
+        if (Date.now() - stableRowSeenAt >= 120 && clickNativeEditButton()) {
+          return true;
+        }
+      } else {
+        stableRowSeenAt = 0;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
