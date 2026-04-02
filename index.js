@@ -2746,6 +2746,10 @@ jQuery(async () => {
     btn.find(".drawer-toggle").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if ($("#cfm-overlay").length > 0) {
+        closeMainPopup();
+        return;
+      }
       showMainPopup();
     });
     // 创建按钮后自动检测并应用自定义图标（延迟等待美化主题样式加载）
@@ -19832,6 +19836,22 @@ jQuery(async () => {
       e.preventDefault();
       closeMainPopup();
     });
+
+    if (window.innerWidth <= 768) {
+      $(document)
+        .off("click.cfmMobileAutoClose touchend.cfmMobileAutoClose")
+        .on("click.cfmMobileAutoClose touchend.cfmMobileAutoClose", (e) => {
+          if (!$("#cfm-overlay").length) return;
+          const target = $(e.target);
+          if (
+            target.closest("#cfm-overlay").length ||
+            target.closest("#cfm-topbar-button").length
+          ) {
+            return;
+          }
+          closeMainPopup();
+        });
+    }
     popup.find("#cfm-btn-config").on("click touchend", (e) => {
       e.preventDefault();
       showConfigPopup();
@@ -23794,6 +23814,7 @@ jQuery(async () => {
       console.error("[CFM] 关闭插件时静默恢复QR分组失败", e),
     );
     $("#cfm-overlay").remove();
+    $(document).off("click.cfmMobileAutoClose touchend.cfmMobileAutoClose");
     clearNewlyImportedHighlight();
     $("#cfm-topbar-button .drawer-icon")
       .removeClass("openIcon")
