@@ -1690,21 +1690,29 @@
 
 /* ========== 移动端适配 ========== */
 @media (max-width: 768px) {
-  /* 主弹窗全屏显示 */
+  /* 参考酒馆原生 drawer：从顶部栏下方开始，占据剩余视口，而不是整屏覆盖 */
+  #cfm-overlay {
+    --cfm-mobile-topbar-offset: max(35px, calc(env(safe-area-inset-top, 0px) + 35px));
+    top: var(--cfm-mobile-topbar-offset);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding-top: 0;
+    height: calc(100dvh - var(--cfm-mobile-topbar-offset));
+    box-sizing: border-box;
+  }
+
+  /* 主弹窗占满 overlay 本身，不再自己额外制造顶部留白 */
   #cfm-popup {
     width: 100vw;
-    height: 100vh;
-    height: 100dvh; /* 动态视口高度，排除浏览器导航栏 */
+    height: calc(100dvh - var(--cfm-mobile-topbar-offset));
     max-width: 100vw;
-    max-height: 100vh;
-    max-height: 100dvh;
+    max-height: calc(100dvh - var(--cfm-mobile-topbar-offset));
     border-radius: 0;
     padding-top: 0;
-  }
-  #cfm-overlay {
-    padding-top: 0;
-    height: 100vh;
-    height: 100dvh;
+    flex: 0 0 auto;
   }
 
   /* 为底部可滚动列表添加安全边距，防止被浏览器导航栏遮挡 */
