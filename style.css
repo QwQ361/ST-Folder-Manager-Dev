@@ -5484,16 +5484,15 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 #cfm-overlay .cfm-preset-detail-opening-loading {
   position: fixed;
   inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 20px;
   background: rgba(17, 17, 27, 0.52);
   backdrop-filter: blur(1.5px);
   z-index: 10020;
 }
 #cfm-overlay .cfm-preset-detail-opening-loading-box {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5502,7 +5501,6 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   min-width: 200px;
   padding: 12px 18px;
   max-width: min(calc(100vw - 32px), 440px);
-  box-sizing: border-box;
   border-radius: 999px;
   background: rgba(24, 24, 37, 0.98);
   border: 1px solid rgba(137, 180, 250, 0.28);
