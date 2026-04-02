@@ -12579,6 +12579,8 @@ jQuery(async () => {
 
   /** 清理 bringNativePresetPromptPopupToFront 设置的 inline style（仅 z-index） */
   let _nativePopupCleanupBound = false;
+  /** 编辑非当前预设条目时，保存原始预设选择值以便弹窗关闭后恢复 */
+  let _presetValueToRestore = null;
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById(
       "completion_prompt_manager_popup",
@@ -12622,9 +12624,32 @@ jQuery(async () => {
       if (btn) {
         btn.addEventListener("click", () => {
           // 延迟清理，等原生代码先完成弹窗隐藏
-          setTimeout(() => resetNativePresetPromptPopupStyles(), 100);
+          setTimeout(() => {
+            resetNativePresetPromptPopupStyles();
+            restorePresetSelectionAfterEdit();
+          }, 100);
         });
       }
+    }
+  }
+
+  /**
+   * 弹窗关闭后恢复原始预设选择（如果之前因编辑非当前预设而切换过）
+   */
+  function restorePresetSelectionAfterEdit() {
+    if (_presetValueToRestore === null) return;
+    const valueToRestore = _presetValueToRestore;
+    _presetValueToRestore = null;
+    try {
+      const pm = getContext().getPresetManager();
+      if (!pm?.select) return;
+      const currentValue = String(pm.select.val() || "");
+      if (currentValue !== valueToRestore) {
+        pm.select.val(valueToRestore);
+        pm.select.trigger("change");
+      }
+    } catch (e) {
+      console.warn("[CFM] 恢复预设选择失败", e);
     }
   }
 
@@ -12710,6 +12735,8 @@ jQuery(async () => {
     const currentValue = String(pm.select.val() || "");
 
     if (targetValue && currentValue !== targetValue) {
+      // 保存原始预设值，弹窗关闭后恢复
+      _presetValueToRestore = currentValue;
       pm.select.val(targetValue);
       pm.select.trigger("change");
       pm.select.trigger("input");
@@ -23132,6 +23159,7 @@ jQuery(async () => {
       closeWorldInfoEntryPanels();
       cfmWorldInfoEntryLastFocusedName = null;
       resetNativePresetPromptPopupStyles();
+      restorePresetSelectionAfterEdit();
 
       cfmChatMode = false;
       cfmChatExpandedAvatars.clear();
