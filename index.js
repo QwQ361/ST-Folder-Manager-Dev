@@ -12577,15 +12577,16 @@ jQuery(async () => {
     return null;
   }
 
-  /** 清理 bringNativePresetPromptPopupToFront 设置的所有 inline style */
+  /** 清理 bringNativePresetPromptPopupToFront 设置的 inline style（仅 z-index） */
   let _nativePopupCleanupBound = false;
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById(
       "completion_prompt_manager_popup",
     );
     if (popupEl) {
+      // 清理所有可能被设置过的 inline style（兼容旧版本残留）
       const propsToRemove = [
-        "position", "top", "left", "right", "bottom",
+        "position", "top", "left", "right", "bottom", "inset",
         "transform", "margin", "max-height", "max-width", "z-index",
       ];
       for (const prop of propsToRemove) {
@@ -12655,49 +12656,21 @@ jQuery(async () => {
         overlayEl ? window.getComputedStyle(overlayEl).zIndex : "",
         10,
       );
-      let nextZ = Number.isFinite(overlayZ) ? overlayZ + 2 : 10002;
+      const nextZ = Number.isFinite(overlayZ) ? overlayZ + 2 : 10002;
 
-      const applyLayerStyle = (el, { position = null } = {}) => {
-        if (!(el instanceof HTMLElement)) return false;
-        if (position) {
-          el.style.setProperty("position", position, "important");
-        }
-        el.style.setProperty("z-index", String(nextZ), "important");
-        nextZ += 1;
-        return true;
-      };
-
+      // 只提升 z-index，不改变 position/layout 属性
+      // 原生弹窗使用 position:absolute 并依赖父元素来确定尺寸，
+      // 强制改为 position:fixed 会导致移动端弹窗高度塌陷变得不可见
       const wrapperEl = popupEl.parentElement;
-      let applied = false;
-
       if (wrapperEl instanceof HTMLElement) {
-        applied =
-          applyLayerStyle(wrapperEl, { position: "relative" }) || applied;
+        wrapperEl.style.setProperty("z-index", String(nextZ), "important");
       }
-
-      popupEl.style.setProperty("position", "fixed", "important");
-      popupEl.style.setProperty("top", "50%", "important");
-      popupEl.style.setProperty("left", "50%", "important");
-      popupEl.style.setProperty("right", "auto", "important");
-      popupEl.style.setProperty("bottom", "auto", "important");
-      popupEl.style.setProperty(
-        "transform",
-        "translate(-50%, -50%)",
-        "important",
-      );
-      popupEl.style.setProperty("margin", "0", "important");
-      popupEl.style.setProperty(
-        "max-height",
-        `${Math.max(240, window.innerHeight - 24)}px`,
-        "important",
-      );
-      popupEl.style.setProperty("max-width", `calc(100vw - 32px)`, "important");
-      applied = applyLayerStyle(popupEl, { position: "fixed" }) || applied;
+      popupEl.style.setProperty("z-index", String(nextZ + 1), "important");
 
       // 绑定关闭/保存按钮的清理事件（仅绑定一次）
       bindNativePopupCleanup();
 
-      return applied;
+      return true;
     };
 
     const scheduleBringNativePresetPromptPopupToFront = () => {
