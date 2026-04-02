@@ -19907,6 +19907,24 @@ jQuery(async () => {
           ) {
             return;
           }
+
+          const topbarTrigger = target.closest(
+            [
+              "#rightNavHolder .drawer",
+              "#rightNavHolder .drawer-toggle",
+              "#top-settings-holder .drawer",
+              "#top-settings-holder .drawer-toggle",
+              "#left-nav-panel .drawer",
+              "#left-nav-panel .drawer-toggle",
+              ".drawer-content .drawer",
+              ".drawer-content .drawer-toggle",
+            ].join(", "),
+          );
+
+          if (!topbarTrigger.length) {
+            return;
+          }
+
           closeMainPopup();
         });
     }
