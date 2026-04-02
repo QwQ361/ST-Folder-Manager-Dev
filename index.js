@@ -13073,14 +13073,9 @@ jQuery(async () => {
     const normalizedFieldKey = String(fieldKey || "").trim();
     if (!normalizedFieldKey) return null;
 
-    const row = $(
-      `.cfm-preset-detail-row[data-field="${$.escapeSelector(normalizedFieldKey)}"]`,
-    ).first();
-    const card = row.closest(".cfm-preset-detail-card");
-    const host = card.length ? card : $("#cfm-overlay .cfm-preset-detail-sublist").first();
+    const host = $("#cfm-overlay");
     if (!host.length) return null;
 
-    host.addClass("cfm-preset-detail-loading-host");
     host.find(".cfm-preset-detail-opening-loading").remove();
 
     const loading = $(`
@@ -13095,9 +13090,6 @@ jQuery(async () => {
     host.append(loading);
     return () => {
       loading.remove();
-      if (!host.find(".cfm-preset-detail-opening-loading").length) {
-        host.removeClass("cfm-preset-detail-loading-host");
-      }
     };
   }
 
