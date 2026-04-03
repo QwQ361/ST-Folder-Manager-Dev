@@ -415,7 +415,7 @@ jQuery(async () => {
       }
     }
     if (typeof renderFn === "function") renderFn();
-    toastr.success(`文件夹已重命名为「${trimmed}」`);
+    cfmToastr.success(`文件夹已重命名为「${trimmed}」`);
   }
 
   // 兼容旧接口
@@ -617,11 +617,11 @@ jQuery(async () => {
     if (isCurrentAppliedPreset(presetName)) return true;
     const currentPresetName = getCurrentPresetName();
     if (currentPresetName) {
-      toastr.warning(
+      cfmToastr.warning(
         `${actionLabel}仅支持当前应用的预设：${currentPresetName}`,
       );
     } else {
-      toastr.warning(`请先应用一个预设后再执行${actionLabel}`);
+      cfmToastr.warning(`请先应用一个预设后再执行${actionLabel}`);
     }
     return false;
   }
@@ -753,14 +753,14 @@ jQuery(async () => {
   function applyTheme(themeName) {
     const themesSelect = document.getElementById("themes");
     if (!themesSelect) {
-      toastr.error("找不到主题下拉框");
+      cfmToastr.error("找不到主题下拉框");
       return;
     }
     const option = themesSelect.querySelector(
       `option[value="${CSS.escape(themeName)}"]`,
     );
     if (!option) {
-      toastr.error(`主题「${themeName}」不存在`);
+      cfmToastr.error(`主题「${themeName}」不存在`);
       return;
     }
     themesSelect.value = themeName;
@@ -793,7 +793,7 @@ jQuery(async () => {
     if (bgEl) {
       bgEl.click();
     } else {
-      toastr.error(`背景「${getBackgroundDisplayName(bgfile)}」不存在`);
+      cfmToastr.error(`背景「${getBackgroundDisplayName(bgfile)}」不存在`);
     }
   }
 
@@ -1451,13 +1451,13 @@ jQuery(async () => {
       e.stopPropagation();
       const content = popup.find(textareaSelector).val().trim();
       if (!content) {
-        toastr.warning("请先输入文件夹结构");
+        cfmToastr.warning("请先输入文件夹结构");
         return;
       }
       const name = prompt("请输入模板名称：");
       if (!name || !name.trim()) return;
       saveBatchTemplate(type, name.trim(), content);
-      toastr.success(`模板「${name.trim()}」已保存`);
+      cfmToastr.success(`模板「${name.trim()}」已保存`);
       refreshFn();
     });
     // 加载模板
@@ -1470,7 +1470,7 @@ jQuery(async () => {
         const templates = getBatchTemplates(type);
         if (templates[idx]) {
           popup.find(textareaSelector).val(templates[idx].content);
-          toastr.info(`已加载模板「${templates[idx].name}」`);
+          cfmToastr.info(`已加载模板「${templates[idx].name}」`);
         }
       });
     // 删除模板
@@ -1484,7 +1484,7 @@ jQuery(async () => {
         cfmConfirm(`确定删除模板「${templates[idx].name}」？`)
       ) {
         deleteBatchTemplate(type, idx);
-        toastr.success("模板已删除");
+        cfmToastr.success("模板已删除");
         refreshFn();
       }
     });
@@ -1538,7 +1538,7 @@ jQuery(async () => {
       console.log(
         `[${extensionName}] 首次加载：自动导入 ${imported} 个标签为文件夹`,
       );
-      toastr.info(`已自动导入 ${imported} 个标签为文件夹`, "酒馆资源管理器", {
+      cfmToastr.info(`已自动导入 ${imported} 个标签为文件夹`, "酒馆资源管理器", {
         timeOut: 4000,
       });
     }
@@ -1562,7 +1562,7 @@ jQuery(async () => {
       saveConfig(config);
       // 记录新导入的标签用于高亮（仅存储在会话变量中，关闭弹窗后自动清除）
       sessionNewlyImportedIds = newIds;
-      toastr.info(
+      cfmToastr.info(
         `检测到 ${newIds.length} 个新标签，已自动导入为顶级文件夹`,
         "酒馆资源管理器",
         { timeOut: 3000 },
@@ -1604,7 +1604,7 @@ jQuery(async () => {
       saveConfig(config);
       getContext().saveSettingsDebounced();
     }
-    toastr.success(`已导入 ${imported} 个标签`);
+    cfmToastr.success(`已导入 ${imported} 个标签`);
     return imported;
   }
 
@@ -2162,28 +2162,28 @@ jQuery(async () => {
         if (targetId && targetId !== d.id) {
           if (zone === "into") {
             if (wouldCreateCycle(d.id, targetId)) {
-              toastr.error("此操作会产生循环嵌套，已阻止");
+              cfmToastr.error("此操作会产生循环嵌套，已阻止");
               return;
             }
             reorderFolder(d.id, targetId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getTagName(d.id)}」已移入「${getTagName(targetId)}」`,
             );
           } else {
             const pId = config.folders[targetId]?.parentId || null;
             if (wouldCreateCycle(d.id, pId)) {
-              toastr.error("此操作会产生循环嵌套，已阻止");
+              cfmToastr.error("此操作会产生循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
               reorderFolder(d.id, pId, targetId);
-              toastr.success(`「${getTagName(d.id)}」已排序`);
+              cfmToastr.success(`「${getTagName(d.id)}」已排序`);
             } else {
               const sibs = sortFolders(getChildFolders(pId));
               const ci = sibs.indexOf(targetId);
               const nxt = ci >= 0 && ci < sibs.length - 1 ? sibs[ci + 1] : null;
               reorderFolder(d.id, pId, nxt);
-              toastr.success(`「${getTagName(d.id)}」已排序`);
+              cfmToastr.success(`「${getTagName(d.id)}」已排序`);
             }
           }
           renderLeftTree();
@@ -2200,7 +2200,7 @@ jQuery(async () => {
             !wouldCreateCycle(d.id, selectedTreeNode)
           ) {
             reorderFolder(d.id, selectedTreeNode, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getTagName(d.id)}」已移入「${getTagName(selectedTreeNode)}」`,
             );
             renderLeftTree();
@@ -2214,7 +2214,7 @@ jQuery(async () => {
         const count = avatars.length;
         if (uncatNode) {
           avatars.forEach((av) => removeCharFromAllFolders(av));
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色移出所有文件夹`
               : `已将「${d.name || d.avatar}」移出所有文件夹`,
@@ -2226,7 +2226,7 @@ jQuery(async () => {
           avatars.forEach((av) => {
             handleCharDropToFolder(av, targetId);
           });
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(targetId)}」`
               : `已将「${d.name || d.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(targetId)}」`,
@@ -2244,7 +2244,7 @@ jQuery(async () => {
           avatars.forEach((av) => {
             handleCharDropToFolder(av, selectedTreeNode);
           });
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(selectedTreeNode)}」`
               : `已将「${d.name || d.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(selectedTreeNode)}」`,
@@ -2260,17 +2260,17 @@ jQuery(async () => {
         if (targetId && targetId !== d.id) {
           if (zone === "into") {
             if (wouldCreateResCycle(resType, d.id, targetId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder(resType, d.id, targetId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${d.name}」已移入「${getResFolderDisplayName(resType, targetId)}」`,
             );
           } else {
             const pId = resTree[targetId]?.parentId || null;
             if (wouldCreateResCycle(resType, d.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -2288,7 +2288,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${d.name}」已排序`);
+            cfmToastr.success(`「${d.name}」已排序`);
           }
           if (resType === "presets") renderPresetsView();
           else if (resType === "worldinfo") renderWorldInfoView();
@@ -2319,7 +2319,7 @@ jQuery(async () => {
           ) {
             if (!wouldCreateResCycle(resType, d.id, selFolder)) {
               reorderResFolder(resType, d.id, selFolder, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${d.name}」已移入「${getResFolderDisplayName(resType, selFolder)}」`,
               );
               if (resType === "presets") renderPresetsView();
@@ -2337,7 +2337,7 @@ jQuery(async () => {
         const pCount = presetNames.length;
         if (uncatNode) {
           presetNames.forEach((n) => setItemGroup("presets", n, null));
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -2346,7 +2346,7 @@ jQuery(async () => {
           renderPresetsView();
         } else if (targetId) {
           presetNames.forEach((n) => setItemGroup("presets", n, targetId));
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("presets", targetId)}」`,
@@ -2363,7 +2363,7 @@ jQuery(async () => {
           presetNames.forEach((n) =>
             setItemGroup("presets", n, selectedPresetFolder),
           );
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", selectedPresetFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("presets", selectedPresetFolder)}」`,
@@ -2377,7 +2377,7 @@ jQuery(async () => {
         const wCount = wiNames.length;
         if (uncatNode) {
           wiNames.forEach((n) => setItemGroup("worldinfo", n, null));
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个世界书移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -2386,7 +2386,7 @@ jQuery(async () => {
           renderWorldInfoView();
         } else if (targetId) {
           wiNames.forEach((n) => setItemGroup("worldinfo", n, targetId));
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("worldinfo", targetId)}」`,
@@ -2403,7 +2403,7 @@ jQuery(async () => {
           wiNames.forEach((n) =>
             setItemGroup("worldinfo", n, selectedWorldInfoFolder),
           );
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", selectedWorldInfoFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("worldinfo", selectedWorldInfoFolder)}」`,
@@ -2417,7 +2417,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("themes", n, null));
           if (d.multiSelect) clearMultiSelect();
           renderThemesView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个主题移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -2426,7 +2426,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("themes", n, targetId));
           if (d.multiSelect) clearMultiSelect();
           renderThemesView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("themes", targetId)}」`,
@@ -2441,7 +2441,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("themes", n, selectedThemeFolder));
           if (d.multiSelect) clearMultiSelect();
           renderThemesView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", selectedThemeFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("themes", selectedThemeFolder)}」`,
@@ -2453,7 +2453,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("backgrounds", n, null));
           if (d.multiSelect) clearMultiSelect();
           renderBackgroundsView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个背景移出文件夹`
               : `已将「${getBackgroundDisplayName(d.name)}」移出文件夹`,
@@ -2462,7 +2462,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("backgrounds", n, targetId));
           if (d.multiSelect) clearMultiSelect();
           renderBackgroundsView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", targetId)}」`
               : `已将「${getBackgroundDisplayName(d.name)}」移入「${getResFolderDisplayName("backgrounds", targetId)}」`,
@@ -2479,7 +2479,7 @@ jQuery(async () => {
           );
           if (d.multiSelect) clearMultiSelect();
           renderBackgroundsView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", selectedBgFolder)}」`
               : `已将「${getBackgroundDisplayName(d.name)}」移入「${getResFolderDisplayName("backgrounds", selectedBgFolder)}」`,
@@ -2492,7 +2492,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("personas", n, null));
           if (d.multiSelect) clearMultiSelect();
           renderPersonasView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个User移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -2501,7 +2501,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("personas", n, targetId));
           if (d.multiSelect) clearMultiSelect();
           renderPersonasView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个User移入「${getResFolderDisplayName("personas", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("personas", targetId)}」`,
@@ -2518,7 +2518,7 @@ jQuery(async () => {
           );
           if (d.multiSelect) clearMultiSelect();
           renderPersonasView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个User移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("personas", selectedPersonaFolder)}」`,
@@ -2530,7 +2530,7 @@ jQuery(async () => {
         const qrCount = qrNames.length;
         if (uncatNode) {
           qrNames.forEach((n) => setItemGroup("quickreply", n, null));
-          toastr.success(
+          cfmToastr.success(
             qrCount > 1
               ? `已将 ${qrCount} 个快速回复集移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -2539,7 +2539,7 @@ jQuery(async () => {
           renderQRView();
         } else if (targetId) {
           qrNames.forEach((n) => setItemGroup("quickreply", n, targetId));
-          toastr.success(
+          cfmToastr.success(
             qrCount > 1
               ? `已将 ${qrCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", targetId)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("quickreply", targetId)}」`,
@@ -2556,7 +2556,7 @@ jQuery(async () => {
           qrNames.forEach((n) =>
             setItemGroup("quickreply", n, selectedQrFolder),
           );
-          toastr.success(
+          cfmToastr.success(
             qrCount > 1
               ? `已将 ${qrCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", selectedQrFolder)}」`
               : `已将「${d.name}」移入「${getResFolderDisplayName("quickreply", selectedQrFolder)}」`,
@@ -2815,7 +2815,7 @@ jQuery(async () => {
       console.log(
         `[${extensionName}] 自动清理了 ${cleanedCount} 个多余的路径标签`,
       );
-      toastr.info(
+      cfmToastr.info(
         `已自动清理 ${cleanedCount} 个多余的路径标签`,
         "酒馆资源管理器",
         { timeOut: 3000 },
@@ -3355,7 +3355,7 @@ jQuery(async () => {
           const currentBg = getCurrentBackgroundFile();
           if (currentBg !== boundBg) {
             applyBackground(boundBg);
-            toastr.info(
+            cfmToastr.info(
               `已自动切换背景为「${getBackgroundDisplayName(boundBg)}」`,
               "主题绑定背景",
               { timeOut: 2000 },
@@ -3368,7 +3368,7 @@ jQuery(async () => {
           const currentBg = getCurrentBackgroundFile();
           if (currentBg !== defaultBg) {
             applyBackground(defaultBg);
-            toastr.info(
+            cfmToastr.info(
               `已自动切换为默认背景「${getBackgroundDisplayName(defaultBg)}」`,
               "默认背景",
               { timeOut: 2000 },
@@ -3915,7 +3915,7 @@ jQuery(async () => {
       getContext().saveSettingsDebounced();
       applyCustomStyle();
       overlay.remove();
-      toastr.success("已恢复默认外观", "自定义外观", { timeOut: 2000 });
+      cfmToastr.success("已恢复默认外观", "自定义外观", { timeOut: 2000 });
     });
 
     // 应用
@@ -3928,7 +3928,7 @@ jQuery(async () => {
       getContext().saveSettingsDebounced();
       applyCustomStyle();
       overlay.remove();
-      toastr.success("外观已应用", "自定义外观", { timeOut: 2000 });
+      cfmToastr.success("外观已应用", "自定义外观", { timeOut: 2000 });
     });
 
     // 关闭（不保存）
@@ -4842,7 +4842,7 @@ jQuery(async () => {
   // 导出核心：根据资源类型导出选中的资源
   async function executeResourceExport() {
     if (cfmExportSelected.size === 0) {
-      toastr.warning("请先选择要导出的资源");
+      cfmToastr.warning("请先选择要导出的资源");
       return;
     }
     const selected = Array.from(cfmExportSelected);
@@ -4869,7 +4869,7 @@ jQuery(async () => {
       }
     } catch (err) {
       console.error("[CFM] 导出失败", err);
-      toastr.error("导出失败: " + err.message);
+      cfmToastr.error("导出失败: " + err.message);
     }
     exitExportMode();
   }
@@ -4892,7 +4892,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success("角色卡已导出");
+      cfmToastr.success("角色卡已导出");
     } else {
       // 多个角色卡打包zip
       if (!window.JSZip) {
@@ -4900,7 +4900,7 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${avatars.length} 个角色卡...`);
+      cfmToastr.info(`正在导出 ${avatars.length} 个角色卡...`);
       for (const avatar of avatars) {
         try {
           const resp = await fetch("/api/characters/export", {
@@ -4926,7 +4926,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个角色卡`);
+      cfmToastr.success(`已导出 ${success} 个角色卡`);
     }
   }
 
@@ -4978,14 +4978,14 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success("预设已导出");
+      cfmToastr.success("预设已导出");
     } else {
       if (!window.JSZip) {
         await import("../../../../lib/jszip.min.js");
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${presetNames.length} 个预设...`);
+      cfmToastr.info(`正在导出 ${presetNames.length} 个预设...`);
       for (const name of presetNames) {
         try {
           const preset = getPresetData(name);
@@ -5007,7 +5007,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个预设`);
+      cfmToastr.success(`已导出 ${success} 个预设`);
     }
   }
 
@@ -5042,14 +5042,14 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success("快速回复集已导出");
+      cfmToastr.success("快速回复集已导出");
     } else {
       if (!window.JSZip) {
         await import("../../../../lib/jszip.min.js");
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${setNames.length} 个快速回复集...`);
+      cfmToastr.info(`正在导出 ${setNames.length} 个快速回复集...`);
       for (const name of setNames) {
         try {
           const data = getSetData(name);
@@ -5071,7 +5071,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个快速回复集`);
+      cfmToastr.success(`已导出 ${success} 个快速回复集`);
     }
   }
 
@@ -5095,14 +5095,14 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success("世界书已导出");
+      cfmToastr.success("世界书已导出");
     } else {
       if (!window.JSZip) {
         await import("../../../../lib/jszip.min.js");
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${wiNames.length} 个世界书...`);
+      cfmToastr.info(`正在导出 ${wiNames.length} 个世界书...`);
       for (const name of wiNames) {
         try {
           const resp = await fetch("/api/worldinfo/get", {
@@ -5130,7 +5130,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个世界书`);
+      cfmToastr.success(`已导出 ${success} 个世界书`);
     }
   }
 
@@ -5170,14 +5170,14 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success("主题已导出");
+      cfmToastr.success("主题已导出");
     } else {
       if (!window.JSZip) {
         await import("../../../../lib/jszip.min.js");
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${themeNameList.length} 个主题...`);
+      cfmToastr.info(`正在导出 ${themeNameList.length} 个主题...`);
       for (const name of themeNameList) {
         try {
           const td = getThemeData(name);
@@ -5198,7 +5198,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个主题`);
+      cfmToastr.success(`已导出 ${success} 个主题`);
     }
   }
 
@@ -5217,7 +5217,7 @@ jQuery(async () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
-        toastr.success("背景已导出");
+        cfmToastr.success("背景已导出");
       } catch (e) {
         throw new Error(`导出背景失败: ${e.message}`);
       }
@@ -5227,7 +5227,7 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      toastr.info(`正在导出 ${bgNames.length} 个背景...`);
+      cfmToastr.info(`正在导出 ${bgNames.length} 个背景...`);
       for (const name of bgNames) {
         try {
           const resp = await fetch(`/backgrounds/${encodeURIComponent(name)}`);
@@ -5249,7 +5249,7 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toastr.success(`已导出 ${success} 个背景`);
+      cfmToastr.success(`已导出 ${success} 个背景`);
     }
   }
 
@@ -5294,7 +5294,7 @@ jQuery(async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-    toastr.success(`已导出 ${avatarIds.length} 个 Persona 数据`);
+    cfmToastr.success(`已导出 ${avatarIds.length} 个 Persona 数据`);
   }
 
   // User/Persona导入（酒馆原生 Backup 格式 JSON）
@@ -5305,7 +5305,7 @@ jQuery(async () => {
       const text = await file.text();
       data = JSON.parse(text);
     } catch (e) {
-      toastr.warning("无法解析文件，请选择有效的 JSON 文件");
+      cfmToastr.warning("无法解析文件，请选择有效的 JSON 文件");
       return;
     }
     if (
@@ -5314,12 +5314,12 @@ jQuery(async () => {
       typeof data.personas !== "object" ||
       typeof data.persona_descriptions !== "object"
     ) {
-      toastr.warning("无效的 Persona 备份文件格式");
+      cfmToastr.warning("无效的 Persona 备份文件格式");
       return;
     }
     const pu = getContext().powerUserSettings;
     if (!pu) {
-      toastr.error("无法获取用户设置");
+      cfmToastr.error("无法获取用户设置");
       return;
     }
     // 获取当前服务器上已存在的头像列表
@@ -5440,16 +5440,16 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
 
     if (warnings.length) {
-      toastr.success(
+      cfmToastr.success(
         `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`,
       );
       console.warn(
         `[CFM] PERSONA 导入报告\n====================\n${warnings.join("\n")}`,
       );
     } else if (importedCount > 0) {
-      toastr.success(`已成功导入 ${importedCount} 个 Persona`);
+      cfmToastr.success(`已成功导入 ${importedCount} 个 Persona`);
     } else {
-      toastr.info("没有新的 Persona 需要导入（全部已存在）");
+      cfmToastr.info("没有新的 Persona 需要导入（全部已存在）");
     }
 
     // 刷新酒馆原生 persona 面板
@@ -5577,7 +5577,7 @@ jQuery(async () => {
   // 删除核心：根据资源类型删除选中的资源
   async function executeResourceDelete() {
     if (cfmResDeleteSelected.size === 0) {
-      toastr.warning("请先选择要删除的资源");
+      cfmToastr.warning("请先选择要删除的资源");
       return;
     }
     const selected = Array.from(cfmResDeleteSelected);
@@ -5610,7 +5610,7 @@ jQuery(async () => {
     let fail = 0;
 
     try {
-      toastr.info(`正在删除 ${count} 个${typeLabel}...`);
+      cfmToastr.info(`正在删除 ${count} 个${typeLabel}...`);
 
       if (currentResourceType === "chars") {
         const ctx = getContext();
@@ -6004,7 +6004,7 @@ jQuery(async () => {
       }
 
       if (success > 0) {
-        toastr.success(
+        cfmToastr.success(
           `已删除 ${success} 个${typeLabel}${fail > 0 ? `，${fail} 个失败` : ""}`,
           "",
           {
@@ -6015,11 +6015,11 @@ jQuery(async () => {
         // 保存文件夹分配变更
         getContext().saveSettingsDebounced();
       } else {
-        toastr.error(`删除失败`);
+        cfmToastr.error(`删除失败`);
       }
     } catch (err) {
       console.error("[CFM] 删除失败", err);
-      toastr.error("删除失败: " + err.message);
+      cfmToastr.error("删除失败: " + err.message);
     }
     exitResDeleteMode();
     // 重新渲染
@@ -6100,7 +6100,7 @@ jQuery(async () => {
     const isCurrentTheme =
       themeName === selectValue || themeName === powerUserTheme;
     if (!isCurrentTheme) {
-      toastr.warning("请先应用该美化主题，再点击锁链绑定背景", "提示", {
+      cfmToastr.warning("请先应用该美化主题，再点击锁链绑定背景", "提示", {
         timeOut: 3000,
       });
       return;
@@ -6146,7 +6146,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         setThemeBgBinding(themeName, currentBg);
-        toastr.success(
+        cfmToastr.success(
           `已更新「${themeName}」绑定背景为「${getBackgroundDisplayName(currentBg)}」`,
         );
         closeOverlay();
@@ -6156,7 +6156,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         removeThemeBgBinding(themeName);
-        toastr.info(`已解除「${themeName}」的背景绑定`);
+        cfmToastr.info(`已解除「${themeName}」的背景绑定`);
         closeOverlay();
         if (currentResourceType === "themes") renderThemesView();
       });
@@ -6166,11 +6166,11 @@ jQuery(async () => {
     } else {
       // 没有绑定，直接绑定当前背景
       if (!currentBg) {
-        toastr.warning("当前没有使用任何背景，无法绑定", "提示");
+        cfmToastr.warning("当前没有使用任何背景，无法绑定", "提示");
         return;
       }
       setThemeBgBinding(themeName, currentBg);
-      toastr.success(
+      cfmToastr.success(
         `已将「${themeName}」绑定背景「${getBackgroundDisplayName(currentBg)}」`,
       );
       if (currentResourceType === "themes") renderThemesView();
@@ -6227,7 +6227,7 @@ jQuery(async () => {
       e.stopPropagation();
       extension_settings[extensionName].defaultBackground = currentBg;
       getContext().saveSettingsDebounced();
-      toastr.success(
+      cfmToastr.success(
         `已将默认背景设为「${getBackgroundDisplayName(currentBg)}」`,
       );
       closeOverlay();
@@ -6239,7 +6239,7 @@ jQuery(async () => {
       if (!cfmConfirm("确认清除默认背景吗？")) return;
       extension_settings[extensionName].defaultBackground = "";
       getContext().saveSettingsDebounced();
-      toastr.info("已清除默认背景");
+      cfmToastr.info("已清除默认背景");
       closeOverlay();
       updateDefaultBgBtnState();
     });
@@ -6436,7 +6436,7 @@ jQuery(async () => {
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+      cfmToastr.warning("请输入备注内容");
       return;
     }
     let count = 0;
@@ -6454,7 +6454,7 @@ jQuery(async () => {
       }
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个主题的备注`);
+      cfmToastr.success(`已更新 ${count} 个主题的备注`);
       renderThemesView();
     }
   }
@@ -6763,7 +6763,7 @@ jQuery(async () => {
     const { note, orient, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !orient && !clear) {
-      toastr.warning("请输入备注内容或选择屏幕方向");
+      cfmToastr.warning("请输入备注内容或选择屏幕方向");
       return;
     }
     let count = 0;
@@ -6788,7 +6788,7 @@ jQuery(async () => {
       if (changed) count++;
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个背景的备注`);
+      cfmToastr.success(`已更新 ${count} 个背景的备注`);
       renderBackgroundsView();
     }
   }
@@ -7036,21 +7036,21 @@ jQuery(async () => {
       const oldName = names[0],
         newName = result.newName;
       if (!newName) {
-        toastr.warning("请输入新名称");
+        cfmToastr.warning("请输入新名称");
         return;
       }
       if (newName === oldName) {
-        toastr.info("名称未变更");
+        cfmToastr.info("名称未变更");
         return;
       }
       if (new Set(getThemeNames()).has(newName)) {
-        toastr.error(`已存在名为「${newName}」的主题`);
+        cfmToastr.error(`已存在名为「${newName}」的主题`);
         return;
       }
       try {
         const themeData = getThemeData(oldName);
         if (!themeData) {
-          toastr.error(`找不到主题「${oldName}」的数据`);
+          cfmToastr.error(`找不到主题「${oldName}」的数据`);
           return;
         }
         themeData.name = newName;
@@ -7078,23 +7078,23 @@ jQuery(async () => {
             themes[idx].name = newName;
         }
         updateSettingsAfterRename("themes", oldName, newName);
-        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+        cfmToastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 主题重命名失败", e);
-        toastr.error(`重命名失败: ${e.message}`);
+        cfmToastr.error(`重命名失败: ${e.message}`);
         return;
       }
     } else if (result.mode === "batch") {
       const { action, text } = result;
       if (!text) {
-        toastr.warning("请输入内容");
+        cfmToastr.warning("请输入内容");
         return;
       }
       const existingThemes = new Set(getThemeNames());
       let success = 0,
         skipped = 0,
         failed = 0;
-      toastr.info(`正在批量重命名 ${names.length} 个主题...`);
+      cfmToastr.info(`正在批量重命名 ${names.length} 个主题...`);
       for (const oldName of names) {
         let newName;
         if (action === "add-prefix") newName = text + oldName;
@@ -7162,8 +7162,8 @@ jQuery(async () => {
       let msg = `已重命名 ${success} 个主题`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
-      if (success > 0) toastr.success(msg);
-      else toastr.warning(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.warning(msg);
     }
     renderThemesView();
   }
@@ -7399,11 +7399,11 @@ jQuery(async () => {
       const oldName = names[0],
         newName = result.newName;
       if (!newName) {
-        toastr.warning("请输入新名称");
+        cfmToastr.warning("请输入新名称");
         return;
       }
       if (newName === oldName) {
-        toastr.info("名称未变更");
+        cfmToastr.info("名称未变更");
         return;
       }
       try {
@@ -7413,7 +7413,7 @@ jQuery(async () => {
           body: JSON.stringify({ old_bg: oldName, new_bg: newName }),
         });
         if (!resp.ok) {
-          toastr.error("重命名背景失败");
+          cfmToastr.error("重命名背景失败");
           return;
         }
         // 更新原生 DOM
@@ -7424,24 +7424,24 @@ jQuery(async () => {
           .attr("bgfile", newName)
           .attr("title", newName);
         updateSettingsAfterRename("backgrounds", oldName, newName);
-        toastr.success(
+        cfmToastr.success(
           `已将「${getBackgroundDisplayName(oldName)}」重命名为「${getBackgroundDisplayName(newName)}」`,
         );
       } catch (e) {
         console.error("[CFM] 背景重命名失败", e);
-        toastr.error(`重命名失败: ${e.message}`);
+        cfmToastr.error(`重命名失败: ${e.message}`);
         return;
       }
     } else if (result.mode === "batch") {
       const { action, text } = result;
       if (!text) {
-        toastr.warning("请输入内容");
+        cfmToastr.warning("请输入内容");
         return;
       }
       let success = 0,
         skipped = 0,
         failed = 0;
-      toastr.info(`正在批量重命名 ${names.length} 个背景...`);
+      cfmToastr.info(`正在批量重命名 ${names.length} 个背景...`);
       for (const oldName of names) {
         const dotIdx = oldName.lastIndexOf(".");
         const baseName = dotIdx > 0 ? oldName.substring(0, dotIdx) : oldName;
@@ -7493,8 +7493,8 @@ jQuery(async () => {
       let msg = `已重命名 ${success} 个背景`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
-      if (success > 0) toastr.success(msg);
-      else toastr.warning(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.warning(msg);
     }
     // 刷新原生背景列表
     try {
@@ -7721,7 +7721,7 @@ jQuery(async () => {
     const { note, clear } = result;
     const isBatch = ids.length > 1;
     if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+      cfmToastr.warning("请输入备注内容");
       return;
     }
     let count = 0;
@@ -7738,7 +7738,7 @@ jQuery(async () => {
       }
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个User的备注`);
+      cfmToastr.success(`已更新 ${count} 个User的备注`);
       renderPersonasView();
     }
   }
@@ -7913,7 +7913,7 @@ jQuery(async () => {
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+      cfmToastr.warning("请输入备注内容");
       return;
     }
     let count = 0;
@@ -7930,7 +7930,7 @@ jQuery(async () => {
       }
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个预设的备注`);
+      cfmToastr.success(`已更新 ${count} 个预设的备注`);
       renderPresetsView();
     }
   }
@@ -8678,7 +8678,7 @@ jQuery(async () => {
       }
 
       if (!silent && msgParts.length > 0) {
-        toastr.info(msgParts.join("<br>"), "世界书分组", {
+        cfmToastr.info(msgParts.join("<br>"), "世界书分组", {
           timeOut: 4000,
           escapeHtml: false,
         });
@@ -8825,7 +8825,7 @@ jQuery(async () => {
       if (savableBooks.length === 0) return;
       const name = overlay.find("#cfm-wi-preset-name-input").val().trim();
       if (!name) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existing = getWiActivePresets().find((p) => p.name === name);
@@ -8833,7 +8833,7 @@ jQuery(async () => {
         if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveWiActivePreset(name, savableBooks);
-      toastr.success(
+      cfmToastr.success(
         `已保存激活分组「${name}」（${savableBooks.length} 个世界书）`,
       );
       overlay.remove();
@@ -8850,7 +8850,7 @@ jQuery(async () => {
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
@@ -8916,7 +8916,7 @@ jQuery(async () => {
           if (autoDetail.chatMatch) reasons.push("当前聊天");
           if (autoDetail.charMatch) reasons.push("当前角色");
           if (autoDetail.presetMatch) reasons.push("当前预设");
-          toastr.info(
+          cfmToastr.info(
             `分组「${preset.name}」已因${reasons.join("和")}绑定自动生效`,
           );
           return;
@@ -8951,14 +8951,14 @@ jQuery(async () => {
         extension_settings[extensionName]._wiAppliedPresetIndices = newApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
+        cfmToastr.success(
           `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
         );
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
         console.error("[CFM] 应用分组失败", err);
-        toastr.error("应用分组失败");
+        cfmToastr.error("应用分组失败");
       }
     });
 
@@ -8973,14 +8973,14 @@ jQuery(async () => {
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
         const applied =
           extension_settings[extensionName]._wiAppliedPresetIndices || [];
         if (!applied.includes(idx)) {
-          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          cfmToastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         // 检查该分组是否因绑定条件匹配而自动应用
@@ -9019,14 +9019,14 @@ jQuery(async () => {
           otherApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
+        cfmToastr.success(
           `已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占世界书）`,
         );
         overlay.remove();
         renderWorldInfoView();
       } catch (err) {
         console.error("[CFM] 取消应用分组失败", err);
-        toastr.error("取消应用分组失败");
+        cfmToastr.error("取消应用分组失败");
       }
     });
 
@@ -9087,7 +9087,7 @@ jQuery(async () => {
           if (action === "global") {
             setWiPresetScope(idx, "global");
             await applyWorldInfoPreset(preset.books, wiCharBound);
-            toastr.success(`已将分组「${preset.name}」设为全局应用`);
+            cfmToastr.success(`已将分组「${preset.name}」设为全局应用`);
           } else if (action === "preset") {
             if (!currentPresetName) return;
             const alreadyBound =
@@ -9099,18 +9099,18 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.presetMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前预设，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前预设已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前预设已绑定分组「${preset.name}」`);
               }
             } else {
               // 确保 scope 为 bound
               if (preset.scope === "global") setWiPresetScope(idx, "bound");
               bindWiPresetToPreset(idx, currentPresetName);
               await applyWorldInfoPreset(preset.books, wiCharBound);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
               );
             }
@@ -9125,17 +9125,17 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.charMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前角色，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前角色已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前角色已绑定分组「${preset.name}」`);
               }
             } else {
               if (preset.scope === "global") setWiPresetScope(idx, "bound");
               bindWiPresetToChar(idx, currentChar);
               await applyWorldInfoPreset(preset.books, wiCharBound);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
               );
             }
@@ -9152,17 +9152,17 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.chatMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前聊天，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前聊天已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前聊天已绑定分组「${preset.name}」`);
               }
             } else {
               if (preset.scope === "global") setWiPresetScope(idx, "bound");
               bindWiPresetToChat(idx, currentChar, currentChatName);
               await applyWorldInfoPreset(preset.books, wiCharBound);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到聊天「${currentChatName}」`,
               );
             }
@@ -9273,14 +9273,14 @@ jQuery(async () => {
           const { indices: stillAutoIndices } = getAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
             const removedCount = await unapplyWiPresetIndex(idx);
-            toastr.info(
+            cfmToastr.info(
               `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个世界书）`,
             );
           } else {
-            toastr.success(`已取消绑定（分组仍因其他绑定条件匹配而保持应用）`);
+            cfmToastr.success(`已取消绑定（分组仍因其他绑定条件匹配而保持应用）`);
           }
         } else {
-          toastr.success(`已取消绑定`);
+          cfmToastr.success(`已取消绑定`);
         }
         // 检查是否还有绑定，如果没有了就恢复为全局
         const updated = getWiActivePresets()[idx];
@@ -9343,7 +9343,7 @@ jQuery(async () => {
       if (!preset) return;
       if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       deleteWiActivePreset(preset.name);
-      toastr.success(`已删除激活分组「${preset.name}」`);
+      cfmToastr.success(`已删除激活分组「${preset.name}」`);
       // 刷新面板
       overlay.remove();
       showWiPresetPanel();
@@ -9515,7 +9515,7 @@ jQuery(async () => {
     overlay.find(".cfm-edit-popup-confirm").on("click", () => {
       const newName = overlay.find("#cfm-wi-preset-edit-name").val().trim();
       if (!newName) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       // 检查重名（排除自身）
@@ -9523,7 +9523,7 @@ jQuery(async () => {
         (p) => p.name === newName && p.name !== preset.name,
       );
       if (existingOther) {
-        toastr.warning(`分组名称「${newName}」已被使用`);
+        cfmToastr.warning(`分组名称「${newName}」已被使用`);
         return;
       }
       const newBooks = [];
@@ -9531,7 +9531,7 @@ jQuery(async () => {
         newBooks.push($(this).val());
       });
       if (newBooks.length === 0) {
-        toastr.warning("请至少选择一个世界书");
+        cfmToastr.warning("请至少选择一个世界书");
         return;
       }
       // 如果名称变了，先重命名
@@ -9540,7 +9540,7 @@ jQuery(async () => {
       }
       // 更新世界书列表
       saveWiActivePreset(newName, newBooks);
-      toastr.success(
+      cfmToastr.success(
         `已更新激活分组「${newName}」（${newBooks.length} 个世界书）`,
       );
       overlay.remove();
@@ -9740,7 +9740,7 @@ jQuery(async () => {
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+      cfmToastr.warning("请输入备注内容");
       return;
     }
     let count = 0;
@@ -9757,7 +9757,7 @@ jQuery(async () => {
       }
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个世界书的备注`);
+      cfmToastr.success(`已更新 ${count} 个世界书的备注`);
       renderWorldInfoView();
     }
   }
@@ -9936,7 +9936,7 @@ jQuery(async () => {
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
-      toastr.warning("请输入备注内容");
+      cfmToastr.warning("请输入备注内容");
       return;
     }
     let count = 0;
@@ -9953,7 +9953,7 @@ jQuery(async () => {
       }
     }
     if (count > 0) {
-      toastr.success(`已更新 ${count} 个快速回复集的备注`);
+      cfmToastr.success(`已更新 ${count} 个快速回复集的备注`);
       renderQRView();
     }
   }
@@ -10250,11 +10250,11 @@ jQuery(async () => {
       const oldName = names[0];
       const newName = result.newName;
       if (!newName) {
-        toastr.warning("请输入新名称");
+        cfmToastr.warning("请输入新名称");
         return;
       }
       if (newName === oldName) {
-        toastr.info("名称未变更");
+        cfmToastr.info("名称未变更");
         return;
       }
       try {
@@ -10303,23 +10303,23 @@ jQuery(async () => {
         // 更新全局/聊天 QR 引用
         await updateQrGlobalChatRefs(oldName, newName);
 
-        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+        cfmToastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 快速回复集重命名失败", e);
-        toastr.error(`重命名失败: ${e.message}`);
+        cfmToastr.error(`重命名失败: ${e.message}`);
         return;
       }
     } else if (result.mode === "batch") {
       const { action, text } = result;
       if (!text) {
-        toastr.warning("请输入内容");
+        cfmToastr.warning("请输入内容");
         return;
       }
       let success = 0;
       let skipped = 0;
       let failed = 0;
 
-      toastr.info(`正在批量重命名 ${names.length} 个快速回复集...`);
+      cfmToastr.info(`正在批量重命名 ${names.length} 个快速回复集...`);
 
       for (const oldName of names) {
         let newName;
@@ -10391,8 +10391,8 @@ jQuery(async () => {
       let msg = `已重命名 ${success} 个快速回复集`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
-      if (success > 0) toastr.success(msg);
-      else toastr.warning(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.warning(msg);
     }
 
     renderQRView();
@@ -10747,7 +10747,7 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("预设管理器不可用");
+      cfmToastr.error("预设管理器不可用");
       return;
     }
     const headers = getContext().getRequestHeaders();
@@ -10757,24 +10757,24 @@ jQuery(async () => {
       const oldName = names[0];
       const newName = result.newName;
       if (!newName) {
-        toastr.warning("请输入新名称");
+        cfmToastr.warning("请输入新名称");
         return;
       }
       if (newName === oldName) {
-        toastr.info("名称未变更");
+        cfmToastr.info("名称未变更");
         return;
       }
       // 检查是否存在同名预设
       const existingPresets = getCurrentPresets();
       if (existingPresets.some((p) => p.name === newName)) {
-        toastr.error(`已存在名为「${newName}」的预设`);
+        cfmToastr.error(`已存在名为「${newName}」的预设`);
         return;
       }
       try {
         // 获取预设数据
         const presetData = getPresetDataForRename(pm, oldName);
         if (!presetData) {
-          toastr.error(`找不到预设「${oldName}」的数据`);
+          cfmToastr.error(`找不到预设「${oldName}」的数据`);
           return;
         }
         // 用新名字保存
@@ -10797,17 +10797,17 @@ jQuery(async () => {
         syncPresetOptionInDOM(pm, oldName, newName);
         // 更新插件设置中的引用
         updateSettingsAfterRename("presets", oldName, newName);
-        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+        cfmToastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 预设重命名失败", e);
-        toastr.error(`重命名失败: ${e.message}`);
+        cfmToastr.error(`重命名失败: ${e.message}`);
         return;
       }
     } else if (result.mode === "batch") {
       // 批量重命名
       const { action, text } = result;
       if (!text) {
-        toastr.warning("请输入内容");
+        cfmToastr.warning("请输入内容");
         return;
       }
       const existingPresets = new Set(getCurrentPresets().map((p) => p.name));
@@ -10815,7 +10815,7 @@ jQuery(async () => {
       let skipped = 0;
       let failed = 0;
 
-      toastr.info(`正在批量重命名 ${names.length} 个预设...`);
+      cfmToastr.info(`正在批量重命名 ${names.length} 个预设...`);
 
       for (const oldName of names) {
         let newName;
@@ -10880,8 +10880,8 @@ jQuery(async () => {
       let msg = `已重命名 ${success} 个预设`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
-      if (success > 0) toastr.success(msg);
-      else toastr.warning(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.warning(msg);
     }
 
     // 刷新预设管理器的下拉列表
@@ -11431,13 +11431,13 @@ jQuery(async () => {
     if (!sourceName) return;
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
 
     const presetData = getPresetDataForDetail(pm, sourceName);
     if (!presetData) {
-      toastr.error(`找不到预设「${sourceName}」的数据`);
+      cfmToastr.error(`找不到预设「${sourceName}」的数据`);
       return;
     }
 
@@ -11477,10 +11477,10 @@ jQuery(async () => {
         }
       }
       refreshPresetPanelView();
-      toastr.success(`已复制预设「${sourceName}」`);
+      cfmToastr.success(`已复制预设「${sourceName}」`);
     } catch (error) {
       console.error("[CFM] 复制预设失败:", error);
-      toastr.error(`复制失败: ${error.message || error}`);
+      cfmToastr.error(`复制失败: ${error.message || error}`);
     }
   }
 
@@ -11491,14 +11491,14 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("预设管理器不可用");
+      cfmToastr.error("预设管理器不可用");
       return;
     }
 
     try {
       const ok = await pm.deletePreset(name);
       if (ok === false) {
-        toastr.error(`删除预设「${name}」失败`);
+        cfmToastr.error(`删除预设「${name}」失败`);
         return;
       }
       const groups = extension_settings[extensionName].presetGroups;
@@ -11515,10 +11515,10 @@ jQuery(async () => {
       }
       getContext().saveSettingsDebounced();
       refreshPresetPanelView();
-      toastr.success(`已删除预设「${name}」`);
+      cfmToastr.success(`已删除预设「${name}」`);
     } catch (error) {
       console.error("[CFM] 删除预设失败:", error);
-      toastr.error(`删除失败: ${error.message || error}`);
+      cfmToastr.error(`删除失败: ${error.message || error}`);
     }
   }
 
@@ -11531,13 +11531,13 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
 
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -11549,7 +11549,7 @@ jQuery(async () => {
       refreshPresetPanelView();
     } catch (error) {
       console.error("[CFM] 切换预设条目激活状态失败:", error);
-      toastr.error(`保存失败: ${error.message || error}`);
+      cfmToastr.error(`保存失败: ${error.message || error}`);
     }
   }
 
@@ -11597,19 +11597,19 @@ jQuery(async () => {
       ),
     );
     if (!normalizedKeys.length) {
-      toastr.warning("请先选择要操作的预设条目");
+      cfmToastr.warning("请先选择要操作的预设条目");
       return;
     }
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
 
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -11623,19 +11623,19 @@ jQuery(async () => {
     }
 
     if (!changedCount) {
-      toastr.warning("所选条目不支持批量激活操作");
+      cfmToastr.warning("所选条目不支持批量激活操作");
       return;
     }
 
     try {
       await saveNormalizedPresetData(pm, presetName, presetData);
-      toastr.success(
+      cfmToastr.success(
         `已${activate ? "激活" : "取消激活"} ${changedCount} 个预设条目`,
       );
       refreshPresetPanelView();
     } catch (error) {
       console.error("[CFM] 批量切换预设条目激活状态失败:", error);
-      toastr.error(`保存失败: ${error.message || error}`);
+      cfmToastr.error(`保存失败: ${error.message || error}`);
     }
   }
 
@@ -11994,7 +11994,7 @@ jQuery(async () => {
       ),
     );
     if (!targetUids.length) {
-      toastr.warning("请先选择要复制的世界书条目");
+      cfmToastr.warning("请先选择要复制的世界书条目");
       return 0;
     }
 
@@ -12017,12 +12017,12 @@ jQuery(async () => {
     }
 
     if (!duplicatedCount) {
-      toastr.warning("所选条目不支持复制操作");
+      cfmToastr.warning("所选条目不支持复制操作");
       return 0;
     }
 
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
-    toastr.success(`已复制 ${duplicatedCount} 个世界书条目`);
+    cfmToastr.success(`已复制 ${duplicatedCount} 个世界书条目`);
     refreshWorldInfoPanelView();
     return duplicatedCount;
   }
@@ -12046,7 +12046,7 @@ jQuery(async () => {
       ),
     );
     if (!targetUids.length) {
-      toastr.warning("请先选择要删除的世界书条目");
+      cfmToastr.warning("请先选择要删除的世界书条目");
       return 0;
     }
 
@@ -12077,12 +12077,12 @@ jQuery(async () => {
     }
 
     if (!deletedCount) {
-      toastr.warning("所选条目不支持删除操作");
+      cfmToastr.warning("所选条目不支持删除操作");
       return 0;
     }
 
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
-    toastr.success(`已删除 ${deletedCount} 个世界书条目`);
+    cfmToastr.success(`已删除 ${deletedCount} 个世界书条目`);
     refreshWorldInfoPanelView();
     return deletedCount;
   }
@@ -12104,7 +12104,7 @@ jQuery(async () => {
       ),
     );
     if (!targetUids.length) {
-      toastr.warning("请先选择要操作的世界书条目");
+      cfmToastr.warning("请先选择要操作的世界书条目");
       return;
     }
 
@@ -12119,12 +12119,12 @@ jQuery(async () => {
     }
 
     if (!changedCount) {
-      toastr.warning("所选条目不支持批量激活操作");
+      cfmToastr.warning("所选条目不支持批量激活操作");
       return;
     }
 
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
-    toastr.success(
+    cfmToastr.success(
       `已${activate ? "激活" : "取消激活"} ${changedCount} 个世界书条目`,
     );
     refreshWorldInfoPanelView();
@@ -12289,12 +12289,12 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
     const ensureCurrent = () =>
@@ -12390,7 +12390,7 @@ jQuery(async () => {
         .val()
         .trim();
       if (!name) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existing = getPresetDetailActivePresets(presetName).find(
@@ -12400,7 +12400,7 @@ jQuery(async () => {
         if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       savePresetDetailActivePreset(presetName, name, enabledIds);
-      toastr.success(
+      cfmToastr.success(
         `已保存激活分组「${name}」（${enabledIds.length} 个预设条目）`,
       );
       overlay.remove();
@@ -12417,7 +12417,7 @@ jQuery(async () => {
       const currentPresets = getPresetDetailActivePresets(presetName);
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
@@ -12465,7 +12465,7 @@ jQuery(async () => {
 
         const latestPresetData = getPresetDataForDetail(pm, presetName);
         if (!latestPresetData) {
-          toastr.error(`找不到预设「${presetName}」的数据`);
+          cfmToastr.error(`找不到预设「${presetName}」的数据`);
           return;
         }
 
@@ -12497,14 +12497,14 @@ jQuery(async () => {
             : [...otherApplied.filter((i) => i !== idx), idx];
         setPresetDetailAppliedPresetIndices(presetName, newApplied);
 
-        toastr.success(
+        cfmToastr.success(
           `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
         );
         overlay.remove();
         refreshPresetPanelView();
       } catch (err) {
         console.error("[CFM] 应用预设详情分组失败", err);
-        toastr.error("应用分组失败");
+        cfmToastr.error("应用分组失败");
       }
     });
 
@@ -12519,13 +12519,13 @@ jQuery(async () => {
       const currentPresets = getPresetDetailActivePresets(presetName);
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
         const applied = getPresetDetailAppliedPresetIndices(presetName);
         if (!applied.includes(idx)) {
-          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          cfmToastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         const otherApplied = applied.filter(
@@ -12542,7 +12542,7 @@ jQuery(async () => {
 
         const latestPresetData = getPresetDataForDetail(pm, presetName);
         if (!latestPresetData) {
-          toastr.error(`找不到预设「${presetName}」的数据`);
+          cfmToastr.error(`找不到预设「${presetName}」的数据`);
           return;
         }
 
@@ -12560,14 +12560,14 @@ jQuery(async () => {
         await saveNormalizedPresetData(pm, presetName, latestPresetData);
         setPresetDetailAppliedPresetIndices(presetName, otherApplied);
 
-        toastr.success(
+        cfmToastr.success(
           `已取消应用分组「${preset.name}」（取消激活 ${removedCount} 个独占预设条目）`,
         );
         overlay.remove();
         refreshPresetPanelView();
       } catch (err) {
         console.error("[CFM] 取消应用预设详情分组失败", err);
-        toastr.error("取消应用分组失败");
+        cfmToastr.error("取消应用分组失败");
       }
     });
 
@@ -12606,7 +12606,7 @@ jQuery(async () => {
         );
       }
       deletePresetDetailActivePreset(presetName, preset.name);
-      toastr.success(`已删除激活分组「${preset.name}」`);
+      cfmToastr.success(`已删除激活分组「${preset.name}」`);
       overlay.remove();
       showPresetDetailGroupPanel(presetName);
     });
@@ -12618,12 +12618,12 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -12699,14 +12699,14 @@ jQuery(async () => {
         .val()
         .trim();
       if (!newName) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existingOther = getPresetDetailActivePresets(presetName).find(
         (p) => p.name === newName && p.name !== preset.name,
       );
       if (existingOther) {
-        toastr.warning(`分组名称「${newName}」已被使用`);
+        cfmToastr.warning(`分组名称「${newName}」已被使用`);
         return;
       }
       const newFields = [];
@@ -12714,14 +12714,14 @@ jQuery(async () => {
         newFields.push($(this).val());
       });
       if (newFields.length === 0) {
-        toastr.warning("请至少选择一个预设条目");
+        cfmToastr.warning("请至少选择一个预设条目");
         return;
       }
       if (newName !== preset.name) {
         renamePresetDetailActivePreset(presetName, preset.name, newName);
       }
       savePresetDetailActivePreset(presetName, newName, newFields);
-      toastr.success(
+      cfmToastr.success(
         `已更新激活分组「${newName}」（${newFields.length} 个预设条目）`,
       );
       overlay.remove();
@@ -12865,13 +12865,13 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return false;
     }
 
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return false;
     }
 
@@ -12984,7 +12984,7 @@ jQuery(async () => {
       return true;
     } catch (error) {
       console.error("[CFM] 预设条目排序失败:", error);
-      toastr.error(`排序失败: ${error.message || error}`);
+      cfmToastr.error(`排序失败: ${error.message || error}`);
       return false;
     }
   }
@@ -13065,13 +13065,13 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
 
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -13081,13 +13081,13 @@ jQuery(async () => {
       (item) => item.key === fieldKey,
     );
     if (!sourceField) {
-      toastr.error("未找到可复制的预设条目");
+      cfmToastr.error("未找到可复制的预设条目");
       return;
     }
 
     const sourcePrompt = getPresetPromptByKey(presetData, promptKey);
     if (!sourcePrompt) {
-      toastr.error("预设条目不存在，无法复制");
+      cfmToastr.error("预设条目不存在，无法复制");
       return;
     }
 
@@ -13198,7 +13198,7 @@ jQuery(async () => {
 
     try {
       await saveNormalizedPresetData(pm, presetName, presetData);
-      toastr.success(`已复制预设条目「${sourceField.label}」`);
+      cfmToastr.success(`已复制预设条目「${sourceField.label}」`);
       refreshPresetPanelView();
       // 高亮闪烁新复制的预设条目
       flashDraggedElement(
@@ -13207,7 +13207,7 @@ jQuery(async () => {
       );
     } catch (error) {
       console.error("[CFM] 复制预设条目失败:", error);
-      toastr.error(`复制失败: ${error.message || error}`);
+      cfmToastr.error(`复制失败: ${error.message || error}`);
     }
   }
 
@@ -13216,13 +13216,13 @@ jQuery(async () => {
 
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
 
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -13230,7 +13230,7 @@ jQuery(async () => {
       (item) => item.key === fieldKey,
     );
     if (!field) {
-      toastr.error("未找到可删除的预设条目");
+      cfmToastr.error("未找到可删除的预设条目");
       return;
     }
 
@@ -13257,11 +13257,11 @@ jQuery(async () => {
 
     try {
       await saveNormalizedPresetData(pm, presetName, presetData);
-      toastr.success(`已删除预设条目「${field.label}」`);
+      cfmToastr.success(`已删除预设条目「${field.label}」`);
       refreshPresetPanelView();
     } catch (error) {
       console.error("[CFM] 删除预设条目失败:", error);
-      toastr.error(`删除失败: ${error.message || error}`);
+      cfmToastr.error(`删除失败: ${error.message || error}`);
     }
   }
 
@@ -13535,7 +13535,7 @@ jQuery(async () => {
             if (isSaveButton) {
               const persisted = await persistCurrentPresetAfterNativePromptSave();
               if (!persisted) {
-                toastr.error(
+                cfmToastr.error(
                   "预设条目已在运行时更新，但写回预设文件失败，请手动点击“更新当前预设”",
                 );
               }
@@ -14078,12 +14078,12 @@ jQuery(async () => {
   async function editPresetDetailField(presetName, fieldKey) {
     const pm = getContext().getPresetManager();
     if (!pm) {
-      toastr.error("无法获取预设管理器");
+      cfmToastr.error("无法获取预设管理器");
       return;
     }
     const presetData = getPresetDataForDetail(pm, presetName);
     if (!presetData) {
-      toastr.error(`找不到预设「${presetName}」的数据`);
+      cfmToastr.error(`找不到预设「${presetName}」的数据`);
       return;
     }
 
@@ -14091,12 +14091,12 @@ jQuery(async () => {
       (item) => item.key === fieldKey,
     );
     if (!field) {
-      toastr.error("未找到可编辑的预设条目");
+      cfmToastr.error("未找到可编辑的预设条目");
       return;
     }
 
     if (!String(fieldKey || "").startsWith("prompts.")) {
-      toastr.error("仅支持通过原生界面编辑预设条目");
+      cfmToastr.error("仅支持通过原生界面编辑预设条目");
       return;
     }
 
@@ -14109,7 +14109,7 @@ jQuery(async () => {
         field.label,
       );
       if (!opened) {
-        toastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
+        cfmToastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
       }
     } finally {
       hideLoading?.();
@@ -14610,7 +14610,7 @@ jQuery(async () => {
             );
           } catch (error) {
             console.error("[CFM] 批量激活世界书条目失败:", error);
-            toastr.error(`保存失败: ${error.message || error}`);
+            cfmToastr.error(`保存失败: ${error.message || error}`);
           }
         });
       batchToolbar
@@ -14631,7 +14631,7 @@ jQuery(async () => {
             );
           } catch (error) {
             console.error("[CFM] 批量取消激活世界书条目失败:", error);
-            toastr.error(`保存失败: ${error.message || error}`);
+            cfmToastr.error(`保存失败: ${error.message || error}`);
           }
         });
       detailCard.append(batchToolbar);
@@ -14784,7 +14784,7 @@ jQuery(async () => {
             refreshFn();
           } catch (error) {
             console.error("[CFM] 切换世界书条目激活失败:", error);
-            toastr.error(`保存失败: ${error.message || error}`);
+            cfmToastr.error(`保存失败: ${error.message || error}`);
           } finally {
             el.data("pending", false);
           }
@@ -14823,7 +14823,7 @@ jQuery(async () => {
               entry.uid,
             );
             if (newEntry) {
-              toastr.success(`已复制条目「${escapeHtml(entry.label)}」`);
+              cfmToastr.success(`已复制条目「${escapeHtml(entry.label)}」`);
               // 清除缓存，强制重新获取数据
               refreshFn();
               // 高亮闪烁新复制的条目
@@ -14834,7 +14834,7 @@ jQuery(async () => {
             }
           } catch (error) {
             console.error("[CFM] 复制世界书条目失败:", error);
-            toastr.error(`复制失败: ${error.message || error}`);
+            cfmToastr.error(`复制失败: ${error.message || error}`);
           } finally {
             el.data("pending", false);
           }
@@ -14860,7 +14860,7 @@ jQuery(async () => {
               entry.uid,
             );
             if (deleted) {
-              toastr.success(`已删除条目「${escapeHtml(entry.label)}」`);
+              cfmToastr.success(`已删除条目「${escapeHtml(entry.label)}」`);
               // 从批量选中集合中移除
               const entryKey = getWorldInfoEntrySelectionKey(
                 normalizedName,
@@ -14875,7 +14875,7 @@ jQuery(async () => {
             }
           } catch (error) {
             console.error("[CFM] 删除世界书条目失败:", error);
-            toastr.error(`删除失败: ${error.message || error}`);
+            cfmToastr.error(`删除失败: ${error.message || error}`);
           } finally {
             el.data("pending", false);
           }
@@ -14902,7 +14902,7 @@ jQuery(async () => {
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
           console.error("[CFM] 保存插入位置失败:", err);
-          toastr.error(`保存失败: ${err.message || err}`);
+          cfmToastr.error(`保存失败: ${err.message || err}`);
         }
       });
       row.find(".cfm-wi-ctrl-depth").on("change", async function (e) {
@@ -14916,7 +14916,7 @@ jQuery(async () => {
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
           console.error("[CFM] 保存深度失败:", err);
-          toastr.error(`保存失败: ${err.message || err}`);
+          cfmToastr.error(`保存失败: ${err.message || err}`);
         }
       });
       row.find(".cfm-wi-ctrl-order").on("change", async function (e) {
@@ -14930,7 +14930,7 @@ jQuery(async () => {
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
           console.error("[CFM] 保存顺序失败:", err);
-          toastr.error(`保存失败: ${err.message || err}`);
+          cfmToastr.error(`保存失败: ${err.message || err}`);
         }
       });
       row.find(".cfm-wi-ctrl-prob").on("change", async function (e) {
@@ -14947,7 +14947,7 @@ jQuery(async () => {
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
           console.error("[CFM] 保存触发概率失败:", err);
-          toastr.error(`保存失败: ${err.message || err}`);
+          cfmToastr.error(`保存失败: ${err.message || err}`);
         }
       });
       row.find(".cfm-wi-ctrl-state").on("change", async function (e) {
@@ -14963,7 +14963,7 @@ jQuery(async () => {
           await saveWorldInfoDetailData(normalizedName, wiData);
         } catch (err) {
           console.error("[CFM] 保存条目状态失败:", err);
-          toastr.error(`保存失败: ${err.message || err}`);
+          cfmToastr.error(`保存失败: ${err.message || err}`);
         }
       });
       // 阻止控件区域的 click 冒泡（避免影响批量选择等）
@@ -14994,7 +14994,7 @@ jQuery(async () => {
             await saveWorldInfoDetailData(normalizedName, wiData);
           } catch (err) {
             console.error(`[CFM] ${errorLabel}失败:`, err);
-            toastr.error(`${errorLabel}失败: ${err.message || err}`);
+            cfmToastr.error(`${errorLabel}失败: ${err.message || err}`);
           }
         };
 
@@ -16095,11 +16095,11 @@ jQuery(async () => {
       const oldName = names[0];
       const newName = result.newName;
       if (!newName) {
-        toastr.warning("请输入新名称");
+        cfmToastr.warning("请输入新名称");
         return;
       }
       if (newName === oldName) {
-        toastr.info("名称未变更");
+        cfmToastr.info("名称未变更");
         return;
       }
       try {
@@ -16129,23 +16129,23 @@ jQuery(async () => {
         updateSettingsAfterRename("worldinfo", oldName, newName);
         // 更新角色卡的世界书绑定
         await updateCharWorldBindings(oldName, newName);
-        toastr.success(`已将「${oldName}」重命名为「${newName}」`);
+        cfmToastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 世界书重命名失败", e);
-        toastr.error(`重命名失败: ${e.message}`);
+        cfmToastr.error(`重命名失败: ${e.message}`);
         return;
       }
     } else if (result.mode === "batch") {
       const { action, text } = result;
       if (!text) {
-        toastr.warning("请输入内容");
+        cfmToastr.warning("请输入内容");
         return;
       }
       let success = 0;
       let skipped = 0;
       let failed = 0;
 
-      toastr.info(`正在批量重命名 ${names.length} 个世界书...`);
+      cfmToastr.info(`正在批量重命名 ${names.length} 个世界书...`);
 
       for (const oldName of names) {
         let newName;
@@ -16209,8 +16209,8 @@ jQuery(async () => {
       let msg = `已重命名 ${success} 个世界书`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
-      if (success > 0) toastr.success(msg);
-      else toastr.warning(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.warning(msg);
     }
 
     renderWorldInfoView();
@@ -17006,7 +17006,7 @@ jQuery(async () => {
             const toImport = Array.isArray(parsed) ? parsed : [parsed];
             for (const regexScript of toImport) {
               if (!regexScript.scriptName) {
-                toastr.warning("跳过无名称的正则脚本");
+                cfmToastr.warning("跳过无名称的正则脚本");
                 continue;
               }
               regexScript.id = getContext().uuidv4();
@@ -17014,11 +17014,11 @@ jQuery(async () => {
             }
           }
           await saveCharRegexScripts(avatar, scripts);
-          toastr.success("正则脚本导入成功");
+          cfmToastr.success("正则脚本导入成功");
           rerenderCurrentView();
         } catch (err) {
           console.error("[CFM] 正则导入失败:", err);
-          toastr.error("导入失败: " + err.message);
+          cfmToastr.error("导入失败: " + err.message);
         }
       });
       // 新增按钮
@@ -17123,7 +17123,7 @@ jQuery(async () => {
             cfmRegexBatchSelected.has(s.id),
           );
           if (toExport.length === 0) {
-            toastr.warning("请先选择要导出的正则脚本");
+            cfmToastr.warning("请先选择要导出的正则脚本");
             return;
           }
           try {
@@ -17143,10 +17143,10 @@ jQuery(async () => {
                 "application/json",
               );
             }
-            toastr.success(`已导出 ${toExport.length} 个正则脚本`);
+            cfmToastr.success(`已导出 ${toExport.length} 个正则脚本`);
           } catch (err) {
             console.error("[CFM] 批量导出正则失败:", err);
-            toastr.error("导出失败: " + err.message);
+            cfmToastr.error("导出失败: " + err.message);
           }
         });
         // 批量删除
@@ -17156,7 +17156,7 @@ jQuery(async () => {
             .filter((s) => cfmRegexBatchSelected.has(s.id))
             .map((s) => s.id);
           if (toDeleteIds.length === 0) {
-            toastr.warning("请先选择要删除的正则脚本");
+            cfmToastr.warning("请先选择要删除的正则脚本");
             return;
           }
           if (
@@ -17172,11 +17172,11 @@ jQuery(async () => {
             }
             await saveCharRegexScripts(avatar, scripts);
             cfmRegexBatchSelected.clear();
-            toastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            cfmToastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
             rerenderCurrentView();
           } catch (err) {
             console.error("[CFM] 批量删除正则失败:", err);
-            toastr.error("删除失败: " + err.message);
+            cfmToastr.error("删除失败: " + err.message);
           }
         });
         subList.append(batchToolbar);
@@ -17251,7 +17251,7 @@ jQuery(async () => {
               await saveCharRegexScripts(avatar, scripts);
             } catch (err) {
               console.error("[CFM] 正则toggle保存失败:", err);
-              toastr.error("保存失败: " + err.message);
+              cfmToastr.error("保存失败: " + err.message);
               script.disabled = !script.disabled;
               return;
             }
@@ -17278,7 +17278,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("非当前角色的正则脚本，无法编辑");
+            cfmToastr.warning("非当前角色的正则脚本，无法编辑");
           }
         });
         // 上移按钮
@@ -17299,7 +17299,7 @@ jQuery(async () => {
           } catch (err) {
             console.error("[CFM] 正则上移失败:", err);
             [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
-            toastr.error("上移失败: " + err.message);
+            cfmToastr.error("上移失败: " + err.message);
           }
         });
         // 下移按钮
@@ -17320,7 +17320,7 @@ jQuery(async () => {
           } catch (err) {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
-            toastr.error("下移失败: " + err.message);
+            cfmToastr.error("下移失败: " + err.message);
           }
         });
         subList.append(row);
@@ -17383,7 +17383,7 @@ jQuery(async () => {
               }
             } catch (err) {
               console.error("[CFM] 正则拖拽排序失败:", err);
-              toastr.error("排序失败: " + err.message);
+              cfmToastr.error("排序失败: " + err.message);
               rerenderCurrentView();
             }
           },
@@ -17438,11 +17438,11 @@ jQuery(async () => {
       ),
     );
     if (!normalizedIds.length) {
-      toastr.warning("请先选择要操作的正则脚本");
+      cfmToastr.warning("请先选择要操作的正则脚本");
       return false;
     }
     if (!Array.isArray(scripts) || typeof save !== "function") {
-      toastr.error("批量激活正则脚本失败：缺少保存上下文");
+      cfmToastr.error("批量激活正则脚本失败：缺少保存上下文");
       return false;
     }
 
@@ -17460,13 +17460,13 @@ jQuery(async () => {
     }
 
     if (!changedCount) {
-      toastr.warning("所选正则脚本状态未发生变化");
+      cfmToastr.warning("所选正则脚本状态未发生变化");
       return false;
     }
 
     try {
       await save();
-      toastr.success(
+      cfmToastr.success(
         `已${activate ? "激活" : "取消激活"} ${changedCount} 个${successLabel}`,
       );
       return true;
@@ -17475,7 +17475,7 @@ jQuery(async () => {
         script.disabled = oldDisabled;
       }
       console.error("[CFM] 批量切换正则脚本激活状态失败:", error);
-      toastr.error(`保存失败: ${error.message || error}`);
+      cfmToastr.error(`保存失败: ${error.message || error}`);
       return false;
     }
   }
@@ -17489,7 +17489,7 @@ jQuery(async () => {
       ),
     );
     if (!normalizedNames.length) {
-      toastr.warning("请先选择要操作的世界书");
+      cfmToastr.warning("请先选择要操作的世界书");
       return false;
     }
 
@@ -17512,16 +17512,16 @@ jQuery(async () => {
     }
 
     if (changedCount > 0) {
-      toastr.success(
+      cfmToastr.success(
         `已${activate ? "激活" : "取消激活"} ${changedCount} 个世界书`,
       );
     } else {
-      toastr.warning(
+      cfmToastr.warning(
         `所选世界书状态未发生变化${skippedCount ? "（角色关联项已自动跳过）" : ""}`,
       );
     }
     if (skippedCount > 0) {
-      toastr.info(`已跳过 ${skippedCount} 个角色关联世界书`);
+      cfmToastr.info(`已跳过 ${skippedCount} 个角色关联世界书`);
     }
     return changedCount > 0;
   }
@@ -17535,7 +17535,7 @@ jQuery(async () => {
       ),
     );
     if (!normalizedNames.length) {
-      toastr.warning("请先选择要操作的快速回复集");
+      cfmToastr.warning("请先选择要操作的快速回复集");
       return false;
     }
 
@@ -17544,7 +17544,7 @@ jQuery(async () => {
       existingNameSet.has(name),
     );
     if (!validNames.length) {
-      toastr.warning("所选快速回复集已不存在");
+      cfmToastr.warning("所选快速回复集已不存在");
       return false;
     }
 
@@ -17561,11 +17561,11 @@ jQuery(async () => {
     }
 
     if (!changedCount) {
-      toastr.warning("所选快速回复集状态未发生变化");
+      cfmToastr.warning("所选快速回复集状态未发生变化");
       return false;
     }
 
-    toastr.success(
+    cfmToastr.success(
       `已${activate ? "激活" : "取消激活"} ${changedCount} 个快速回复集`,
     );
     return true;
@@ -17580,7 +17580,7 @@ jQuery(async () => {
       ),
     );
     if (!normalizedIds.length) {
-      toastr.warning("请先选择要操作的正则脚本");
+      cfmToastr.warning("请先选择要操作的正则脚本");
       return false;
     }
 
@@ -17599,14 +17599,14 @@ jQuery(async () => {
     }
 
     if (!changedCount) {
-      toastr.warning("所选正则脚本状态未发生变化");
+      cfmToastr.warning("所选正则脚本状态未发生变化");
       return false;
     }
 
     try {
       getContext().saveSettingsDebounced();
       await syncNativeRegexState();
-      toastr.success(
+      cfmToastr.success(
         `已${activate ? "激活" : "取消激活"} ${changedCount} 个正则脚本`,
       );
       return true;
@@ -17615,7 +17615,7 @@ jQuery(async () => {
         script.disabled = oldDisabled;
       }
       console.error("[CFM] 批量切换全局正则激活状态失败:", error);
-      toastr.error(`保存失败: ${error.message || error}`);
+      cfmToastr.error(`保存失败: ${error.message || error}`);
       return false;
     }
   }
@@ -17679,7 +17679,7 @@ jQuery(async () => {
             const toImport = Array.isArray(parsed) ? parsed : [parsed];
             for (const regexScript of toImport) {
               if (!regexScript.scriptName) {
-                toastr.warning("跳过无名称的正则脚本");
+                cfmToastr.warning("跳过无名称的正则脚本");
                 continue;
               }
               regexScript.id = getContext().uuidv4();
@@ -17687,11 +17687,11 @@ jQuery(async () => {
             }
           }
           await savePresetRegexScripts(scripts);
-          toastr.success("正则脚本导入成功");
+          cfmToastr.success("正则脚本导入成功");
           rerenderCurrentView();
         } catch (err) {
           console.error("[CFM] 正则导入失败:", err);
-          toastr.error("导入失败: " + err.message);
+          cfmToastr.error("导入失败: " + err.message);
         }
       });
       // 新增按钮
@@ -17795,7 +17795,7 @@ jQuery(async () => {
             cfmRegexBatchSelected.has(s.id),
           );
           if (toExport.length === 0) {
-            toastr.warning("请先选择要导出的正则脚本");
+            cfmToastr.warning("请先选择要导出的正则脚本");
             return;
           }
           try {
@@ -17815,10 +17815,10 @@ jQuery(async () => {
                 "application/json",
               );
             }
-            toastr.success(`已导出 ${toExport.length} 个正则脚本`);
+            cfmToastr.success(`已导出 ${toExport.length} 个正则脚本`);
           } catch (err) {
             console.error("[CFM] 批量导出正则失败:", err);
-            toastr.error("导出失败: " + err.message);
+            cfmToastr.error("导出失败: " + err.message);
           }
         });
         // 批量删除
@@ -17828,7 +17828,7 @@ jQuery(async () => {
             .filter((s) => cfmRegexBatchSelected.has(s.id))
             .map((s) => s.id);
           if (toDeleteIds.length === 0) {
-            toastr.warning("请先选择要删除的正则脚本");
+            cfmToastr.warning("请先选择要删除的正则脚本");
             return;
           }
           if (
@@ -17844,11 +17844,11 @@ jQuery(async () => {
             }
             await savePresetRegexScripts(scripts);
             cfmRegexBatchSelected.clear();
-            toastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            cfmToastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
             rerenderCurrentView();
           } catch (err) {
             console.error("[CFM] 批量删除正则失败:", err);
-            toastr.error("删除失败: " + err.message);
+            cfmToastr.error("删除失败: " + err.message);
           }
         });
         subList.append(batchToolbar);
@@ -17923,7 +17923,7 @@ jQuery(async () => {
               await savePresetRegexScripts(scripts);
             } catch (err) {
               console.error("[CFM] 正则toggle保存失败:", err);
-              toastr.error("保存失败: " + err.message);
+              cfmToastr.error("保存失败: " + err.message);
               script.disabled = !script.disabled;
               return;
             }
@@ -17950,7 +17950,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("非当前预设的正则脚本，无法编辑");
+            cfmToastr.warning("非当前预设的正则脚本，无法编辑");
           }
         });
         // 上移按钮
@@ -17971,7 +17971,7 @@ jQuery(async () => {
           } catch (err) {
             console.error("[CFM] 正则上移失败:", err);
             [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
-            toastr.error("上移失败: " + err.message);
+            cfmToastr.error("上移失败: " + err.message);
           }
         });
         // 下移按钮
@@ -17992,7 +17992,7 @@ jQuery(async () => {
           } catch (err) {
             console.error("[CFM] 正则下移失败:", err);
             [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
-            toastr.error("下移失败: " + err.message);
+            cfmToastr.error("下移失败: " + err.message);
           }
         });
         subList.append(row);
@@ -18055,7 +18055,7 @@ jQuery(async () => {
               }
             } catch (err) {
               console.error("[CFM] 正则拖拽排序失败:", err);
-              toastr.error("排序失败: " + err.message);
+              cfmToastr.error("排序失败: " + err.message);
               rerenderCurrentView();
             }
           },
@@ -18384,18 +18384,18 @@ jQuery(async () => {
       });
       const data = await response.json();
       if (!response.ok) {
-        toastr.error(`导出失败: ${data.message}`);
+        cfmToastr.error(`导出失败: ${data.message}`);
         return false;
       }
       const mimeType =
         format === "txt" ? "text/plain" : "application/octet-stream";
       const download = (await import("../../../utils.js")).download;
       download(data.result, body.exportfilename, mimeType);
-      toastr.success(`已导出: ${chatFileName}.${format}`);
+      cfmToastr.success(`已导出: ${chatFileName}.${format}`);
       return true;
     } catch (e) {
       console.error("[CFM] 导出聊天记录失败:", e);
-      toastr.error(`导出失败: ${e.message}`);
+      cfmToastr.error(`导出失败: ${e.message}`);
       return false;
     }
   }
@@ -18425,7 +18425,7 @@ jQuery(async () => {
       closeMainPopup();
     } catch (e) {
       console.error("[CFM] 打开聊天记录失败:", e);
-      toastr.error("打开聊天记录失败");
+      cfmToastr.error("打开聊天记录失败");
     }
   }
 
@@ -18464,7 +18464,7 @@ jQuery(async () => {
       pinned.splice(idx, 1);
       extension_settings[extensionName].pinnedChats = pinned;
       getContext().saveSettingsDebounced();
-      toastr.info("已取消置顶");
+      cfmToastr.info("已取消置顶");
       applyPinnedChatsToWelcomeScreen();
       return false;
     } else {
@@ -18472,7 +18472,7 @@ jQuery(async () => {
       pinned.push({ avatar, chatFileName });
       extension_settings[extensionName].pinnedChats = pinned;
       getContext().saveSettingsDebounced();
-      toastr.success("已置顶到最近聊天");
+      cfmToastr.success("已置顶到最近聊天");
       applyPinnedChatsToWelcomeScreen();
       return true;
     }
@@ -18948,13 +18948,13 @@ jQuery(async () => {
     const characters = getCharacters();
     const char = characters.find((c) => c.avatar === avatar);
     if (!char) {
-      toastr.error("找不到对应角色");
+      cfmToastr.error("找不到对应角色");
       return;
     }
     const ctx = getContext();
     let successCount = 0;
     let failCount = 0;
-    toastr.info(`正在导入 ${files.length} 个聊天记录...`);
+    cfmToastr.info(`正在导入 ${files.length} 个聊天记录...`);
     for (const file of files) {
       try {
         const formData = new FormData();
@@ -19000,11 +19000,11 @@ jQuery(async () => {
     }
     await invalidateChatCache(avatar);
     if (successCount > 0) {
-      toastr.success(
+      cfmToastr.success(
         `成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`,
       );
     } else {
-      toastr.error(`导入失败`);
+      cfmToastr.error(`导入失败`);
     }
     rerenderCurrentView();
   }
@@ -19362,7 +19362,7 @@ jQuery(async () => {
           k.startsWith(avatar + "::"),
         );
         if (toExport.length === 0) {
-          toastr.warning("请先选择要导出的聊天记录");
+          cfmToastr.warning("请先选择要导出的聊天记录");
           return;
         }
         if (toExport.length === 1) {
@@ -19403,7 +19403,7 @@ jQuery(async () => {
               }
             }
             if (success === 0) {
-              toastr.error("没有成功导出任何聊天记录");
+              cfmToastr.error("没有成功导出任何聊天记录");
               return;
             }
             const content = await zip.generateAsync({ type: "blob" });
@@ -19414,10 +19414,10 @@ jQuery(async () => {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
-            toastr.success(`已导出 ${success} 条聊天记录到 聊天记录.zip`);
+            cfmToastr.success(`已导出 ${success} 条聊天记录到 聊天记录.zip`);
           } catch (err) {
             console.error("[CFM] 批量导出聊天记录失败:", err);
-            toastr.error(`批量导出失败: ${err.message}`);
+            cfmToastr.error(`批量导出失败: ${err.message}`);
           }
         }
       });
@@ -19427,7 +19427,7 @@ jQuery(async () => {
           k.startsWith(avatar + "::"),
         );
         if (toDelete.length === 0) {
-          toastr.warning("请先选择要删除的聊天记录");
+          cfmToastr.warning("请先选择要删除的聊天记录");
           return;
         }
         if (
@@ -19441,7 +19441,7 @@ jQuery(async () => {
           const fn = key.split("::")[1];
           if (await deleteChatFile(avatar, fn)) successCount++;
         }
-        toastr.success(`已删除 ${successCount} 条聊天记录`);
+        cfmToastr.success(`已删除 ${successCount} 条聊天记录`);
         rerenderCurrentView();
       });
       subList.append(batchToolbar);
@@ -19531,10 +19531,10 @@ jQuery(async () => {
         const newName = await showChatRenamePopup(chatName);
         if (!newName || newName === chatName) return;
         if (await renameChatFile(avatar, chatName, newName)) {
-          toastr.success(`已重命名: ${chatName} → ${newName}`);
+          cfmToastr.success(`已重命名: ${chatName} → ${newName}`);
           rerenderCurrentView();
         } else {
-          toastr.error("重命名失败");
+          cfmToastr.error("重命名失败");
         }
       });
 
@@ -19565,10 +19565,10 @@ jQuery(async () => {
         if (!cfmConfirm(`确定要删除聊天记录「${chatName}」吗？\n此操作不可撤销！`))
           return;
         if (await deleteChatFile(avatar, chatName)) {
-          toastr.success(`已删除: ${chatName}`);
+          cfmToastr.success(`已删除: ${chatName}`);
           rerenderCurrentView();
         } else {
-          toastr.error("删除失败");
+          cfmToastr.error("删除失败");
         }
       });
 
@@ -19674,14 +19674,14 @@ jQuery(async () => {
     const isBatch = avatars.length > 1;
     // 批量模式下，留空表示不修改
     if (isBatch && !creator && !version) {
-      toastr.warning("请至少填写一个字段");
+      cfmToastr.warning("请至少填写一个字段");
       return;
     }
     const characters = getContext().characters;
     const headers = getContext().getRequestHeaders();
     let success = 0;
     let fail = 0;
-    toastr.info(`正在更新 ${avatars.length} 个角色卡...`);
+    cfmToastr.info(`正在更新 ${avatars.length} 个角色卡...`);
 
     for (const avatar of avatars) {
       const char = characters.find((c) => c.avatar === avatar);
@@ -19727,11 +19727,11 @@ jQuery(async () => {
       }
     }
     if (success > 0) {
-      toastr.success(
+      cfmToastr.success(
         `已更新 ${success} 个角色卡${fail > 0 ? `，${fail} 个失败` : ""}`,
       );
     } else {
-      toastr.error("更新失败");
+      cfmToastr.error("更新失败");
     }
     rerenderCurrentView();
   }
@@ -20874,7 +20874,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applySortToFolders(childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           updateSortButtonState();
           renderLeftTree();
           renderRightPane();
@@ -20886,7 +20886,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applySortToFolders(childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           updateSortButtonState();
           renderLeftTree();
           renderRightPane();
@@ -20902,7 +20902,7 @@ jQuery(async () => {
         getContext().saveSettingsDebounced();
         if (sortSnapshot) {
           revertSort();
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         updateSortButtonState();
         renderLeftTree();
@@ -20932,10 +20932,10 @@ jQuery(async () => {
         (mode) => {
           if (mode === "revert") {
             revertSort();
-            toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+            cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
           } else {
             applySortToFolders(topFolders, mode);
-            toastr.info(
+            cfmToastr.info(
               mode === "az"
                 ? "顶级文件夹已按 A→Z 排序"
                 : "顶级文件夹已按 Z→A 排序",
@@ -20967,7 +20967,7 @@ jQuery(async () => {
         btn.html(
           `<i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}`,
         );
-        toastr.info(cfmCopyMode ? "已切换为复制模式" : "已切换为移动模式", "", {
+        cfmToastr.info(cfmCopyMode ? "已切换为复制模式" : "已切换为移动模式", "", {
           timeOut: 1500,
         });
       }
@@ -21144,7 +21144,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("presets", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderPresetsView();
         }
         dropdown.remove();
@@ -21154,7 +21154,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("presets", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderPresetsView();
         }
         dropdown.remove();
@@ -21166,7 +21166,7 @@ jQuery(async () => {
         presetRightSortMode = null;
         if (presetSortSnapshot) {
           revertResSort("presets");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderPresetsView();
         dropdown.remove();
@@ -21257,7 +21257,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("worldinfo", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderWorldInfoView();
         }
         dropdown.remove();
@@ -21267,7 +21267,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("worldinfo", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderWorldInfoView();
         }
         dropdown.remove();
@@ -21279,7 +21279,7 @@ jQuery(async () => {
         worldInfoRightSortMode = null;
         if (worldInfoSortSnapshot) {
           revertResSort("worldinfo");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderWorldInfoView();
         dropdown.remove();
@@ -21370,7 +21370,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("quickreply", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderQRView();
         }
         dropdown.remove();
@@ -21380,7 +21380,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("quickreply", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderQRView();
         }
         dropdown.remove();
@@ -21392,7 +21392,7 @@ jQuery(async () => {
         qrRightSortMode = null;
         if (qrSortSnapshot) {
           revertResSort("quickreply");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderQRView();
         dropdown.remove();
@@ -21483,7 +21483,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("themes", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderThemesView();
         }
         dropdown.remove();
@@ -21493,7 +21493,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("themes", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderThemesView();
         }
         dropdown.remove();
@@ -21505,7 +21505,7 @@ jQuery(async () => {
         themeRightSortMode = null;
         if (themeSortSnapshot) {
           revertResSort("themes");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderThemesView();
         dropdown.remove();
@@ -21589,7 +21589,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("backgrounds", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderBackgroundsView();
         }
         dropdown.remove();
@@ -21599,7 +21599,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("backgrounds", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderBackgroundsView();
         }
         dropdown.remove();
@@ -21611,7 +21611,7 @@ jQuery(async () => {
         bgRightSortMode = null;
         if (bgSortSnapshot) {
           revertResSort("backgrounds");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderBackgroundsView();
         dropdown.remove();
@@ -21695,7 +21695,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("personas", childFolders, "az");
-          toastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 A→Z 排序", "", { timeOut: 1500 });
           renderPersonasView();
         }
         dropdown.remove();
@@ -21705,7 +21705,7 @@ jQuery(async () => {
         ev.stopPropagation();
         if (childFolders.length > 0) {
           applyResSortToFolders("personas", childFolders, "za");
-          toastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
+          cfmToastr.info("子文件夹已按 Z→A 排序", "", { timeOut: 1500 });
           renderPersonasView();
         }
         dropdown.remove();
@@ -21717,7 +21717,7 @@ jQuery(async () => {
         personaRightSortMode = null;
         if (personaSortSnapshot) {
           revertResSort("personas");
-          toastr.info("已恢复自定义排序", "", { timeOut: 1500 });
+          cfmToastr.info("已恢复自定义排序", "", { timeOut: 1500 });
         }
         renderPersonasView();
         dropdown.remove();
@@ -21832,7 +21832,7 @@ jQuery(async () => {
       if (cfmEditMode) {
         // 已在编辑模式，执行编辑
         if (cfmEditSelected.size === 0) {
-          toastr.warning("请先选择要编辑的角色卡");
+          cfmToastr.warning("请先选择要编辑的角色卡");
           return;
         }
         const avatars = Array.from(cfmEditSelected);
@@ -21867,7 +21867,7 @@ jQuery(async () => {
       let failCount = 0;
       const importedAvatars = [];
 
-      toastr.info(`正在导入 ${totalFiles} 个角色卡...`);
+      cfmToastr.info(`正在导入 ${totalFiles} 个角色卡...`);
 
       for (const file of files) {
         const ext = file.name.match(/\.(\w+)$/);
@@ -21877,7 +21877,7 @@ jQuery(async () => {
             ext[1].toLowerCase(),
           )
         ) {
-          toastr.warning(`跳过不支持的文件: ${file.name}`);
+          cfmToastr.warning(`跳过不支持的文件: ${file.name}`);
           failCount++;
           continue;
         }
@@ -21958,7 +21958,7 @@ jQuery(async () => {
           } catch (syncErr) {
             console.warn("[CFM] 刷新世界书列表失败", syncErr);
           }
-          toastr.info(`自动提取了 ${embImported} 个内嵌世界书`, "角色世界书");
+          cfmToastr.info(`自动提取了 ${embImported} 个内嵌世界书`, "角色世界书");
         }
       }
 
@@ -21970,11 +21970,11 @@ jQuery(async () => {
         ? `到「${getTagName(targetFolder)}」`
         : "（未归类）";
       if (successCount > 0) {
-        toastr.success(
+        cfmToastr.success(
           `成功导入 ${successCount} 个角色卡${folderHint}${failCount > 0 ? `，${failCount} 个失败` : ""}`,
         );
       } else if (failCount > 0) {
-        toastr.error(`导入失败，${failCount} 个文件无法导入`);
+        cfmToastr.error(`导入失败，${failCount} 个文件无法导入`);
       }
 
       e.target.value = null;
@@ -21999,7 +21999,7 @@ jQuery(async () => {
 
       const pm = getContext().getPresetManager();
       if (!pm) {
-        toastr.error("无法获取预设管理器，请确认已选择API");
+        cfmToastr.error("无法获取预设管理器，请确认已选择API");
         return;
       }
 
@@ -22025,7 +22025,7 @@ jQuery(async () => {
       }
 
       if (parsedFiles.length === 0) {
-        toastr.warning("没有可导入的有效预设文件");
+        cfmToastr.warning("没有可导入的有效预设文件");
         e.target.value = null;
         return;
       }
@@ -22042,7 +22042,7 @@ jQuery(async () => {
           "预设",
         );
         if (dupAction === "cancel") {
-          toastr.info("已取消导入");
+          cfmToastr.info("已取消导入");
           e.target.value = null;
           return;
         }
@@ -22091,11 +22091,11 @@ jQuery(async () => {
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(parts.join("，"));
+        cfmToastr.success(parts.join("，"));
       } else if (skipCount > 0 && failCount === 0) {
-        toastr.info(parts.join("，"));
+        cfmToastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(parts.join("，"));
+        cfmToastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -22107,7 +22107,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmThemeNoteMode) {
         if (cfmThemeNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的主题");
+          cfmToastr.warning("请先选择要编辑备注的主题");
           return;
         }
         const names = Array.from(cfmThemeNoteSelected);
@@ -22123,7 +22123,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmBgNoteMode) {
         if (cfmBgNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的背景");
+          cfmToastr.warning("请先选择要编辑备注的背景");
           return;
         }
         const names = Array.from(cfmBgNoteSelected);
@@ -22139,7 +22139,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmPresetNoteMode) {
         if (cfmPresetNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的预设");
+          cfmToastr.warning("请先选择要编辑备注的预设");
           return;
         }
         const names = Array.from(cfmPresetNoteSelected);
@@ -22155,7 +22155,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmWorldInfoNoteMode) {
         if (cfmWorldInfoNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的世界书");
+          cfmToastr.warning("请先选择要编辑备注的世界书");
           return;
         }
         const names = Array.from(cfmWorldInfoNoteSelected);
@@ -22171,7 +22171,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmQrNoteMode) {
         if (cfmQrNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的快速回复集");
+          cfmToastr.warning("请先选择要编辑备注的快速回复集");
           return;
         }
         const names = Array.from(cfmQrNoteSelected);
@@ -22235,7 +22235,7 @@ jQuery(async () => {
       }
 
       if (validFiles.length === 0) {
-        toastr.warning("没有可导入的有效快速回复集文件");
+        cfmToastr.warning("没有可导入的有效快速回复集文件");
         e.target.value = null;
         return;
       }
@@ -22252,7 +22252,7 @@ jQuery(async () => {
           "快速回复集",
         );
         if (dupAction === "cancel") {
-          toastr.info("已取消导入");
+          cfmToastr.info("已取消导入");
           e.target.value = null;
           return;
         }
@@ -22395,11 +22395,11 @@ jQuery(async () => {
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(parts.join("，"));
+        cfmToastr.success(parts.join("，"));
       } else if (skipCount > 0 && failCount === 0) {
-        toastr.info(parts.join("，"));
+        cfmToastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(parts.join("，"));
+        cfmToastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -22411,7 +22411,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmQrRenameMode) {
         if (cfmQrRenameSelected.size === 0) {
-          toastr.warning("请先选择要重命名的快速回复集");
+          cfmToastr.warning("请先选择要重命名的快速回复集");
           return;
         }
         const names = Array.from(cfmQrRenameSelected);
@@ -22503,7 +22503,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmPersonaNoteMode) {
         if (cfmPersonaNoteSelected.size === 0) {
-          toastr.warning("请先选择要编辑备注的User");
+          cfmToastr.warning("请先选择要编辑备注的User");
           return;
         }
         const ids = Array.from(cfmPersonaNoteSelected);
@@ -22519,7 +22519,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmPresetRenameMode) {
         if (cfmPresetRenameSelected.size === 0) {
-          toastr.warning("请先选择要重命名的预设");
+          cfmToastr.warning("请先选择要重命名的预设");
           return;
         }
         const names = Array.from(cfmPresetRenameSelected);
@@ -22535,7 +22535,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmWorldInfoRenameMode) {
         if (cfmWorldInfoRenameSelected.size === 0) {
-          toastr.warning("请先选择要重命名的世界书");
+          cfmToastr.warning("请先选择要重命名的世界书");
           return;
         }
         const names = Array.from(cfmWorldInfoRenameSelected);
@@ -22551,7 +22551,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmThemeRenameMode) {
         if (cfmThemeRenameSelected.size === 0) {
-          toastr.warning("请先选择要重命名的主题");
+          cfmToastr.warning("请先选择要重命名的主题");
           return;
         }
         const names = Array.from(cfmThemeRenameSelected);
@@ -22567,7 +22567,7 @@ jQuery(async () => {
       e.stopPropagation();
       if (cfmBgRenameMode) {
         if (cfmBgRenameSelected.size === 0) {
-          toastr.warning("请先选择要重命名的背景");
+          cfmToastr.warning("请先选择要重命名的背景");
           return;
         }
         const names = Array.from(cfmBgRenameSelected);
@@ -22623,7 +22623,7 @@ jQuery(async () => {
       }
 
       if (parsedFiles.length === 0) {
-        toastr.warning("没有可导入的有效主题文件");
+        cfmToastr.warning("没有可导入的有效主题文件");
         e.target.value = null;
         return;
       }
@@ -22640,7 +22640,7 @@ jQuery(async () => {
           "主题",
         );
         if (dupAction === "cancel") {
-          toastr.info("已取消导入");
+          cfmToastr.info("已取消导入");
           e.target.value = null;
           return;
         }
@@ -22707,11 +22707,11 @@ jQuery(async () => {
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(parts.join("，"));
+        cfmToastr.success(parts.join("，"));
       } else if (skipCount > 0 && failCount === 0) {
-        toastr.info(parts.join("，"));
+        cfmToastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(parts.join("，"));
+        cfmToastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -22749,7 +22749,7 @@ jQuery(async () => {
       }
 
       if (imageFiles.length === 0) {
-        toastr.warning("没有可导入的有效图片文件");
+        cfmToastr.warning("没有可导入的有效图片文件");
         e.target.value = null;
         return;
       }
@@ -22766,7 +22766,7 @@ jQuery(async () => {
           "背景",
         );
         if (dupAction === "cancel") {
-          toastr.info("已取消导入");
+          cfmToastr.info("已取消导入");
           e.target.value = null;
           return;
         }
@@ -22869,11 +22869,11 @@ jQuery(async () => {
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(parts.join("，"));
+        cfmToastr.success(parts.join("，"));
       } else if (skipCount > 0 && failCount === 0) {
-        toastr.info(parts.join("，"));
+        cfmToastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(parts.join("，"));
+        cfmToastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -22923,7 +22923,7 @@ jQuery(async () => {
       }
 
       if (validFiles.length === 0) {
-        toastr.warning("没有可导入的有效世界书文件");
+        cfmToastr.warning("没有可导入的有效世界书文件");
         e.target.value = null;
         return;
       }
@@ -22940,7 +22940,7 @@ jQuery(async () => {
           "世界书",
         );
         if (dupAction === "cancel") {
-          toastr.info("已取消导入");
+          cfmToastr.info("已取消导入");
           e.target.value = null;
           return;
         }
@@ -23060,11 +23060,11 @@ jQuery(async () => {
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
       if (successCount > 0) {
-        toastr.success(parts.join("，"));
+        cfmToastr.success(parts.join("，"));
       } else if (skipCount > 0 && failCount === 0) {
-        toastr.info(parts.join("，"));
+        cfmToastr.info(parts.join("，"));
       } else if (failCount > 0) {
-        toastr.error(parts.join("，"));
+        cfmToastr.error(parts.join("，"));
       }
 
       e.target.value = null;
@@ -23781,7 +23781,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已应用预设「${p.name}」`);
+          cfmToastr.success(`已应用预设「${p.name}」`);
         });
         // 拖拽支持（搜索模式下也可拖拽）
         row.attr("draggable", "true");
@@ -24039,7 +24039,7 @@ jQuery(async () => {
             e.preventDefault();
             e.stopPropagation();
             if (wiIsBound) {
-              toastr.warning("角色关联的世界书不可手动切换");
+              cfmToastr.warning("角色关联的世界书不可手动切换");
               return;
             }
             const newState = !wiActiveSet.has(n);
@@ -24387,7 +24387,7 @@ jQuery(async () => {
         applyTheme(name);
         rightList.find(".cfm-rv-item-active").removeClass("cfm-rv-item-active");
         row.addClass("cfm-rv-item-active");
-        toastr.success(`已应用主题「${name}」`);
+        cfmToastr.success(`已应用主题「${name}」`);
       });
       row.on("dragstart", (e) => {
         pcDragStart(e, getMultiDragData({ type: "theme", name }));
@@ -24579,7 +24579,7 @@ jQuery(async () => {
         applyBackground(name);
         rightList.find(".cfm-rv-item-active").removeClass("cfm-rv-item-active");
         row.addClass("cfm-rv-item-active");
-        toastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
+        cfmToastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
       });
       row.on("dragstart", (e) => {
         pcDragStart(e, getMultiDragData({ type: "background", name }));
@@ -24788,7 +24788,7 @@ jQuery(async () => {
           renderRightPane();
         },
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色移出所有文件夹`
               : `已将「${first}」移出所有文件夹`,
@@ -24824,7 +24824,7 @@ jQuery(async () => {
             : [data.avatar];
         const count = avatars.length;
         avatars.forEach((av) => removeCharFromAllFolders(av));
-        toastr.success(
+        cfmToastr.success(
           count > 1
             ? `已将 ${count} 个角色移出所有文件夹`
             : `已将「${data.name || data.avatar}」移出所有文件夹`,
@@ -24882,7 +24882,7 @@ jQuery(async () => {
           renderRightPane();
         },
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
               : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
@@ -25002,11 +25002,11 @@ jQuery(async () => {
         if (dropZone === "into") {
           // 嵌套：拖入文件夹内部
           if (wouldCreateCycle(data.id, folderId)) {
-            toastr.error("此操作会产生循环嵌套，已阻止");
+            cfmToastr.error("此操作会产生循环嵌套，已阻止");
             return;
           }
           reorderFolder(data.id, folderId, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getTagName(data.id)}」已移入「${getTagName(folderId)}」`,
           );
         } else {
@@ -25014,12 +25014,12 @@ jQuery(async () => {
           const targetParentId = config.folders[folderId]?.parentId || null;
           // 检查是否会产生循环（移到目标的父级下）
           if (wouldCreateCycle(data.id, targetParentId)) {
-            toastr.error("此操作会产生循环嵌套，已阻止");
+            cfmToastr.error("此操作会产生循环嵌套，已阻止");
             return;
           }
           if (dropZone === "before") {
             reorderFolder(data.id, targetParentId, folderId);
-            toastr.success(`「${getTagName(data.id)}」已排序`);
+            cfmToastr.success(`「${getTagName(data.id)}」已排序`);
           } else {
             // 'after': 找到当前节点的下一个兄弟节点作为 insertBefore
             const siblings = sortFolders(getChildFolders(targetParentId));
@@ -25029,7 +25029,7 @@ jQuery(async () => {
                 ? siblings[curIdx + 1]
                 : null;
             reorderFolder(data.id, targetParentId, nextSiblingId);
-            toastr.success(`「${getTagName(data.id)}」已排序`);
+            cfmToastr.success(`「${getTagName(data.id)}」已排序`);
           }
         }
         renderLeftTree();
@@ -25044,7 +25044,7 @@ jQuery(async () => {
         avatars.forEach((av) => {
           handleCharDropToFolder(av, folderId);
         });
-        toastr.success(
+        cfmToastr.success(
           count > 1
             ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
             : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
@@ -25258,7 +25258,7 @@ jQuery(async () => {
             renderRightPane();
           },
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
                 : `已将「${first}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
@@ -25351,22 +25351,22 @@ jQuery(async () => {
           if (data.id === childId) return;
           if (dropZone === "into") {
             if (wouldCreateCycle(data.id, childId)) {
-              toastr.error("此操作会产生循环嵌套，已阻止");
+              cfmToastr.error("此操作会产生循环嵌套，已阻止");
               return;
             }
             reorderFolder(data.id, childId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getTagName(data.id)}」已移入「${getTagName(childId)}」`,
             );
           } else {
             const targetParentId = config.folders[childId]?.parentId || null;
             if (wouldCreateCycle(data.id, targetParentId)) {
-              toastr.error("此操作会产生循环嵌套，已阻止");
+              cfmToastr.error("此操作会产生循环嵌套，已阻止");
               return;
             }
             if (dropZone === "before") {
               reorderFolder(data.id, targetParentId, childId);
-              toastr.success(`「${getTagName(data.id)}」已排序`);
+              cfmToastr.success(`「${getTagName(data.id)}」已排序`);
             } else {
               const siblings = sortFolders(getChildFolders(targetParentId));
               const curIdx = siblings.indexOf(childId);
@@ -25375,7 +25375,7 @@ jQuery(async () => {
                   ? siblings[curIdx + 1]
                   : null;
               reorderFolder(data.id, targetParentId, nextSiblingId);
-              toastr.success(`「${getTagName(data.id)}」已排序`);
+              cfmToastr.success(`「${getTagName(data.id)}」已排序`);
             }
           }
           renderLeftTree();
@@ -25389,7 +25389,7 @@ jQuery(async () => {
           avatars.forEach((av) => {
             handleCharDropToFolder(av, childId);
           });
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`
               : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(childId)}」`,
@@ -25465,11 +25465,11 @@ jQuery(async () => {
       if (data.type === "folder" && data.id) {
         if (data.id === folderId) return;
         if (wouldCreateCycle(data.id, folderId)) {
-          toastr.error("此操作会产生循环嵌套，已阻止");
+          cfmToastr.error("此操作会产生循环嵌套，已阻止");
           return;
         }
         reorderFolder(data.id, folderId, null);
-        toastr.success(
+        cfmToastr.success(
           `「${getTagName(data.id)}」已移入「${getTagName(folderId)}」`,
         );
         renderLeftTree();
@@ -25483,7 +25483,7 @@ jQuery(async () => {
         avatars.forEach((av) => {
           handleCharDropToFolder(av, folderId);
         });
-        toastr.success(
+        cfmToastr.success(
           count > 1
             ? `已将 ${count} 个角色${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`
             : `已将「${data.name || data.avatar}」${cfmCopyMode ? "复制" : "移动"}到「${getTagName(folderId)}」`,
@@ -26257,7 +26257,7 @@ jQuery(async () => {
       if (window.innerWidth <= 768) {
         $("#cfm-overlay").toggleClass("cfm-topbar-avoid", checked);
       }
-      toastr.success(checked ? "已开启顶部栏避让" : "已关闭顶部栏避让");
+      cfmToastr.success(checked ? "已开启顶部栏避让" : "已关闭顶部栏避让");
     });
     body.append(section);
   }
@@ -26284,7 +26284,7 @@ jQuery(async () => {
       getContext().saveSettingsDebounced();
       section.find(".cfm-lang-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
-      toastr.success(lang === "zh-TW" ? "已切換為繁體中文，重新打開插件後生效" : "已切换为简体中文，重新打开插件后生效");
+      cfmToastr.success(lang === "zh-TW" ? "已切換為繁體中文，重新打開插件後生效" : "已切换为简体中文，重新打开插件后生效");
     });
     body.append(section);
   }
@@ -26363,7 +26363,7 @@ jQuery(async () => {
         const checkedCount = allChecks.filter(":checked").length;
         if (checkedCount === 0) {
           $(this).prop("checked", true);
-          toastr.warning("至少需要保留一个标签页");
+          cfmToastr.warning("至少需要保留一个标签页");
           return;
         }
         saveTabOrder();
@@ -26606,7 +26606,7 @@ jQuery(async () => {
       getContext().saveSettingsDebounced();
       // 重新渲染整个设置面板（保持位置）
       renderConfigBody();
-      toastr.success("已恢复默认布局");
+      cfmToastr.success("已恢复默认布局");
     });
 
     // 初始渲染第一个标签页的子功能
@@ -26661,7 +26661,7 @@ jQuery(async () => {
         float: "已切换为浮动按钮",
         wand: "已切换为魔术棒菜单",
       };
-      toastr.success(modeLabels[newMode] || "已切换");
+      cfmToastr.success(modeLabels[newMode] || "已切换");
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
@@ -26713,7 +26713,7 @@ jQuery(async () => {
       e.preventDefault();
       const tagId = select.val();
       if (!tagId) {
-        toastr.warning("请先选择一个标签");
+        cfmToastr.warning("请先选择一个标签");
         return;
       }
       const parentIds =
@@ -26736,7 +26736,7 @@ jQuery(async () => {
               .map((id) => getTagName(id))
               .join("、")}」的子级`
           : "顶级文件夹";
-      toastr.success(`已将「${getTagName(tagId)}」添加为${parentHint}`);
+      cfmToastr.success(`已将「${getTagName(tagId)}」添加为${parentHint}`);
       renderConfigBody();
     });
     body.append(addSection);
@@ -26767,7 +26767,7 @@ jQuery(async () => {
         .toString()
         .trim();
       if (!input) {
-        toastr.warning("请输入标签名称");
+        cfmToastr.warning("请输入标签名称");
         return;
       }
       const cParentIds =
@@ -26779,7 +26779,7 @@ jQuery(async () => {
         totalCreated += createTagsSiblings(input, cPid, cParentIds.length > 1);
       }
       if (cParentIds.length > 1 && totalCreated > 0) {
-        toastr.success(
+        cfmToastr.success(
           `已在 ${cParentIds.length} 个父级下创建共 ${totalCreated} 个文件夹`,
         );
       }
@@ -27005,7 +27005,7 @@ jQuery(async () => {
         float: "已切换为浮动按钮",
         wand: "已切换为魔术棒菜单",
       };
-      toastr.success(modeLabels[newMode] || "已切换");
+      cfmToastr.success(modeLabels[newMode] || "已切换");
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
@@ -27045,7 +27045,7 @@ jQuery(async () => {
       e.preventDefault();
       const input = createSection.find("#cfm-res-create-input").val().trim();
       if (!input) {
-        toastr.warning("请输入文件夹名称");
+        cfmToastr.warning("请输入文件夹名称");
         return;
       }
       const parentIds =
@@ -27064,9 +27064,9 @@ jQuery(async () => {
           else totalSkipped++;
         }
       }
-      if (totalCreated > 0) toastr.success(`已创建 ${totalCreated} 个文件夹`);
+      if (totalCreated > 0) cfmToastr.success(`已创建 ${totalCreated} 个文件夹`);
       if (totalSkipped > 0)
-        toastr.warning(`${totalSkipped} 个文件夹已存在（跳过）`);
+        cfmToastr.warning(`${totalSkipped} 个文件夹已存在（跳过）`);
       createSection.find("#cfm-res-create-input").val("");
       renderResourceConfigBody(body.empty(), type);
     });
@@ -27358,7 +27358,7 @@ jQuery(async () => {
             showResDeleteConfirmDialog(type, [folderId], () => {
               removeResFolder(type, folderId);
               resConfigSelectedFolderIds.delete(folderId);
-              toastr.success(`已删除${typeLabel}文件夹「${folderId}」`);
+              cfmToastr.success(`已删除${typeLabel}文件夹「${folderId}」`);
               renderResourceConfigBody(body.empty(), type);
             });
           });
@@ -27470,7 +27470,7 @@ jQuery(async () => {
       const newMode = $(this).data("mode");
       if (newMode === getButtonMode()) return;
       switchButtonMode(newMode);
-      toastr.success(
+      cfmToastr.success(
         {
           topbar: "已切换为顶栏按钮",
           float: "已切换为浮动按钮",
@@ -27503,7 +27503,7 @@ jQuery(async () => {
       e.preventDefault();
       const input = createSection.find("#cfm-res-create-input").val().trim();
       if (!input) {
-        toastr.warning("请输入文件夹名称");
+        cfmToastr.warning("请输入文件夹名称");
         return;
       }
       const parentIds =
@@ -27522,9 +27522,9 @@ jQuery(async () => {
           else totalSkipped++;
         }
       }
-      if (totalCreated > 0) toastr.success(`已创建 ${totalCreated} 个文件夹`);
+      if (totalCreated > 0) cfmToastr.success(`已创建 ${totalCreated} 个文件夹`);
       if (totalSkipped > 0)
-        toastr.warning(`${totalSkipped} 个文件夹已存在（跳过）`);
+        cfmToastr.warning(`${totalSkipped} 个文件夹已存在（跳过）`);
       createSection.find("#cfm-res-create-input").val("");
       renderRegexConfigBody(body.empty());
     });
@@ -27616,7 +27616,7 @@ jQuery(async () => {
         }
         resConfigDeleteSelected.clear();
         resConfigDeleteMode = false;
-        toastr.success(`已删除 ${toDelete.length} 个正则文件夹`);
+        cfmToastr.success(`已删除 ${toDelete.length} 个正则文件夹`);
         renderRegexConfigBody(body.empty());
       });
       body.append(deleteBar);
@@ -27751,7 +27751,7 @@ jQuery(async () => {
               return;
             removeRegexFolderConf(folderId);
             resConfigSelectedFolderIds.delete(folderId);
-            toastr.success(`已删除正则文件夹「${getRegexDispName(folderId)}」`);
+            cfmToastr.success(`已删除正则文件夹「${getRegexDispName(folderId)}」`);
             renderRegexConfigBody(body.empty());
           });
         }
@@ -27852,7 +27852,7 @@ jQuery(async () => {
         const text = batchPopup.find("#cfm-regex-batch-textarea").val();
         const treeData = parseBatchText(text);
         if (treeData.length === 0) {
-          toastr.warning("无法解析，请检查格式");
+          cfmToastr.warning("无法解析，请检查格式");
           return;
         }
         let created = 0,
@@ -27888,7 +27888,7 @@ jQuery(async () => {
           for (const node of treeData) processNode(node, batchParentId);
         }
         batchOverlay.remove();
-        toastr.success(
+        cfmToastr.success(
           `已创建 ${created} 个文件夹${skipped > 0 ? `，${skipped} 个跳过` : ""}`,
         );
         renderRegexConfigBody(body.empty());
@@ -27958,7 +27958,7 @@ jQuery(async () => {
       }
       resConfigDeleteSelected.clear();
       resConfigDeleteMode = false;
-      toastr.success(`已删除 ${toDelete.length} 个${typeLabel}文件夹`);
+      cfmToastr.success(`已删除 ${toDelete.length} 个${typeLabel}文件夹`);
       const body = $("#cfm-config-body");
       renderResourceConfigBody(body.empty(), type);
     });
@@ -28086,7 +28086,7 @@ jQuery(async () => {
       const text = popup.find("#cfm-res-batch-textarea").val();
       const treeData = parseBatchText(text);
       if (treeData.length === 0) {
-        toastr.warning("无法解析，请检查格式");
+        cfmToastr.warning("无法解析，请检查格式");
         return;
       }
       let created = 0,
@@ -28128,7 +28128,7 @@ jQuery(async () => {
         for (const node of treeData) processResNode(node, batchParentId);
       }
       overlay.remove();
-      toastr.success(
+      cfmToastr.success(
         `已创建 ${created} 个文件夹${skipped > 0 ? `，${skipped} 个跳过` : ""}`,
       );
       renderConfigBody();
@@ -28278,7 +28278,7 @@ jQuery(async () => {
         getContext().saveSettingsDebounced();
         configSelectedFolderIds.delete(folderId);
         const suffix = alsoDeleteTags ? "（标签已同步删除）" : "";
-        toastr.info(`已移除文件夹「${name}」${suffix}`);
+        cfmToastr.info(`已移除文件夹「${name}」${suffix}`);
         renderConfigBody();
       });
     });
@@ -28453,7 +28453,7 @@ jQuery(async () => {
       cfmDeleteRangeMode = false;
       cfmDeleteMode = false;
       const suffix = alsoDeleteTags ? "（标签已同步删除）" : "";
-      toastr.success(`已删除 ${deletedNames.length} 个文件夹${suffix}`);
+      cfmToastr.success(`已删除 ${deletedNames.length} 个文件夹${suffix}`);
       renderConfigBody();
     });
   }
@@ -28462,7 +28462,7 @@ jQuery(async () => {
   function createTagsSiblings(input, parentFolderId, silent) {
     const names = input.split(/\s+/).filter((s) => s.length > 0);
     if (names.length === 0) {
-      if (!silent) toastr.warning("标签名称不能为空");
+      if (!silent) cfmToastr.warning("标签名称不能为空");
       return 0;
     }
     const created = [];
@@ -28491,7 +28491,7 @@ jQuery(async () => {
       const parentHint = parentFolderId
         ? `「${getTagName(parentFolderId)}」下`
         : "顶级";
-      toastr.success(`已创建 ${created.length} 个文件夹`);
+      cfmToastr.success(`已创建 ${created.length} 个文件夹`);
     }
     return created.length;
   }
@@ -28561,7 +28561,7 @@ jQuery(async () => {
       const text = popup.find("#cfm-batch-textarea").val();
       const tree = parseBatchText(text);
       if (tree.length === 0) {
-        toastr.warning("无法解析，请检查格式");
+        cfmToastr.warning("无法解析，请检查格式");
         return;
       }
       const batchParentIds =
@@ -28573,7 +28573,7 @@ jQuery(async () => {
         batchTotal += executeBatchCreate(tree, bpId, batchParentIds.length > 1);
       }
       if (batchParentIds.length > 1 && batchTotal > 0) {
-        toastr.success(
+        cfmToastr.success(
           `已在 ${batchParentIds.length} 个父级下创建共 ${batchTotal} 个文件夹`,
         );
       }
@@ -28683,7 +28683,7 @@ jQuery(async () => {
     for (const node of nodes) processNode(node, parentId);
     saveConfig(config);
     getContext().saveSettingsDebounced();
-    if (!silent) toastr.success(`已创建 ${count} 个文件夹`);
+    if (!silent) cfmToastr.success(`已创建 ${count} 个文件夹`);
     return count;
   }
 
@@ -28795,7 +28795,7 @@ jQuery(async () => {
           (items) => items.forEach((n) => setItemGroup("presets", n, folderId)),
           () => renderPresetsView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("presets", folderId)}」`,
@@ -28897,17 +28897,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("presets", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("presets", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("presets", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -28925,7 +28925,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderPresetsView();
         } else if (data.type === "preset") {
@@ -28937,7 +28937,7 @@ jQuery(async () => {
           presetNames.forEach((n) => setItemGroup("presets", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderPresetsView();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("presets", folderId)}」`,
@@ -28988,7 +28988,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("presets", n, null)),
         () => renderPresetsView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个预设移出文件夹`
               : `已将「${first}」移出文件夹`,
@@ -29020,7 +29020,7 @@ jQuery(async () => {
           presetNames.forEach((n) => setItemGroup("presets", n, null));
           if (d.multiSelect) clearMultiSelect();
           renderPresetsView();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -29127,7 +29127,7 @@ jQuery(async () => {
               items.forEach((n) => setItemGroup("presets", n, childId)),
             () => renderPresetsView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个预设移入「${getResFolderDisplayName("presets", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("presets", childId)}」`,
@@ -29213,17 +29213,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("presets", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("presets", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("presets", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -29241,7 +29241,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderPresetsView();
           } else if (data.type === "preset") {
@@ -29252,7 +29252,7 @@ jQuery(async () => {
             const pCount = presetNames.length;
             presetNames.forEach((n) => setItemGroup("presets", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               pCount > 1
                 ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("presets", childId)}」`,
@@ -29479,7 +29479,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已应用预设「${p.name}」`);
+          cfmToastr.success(`已应用预设「${p.name}」`);
         });
         row.on("dragstart", (e) => {
           const singleData = { type: "preset", name: p.name, value: p.value };
@@ -29582,11 +29582,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("presets", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("presets", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("presets", data.id)}」已移入「${getResFolderDisplayName("presets", currentFolder)}」`,
           );
           renderPresetsView();
@@ -29598,7 +29598,7 @@ jQuery(async () => {
           const pCount = presetNames.length;
           presetNames.forEach((n) => setItemGroup("presets", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个预设移入「${getResFolderDisplayName("presets", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("presets", currentFolder)}」`,
@@ -29705,7 +29705,7 @@ jQuery(async () => {
           (items) => items.forEach((n) => setItemGroup("themes", n, folderId)),
           () => renderThemesView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("themes", folderId)}」`,
@@ -29791,17 +29791,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("themes", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("themes", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("themes", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -29819,7 +29819,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderThemesView();
         } else if (data.type === "theme") {
@@ -29830,7 +29830,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("themes", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderThemesView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("themes", folderId)}」`,
@@ -29876,7 +29876,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("themes", n, null)),
         () => renderThemesView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个主题移出文件夹`
               : `已将「${first}」移出文件夹`,
@@ -29905,7 +29905,7 @@ jQuery(async () => {
         names.forEach((n) => setItemGroup("themes", n, null));
         if (d.multiSelect) clearMultiSelect();
         renderThemesView();
-        toastr.success(
+        cfmToastr.success(
           names.length > 1
             ? `已将 ${names.length} 个主题移出文件夹`
             : `已将「${d.name}」移出文件夹`,
@@ -30000,7 +30000,7 @@ jQuery(async () => {
             (items) => items.forEach((n) => setItemGroup("themes", n, childId)),
             () => renderThemesView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个主题移入「${getResFolderDisplayName("themes", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("themes", childId)}」`,
@@ -30085,17 +30085,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("themes", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("themes", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("themes", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -30113,7 +30113,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderThemesView();
           } else if (data.type === "theme") {
@@ -30123,7 +30123,7 @@ jQuery(async () => {
                 : [data.name];
             names.forEach((n) => setItemGroup("themes", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               names.length > 1
                 ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("themes", childId)}」`,
@@ -30276,7 +30276,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已应用主题「${name}」`);
+          cfmToastr.success(`已应用主题「${name}」`);
         });
         row.on("dragstart", (e) => {
           const singleData = { type: "theme", name: name };
@@ -30360,11 +30360,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("themes", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("themes", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("themes", data.id)}」已移入「${getResFolderDisplayName("themes", currentFolder)}」`,
           );
           renderThemesView();
@@ -30375,7 +30375,7 @@ jQuery(async () => {
               : [data.name];
           names.forEach((n) => setItemGroup("themes", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个主题移入「${getResFolderDisplayName("themes", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("themes", currentFolder)}」`,
@@ -30470,7 +30470,7 @@ jQuery(async () => {
             items.forEach((n) => setItemGroup("backgrounds", n, folderId)),
           () => renderBackgroundsView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
                 : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
@@ -30561,17 +30561,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("backgrounds", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("backgrounds", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("backgrounds", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -30589,7 +30589,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderBackgroundsView();
         } else if (data.type === "background") {
@@ -30600,7 +30600,7 @@ jQuery(async () => {
           names.forEach((n) => setItemGroup("backgrounds", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderBackgroundsView();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", folderId)}」`
               : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", folderId)}」`,
@@ -30637,7 +30637,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("backgrounds", n, null)),
         () => renderBackgroundsView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个背景移出文件夹`
               : `已将「${getBackgroundDisplayName(first)}」移出文件夹`,
@@ -30666,7 +30666,7 @@ jQuery(async () => {
         names.forEach((n) => setItemGroup("backgrounds", n, null));
         if (d.multiSelect) clearMultiSelect();
         renderBackgroundsView();
-        toastr.success(
+        cfmToastr.success(
           names.length > 1
             ? `已将 ${names.length} 个背景移出文件夹`
             : `已将「${getBackgroundDisplayName(d.name)}」移出文件夹`,
@@ -30747,7 +30747,7 @@ jQuery(async () => {
               items.forEach((n) => setItemGroup("backgrounds", n, childId)),
             () => renderBackgroundsView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
                   : `已将「${getBackgroundDisplayName(first)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
@@ -30834,17 +30834,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("backgrounds", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("backgrounds", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("backgrounds", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -30862,7 +30862,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderBackgroundsView();
           } else if (data.type === "background") {
@@ -30872,7 +30872,7 @@ jQuery(async () => {
                 : [data.name];
             names.forEach((n) => setItemGroup("backgrounds", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               names.length > 1
                 ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", childId)}」`
                 : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", childId)}」`,
@@ -31003,7 +31003,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
+          cfmToastr.success(`已应用背景「${getBackgroundDisplayName(name)}」`);
         });
         row.on("dragstart", (e) => {
           pcDragStart(e, getMultiDragData({ type: "background", name }));
@@ -31076,11 +31076,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("backgrounds", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("backgrounds", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("backgrounds", data.id)}」已移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`,
           );
           renderBackgroundsView();
@@ -31091,7 +31091,7 @@ jQuery(async () => {
               : [data.name];
           names.forEach((n) => setItemGroup("backgrounds", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             names.length > 1
               ? `已将 ${names.length} 个背景移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`
               : `已将「${getBackgroundDisplayName(data.name)}」移入「${getResFolderDisplayName("backgrounds", currentFolder)}」`,
@@ -31443,10 +31443,10 @@ jQuery(async () => {
         msg += `${msg ? "，" : ""}${skippedCount} 个已在目标文件夹或重复`;
       if (failCount > 0) msg += `${msg ? "，" : ""}${failCount} 个失败`;
       if (!msg) msg = "未选择任何世界书";
-      if (failCount > 0) toastr.warning(msg, "角色世界书归类");
+      if (failCount > 0) cfmToastr.warning(msg, "角色世界书归类");
       else if (movedCount > 0 || importedCount > 0)
-        toastr.success(msg, "角色世界书归类");
-      else toastr.info(msg, "角色世界书归类");
+        cfmToastr.success(msg, "角色世界书归类");
+      else cfmToastr.info(msg, "角色世界书归类");
     });
 
     // ESC关闭
@@ -31558,7 +31558,7 @@ jQuery(async () => {
             items.forEach((n) => setItemGroup("worldinfo", n, folderId)),
           () => renderWorldInfoView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
@@ -31659,17 +31659,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("worldinfo", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("worldinfo", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("worldinfo", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -31687,7 +31687,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderWorldInfoView();
         } else if (data.type === "worldinfo") {
@@ -31699,7 +31699,7 @@ jQuery(async () => {
           wiNames.forEach((n) => setItemGroup("worldinfo", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderWorldInfoView();
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", folderId)}」`,
@@ -31766,7 +31766,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("worldinfo", n, null)),
         () => renderWorldInfoView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个世界书移出文件夹`
               : `已将「${first}」移出文件夹`,
@@ -31797,7 +31797,7 @@ jQuery(async () => {
         wiNames.forEach((n) => setItemGroup("worldinfo", n, null));
         if (d.multiSelect) clearMultiSelect();
         renderWorldInfoView();
-        toastr.success(
+        cfmToastr.success(
           wCount > 1
             ? `已将 ${wCount} 个世界书移出文件夹`
             : `已将「${d.name}」移出文件夹`,
@@ -31903,7 +31903,7 @@ jQuery(async () => {
               items.forEach((n) => setItemGroup("worldinfo", n, childId)),
             () => renderWorldInfoView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个世界书移入「${getResFolderDisplayName("worldinfo", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("worldinfo", childId)}」`,
@@ -31989,17 +31989,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("worldinfo", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("worldinfo", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("worldinfo", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -32017,7 +32017,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderWorldInfoView();
           } else if (data.type === "worldinfo") {
@@ -32028,7 +32028,7 @@ jQuery(async () => {
             const wCount = wiNames.length;
             wiNames.forEach((n) => setItemGroup("worldinfo", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               wCount > 1
                 ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", childId)}」`,
@@ -32122,7 +32122,7 @@ jQuery(async () => {
           e.preventDefault();
           e.stopPropagation();
           if (wiIsBound) {
-            toastr.warning("角色关联的世界书不可手动切换");
+            cfmToastr.warning("角色关联的世界书不可手动切换");
             return;
           }
           const newState = !wiActiveSet.has(n);
@@ -32319,11 +32319,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("worldinfo", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("worldinfo", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("worldinfo", data.id)}」已移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`,
           );
           renderWorldInfoView();
@@ -32335,7 +32335,7 @@ jQuery(async () => {
           const wCount = wiNames.length;
           wiNames.forEach((n) => setItemGroup("worldinfo", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个世界书移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("worldinfo", currentFolder)}」`,
@@ -32497,7 +32497,7 @@ jQuery(async () => {
     try {
       const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
       if (!api) {
-        toastr.error("快速回复 API 不可用");
+        cfmToastr.error("快速回复 API 不可用");
         return false;
       }
       if (activate) {
@@ -32512,7 +32512,7 @@ jQuery(async () => {
       return true;
     } catch (e) {
       console.error("[CFM] 切换快速回复集激活状态失败", e);
-      toastr.error("切换快速回复集激活失败");
+      cfmToastr.error("切换快速回复集激活失败");
       return false;
     }
   }
@@ -32665,13 +32665,13 @@ jQuery(async () => {
             });
             if (!response.ok) throw new Error("保存失败");
           }
-          toastr.success(`快速回复 "${label}" 已保存`);
+          cfmToastr.success(`快速回复 "${label}" 已保存`);
         } else {
-          toastr.error("无法找到目标快速回复对象");
+          cfmToastr.error("无法找到目标快速回复对象");
         }
       } catch (err) {
         console.error("[CFM] 保存快速回复失败", err);
-        toastr.error("保存失败: " + err.message);
+        cfmToastr.error("保存失败: " + err.message);
       }
       closeEditor();
     });
@@ -32963,7 +32963,7 @@ jQuery(async () => {
             items.forEach((n) => setItemGroup("quickreply", n, folderId)),
           () => renderQRView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个快速回复集移入「${getResFolderDisplayName("quickreply", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("quickreply", folderId)}」`,
@@ -33059,17 +33059,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("quickreply", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("quickreply", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("quickreply", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -33087,7 +33087,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderQRView();
         } else if (data.type === "quickreply") {
@@ -33099,7 +33099,7 @@ jQuery(async () => {
           qrNames.forEach((n) => setItemGroup("quickreply", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderQRView();
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", folderId)}」`,
@@ -33166,7 +33166,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("quickreply", n, null)),
         () => renderQRView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个快速回复集移出文件夹`
               : `已将「${first}」移出文件夹`,
@@ -33197,7 +33197,7 @@ jQuery(async () => {
         qrNames.forEach((n) => setItemGroup("quickreply", n, null));
         if (d.multiSelect) clearMultiSelect();
         renderQRView();
-        toastr.success(
+        cfmToastr.success(
           wCount > 1
             ? `已将 ${wCount} 个快速回复集移出文件夹`
             : `已将「${d.name}」移出文件夹`,
@@ -33297,7 +33297,7 @@ jQuery(async () => {
               items.forEach((n) => setItemGroup("quickreply", n, childId)),
             () => renderQRView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个快速回复集移入「${getResFolderDisplayName("quickreply", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("quickreply", childId)}」`,
@@ -33383,17 +33383,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("quickreply", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("quickreply", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("quickreply", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -33411,7 +33411,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderQRView();
           } else if (data.type === "quickreply") {
@@ -33422,7 +33422,7 @@ jQuery(async () => {
             const wCount = qrNames.length;
             qrNames.forEach((n) => setItemGroup("quickreply", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               wCount > 1
                 ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", childId)}」`,
@@ -33758,11 +33758,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("quickreply", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("quickreply", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("quickreply", data.id)}」已移入「${getResFolderDisplayName("quickreply", currentFolder)}」`,
           );
           renderQRView();
@@ -33774,7 +33774,7 @@ jQuery(async () => {
           const wCount = qrNames.length;
           qrNames.forEach((n) => setItemGroup("quickreply", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             wCount > 1
               ? `已将 ${wCount} 个快速回复集移入「${getResFolderDisplayName("quickreply", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("quickreply", currentFolder)}」`,
@@ -33810,10 +33810,10 @@ jQuery(async () => {
         setEl.trigger("click");
         return;
       }
-      toastr.info(`快速回复集「${setName}」`);
+      cfmToastr.info(`快速回复集「${setName}」`);
     } catch (e) {
       console.warn("[CFM] 打开快速回复集编辑器失败", e);
-      toastr.info(`快速回复集「${setName}」`);
+      cfmToastr.info(`快速回复集「${setName}」`);
     }
   }
 
@@ -34195,7 +34195,7 @@ jQuery(async () => {
         }
       }
       if (!silent && msgParts.length > 0) {
-        toastr.info(msgParts.join("<br>"), "快速回复分组", {
+        cfmToastr.info(msgParts.join("<br>"), "快速回复分组", {
           timeOut: 4000,
           escapeHtml: false,
         });
@@ -34325,7 +34325,7 @@ jQuery(async () => {
       if (savableSets.length === 0) return;
       const name = overlay.find("#cfm-qr-preset-name-input").val().trim();
       if (!name) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existing = getQrActivePresets().find((p) => p.name === name);
@@ -34333,7 +34333,7 @@ jQuery(async () => {
         if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveQrActivePreset(name, savableSets);
-      toastr.success(
+      cfmToastr.success(
         `已保存激活分组「${name}」（${savableSets.length} 个快速回复集）`,
       );
       overlay.remove();
@@ -34350,7 +34350,7 @@ jQuery(async () => {
       const currentPresets = getQrActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
@@ -34412,7 +34412,7 @@ jQuery(async () => {
           if (autoDetail.chatMatch) reasons.push("当前聊天");
           if (autoDetail.charMatch) reasons.push("当前角色");
           if (autoDetail.presetMatch) reasons.push("当前预设");
-          toastr.info(
+          cfmToastr.info(
             `分组「${preset.name}」已因${reasons.join("和")}绑定自动生效`,
           );
           return;
@@ -34434,14 +34434,14 @@ jQuery(async () => {
             : [...otherApplied.filter((i) => i !== idx), idx];
         extension_settings[extensionName]._qrAppliedPresetIndices = newApplied;
         getContext().saveSettingsDebounced();
-        toastr.success(
+        cfmToastr.success(
           `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
         );
         overlay.remove();
         renderQRView();
       } catch (err) {
         console.error("[CFM] 应用QR分组失败", err);
-        toastr.error("应用分组失败");
+        cfmToastr.error("应用分组失败");
       }
     });
 
@@ -34456,14 +34456,14 @@ jQuery(async () => {
       const currentPresets = getQrActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
         const applied =
           extension_settings[extensionName]._qrAppliedPresetIndices || [];
         if (!applied.includes(idx)) {
-          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          cfmToastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         const { indices: autoIndices, details: autoDetails } =
@@ -34497,14 +34497,14 @@ jQuery(async () => {
         extension_settings[extensionName]._qrAppliedPresetIndices =
           otherApplied;
         getContext().saveSettingsDebounced();
-        toastr.success(
+        cfmToastr.success(
           `已取消应用分组「${preset.name}」（移除 ${removedCount} 个独占快速回复集）`,
         );
         overlay.remove();
         renderQRView();
       } catch (err) {
         console.error("[CFM] 取消应用QR分组失败", err);
-        toastr.error("取消应用分组失败");
+        cfmToastr.error("取消应用分组失败");
       }
     });
 
@@ -34561,7 +34561,7 @@ jQuery(async () => {
           if (action === "global") {
             setQrPresetScope(idx, "global");
             await applyQrPreset(preset.sets);
-            toastr.success(`已将分组「${preset.name}」设为全局应用`);
+            cfmToastr.success(`已将分组「${preset.name}」设为全局应用`);
           } else if (action === "preset") {
             if (!currentPresetName) return;
             const alreadyBound =
@@ -34573,17 +34573,17 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.presetMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前预设，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前预设已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前预设已绑定分组「${preset.name}」`);
               }
             } else {
               if (preset.scope === "global") setQrPresetScope(idx, "bound");
               bindQrPresetToPreset(idx, currentPresetName);
               await applyQrPreset(preset.sets);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
               );
             }
@@ -34598,17 +34598,17 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.charMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前角色，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前角色已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前角色已绑定分组「${preset.name}」`);
               }
             } else {
               if (preset.scope === "global") setQrPresetScope(idx, "bound");
               bindQrPresetToChar(idx, currentChar);
               await applyQrPreset(preset.sets);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
               );
             }
@@ -34625,17 +34625,17 @@ jQuery(async () => {
                 autoApplied.indices.includes(idx) &&
                 autoApplied.details[idx]?.chatMatch
               ) {
-                toastr.info(
+                cfmToastr.info(
                   `分组「${preset.name}」已绑定当前聊天，且已处于应用状态`,
                 );
               } else {
-                toastr.info(`当前聊天已绑定分组「${preset.name}」`);
+                cfmToastr.info(`当前聊天已绑定分组「${preset.name}」`);
               }
             } else {
               if (preset.scope === "global") setQrPresetScope(idx, "bound");
               bindQrPresetToChat(idx, currentChar, currentChatName);
               await applyQrPreset(preset.sets);
-              toastr.success(
+              cfmToastr.success(
                 `已将分组「${preset.name}」绑定到聊天「${currentChatName}」`,
               );
             }
@@ -34725,14 +34725,14 @@ jQuery(async () => {
           const { indices: stillAutoIndices } = getQrAutoApplyPresetIndices();
           if (!stillAutoIndices.includes(idx)) {
             const removedCount = await unapplyQrPresetIndex(idx);
-            toastr.info(
+            cfmToastr.info(
               `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（移除 ${removedCount} 个快速回复集）`,
             );
           } else {
-            toastr.success("已取消绑定（分组仍因其他绑定条件匹配而保持应用）");
+            cfmToastr.success("已取消绑定（分组仍因其他绑定条件匹配而保持应用）");
           }
         } else {
-          toastr.success("已取消绑定");
+          cfmToastr.success("已取消绑定");
         }
         const updated = getQrActivePresets()[idx];
         const stillHasBindings =
@@ -34782,7 +34782,7 @@ jQuery(async () => {
       if (!preset) return;
       if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       deleteQrActivePreset(preset.name);
-      toastr.success(`已删除激活分组「${preset.name}」`);
+      cfmToastr.success(`已删除激活分组「${preset.name}」`);
       overlay.remove();
       showQrPresetPanel();
     });
@@ -34950,14 +34950,14 @@ jQuery(async () => {
     overlay.find(".cfm-edit-popup-confirm").on("click", () => {
       const newName = overlay.find("#cfm-qr-preset-edit-name").val().trim();
       if (!newName) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existingOther = getQrActivePresets().find(
         (p) => p.name === newName && p.name !== preset.name,
       );
       if (existingOther) {
-        toastr.warning(`分组名称「${newName}」已被使用`);
+        cfmToastr.warning(`分组名称「${newName}」已被使用`);
         return;
       }
       const newSets = [];
@@ -34965,12 +34965,12 @@ jQuery(async () => {
         newSets.push($(this).val());
       });
       if (newSets.length === 0) {
-        toastr.warning("请至少选择一个快速回复集");
+        cfmToastr.warning("请至少选择一个快速回复集");
         return;
       }
       if (newName !== preset.name) renameQrActivePreset(preset.name, newName);
       saveQrActivePreset(newName, newSets);
-      toastr.success(
+      cfmToastr.success(
         `已更新激活分组「${newName}」（${newSets.length} 个快速回复集）`,
       );
       overlay.remove();
@@ -35088,7 +35088,7 @@ jQuery(async () => {
     const ctx = getContext();
     const pu = ctx.powerUserSettings;
     if (!pu) {
-      toastr.error("无法获取User设定数据");
+      cfmToastr.error("无法获取User设定数据");
       return;
     }
     if (!pu.personas) pu.personas = {};
@@ -35098,7 +35098,7 @@ jQuery(async () => {
       sourcePersona.avatarId,
     );
     if (!avatarPayload) {
-      toastr.error("复制User失败：无法获取头像资源");
+      cfmToastr.error("复制User失败：无法获取头像资源");
       return;
     }
 
@@ -35129,7 +35129,7 @@ jQuery(async () => {
       body: formData,
     });
     if (!uploadResp.ok) {
-      toastr.error("复制User失败：头像创建失败");
+      cfmToastr.error("复制User失败：头像创建失败");
       return;
     }
 
@@ -35153,7 +35153,7 @@ jQuery(async () => {
       `.cfm-row[data-avatar-id="${$.escapeSelector(newAvatarId)}"]`,
       300,
     );
-    toastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
+    cfmToastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
   }
 
   // 获取当前 persona 列表
@@ -35588,7 +35588,7 @@ jQuery(async () => {
     const ctx = getContext();
     const pu = ctx.powerUserSettings;
     if (!pu) {
-      toastr.error("无法获取User设定数据");
+      cfmToastr.error("无法获取User设定数据");
       return;
     }
 
@@ -35596,19 +35596,19 @@ jQuery(async () => {
       if (!pu.personas) pu.personas = {};
       pu.personas[persona.avatarId] = value || "[未命名User]";
       getContext().saveSettingsDebounced();
-      toastr.success("已更新User名称");
+      cfmToastr.success("已更新User名称");
       refreshPersonaPanelView();
       return;
     }
 
     const entry = ensurePersonaDescriptionEntry(persona.avatarId);
     if (!entry) {
-      toastr.error("无法获取User设定数据");
+      cfmToastr.error("无法获取User设定数据");
       return;
     }
     entry[field] = value;
     getContext().saveSettingsDebounced();
-    toastr.success(field === "title" ? "已更新User标题" : "已更新User具体设定");
+    cfmToastr.success(field === "title" ? "已更新User标题" : "已更新User具体设定");
     refreshPersonaPanelView();
   }
 
@@ -35843,7 +35843,7 @@ jQuery(async () => {
       if (action === "append") {
         const appendValue = String(value || "").trim();
         if (!appendValue) {
-          toastr.warning("新增开场白不能为空");
+          cfmToastr.warning("新增开场白不能为空");
           return;
         }
         const nextGreetings = [...existingGreetings, appendValue];
@@ -35991,19 +35991,19 @@ jQuery(async () => {
           "cfmAltGreetingIndex",
           Math.max((char.data.alternate_greetings || []).length - 1, 0),
         );
-        toastr.success("已新增开场白");
+        cfmToastr.success("已新增开场白");
       } else if (field === "alt_greetings" && action === "delete") {
-        toastr.success("已删除开场白");
+        cfmToastr.success("已删除开场白");
       } else if (field === "first_mes" && action === "clear") {
-        toastr.success("已清空第一条消息");
+        cfmToastr.success("已清空第一条消息");
       } else {
-        toastr.success("已更新角色设定");
+        cfmToastr.success("已更新角色设定");
       }
       renderCharacterDetailSubList(charRow, char);
       charRow.next(".cfm-char-detail-sublist").show();
     } catch (error) {
       console.error("[CFM] 保存角色设定失败:", error);
-      toastr.error("保存角色设定失败");
+      cfmToastr.error("保存角色设定失败");
     }
   }
 
@@ -36026,7 +36026,7 @@ jQuery(async () => {
     setTimeout(() => {
       const btn = $(selector);
       if (!btn.length) {
-        toastr.warning("未找到酒馆原生绑定按钮");
+        cfmToastr.warning("未找到酒馆原生绑定按钮");
         return;
       }
       btn.trigger("click");
@@ -36106,14 +36106,14 @@ jQuery(async () => {
     setTimeout(() => {
       if (triggerToolBtn()) return;
       if (!openPersonaManager()) {
-        toastr.warning("未找到酒馆原生设定生成器按钮");
+        cfmToastr.warning("未找到酒馆原生设定生成器按钮");
         return;
       }
       setTimeout(() => {
         selectPersona(persona.avatarId);
         setTimeout(() => {
           if (!triggerToolBtn()) {
-            toastr.warning("未找到酒馆原生设定生成器按钮");
+            cfmToastr.warning("未找到酒馆原生设定生成器按钮");
           }
         }, 60);
       }, 120);
@@ -36499,7 +36499,7 @@ jQuery(async () => {
             items.forEach((n) => setItemGroup("personas", n, folderId)),
           () => renderPersonasView(),
           (count, first) =>
-            toastr.success(
+            cfmToastr.success(
               count > 1
                 ? `已将 ${count} 个User移入「${getResFolderDisplayName("personas", folderId)}」`
                 : `已将「${first}」移入「${getResFolderDisplayName("personas", folderId)}」`,
@@ -36601,17 +36601,17 @@ jQuery(async () => {
         ) {
           if (zone === "into") {
             if (wouldCreateResCycle("personas", data.id, folderId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             reorderResFolder("personas", data.id, folderId, null);
-            toastr.success(
+            cfmToastr.success(
               `「${getResFolderDisplayName("personas", data.id)}」已移入「${getResFolderDisplayName("personas", folderId)}」`,
             );
           } else {
             const pId = tree[folderId]?.parentId || null;
             if (wouldCreateResCycle("personas", data.id, pId)) {
-              toastr.error("循环嵌套，已阻止");
+              cfmToastr.error("循环嵌套，已阻止");
               return;
             }
             if (zone === "before") {
@@ -36629,7 +36629,7 @@ jQuery(async () => {
                 ci < sibs.length - 1 ? sibs[ci + 1] : null,
               );
             }
-            toastr.success(`「${data.id}」已排序`);
+            cfmToastr.success(`「${data.id}」已排序`);
           }
           renderPersonasView();
         } else if (data.type === "persona") {
@@ -36641,7 +36641,7 @@ jQuery(async () => {
           personaIds.forEach((n) => setItemGroup("personas", n, folderId));
           if (data.multiSelect) clearMultiSelect();
           renderPersonasView();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", folderId)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("personas", folderId)}」`,
@@ -36692,7 +36692,7 @@ jQuery(async () => {
         (items) => items.forEach((n) => setItemGroup("personas", n, null)),
         () => renderPersonasView(),
         (count, first) =>
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个User移出文件夹`
               : `已将「${first}」移出文件夹`,
@@ -36724,7 +36724,7 @@ jQuery(async () => {
           personaIds.forEach((n) => setItemGroup("personas", n, null));
           if (d.multiSelect) clearMultiSelect();
           renderPersonasView();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个User移出文件夹`
               : `已将「${d.name}」移出文件夹`,
@@ -36856,7 +36856,7 @@ jQuery(async () => {
               items.forEach((n) => setItemGroup("personas", n, childId)),
             () => renderPersonasView(),
             (count, first) =>
-              toastr.success(
+              cfmToastr.success(
                 count > 1
                   ? `已将 ${count} 个User移入「${getResFolderDisplayName("personas", childId)}」`
                   : `已将「${first}」移入「${getResFolderDisplayName("personas", childId)}」`,
@@ -36942,17 +36942,17 @@ jQuery(async () => {
           ) {
             if (zone === "into") {
               if (wouldCreateResCycle("personas", data.id, childId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               reorderResFolder("personas", data.id, childId, null);
-              toastr.success(
+              cfmToastr.success(
                 `「${getResFolderDisplayName("personas", data.id)}」已移入「${getResFolderDisplayName("personas", childId)}」`,
               );
             } else {
               const pId = tree[childId]?.parentId || null;
               if (wouldCreateResCycle("personas", data.id, pId)) {
-                toastr.error("循环嵌套，已阻止");
+                cfmToastr.error("循环嵌套，已阻止");
                 return;
               }
               if (zone === "before") {
@@ -36970,7 +36970,7 @@ jQuery(async () => {
                   ci < sibs.length - 1 ? sibs[ci + 1] : null,
                 );
               }
-              toastr.success(`「${data.id}」已排序`);
+              cfmToastr.success(`「${data.id}」已排序`);
             }
             renderPersonasView();
           } else if (data.type === "persona") {
@@ -36981,7 +36981,7 @@ jQuery(async () => {
             const pCount = personaIds.length;
             personaIds.forEach((n) => setItemGroup("personas", n, childId));
             if (data.multiSelect) clearMultiSelect();
-            toastr.success(
+            cfmToastr.success(
               pCount > 1
                 ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", childId)}」`
                 : `已将「${data.name}」移入「${getResFolderDisplayName("personas", childId)}」`,
@@ -37139,7 +37139,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已切换到User「${p.name}」`);
+          cfmToastr.success(`已切换到User「${p.name}」`);
         });
         row.on("dragstart", (e) => {
           const singleData = {
@@ -37235,11 +37235,11 @@ jQuery(async () => {
           data.id !== currentFolder
         ) {
           if (wouldCreateResCycle("personas", data.id, currentFolder)) {
-            toastr.error("循环嵌套，已阻止");
+            cfmToastr.error("循环嵌套，已阻止");
             return;
           }
           reorderResFolder("personas", data.id, currentFolder, null);
-          toastr.success(
+          cfmToastr.success(
             `「${getResFolderDisplayName("personas", data.id)}」已移入「${getResFolderDisplayName("personas", currentFolder)}」`,
           );
           renderPersonasView();
@@ -37251,7 +37251,7 @@ jQuery(async () => {
           const pCount = personaIds.length;
           personaIds.forEach((n) => setItemGroup("personas", n, currentFolder));
           if (data.multiSelect) clearMultiSelect();
-          toastr.success(
+          cfmToastr.success(
             pCount > 1
               ? `已将 ${pCount} 个User移入「${getResFolderDisplayName("personas", currentFolder)}」`
               : `已将「${data.name}」移入「${getResFolderDisplayName("personas", currentFolder)}」`,
@@ -37478,7 +37478,7 @@ jQuery(async () => {
             .find(".cfm-rv-item-active")
             .removeClass("cfm-rv-item-active");
           row.addClass("cfm-rv-item-active");
-          toastr.success(`已切换到User「${p.name}」`);
+          cfmToastr.success(`已切换到User「${p.name}」`);
         });
         row.on("dragstart", (e) => {
           pcDragStart(e, {
@@ -37501,7 +37501,7 @@ jQuery(async () => {
     if (!files || files.length === 0) return;
     const globalScripts = extension_settings.regex;
     if (!Array.isArray(globalScripts)) {
-      toastr.error("无法访问全局正则脚本列表");
+      cfmToastr.error("无法访问全局正则脚本列表");
       return;
     }
     let importedCount = 0;
@@ -37512,7 +37512,7 @@ jQuery(async () => {
         const text = await file.text();
         parsed = JSON.parse(text);
       } catch (e) {
-        toastr.warning(`无法解析文件 "${file.name}"，请选择有效的 JSON 文件`);
+        cfmToastr.warning(`无法解析文件 "${file.name}"，请选择有效的 JSON 文件`);
         continue;
       }
       const toImport = Array.isArray(parsed) ? parsed : [parsed];
@@ -37536,15 +37536,15 @@ jQuery(async () => {
     if (importedCount > 0) {
       getContext().saveSettingsDebounced();
       if (warnings.length > 0) {
-        toastr.success(
+        cfmToastr.success(
           `已导入 ${importedCount} 个正则脚本（有 ${warnings.length} 条警告）`,
         );
         console.warn(`[CFM] 正则导入报告\n${warnings.join("\n")}`);
       } else {
-        toastr.success(`已导入 ${importedCount} 个正则脚本`);
+        cfmToastr.success(`已导入 ${importedCount} 个正则脚本`);
       }
     } else {
-      toastr.warning("没有成功导入任何正则脚本");
+      cfmToastr.warning("没有成功导入任何正则脚本");
     }
     renderRegexView();
   }
@@ -37555,7 +37555,7 @@ jQuery(async () => {
       (s) => s.id && scriptIds.includes(s.id),
     );
     if (toExport.length === 0) {
-      toastr.warning("未找到选中的正则脚本");
+      cfmToastr.warning("未找到选中的正则脚本");
       return;
     }
     try {
@@ -37577,10 +37577,10 @@ jQuery(async () => {
           "application/json",
         );
       }
-      toastr.success(`已导出 ${toExport.length} 个正则脚本`);
+      cfmToastr.success(`已导出 ${toExport.length} 个正则脚本`);
     } catch (err) {
       console.error("[CFM] 正则导出失败:", err);
-      toastr.error("导出失败: " + err.message);
+      cfmToastr.error("导出失败: " + err.message);
     }
   }
 
@@ -37858,7 +37858,7 @@ jQuery(async () => {
             .find('input[name="cfm-regex-transfer-target"]:checked')
             .val() || "";
         if (!targetType) {
-          toastr.warning("当前没有可用的目标位置");
+          cfmToastr.warning("当前没有可用的目标位置");
           return;
         }
         closeDialog({
@@ -38014,7 +38014,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         if (selectedTargetIndex === null) {
-          toastr.warning("请先选择一个插入位置");
+          cfmToastr.warning("请先选择一个插入位置");
           return;
         }
         try {
@@ -38024,7 +38024,7 @@ jQuery(async () => {
           closeDialog();
         } catch (err) {
           console.error("[CFM] 互通正则插入失败:", err);
-          toastr.error("保存插入位置失败: " + (err?.message || err));
+          cfmToastr.error("保存插入位置失败: " + (err?.message || err));
         }
       });
 
@@ -38038,7 +38038,7 @@ jQuery(async () => {
           closeDialog();
         } catch (err) {
           console.error("[CFM] 跳过互通正则插入失败:", err);
-          toastr.error("跳过失败: " + (err?.message || err));
+          cfmToastr.error("跳过失败: " + (err?.message || err));
         }
       });
 
@@ -38060,7 +38060,7 @@ jQuery(async () => {
     const { sourceScope, selectedIds = [] } = options || {};
     const uniqueIds = [...new Set((selectedIds || []).filter(Boolean))];
     if (!sourceScope || uniqueIds.length === 0) {
-      toastr.warning("请先选择要移动/复制的正则脚本");
+      cfmToastr.warning("请先选择要移动/复制的正则脚本");
       return;
     }
 
@@ -38070,7 +38070,7 @@ jQuery(async () => {
       selectedIdSet.has(script?.id),
     );
     if (selectedScripts.length === 0) {
-      toastr.warning("未找到选中的正则脚本");
+      cfmToastr.warning("未找到选中的正则脚本");
       return;
     }
 
@@ -38102,7 +38102,7 @@ jQuery(async () => {
       };
     } else if (transferConfig.targetType === "char") {
       if (!currentCharAvatar) {
-        toastr.warning("当前没有可用的目标角色");
+        cfmToastr.warning("当前没有可用的目标角色");
         return;
       }
       targetScope = {
@@ -38112,7 +38112,7 @@ jQuery(async () => {
       };
     } else if (transferConfig.targetType === "preset") {
       if (!currentPresetName) {
-        toastr.warning("当前没有可用的目标预设");
+        cfmToastr.warning("当前没有可用的目标预设");
         return;
       }
       targetScope = {
@@ -38122,12 +38122,12 @@ jQuery(async () => {
     }
 
     if (!targetScope) {
-      toastr.warning("未能确定目标位置");
+      cfmToastr.warning("未能确定目标位置");
       return;
     }
 
     if (isSameRegexScopeList(sourceScope, targetScope)) {
-      toastr.warning("来源与目标相同，请选择其他位置");
+      cfmToastr.warning("来源与目标相同，请选择其他位置");
       return;
     }
 
@@ -38208,7 +38208,7 @@ jQuery(async () => {
       await syncNativeRegexState();
       rerenderCurrentView();
       if (currentResourceType === "regex") renderRegexView();
-      toastr.success(
+      cfmToastr.success(
         `已${isCopyMode ? "复制" : "移动"} ${insertedScripts.length} 个正则脚本到${getRegexTransferScopeLabel(targetScope)}`,
       );
     };
@@ -38229,11 +38229,11 @@ jQuery(async () => {
   async function startGlobalRegexTransferFlow() {
     const selectedIds = Array.from(cfmMultiSelected || []).filter(Boolean);
     if (!cfmMultiSelectMode) {
-      toastr.warning("请先开启多选模式，再选择要互通的正则脚本");
+      cfmToastr.warning("请先开启多选模式，再选择要互通的正则脚本");
       return;
     }
     if (selectedIds.length === 0) {
-      toastr.warning("请先选择要移动/复制的正则脚本");
+      cfmToastr.warning("请先选择要移动/复制的正则脚本");
       return;
     }
     await executeRegexTransferFlow({
@@ -38258,11 +38258,11 @@ jQuery(async () => {
       selectedIds = [],
     } = options || {};
     if (!cfmRegexBatchMode) {
-      toastr.warning("请先开启批量操作，再选择要互通的正则脚本");
+      cfmToastr.warning("请先开启批量操作，再选择要互通的正则脚本");
       return;
     }
     if (!selectedIds.length) {
-      toastr.warning("请先选择要移动/复制的正则脚本");
+      cfmToastr.warning("请先选择要移动/复制的正则脚本");
       return;
     }
     await executeRegexTransferFlow({
@@ -38289,7 +38289,7 @@ jQuery(async () => {
     await syncNativeRegexState();
     renderRegexView();
     if (successMessage) {
-      toastr.success(successMessage);
+      cfmToastr.success(successMessage);
     }
   }
 
@@ -38396,7 +38396,7 @@ jQuery(async () => {
               globalFavorites: nextFavorites,
             });
             renderRegexView();
-            toastr.info("已取消新建正则");
+            cfmToastr.info("已取消新建正则");
           },
         });
       },
@@ -38466,7 +38466,7 @@ jQuery(async () => {
         closeDialog();
       } catch (err) {
         console.error("[CFM] 取消新建局部正则失败:", err);
-        toastr.error("取消新建失败: " + (err?.message || err));
+        cfmToastr.error("取消新建失败: " + (err?.message || err));
       }
     }
 
@@ -38540,7 +38540,7 @@ jQuery(async () => {
       e.preventDefault();
       e.stopPropagation();
       if (selectedTargetIndex === null) {
-        toastr.warning("请先选择一个插入位置");
+        cfmToastr.warning("请先选择一个插入位置");
         return;
       }
       const newOrder = moveRegexScriptInArray(
@@ -38549,7 +38549,7 @@ jQuery(async () => {
         selectedTargetIndex,
       );
       if (!newOrder) {
-        toastr.warning("未找到新建的正则脚本，无法调整位置");
+        cfmToastr.warning("未找到新建的正则脚本，无法调整位置");
         closeDialog();
         return;
       }
@@ -38560,7 +38560,7 @@ jQuery(async () => {
         closeDialog();
       } catch (err) {
         console.error("[CFM] 保存局部正则插入位置失败:", err);
-        toastr.error("保存插入位置失败: " + (err?.message || err));
+        cfmToastr.error("保存插入位置失败: " + (err?.message || err));
       }
     });
 
@@ -38574,7 +38574,7 @@ jQuery(async () => {
         closeDialog();
       } catch (err) {
         console.error("[CFM] 跳过局部正则插入排序失败:", err);
-        toastr.error("跳过失败: " + (err?.message || err));
+        cfmToastr.error("跳过失败: " + (err?.message || err));
       }
     });
 
@@ -38594,13 +38594,13 @@ jQuery(async () => {
   function createGlobalRegexFromManager() {
     ensureResourceSettings();
     if (cfmRegexCreateMonitorTimer) {
-      toastr.info("正在等待当前新建正则完成");
+      cfmToastr.info("正在等待当前新建正则完成");
       return;
     }
 
     const nativeCreateBtn = $("#open_regex_editor");
     if (!nativeCreateBtn.length) {
-      toastr.warning(
+      cfmToastr.warning(
         "未找到原生全局正则编辑器入口，请先确保原生正则功能已完成加载",
       );
       return;
@@ -38618,13 +38618,13 @@ jQuery(async () => {
   function createCharScopedRegexFromManager(avatar, charName) {
     ensureResourceSettings();
     if (cfmRegexCreateMonitorTimer) {
-      toastr.info("正在等待当前新建正则完成");
+      cfmToastr.info("正在等待当前新建正则完成");
       return;
     }
 
     const nativeCreateBtn = $("#open_scoped_editor");
     if (!nativeCreateBtn.length) {
-      toastr.warning(
+      cfmToastr.warning(
         "未找到原生角色正则编辑器入口，请先确保原生正则功能已完成加载",
       );
       return;
@@ -38654,13 +38654,13 @@ jQuery(async () => {
           onApply: async (newOrder) => {
             await saveCharRegexScripts(avatar, newOrder);
             rerenderCurrentView();
-            toastr.success(
+            cfmToastr.success(
               `角色「${charName || "当前角色"}」的新正则插入位置已保存`,
             );
           },
           onSkip: () => {
             rerenderCurrentView();
-            toastr.success("新正则已创建，顺序保持在最后");
+            cfmToastr.success("新正则已创建，顺序保持在最后");
           },
           onCancel: async () => {
             const latestScripts = getScripts();
@@ -38669,7 +38669,7 @@ jQuery(async () => {
             );
             await saveCharRegexScripts(avatar, nextScripts);
             rerenderCurrentView();
-            toastr.info(`已取消角色「${charName || "当前角色"}」的新正则`);
+            cfmToastr.info(`已取消角色「${charName || "当前角色"}」的新正则`);
           },
         });
       },
@@ -38683,13 +38683,13 @@ jQuery(async () => {
   function createPresetRegexFromManager(presetName) {
     ensureResourceSettings();
     if (cfmRegexCreateMonitorTimer) {
-      toastr.info("正在等待当前新建正则完成");
+      cfmToastr.info("正在等待当前新建正则完成");
       return;
     }
 
     const nativeCreateBtn = $("#open_preset_editor");
     if (!nativeCreateBtn.length) {
-      toastr.warning(
+      cfmToastr.warning(
         "未找到原生预设正则编辑器入口，请先确保原生正则功能已完成加载",
       );
       return;
@@ -38713,13 +38713,13 @@ jQuery(async () => {
           onApply: async (newOrder) => {
             await savePresetRegexScripts(newOrder);
             rerenderCurrentView();
-            toastr.success(
+            cfmToastr.success(
               `预设「${presetName || "当前预设"}」的新正则插入位置已保存`,
             );
           },
           onSkip: () => {
             rerenderCurrentView();
-            toastr.success("新正则已创建，顺序保持在最后");
+            cfmToastr.success("新正则已创建，顺序保持在最后");
           },
           onCancel: async () => {
             const latestScripts = getScripts();
@@ -38728,7 +38728,7 @@ jQuery(async () => {
             );
             await savePresetRegexScripts(nextScripts);
             rerenderCurrentView();
-            toastr.info(`已取消预设「${presetName || "当前预设"}」的新正则`);
+            cfmToastr.info(`已取消预设「${presetName || "当前预设"}」的新正则`);
           },
         });
       },
@@ -39094,7 +39094,7 @@ jQuery(async () => {
       if (enabledIds.length === 0) return;
       const name = overlay.find("#cfm-regex-preset-name-input").val().trim();
       if (!name) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existing = getRegexActivePresets().find((p) => p.name === name);
@@ -39102,7 +39102,7 @@ jQuery(async () => {
         if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveRegexActivePreset(name, enabledIds);
-      toastr.success(
+      cfmToastr.success(
         `已保存激活分组「${name}」（${enabledIds.length} 个正则脚本）`,
       );
       overlay.remove();
@@ -39119,7 +39119,7 @@ jQuery(async () => {
       const currentPresets = getRegexActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
@@ -39199,14 +39199,14 @@ jQuery(async () => {
           newApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
+        cfmToastr.success(
           `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
         );
         overlay.remove();
         renderRegexView();
       } catch (err) {
         console.error("[CFM] 应用正则分组失败", err);
-        toastr.error("应用分组失败");
+        cfmToastr.error("应用分组失败");
       }
     });
 
@@ -39221,14 +39221,14 @@ jQuery(async () => {
       const currentPresets = getRegexActivePresets();
       const preset = currentPresets[idx];
       if (!preset) {
-        toastr.error("分组不存在");
+        cfmToastr.error("分组不存在");
         return;
       }
       try {
         const applied =
           extension_settings[extensionName]._regexAppliedPresetIndices || [];
         if (!applied.includes(idx)) {
-          toastr.warning(`分组「${preset.name}」当前未处于应用状态`);
+          cfmToastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
         // 计算其他已应用分组覆盖的脚本
@@ -39256,14 +39256,14 @@ jQuery(async () => {
           otherApplied;
         getContext().saveSettingsDebounced();
 
-        toastr.success(
+        cfmToastr.success(
           `已取消应用分组「${preset.name}」（禁用 ${removedCount} 个独占脚本）`,
         );
         overlay.remove();
         renderRegexView();
       } catch (err) {
         console.error("[CFM] 取消应用正则分组失败", err);
-        toastr.error("取消应用分组失败");
+        cfmToastr.error("取消应用分组失败");
       }
     });
 
@@ -39302,7 +39302,7 @@ jQuery(async () => {
           applied.filter((i) => i !== idx);
       }
       deleteRegexActivePreset(preset.name);
-      toastr.success(`已删除激活分组「${preset.name}」`);
+      cfmToastr.success(`已删除激活分组「${preset.name}」`);
       overlay.remove();
       showRegexPresetPanel();
     });
@@ -39480,14 +39480,14 @@ jQuery(async () => {
     overlay.find(".cfm-edit-popup-confirm").on("click", () => {
       const newName = overlay.find("#cfm-regex-preset-edit-name").val().trim();
       if (!newName) {
-        toastr.warning("请输入分组名称");
+        cfmToastr.warning("请输入分组名称");
         return;
       }
       const existingOther = getRegexActivePresets().find(
         (p) => p.name === newName && p.name !== preset.name,
       );
       if (existingOther) {
-        toastr.warning(`分组名称「${newName}」已被使用`);
+        cfmToastr.warning(`分组名称「${newName}」已被使用`);
         return;
       }
       const newScripts = [];
@@ -39495,14 +39495,14 @@ jQuery(async () => {
         newScripts.push($(this).val());
       });
       if (newScripts.length === 0) {
-        toastr.warning("请至少选择一个正则脚本");
+        cfmToastr.warning("请至少选择一个正则脚本");
         return;
       }
       if (newName !== preset.name) {
         renameRegexActivePreset(preset.name, newName);
       }
       saveRegexActivePreset(newName, newScripts);
-      toastr.success(
+      cfmToastr.success(
         `已更新激活分组「${newName}」（${newScripts.length} 个正则脚本）`,
       );
       overlay.remove();
@@ -39571,7 +39571,7 @@ jQuery(async () => {
           closeDialog();
         } catch (err) {
           console.error("[CFM] 取消新建全局正则失败:", err);
-          toastr.error("取消新建失败: " + (err?.message || err));
+          cfmToastr.error("取消新建失败: " + (err?.message || err));
         }
       };
 
@@ -39643,7 +39643,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         if (selectedTargetIndex === null) {
-          toastr.warning("请先选择一个插入位置");
+          cfmToastr.warning("请先选择一个插入位置");
           return;
         }
         const newOrder = moveRegexScriptToIndex(
@@ -39651,7 +39651,7 @@ jQuery(async () => {
           selectedTargetIndex,
         );
         if (!newOrder) {
-          toastr.warning("未找到新建的正则脚本，无法调整位置");
+          cfmToastr.warning("未找到新建的正则脚本，无法调整位置");
           closeDialog();
           return;
         }
@@ -39663,7 +39663,7 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         renderRegexView();
-        toastr.success("新正则已创建，顺序保持在最后");
+        cfmToastr.success("新正则已创建，顺序保持在最后");
         closeDialog();
       });
 
@@ -40157,7 +40157,7 @@ jQuery(async () => {
           const firstName =
             globalScripts.find((sc) => sc.id === firstId)?.scriptName ||
             firstId;
-          toastr.success(
+          cfmToastr.success(
             count > 1
               ? `已将 ${count} 个脚本移入「${fname}」`
               : `已将「${firstName}」移入「${fname}」`,
@@ -40206,7 +40206,7 @@ jQuery(async () => {
           return;
         folderTree[folderId].displayName = newName.trim();
         getContext().saveSettingsDebounced();
-        toastr.success(`文件夹已重命名为「${newName.trim()}」`);
+        cfmToastr.success(`文件夹已重命名为「${newName.trim()}」`);
         renderRegexView();
       });
       node.on("click", (e) => {
@@ -40238,7 +40238,7 @@ jQuery(async () => {
           if (data.multiSelect) clearMultiSelect();
           getContext().saveSettingsDebounced();
           const fname = folderTree[folderId]?.displayName || folderId;
-          toastr.success(
+          cfmToastr.success(
             scriptIds.length > 1
               ? `已将 ${scriptIds.length} 个脚本移入「${fname}」`
               : `已将「${data.scriptName}」移入「${fname}」`,
@@ -40320,7 +40320,7 @@ jQuery(async () => {
         });
         if (data.multiSelect) clearMultiSelect();
         getContext().saveSettingsDebounced();
-        toastr.success(
+        cfmToastr.success(
           scriptIds.length > 1
             ? `已将 ${scriptIds.length} 个脚本移出文件夹`
             : `已将「${data.scriptName}」移出文件夹`,
@@ -40458,7 +40458,7 @@ jQuery(async () => {
             });
             if (data.multiSelect) clearMultiSelect();
             getContext().saveSettingsDebounced();
-            toastr.success(
+            cfmToastr.success(
               scriptIds.length > 1
                 ? `已将 ${scriptIds.length} 个脚本移入「${childDisplayName}」`
                 : `已将「${data.scriptName}」移入「${childDisplayName}」`,
@@ -40682,7 +40682,7 @@ jQuery(async () => {
             }
           }
           if (!script) {
-            toastr.warning("未找到对应的正则脚本");
+            cfmToastr.warning("未找到对应的正则脚本");
             return;
           }
 
@@ -40717,7 +40717,7 @@ jQuery(async () => {
             }
           } catch (err) {
             console.error("[CFM] 正则toggle保存失败:", err);
-            toastr.error("保存失败: " + err.message);
+            cfmToastr.error("保存失败: " + err.message);
             // 回滚
             script.disabled = !script.disabled;
             return;
@@ -40760,7 +40760,7 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            toastr.warning("未找到对应的正则脚本编辑器，请确认脚本是否存在");
+            cfmToastr.warning("未找到对应的正则脚本编辑器，请确认脚本是否存在");
           }
         },
       );
@@ -40937,7 +40937,7 @@ jQuery(async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toastr.success(`已导出${scopeLabel}数据`);
+    cfmToastr.success(`已导出${scopeLabel}数据`);
   }
 
   async function executeImport(jsonData) {
@@ -41423,7 +41423,7 @@ jQuery(async () => {
         try {
           const jsonData = JSON.parse(ev.target.result);
           if (!jsonData.version || !jsonData.pluginName) {
-            toastr.error("无效的备份文件");
+            cfmToastr.error("无效的备份文件");
             return;
           }
           const resultArea = popup.find("#cfm-backup-import-result");
@@ -41466,7 +41466,7 @@ jQuery(async () => {
           else if (currentResourceType === "regex") renderRegexView();
           else if (currentResourceType === "quickreply") renderQRView();
         } catch (err) {
-          toastr.error("导入失败：" + err.message);
+          cfmToastr.error("导入失败：" + err.message);
           console.error("[CFM] Import error:", err);
         }
       };
@@ -42510,7 +42510,7 @@ jQuery(async () => {
       e.stopPropagation();
       const presetName = getCurrentPresetName();
       if (!presetName) {
-        toastr.warning("请先选择一个预设");
+        cfmToastr.warning("请先选择一个预设");
         return;
       }
       await showPresetDetailGroupPanel(presetName);
