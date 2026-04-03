@@ -107,6 +107,11 @@ jQuery(async () => {
     error: (msg, title, ...rest) => toastr.error(cfmT(msg), title ? cfmT(title) : title, ...rest),
   };
 
+  // CFM 专用 confirm 包装（自动简繁转换）
+  function cfmConfirm(msg) {
+    return confirm(cfmT(msg));
+  }
+
   // ==================== 全局 MutationObserver：自动简繁转换 ====================
   // 监听 body 下 CFM 相关 overlay/popup 的插入与内容变化，自动转换文本
   (function initCfmS2tObserver() {
@@ -1476,7 +1481,7 @@ jQuery(async () => {
       const templates = getBatchTemplates(type);
       if (
         templates[idx] &&
-        confirm(`确定删除模板「${templates[idx].name}」？`)
+        cfmConfirm(`确定删除模板「${templates[idx].name}」？`)
       ) {
         deleteBatchTemplate(type, idx);
         toastr.success("模板已删除");
@@ -3899,7 +3904,7 @@ jQuery(async () => {
     // 恢复默认
     overlay.find("#cfm-theme-reset-all").on("click", function () {
       if (
-        !confirm(
+        !cfmConfirm(
           `确定要恢复当前主题「${themeName === "__default__" ? "默认" : themeName}」的插件外观为默认吗？\n这将删除该主题的所有自定义样式设置。`,
         )
       )
@@ -5595,7 +5600,7 @@ jQuery(async () => {
                     : "世界书";
 
     // 确认弹窗
-    const confirmed = confirm(
+    const confirmed = cfmConfirm(
       `确定要删除 ${count} 个${typeLabel}吗？\n此操作不可撤销！`,
     );
     if (!confirmed) return;
@@ -6231,7 +6236,7 @@ jQuery(async () => {
     dialog.find("#cfm-defbg-clear").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!window.confirm("确认清除默认背景吗？")) return;
+      if (!cfmConfirm("确认清除默认背景吗？")) return;
       extension_settings[extensionName].defaultBackground = "";
       getContext().saveSettingsDebounced();
       toastr.info("已清除默认背景");
@@ -6404,7 +6409,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -6729,7 +6734,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", orient: "", clear: true });
       });
@@ -7689,7 +7694,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -7881,7 +7886,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -8825,7 +8830,7 @@ jQuery(async () => {
       }
       const existing = getWiActivePresets().find((p) => p.name === name);
       if (existing) {
-        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+        if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveWiActivePreset(name, savableBooks);
       toastr.success(
@@ -8991,7 +8996,7 @@ jQuery(async () => {
           if (detail.presetMatch)
             reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
           const confirmMsg = `分组「${preset.name}」当前因${reasons.join(" 和 ")}自动应用，确认取消应用吗？`;
-          if (!confirm(confirmMsg)) return;
+          if (!cfmConfirm(confirmMsg)) return;
         }
         // 计算其他已应用分组覆盖的世界书
         const otherApplied = applied.filter(
@@ -9249,7 +9254,7 @@ jQuery(async () => {
         const bindId = entry.data("bind-id");
         const displayName = entry.find(".cfm-wi-bind-entry-name").text();
         if (
-          !confirm(
+          !cfmConfirm(
             `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : bindType === "chat" ? "聊天" : "预设"}「${displayName}」的绑定？`,
           )
         )
@@ -9336,7 +9341,7 @@ jQuery(async () => {
       const currentPresets = getWiActivePresets();
       const preset = currentPresets[idx];
       if (!preset) return;
-      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       deleteWiActivePreset(preset.name);
       toastr.success(`已删除激活分组「${preset.name}」`);
       // 刷新面板
@@ -9708,7 +9713,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -9904,7 +9909,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve({ note: "", clear: true });
       });
@@ -11482,7 +11487,7 @@ jQuery(async () => {
   async function deleteSinglePreset(presetName) {
     const name = String(presetName || "").trim();
     if (!name) return;
-    if (!confirm(`确定删除预设「${name}」？`)) return;
+    if (!cfmConfirm(`确定删除预设「${name}」？`)) return;
 
     const pm = getContext().getPresetManager();
     if (!pm) {
@@ -11944,7 +11949,7 @@ jQuery(async () => {
       const entry = worldInfoData.entries[normalizedUid];
       const entryLabel =
         entry?.comment || (entry?.key || [])[0] || `UID ${normalizedUid}`;
-      const confirmed = confirm(
+      const confirmed = cfmConfirm(
         `确定要删除条目「${entryLabel}」吗？\n此操作不可撤销！`,
       );
       if (!confirmed) return false;
@@ -12045,7 +12050,7 @@ jQuery(async () => {
       return 0;
     }
 
-    const confirmed = confirm(
+    const confirmed = cfmConfirm(
       `确定要删除选中的 ${targetUids.length} 个条目吗？\n此操作不可撤销！`,
     );
     if (!confirmed) return 0;
@@ -12392,7 +12397,7 @@ jQuery(async () => {
         (p) => p.name === name,
       );
       if (existing) {
-        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+        if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       savePresetDetailActivePreset(presetName, name, enabledIds);
       toastr.success(
@@ -12592,7 +12597,7 @@ jQuery(async () => {
       const currentPresets = getPresetDetailActivePresets(presetName);
       const preset = currentPresets[idx];
       if (!preset) return;
-      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       const applied = getPresetDetailAppliedPresetIndices(presetName);
       if (applied.includes(idx)) {
         setPresetDetailAppliedPresetIndices(
@@ -12770,7 +12775,7 @@ jQuery(async () => {
         if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm(`确认清空${field.label}吗？`)) return;
+        if (!cfmConfirm(`确认清空${field.label}吗？`)) return;
         close("");
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
@@ -13229,7 +13234,7 @@ jQuery(async () => {
       return;
     }
 
-    if (!confirm(`确定删除预设条目「${field.label}」？`)) return;
+    if (!cfmConfirm(`确定删除预设条目「${field.label}」？`)) return;
 
     const promptKey = fieldKey.slice("prompts.".length);
     const promptList = ensurePresetPromptList(presetData);
@@ -17155,7 +17160,7 @@ jQuery(async () => {
             return;
           }
           if (
-            !confirm(
+            !cfmConfirm(
               `确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`,
             )
           )
@@ -17827,7 +17832,7 @@ jQuery(async () => {
             return;
           }
           if (
-            !confirm(
+            !cfmConfirm(
               `确定要删除选中的 ${toDeleteIds.length} 个正则脚本吗？\n此操作不可撤销！`,
             )
           )
@@ -18264,7 +18269,7 @@ jQuery(async () => {
         }
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm("确认清除备注吗？")) return;
+        if (!cfmConfirm("确认清除备注吗？")) return;
         overlay.remove();
         resolve("");
       });
@@ -19426,7 +19431,7 @@ jQuery(async () => {
           return;
         }
         if (
-          !confirm(
+          !cfmConfirm(
             `确定要删除选中的 ${toDelete.length} 条聊天记录吗？\n此操作不可撤销！`,
           )
         )
@@ -19557,7 +19562,7 @@ jQuery(async () => {
       // 删除
       chatRow.find(".cfm-chat-delete-btn").on("click", async (e) => {
         e.stopPropagation();
-        if (!confirm(`确定要删除聊天记录「${chatName}」吗？\n此操作不可撤销！`))
+        if (!cfmConfirm(`确定要删除聊天记录「${chatName}」吗？\n此操作不可撤销！`))
           return;
         if (await deleteChatFile(avatar, chatName)) {
           toastr.success(`已删除: ${chatName}`);
@@ -26163,7 +26168,7 @@ jQuery(async () => {
     // 清除按钮
     iconSection.find("#cfm-icon-clear").on("click touchend", (e) => {
       e.preventDefault();
-      if (!window.confirm("确认清除自定义图标吗？")) return;
+      if (!cfmConfirm("确认清除自定义图标吗？")) return;
       $("#cfm-icon-url-input").val("");
       extension_settings[extensionName].customTopbarIcon = "";
       getContext().saveSettingsDebounced();
@@ -26538,7 +26543,7 @@ jQuery(async () => {
     section.find(".cfm-layout-reset-btn").on("click touchend", function (e) {
       e.preventDefault();
       if (
-        !confirm(
+        !cfmConfirm(
           "确定要恢复默认布局吗？当前的标签页顺序和子功能开关设置将被重置。",
         )
       )
@@ -27739,7 +27744,7 @@ jQuery(async () => {
             e.preventDefault();
             e.stopPropagation();
             if (
-              !confirm(
+              !cfmConfirm(
                 `确定删除文件夹「${getRegexDispName(folderId)}」吗？\n子文件夹将提升到上级，脚本将变为未归类。`,
               )
             )
@@ -34325,7 +34330,7 @@ jQuery(async () => {
       }
       const existing = getQrActivePresets().find((p) => p.name === name);
       if (existing) {
-        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+        if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveQrActivePreset(name, savableSets);
       toastr.success(
@@ -34473,7 +34478,7 @@ jQuery(async () => {
           if (detail.presetMatch)
             reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
           const confirmMsg = `分组「${preset.name}」当前因${reasons.join(" 和 ")}自动应用，确认取消应用吗？`;
-          if (!confirm(confirmMsg)) return;
+          if (!cfmConfirm(confirmMsg)) return;
         }
         const otherApplied = applied.filter(
           (i) => i !== idx && currentPresets[i],
@@ -34705,7 +34710,7 @@ jQuery(async () => {
         const bindId = entry.data("bind-id");
         const displayName = entry.find(".cfm-wi-bind-entry-name").text();
         if (
-          !confirm(
+          !cfmConfirm(
             `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : bindType === "chat" ? "聊天" : "预设"}「${displayName}」的绑定？`,
           )
         )
@@ -34775,7 +34780,7 @@ jQuery(async () => {
       const currentPresets = getQrActivePresets();
       const preset = currentPresets[idx];
       if (!preset) return;
-      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       deleteQrActivePreset(preset.name);
       toastr.success(`已删除激活分组「${preset.name}」`);
       overlay.remove();
@@ -35557,7 +35562,7 @@ jQuery(async () => {
         overlayPressStarted = false;
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
-        if (!window.confirm(`确认清空${meta.label}吗？`)) return;
+        if (!cfmConfirm(`确认清空${meta.label}吗？`)) return;
         close("");
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
@@ -35754,7 +35759,7 @@ jQuery(async () => {
           field === "alt_greetings"
             ? "确认删除这条开场白吗？"
             : `确认清空${meta.label}吗？`;
-        if (!window.confirm(confirmMessage)) return;
+        if (!cfmConfirm(confirmMessage)) return;
         close({
           action: field === "alt_greetings" ? "delete" : "clear",
           value: "",
@@ -36363,7 +36368,7 @@ jQuery(async () => {
           return;
         }
 
-        if (!window.confirm("确认编辑Uesr设定吗？")) {
+        if (!cfmConfirm("确认编辑Uesr设定吗？")) {
           return;
         }
 
@@ -39094,7 +39099,7 @@ jQuery(async () => {
       }
       const existing = getRegexActivePresets().find((p) => p.name === name);
       if (existing) {
-        if (!confirm(`分组「${name}」已存在，是否覆盖？`)) return;
+        if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
       saveRegexActivePreset(name, enabledIds);
       toastr.success(
@@ -39288,7 +39293,7 @@ jQuery(async () => {
       const currentPresets = getRegexActivePresets();
       const preset = currentPresets[idx];
       if (!preset) return;
-      if (!confirm(`确定删除激活分组「${preset.name}」？`)) return;
+      if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
       // 如果该分组正在应用中，从追踪中移除
       const applied =
         extension_settings[extensionName]._regexAppliedPresetIndices || [];
