@@ -4037,78 +4037,59 @@ jQuery(async () => {
 
     }
 
-    // 为所有 color input 在移动端覆盖自定义色板触发器
-    if (isMobileDevice()) {
-      overlay.find('input[type="color"]').each(function () {
-        const colorInput = $(this);
-        const inputId = this.id;
-        // 隐藏原生 color input，改为可点击的色块覆盖层
-        colorInput.css({
-          "pointer-events": "none",
-          "position": "relative",
-        });
-        // 在 color input 的父容器中覆盖一个触发用的色块
-        const trigger = $(`<div class="cfm-mobile-color-trigger" data-for="${inputId}"></div>`);
-        trigger.css("background", colorInput.val());
-        colorInput.parent().css("position", "relative");
-        // 将 trigger 插入到 colorInput 之后并绝对定位覆盖在其上方
-        colorInput.after(trigger);
-
-        const draftKeyMap = {
-          "cfm-theme-bg-color": "bgColor",
-          "cfm-theme-text-color": "textColor",
-          "cfm-theme-border-color": "borderColor",
-          "cfm-theme-accent-color": "accentColor",
-          "cfm-theme-detail-bg-color": "detailBgColor",
-          "cfm-theme-detail-text-color": "detailTextColor",
-          "cfm-theme-detail-label-color": "detailLabelColor",
-        };
-
-        // 使用 touchend 触发，加全局锁防止重复打开
-        let triggerTouchMoved = false;
-        let pickerOpenLock = false;
-
-        function doOpenPicker() {
-          if (pickerOpenLock) return;
-          pickerOpenLock = true;
-          // 500ms 后解锁，防止 touchend + 合成 click 重复触发
-          setTimeout(() => { pickerOpenLock = false; }, 500);
-
-          const draftKey = draftKeyMap[inputId];
-          if (!draftKey) return;
-          const hexSel = "#" + inputId.replace("-color", "-hex");
-
-          openMobileColorPicker(draft[draftKey], (hex) => {
-            draft[draftKey] = hex;
-            colorInput.val(hex);
-            trigger.css("background", hex);
-            overlay.find(hexSel).val(hex);
-            refreshPreview();
-          });
-        }
-
-        trigger[0].addEventListener("touchstart", function (e) {
-          triggerTouchMoved = false;
-        }, { passive: true });
-        trigger[0].addEventListener("touchmove", function () {
-          triggerTouchMoved = true;
-        }, { passive: true });
-        trigger[0].addEventListener("touchend", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          if (triggerTouchMoved) return;
-          doOpenPicker();
-        }, { passive: false });
-        // PC端回退（click）——移动端由于 touchend 的 preventDefault 不会触发合成 click
-        trigger[0].addEventListener("click", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          doOpenPicker();
-        }, { capture: true });
+    // 为所有 color input 覆盖自定义色板触发器（PC + 移动端通用）
+    overlay.find('input[type="color"]').each(function () {
+      const colorInput = $(this);
+      const inputId = this.id;
+      // 隐藏原生 color input，改为可点击的色块覆盖层
+      colorInput.css({
+        "pointer-events": "none",
+        "position": "relative",
       });
-    }
+      // 在 color input 的父容器中覆盖一个触发用的色块
+      const trigger = $(`<div class="cfm-mobile-color-trigger" data-for="${inputId}"></div>`);
+      trigger.css("background", colorInput.val());
+      colorInput.parent().css("position", "relative");
+      // 将 trigger 插入到 colorInput 之后并绝对定位覆盖在其上方
+      colorInput.after(trigger);
+
+      const draftKeyMap = {
+        "cfm-theme-bg-color": "bgColor",
+        "cfm-theme-text-color": "textColor",
+        "cfm-theme-border-color": "borderColor",
+        "cfm-theme-accent-color": "accentColor",
+        "cfm-theme-detail-bg-color": "detailBgColor",
+        "cfm-theme-detail-text-color": "detailTextColor",
+        "cfm-theme-detail-label-color": "detailLabelColor",
+      };
+
+      let pickerOpenLock = false;
+
+      function doOpenPicker() {
+        if (pickerOpenLock) return;
+        pickerOpenLock = true;
+        setTimeout(() => { pickerOpenLock = false; }, 500);
+
+        const draftKey = draftKeyMap[inputId];
+        if (!draftKey) return;
+        const hexSel = "#" + inputId.replace("-color", "-hex");
+
+        openMobileColorPicker(draft[draftKey], (hex) => {
+          draft[draftKey] = hex;
+          colorInput.val(hex);
+          trigger.css("background", hex);
+          overlay.find(hexSel).val(hex);
+          refreshPreview();
+        });
+      }
+
+      // click 事件（PC + 移动端通用）
+      trigger.on("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        doOpenPicker();
+      });
+    });
 
     // 颜色选择器
     overlay.find("#cfm-theme-bg-color").on("input", function () {
