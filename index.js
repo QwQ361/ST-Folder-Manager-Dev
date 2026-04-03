@@ -3860,9 +3860,11 @@ jQuery(async () => {
      * @param {Function} onSelect - 选中颜色回调 (hex) => void
      */
     function openMobileColorPicker(currentColor, onSelect) {
-      // 移除已有面板
-      $(".cfm-mobile-color-picker-overlay").remove();
-      $(".cfm-mobile-color-picker-standalone").remove();
+      // 如果已有面板打开，先移除（但只在非锁定状态时）
+      if ($(".cfm-mobile-color-picker-standalone").length > 0) {
+        // 面板已存在，直接返回不重复打开
+        return;
+      }
 
       // 预定义常用色
       const swatches = [
