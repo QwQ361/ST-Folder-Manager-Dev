@@ -3960,12 +3960,23 @@ jQuery(async () => {
       $("body").append(pickerPanel);
 
       // 阻止面板内事件冒泡到 document，防止被外层处理器捕获
-      // 注意：使用 bubbling phase（第三参数 false），这样子元素的事件处理器先执行
       pickerPanel[0].addEventListener("touchstart", (e) => e.stopPropagation(), { passive: false });
       pickerPanel[0].addEventListener("touchend", (e) => e.stopPropagation(), { passive: false });
       pickerPanel[0].addEventListener("click", (e) => e.stopPropagation(), false);
       pickerPanel[0].addEventListener("mousedown", (e) => e.stopPropagation(), false);
       pickerPanel[0].addEventListener("mouseup", (e) => e.stopPropagation(), false);
+
+      // [调试] 监控面板移除 — 拦截原生 removeChild
+      const origRemoveChild = Node.prototype.removeChild;
+      Node.prototype.removeChild = function(child) {
+        if (child === pickerPanel[0] || (child && child.classList && child.classList.contains("cfm-mobile-color-picker-standalone"))) {
+          console.error("[CFM DEBUG] 色板面板被移除！调用栈:");
+          console.trace();
+        }
+        return origRemoveChild.call(this, child);
+      };
+      // 5秒后恢复，避免长期影响
+      setTimeout(() => { Node.prototype.removeChild = origRemoveChild; }, 5000);
 
       // 用 pickerOverlay 别名保持下面代码兼容
       const pickerOverlay = pickerPanel;
