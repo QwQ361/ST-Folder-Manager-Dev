@@ -4025,12 +4025,11 @@ jQuery(async () => {
         pickerOverlay.remove();
       });
 
-      // 点击遮罩关闭（使用时间戳防护，防止触摸穿透导致立即关闭）
-      const pickerCreatedAt = Date.now();
+      // 阻止遮罩层上的触摸/点击事件穿透（不关闭，只通过按钮关闭）
       pickerOverlay.on("click touchend", function (e) {
-        if (Date.now() - pickerCreatedAt < 400) return; // 忽略创建后400ms内的事件
         if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
-          pickerOverlay.remove();
+          e.stopPropagation();
+          // 不关闭面板，用户需通过「取消」或「X」按钮关闭
         }
       });
     }
