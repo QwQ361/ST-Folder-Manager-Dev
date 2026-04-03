@@ -6847,11 +6847,12 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 
 /* ========== 移动端颜色选择面板（独立固定面板，无遮罩） ========== */
 .cfm-mobile-color-picker-standalone {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin: 0 auto !important;
+  width: 100% !important;
   max-width: 420px;
   max-height: 85vh;
   overflow-y: auto;
@@ -6859,16 +6860,8 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   border-radius: 16px 16px 0 0;
   padding: 16px;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
-  z-index: 100020;
-  animation: cfm-slide-up 0.25s ease-out;
-}
-@keyframes cfm-slide-up {
-  from {
-    transform: translateX(-50%) translateY(100%);
-  }
-  to {
-    transform: translateX(-50%) translateY(0);
-  }
+  z-index: 2147483647 !important; /* 最大 z-index */
+  /* 不使用 animation，避免移动端动画结束后状态异常 */
 }
 .cfm-mcp-header {
   display: flex;
