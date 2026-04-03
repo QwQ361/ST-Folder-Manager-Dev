@@ -4097,7 +4097,13 @@ jQuery(async () => {
         });
       }
 
-      // click 事件（PC + 移动端通用）
+      // 移动端 touchend 事件
+      trigger[0].addEventListener("touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        doOpenPicker();
+      }, { passive: false });
+      // PC端 click 事件
       trigger.on("click", function (e) {
         e.preventDefault();
         e.stopPropagation();
