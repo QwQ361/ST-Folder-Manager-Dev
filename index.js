@@ -110,27 +110,50 @@ jQuery(async () => {
   // ==================== 全局 MutationObserver：自动简繁转换 ====================
   // 监听 body 下 CFM 相关 overlay/popup 的插入与内容变化，自动转换文本
   (function initCfmS2tObserver() {
+    let _converting = false; // 防止 characterData 转换引起无限递归
     const observer = new MutationObserver((mutations) => {
+      if (_converting) return;
       const ext = (typeof getContext === "function" ? getContext().extensionSettings : {})?.[extensionName];
       if (ext?.language !== "zh-TW" || !window._cfm_s2t) return;
       for (const m of mutations) {
-        // 新增节点
         for (const node of m.addedNodes) {
-          if (node.nodeType !== 1) continue;
-          // 只处理 CFM 相关的元素（id 或 class 包含 cfm）
-          const isCfm = node.id?.startsWith?.("cfm-") ||
-            node.className?.toString?.().includes?.("cfm-") ||
-            node.querySelector?.("[id^='cfm-'],[class*='cfm-']");
-          if (isCfm) cfmConvertDomText(node);
+          // 新增元素节点：转换整个子树
+          if (node.nodeType === 1) {
+            const isCfm = node.id?.startsWith?.("cfm-") ||
+              node.className?.toString?.().includes?.("cfm-") ||
+              node.querySelector?.("[id^='cfm-'],[class*='cfm-']");
+            if (isCfm) {
+              _converting = true;
+              cfmConvertDomText(node);
+              _converting = false;
+            }
+          }
+          // 新增文本节点（如 jQuery .text() 产生的）：直接转换
+          if (node.nodeType === 3) {
+            const parent = node.parentElement;
+            if (!parent) continue;
+            if (parent.closest?.("[data-cfm-no-convert]")) continue;
+            const isCfmEl = parent.closest?.("[id^='cfm-'],[class*='cfm-']");
+            if (!isCfmEl) continue;
+            const orig = node.nodeValue;
+            if (!orig || !/[\u4e00-\u9fff]/.test(orig)) continue;
+            const converted = window._cfm_s2t.toTraditional(orig);
+            if (converted !== orig) {
+              _converting = true;
+              node.nodeValue = converted;
+              _converting = false;
+            }
+          }
         }
       }
     });
     // 延迟启动，确保 body 可用
+    const observeOpts = { childList: true, subtree: true, characterData: true };
     if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
+      observer.observe(document.body, observeOpts);
     } else {
       document.addEventListener("DOMContentLoaded", () => {
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, observeOpts);
       });
     }
   })();
