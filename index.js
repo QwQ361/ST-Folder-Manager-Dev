@@ -41472,6 +41472,25 @@ jQuery(async () => {
     }
   }
 
+  function clearWorldInfoNativeFilter() {
+    if (!nativeFilterWorldInfo && _worldInfoDetachedOptions.length === 0) return;
+    nativeFilterWorldInfo = null;
+    applyWorldInfoFilter();
+    updateNativeFilterBtnState("worldinfo");
+  }
+
+  function setupWorldInfoButtonAutoShowAll() {
+    const handler = (ev) => {
+      const target = ev.target instanceof Element ? ev.target : null;
+      if (!target) return;
+      const btn = target.closest("#world_button, #world-info-button");
+      if (!btn) return;
+      clearWorldInfoNativeFilter();
+    };
+    document.addEventListener("click", handler, true);
+    document.addEventListener("touchend", handler, true);
+  }
+
   /**
    * 主题过滤：通过 detach/append option 实现过滤
    */
@@ -42312,6 +42331,7 @@ jQuery(async () => {
   initButton();
   injectNativeFilterButtons();
   setupNativePresetGroupButtonObserver();
+  setupWorldInfoButtonAutoShowAll();
   setupCharWorldPopupFilterObserver();
   setupPersonaSelectionPopupEnhancer();
   initPinnedChatHook(); // 初始化聊天置顶 welcome-screen hook
