@@ -10978,14 +10978,34 @@ jQuery(async () => {
 
   async function saveWorldInfoDetailData(bookName, worldInfoData) {
     const normalizedName = String(bookName || "");
+    const ctx = getContext();
     const resp = await fetch("/api/worldinfo/edit", {
       method: "POST",
-      headers: getContext().getRequestHeaders(),
+      headers: ctx.getRequestHeaders(),
       body: JSON.stringify({ name: normalizedName, data: worldInfoData }),
     });
     if (!resp.ok) {
       throw new Error(`保存世界书「${normalizedName}」失败`);
     }
+
+    // 同步更新酒馆内存中的世界书缓存（worldInfoCache）
+    try {
+      if (typeof ctx.saveWorldInfo === "function") {
+        await ctx.saveWorldInfo(normalizedName, worldInfoData, true);
+      }
+    } catch (e) {
+      console.warn("[CFM] 同步世界书内存缓存失败", e);
+    }
+
+    // 刷新原生世界书编辑器，确保当前已打开的世界书编辑面板立即反映最新数据
+    try {
+      if (typeof ctx.reloadWorldInfoEditor === "function") {
+        ctx.reloadWorldInfoEditor(normalizedName, true);
+      }
+    } catch (e) {
+      console.warn("[CFM] 刷新原生世界书编辑器失败", e);
+    }
+
   }
 
   function getWorldInfoEntryDetailSortMode() {
