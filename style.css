@@ -6720,6 +6720,118 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   border-color: var(--SmartThemeQuoteColor, #89b4fa);
 }
 
+/* 自定义预设 */
+.cfm-user-presets-section {
+  margin-top: 4px;
+}
+.cfm-user-preset-save-btn {
+  background: rgba(137, 180, 250, 0.1) !important;
+  border-color: rgba(137, 180, 250, 0.3) !important;
+}
+.cfm-user-preset-save-btn:hover {
+  background: rgba(137, 180, 250, 0.2) !important;
+}
+.cfm-user-preset-list-btn {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+.cfm-user-presets-dropdown {
+  margin-top: 10px;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.cfm-user-presets-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.4);
+}
+.cfm-user-presets-search-wrap input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  font-size: 12px;
+}
+.cfm-user-presets-search-wrap input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+.cfm-user-presets-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.cfm-user-presets-empty {
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+}
+.cfm-user-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.12s;
+}
+.cfm-user-preset-item:last-child {
+  border-bottom: none;
+}
+.cfm-user-preset-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.cfm-user-preset-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+.cfm-user-preset-name:hover {
+  color: var(--SmartThemeQuoteColor, #89b4fa);
+}
+.cfm-user-preset-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.cfm-user-preset-action-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  transition: all 0.12s;
+}
+.cfm-user-preset-action-btn:hover {
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  background: rgba(255, 255, 255, 0.1);
+}
+.cfm-user-preset-delete:hover {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.12);
+}
+.cfm-user-preset-rename-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--SmartThemeQuoteColor, #89b4fa);
+  border-radius: 4px;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  font-size: 12px;
+  padding: 3px 6px;
+  outline: none;
+  margin-right: 8px;
+}
+
 /* 调色板按钮（顶栏） */
 #cfm-btn-theme {
   background: none;

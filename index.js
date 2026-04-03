@@ -3800,6 +3800,23 @@ jQuery(async () => {
                   .join("")}
               </div>
             </div>
+
+            <!-- 自定义预设 -->
+            <div class="cfm-theme-presets cfm-user-presets-section">
+              <div class="cfm-theme-presets-label">自定义预设</div>
+              <div class="cfm-theme-presets-btns">
+                <button class="cfm-theme-preset-btn cfm-user-preset-save-btn" id="cfm-user-preset-save"><i class="fa-solid fa-floppy-disk"></i> 保存当前</button>
+                <button class="cfm-theme-preset-btn cfm-user-preset-list-btn" id="cfm-user-preset-list-toggle"><i class="fa-solid fa-list"></i> 我的预设</button>
+              </div>
+              <div class="cfm-user-presets-dropdown" id="cfm-user-presets-dropdown" style="display:none;">
+                <div class="cfm-user-presets-search-wrap">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <input type="text" id="cfm-user-presets-search" placeholder="搜索预设..." spellcheck="false" autocomplete="off">
+                </div>
+                <div class="cfm-user-presets-list" id="cfm-user-presets-list"></div>
+                <div class="cfm-user-presets-empty" id="cfm-user-presets-empty">暂无自定义预设</div>
+              </div>
+            </div>
           </div>
 
           <div class="cfm-theme-popup-footer">
@@ -3972,42 +3989,33 @@ jQuery(async () => {
       }
     });
 
-    // 快捷预设
-    overlay.find(".cfm-theme-preset-btn").on("click", function () {
-      const key = $(this).data("preset");
-      const preset = CFM_STYLE_PRESETS[key];
-      if (!preset) return;
-
+    // ─── 通用：将预设对象应用到 draft 并同步表单 ───
+    function applyPresetToForm(preset) {
       draft.bgColor = preset.bgColor;
       draft.bgOpacity = preset.bgOpacity;
       draft.textColor = preset.textColor;
       draft.borderColor = preset.borderColor;
       draft.accentColor = preset.accentColor;
-      draft.blur = preset.blur;
+      draft.blur = preset.blur ?? 0;
       draft.detailBgColor = preset.detailBgColor || "#ffffff";
       draft.detailBgOpacity = preset.detailBgOpacity ?? 0.03;
       draft.detailTextColor = preset.detailTextColor || "#ffffff";
       draft.detailLabelColor = preset.detailLabelColor || "#89b4fa";
       draft.enabled = true;
 
-      // 更新表单
       overlay.find("#cfm-theme-enabled").prop("checked", true);
-      overlay.find("#cfm-theme-bg-color").val(preset.bgColor);
-      overlay.find("#cfm-theme-bg-hex").val(preset.bgColor);
-      overlay
-        .find("#cfm-theme-bg-opacity")
-        .val(Math.round(preset.bgOpacity * 100));
-      overlay
-        .find("#cfm-theme-opacity-val")
-        .text(Math.round(preset.bgOpacity * 100) + "%");
-      overlay.find("#cfm-theme-text-color").val(preset.textColor);
-      overlay.find("#cfm-theme-text-hex").val(preset.textColor);
-      overlay.find("#cfm-theme-border-color").val(preset.borderColor);
-      overlay.find("#cfm-theme-border-hex").val(preset.borderColor);
-      overlay.find("#cfm-theme-accent-color").val(preset.accentColor);
-      overlay.find("#cfm-theme-accent-hex").val(preset.accentColor);
-      overlay.find("#cfm-theme-blur").val(preset.blur);
-      overlay.find("#cfm-theme-blur-val").text(preset.blur + "px");
+      overlay.find("#cfm-theme-bg-color").val(draft.bgColor);
+      overlay.find("#cfm-theme-bg-hex").val(draft.bgColor);
+      overlay.find("#cfm-theme-bg-opacity").val(Math.round(draft.bgOpacity * 100));
+      overlay.find("#cfm-theme-opacity-val").text(Math.round(draft.bgOpacity * 100) + "%");
+      overlay.find("#cfm-theme-text-color").val(draft.textColor);
+      overlay.find("#cfm-theme-text-hex").val(draft.textColor);
+      overlay.find("#cfm-theme-border-color").val(draft.borderColor);
+      overlay.find("#cfm-theme-border-hex").val(draft.borderColor);
+      overlay.find("#cfm-theme-accent-color").val(draft.accentColor);
+      overlay.find("#cfm-theme-accent-hex").val(draft.accentColor);
+      overlay.find("#cfm-theme-blur").val(draft.blur);
+      overlay.find("#cfm-theme-blur-val").text(draft.blur + "px");
       overlay.find("#cfm-theme-detail-bg-color").val(draft.detailBgColor);
       overlay.find("#cfm-theme-detail-bg-hex").val(draft.detailBgColor);
       overlay.find("#cfm-theme-detail-bg-opacity").val(Math.round(draft.detailBgOpacity * 100));
@@ -4018,6 +4026,144 @@ jQuery(async () => {
       overlay.find("#cfm-theme-detail-label-hex").val(draft.detailLabelColor);
       updateControlsState();
       refreshPreview();
+    }
+
+    // 快捷预设
+    overlay.find(".cfm-theme-preset-btn:not(.cfm-user-preset-save-btn):not(.cfm-user-preset-list-btn)").on("click", function () {
+      const key = $(this).data("preset");
+      const preset = CFM_STYLE_PRESETS[key];
+      if (!preset) return;
+      applyPresetToForm(preset);
+    });
+
+    // ─── 自定义预设功能 ───
+    function getUserPresets() {
+      if (!extension_settings[extensionName].userPresets) {
+        extension_settings[extensionName].userPresets = [];
+      }
+      return extension_settings[extensionName].userPresets;
+    }
+
+    function saveUserPresets() {
+      getContext().saveSettingsDebounced();
+    }
+
+    function renderUserPresetsList(filter) {
+      const listEl = overlay.find("#cfm-user-presets-list");
+      const emptyEl = overlay.find("#cfm-user-presets-empty");
+      const presets = getUserPresets();
+      const keyword = (filter || "").trim().toLowerCase();
+      const filtered = keyword
+        ? presets.filter((p) => p.name.toLowerCase().includes(keyword))
+        : presets;
+
+      listEl.empty();
+      if (filtered.length === 0) {
+        emptyEl.show();
+        emptyEl.text(keyword ? "未找到匹配的预设" : "暂无自定义预设");
+        return;
+      }
+      emptyEl.hide();
+
+      filtered.forEach((p, idx) => {
+        // 找到在原数组中的真实索引
+        const realIdx = presets.indexOf(p);
+        const item = $(`
+          <div class="cfm-user-preset-item" data-idx="${realIdx}">
+            <span class="cfm-user-preset-name" title="${p.name}">${p.name}</span>
+            <div class="cfm-user-preset-actions">
+              <button class="cfm-user-preset-action-btn cfm-user-preset-rename" title="重命名"><i class="fa-solid fa-pen"></i></button>
+              <button class="cfm-user-preset-action-btn cfm-user-preset-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        `);
+
+        // 点击预设名称 → 应用
+        item.find(".cfm-user-preset-name").on("click", function () {
+          applyPresetToForm(p.style);
+          cfmToastr.success(`已应用预设「${p.name}」`, "自定义预设", { timeOut: 1500 });
+        });
+
+        // 重命名
+        item.find(".cfm-user-preset-rename").on("click", function (e) {
+          e.stopPropagation();
+          const nameEl = item.find(".cfm-user-preset-name");
+          const oldName = p.name;
+          // 替换为输入框
+          const input = $(`<input type="text" class="cfm-user-preset-rename-input" value="${oldName}" spellcheck="false" autocomplete="off">`);
+          nameEl.replaceWith(input);
+          input.focus().select();
+
+          function finishRename() {
+            const newName = input.val().trim();
+            if (newName && newName !== oldName) {
+              p.name = newName;
+              saveUserPresets();
+            }
+            renderUserPresetsList(overlay.find("#cfm-user-presets-search").val());
+          }
+          input.on("blur", finishRename);
+          input.on("keydown", function (ev) {
+            if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+            if (ev.key === "Escape") { input.val(oldName); input.blur(); }
+          });
+        });
+
+        // 删除
+        item.find(".cfm-user-preset-delete").on("click", function (e) {
+          e.stopPropagation();
+          if (!cfmConfirm(`确定删除预设「${p.name}」吗？`)) return;
+          presets.splice(realIdx, 1);
+          saveUserPresets();
+          renderUserPresetsList(overlay.find("#cfm-user-presets-search").val());
+          cfmToastr.success(`已删除预设「${p.name}」`, "自定义预设", { timeOut: 1500 });
+        });
+
+        listEl.append(item);
+      });
+    }
+
+    // 保存当前为自定义预设
+    overlay.find("#cfm-user-preset-save").on("click", function () {
+      const name = prompt("请输入预设名称：");
+      if (!name || !name.trim()) return;
+      const presets = getUserPresets();
+      const style = {
+        bgColor: draft.bgColor,
+        bgOpacity: draft.bgOpacity,
+        textColor: draft.textColor,
+        borderColor: draft.borderColor,
+        accentColor: draft.accentColor,
+        blur: draft.blur,
+        detailBgColor: draft.detailBgColor,
+        detailBgOpacity: draft.detailBgOpacity,
+        detailTextColor: draft.detailTextColor,
+        detailLabelColor: draft.detailLabelColor,
+      };
+      presets.push({ name: name.trim(), style });
+      saveUserPresets();
+      // 如果下拉列表已展开则刷新
+      if (overlay.find("#cfm-user-presets-dropdown").is(":visible")) {
+        renderUserPresetsList(overlay.find("#cfm-user-presets-search").val());
+      }
+      cfmToastr.success(`预设「${name.trim()}」已保存`, "自定义预设", { timeOut: 1500 });
+    });
+
+    // 展开/收起我的预设下拉列表
+    overlay.find("#cfm-user-preset-list-toggle").on("click", function () {
+      const dropdown = overlay.find("#cfm-user-presets-dropdown");
+      if (dropdown.is(":visible")) {
+        dropdown.slideUp(150);
+      } else {
+        renderUserPresetsList("");
+        overlay.find("#cfm-user-presets-search").val("");
+        dropdown.slideDown(150);
+      }
+    });
+
+    // 搜索过滤
+    overlay.find("#cfm-user-presets-search").on("input", function () {
+      renderUserPresetsList($(this).val());
     });
 
     // 恢复默认
