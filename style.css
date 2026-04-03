@@ -6832,6 +6832,19 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   margin-right: 8px;
 }
 
+/* 移动端颜色触发色块（覆盖原生 color input） */
+.cfm-mobile-color-trigger {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  cursor: pointer;
+  z-index: 2;
+}
+
 /* ========== 移动端颜色选择面板 ========== */
 .cfm-mobile-color-picker-overlay {
   position: fixed;

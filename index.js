@@ -3957,7 +3957,7 @@ jQuery(async () => {
         </div>
       `);
 
-      $(".cfm-popup-overlay").append(pickerOverlay);
+      $("body").append(pickerOverlay);
 
       const previewEl = pickerOverlay.find("#cfm-mcp-preview");
       const hexInput = pickerOverlay.find("#cfm-mcp-hex");
@@ -4033,34 +4033,47 @@ jQuery(async () => {
       });
     }
 
-    // 为所有 color input 在移动端拦截并使用自定义色板
+    // 为所有 color input 在移动端覆盖自定义色板触发器
     if (isMobileDevice()) {
       overlay.find('input[type="color"]').each(function () {
         const colorInput = $(this);
-        // 用一个可视色块替代原生 color input 的交互
-        colorInput.on("click", function (e) {
+        const inputId = this.id;
+        // 隐藏原生 color input，改为可点击的色块覆盖层
+        colorInput.css({
+          "pointer-events": "none",
+          "position": "relative",
+        });
+        // 在 color input 的父容器中覆盖一个触发用的色块
+        const trigger = $(`<div class="cfm-mobile-color-trigger" data-for="${inputId}"></div>`);
+        trigger.css("background", colorInput.val());
+        colorInput.parent().css("position", "relative");
+        // 将 trigger 插入到 colorInput 之后并绝对定位覆盖在其上方
+        colorInput.after(trigger);
+
+        const draftKeyMap = {
+          "cfm-theme-bg-color": "bgColor",
+          "cfm-theme-text-color": "textColor",
+          "cfm-theme-border-color": "borderColor",
+          "cfm-theme-accent-color": "accentColor",
+          "cfm-theme-detail-bg-color": "detailBgColor",
+          "cfm-theme-detail-text-color": "detailTextColor",
+          "cfm-theme-detail-label-color": "detailLabelColor",
+        };
+
+        trigger.on("click", function (e) {
           e.preventDefault();
           e.stopPropagation();
-          const hexSel = "#" + this.id.replace("-color", "-hex");
-          const draftKeyMap = {
-            "cfm-theme-bg-color": "bgColor",
-            "cfm-theme-text-color": "textColor",
-            "cfm-theme-border-color": "borderColor",
-            "cfm-theme-accent-color": "accentColor",
-            "cfm-theme-detail-bg-color": "detailBgColor",
-            "cfm-theme-detail-text-color": "detailTextColor",
-            "cfm-theme-detail-label-color": "detailLabelColor",
-          };
-          const draftKey = draftKeyMap[this.id];
+          const draftKey = draftKeyMap[inputId];
           if (!draftKey) return;
+          const hexSel = "#" + inputId.replace("-color", "-hex");
 
           openMobileColorPicker(draft[draftKey], (hex) => {
             draft[draftKey] = hex;
             colorInput.val(hex);
+            trigger.css("background", hex);
             overlay.find(hexSel).val(hex);
             refreshPreview();
           });
-          return false;
         });
       });
     }
