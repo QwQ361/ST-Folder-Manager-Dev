@@ -3862,6 +3862,7 @@ jQuery(async () => {
     function openMobileColorPicker(currentColor, onSelect) {
       // 移除已有面板
       $(".cfm-mobile-color-picker-overlay").remove();
+      $(".cfm-mobile-color-picker-standalone").remove();
 
       // 预定义常用色
       const swatches = [
@@ -3916,48 +3917,57 @@ jQuery(async () => {
       let [curH, curS, curL] = hexToHsl(currentColor || "#ffffff");
       let selectedHex = currentColor || "#ffffff";
 
-      const pickerOverlay = $(`
-        <div class="cfm-mobile-color-picker-overlay">
-          <div class="cfm-mobile-color-picker">
-            <div class="cfm-mcp-header">
-              <span>选择颜色</span>
-              <button class="cfm-mcp-close"><i class="fa-solid fa-xmark"></i></button>
-            </div>
+      // 不使用 overlay 遮罩，直接固定定位面板，避免移动端各种事件穿透问题
+      const pickerPanel = $(`
+        <div class="cfm-mobile-color-picker-standalone">
+          <div class="cfm-mcp-header">
+            <span>选择颜色</span>
+            <button class="cfm-mcp-close"><i class="fa-solid fa-xmark"></i></button>
+          </div>
 
-            <div class="cfm-mcp-preview-row">
-              <div class="cfm-mcp-preview-swatch" id="cfm-mcp-preview"></div>
-              <input type="text" class="cfm-mcp-hex-input" id="cfm-mcp-hex" value="${selectedHex}" spellcheck="false" autocomplete="off">
-            </div>
+          <div class="cfm-mcp-preview-row">
+            <div class="cfm-mcp-preview-swatch" id="cfm-mcp-preview"></div>
+            <input type="text" class="cfm-mcp-hex-input" id="cfm-mcp-hex" value="${selectedHex}" spellcheck="false" autocomplete="off">
+          </div>
 
-            <div class="cfm-mcp-section-label">色相</div>
-            <div class="cfm-mcp-hue-wrap">
-              <input type="range" class="cfm-mcp-hue-slider" id="cfm-mcp-hue" min="0" max="360" value="${curH}">
-            </div>
+          <div class="cfm-mcp-section-label">色相</div>
+          <div class="cfm-mcp-hue-wrap">
+            <input type="range" class="cfm-mcp-hue-slider" id="cfm-mcp-hue" min="0" max="360" value="${curH}">
+          </div>
 
-            <div class="cfm-mcp-section-label">饱和度</div>
-            <div class="cfm-mcp-slider-wrap">
-              <input type="range" class="cfm-mcp-sat-slider" id="cfm-mcp-sat" min="0" max="100" value="${curS}">
-            </div>
+          <div class="cfm-mcp-section-label">饱和度</div>
+          <div class="cfm-mcp-slider-wrap">
+            <input type="range" class="cfm-mcp-sat-slider" id="cfm-mcp-sat" min="0" max="100" value="${curS}">
+          </div>
 
-            <div class="cfm-mcp-section-label">亮度</div>
-            <div class="cfm-mcp-slider-wrap">
-              <input type="range" class="cfm-mcp-lit-slider" id="cfm-mcp-lit" min="0" max="100" value="${curL}">
-            </div>
+          <div class="cfm-mcp-section-label">亮度</div>
+          <div class="cfm-mcp-slider-wrap">
+            <input type="range" class="cfm-mcp-lit-slider" id="cfm-mcp-lit" min="0" max="100" value="${curL}">
+          </div>
 
-            <div class="cfm-mcp-section-label">常用颜色</div>
-            <div class="cfm-mcp-swatches">
-              ${swatches.map(c => `<div class="cfm-mcp-swatch" data-color="${c}" style="background:${c}"></div>`).join("")}
-            </div>
+          <div class="cfm-mcp-section-label">常用颜色</div>
+          <div class="cfm-mcp-swatches">
+            ${swatches.map(c => `<div class="cfm-mcp-swatch" data-color="${c}" style="background:${c}"></div>`).join("")}
+          </div>
 
-            <div class="cfm-mcp-footer">
-              <button class="cfm-btn cfm-mcp-cancel">取消</button>
-              <button class="cfm-btn cfm-mcp-confirm">确定</button>
-            </div>
+          <div class="cfm-mcp-footer">
+            <button class="cfm-btn cfm-mcp-cancel">取消</button>
+            <button class="cfm-btn cfm-mcp-confirm">确定</button>
           </div>
         </div>
       `);
 
-      $("body").append(pickerOverlay);
+      $("body").append(pickerPanel);
+
+      // 阻止面板内所有触摸/点击事件冒泡到 document，防止被外层处理器捕获
+      pickerPanel[0].addEventListener("touchstart", (e) => e.stopPropagation(), { passive: false });
+      pickerPanel[0].addEventListener("touchend", (e) => e.stopPropagation(), { passive: false });
+      pickerPanel[0].addEventListener("click", (e) => e.stopPropagation(), true);
+      pickerPanel[0].addEventListener("mousedown", (e) => e.stopPropagation(), true);
+      pickerPanel[0].addEventListener("mouseup", (e) => e.stopPropagation(), true);
+
+      // 用 pickerOverlay 别名保持下面代码兼容
+      const pickerOverlay = pickerPanel;
 
       const previewEl = pickerOverlay.find("#cfm-mcp-preview");
       const hexInput = pickerOverlay.find("#cfm-mcp-hex");
@@ -4025,13 +4035,6 @@ jQuery(async () => {
         pickerOverlay.remove();
       });
 
-      // 阻止遮罩层上的触摸/点击事件穿透（不关闭，只通过按钮关闭）
-      pickerOverlay.on("click touchend", function (e) {
-        if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
-          e.stopPropagation();
-          // 不关闭面板，用户需通过「取消」或「X」按钮关闭
-        }
-      });
     }
 
     // 为所有 color input 在移动端覆盖自定义色板触发器
@@ -4061,11 +4064,31 @@ jQuery(async () => {
           "cfm-theme-detail-label-color": "detailLabelColor",
         };
 
-        // 使用 touchend 触发（而非 click），避免移动端触摸穿透
+        // 使用 touchend 触发，加全局锁防止重复打开
         let triggerTouchMoved = false;
+        let pickerOpenLock = false;
+
+        function doOpenPicker() {
+          if (pickerOpenLock) return;
+          pickerOpenLock = true;
+          // 500ms 后解锁，防止 touchend + 合成 click 重复触发
+          setTimeout(() => { pickerOpenLock = false; }, 500);
+
+          const draftKey = draftKeyMap[inputId];
+          if (!draftKey) return;
+          const hexSel = "#" + inputId.replace("-color", "-hex");
+
+          openMobileColorPicker(draft[draftKey], (hex) => {
+            draft[draftKey] = hex;
+            colorInput.val(hex);
+            trigger.css("background", hex);
+            overlay.find(hexSel).val(hex);
+            refreshPreview();
+          });
+        }
+
         trigger[0].addEventListener("touchstart", function (e) {
           triggerTouchMoved = false;
-          e.stopPropagation();
         }, { passive: true });
         trigger[0].addEventListener("touchmove", function () {
           triggerTouchMoved = true;
@@ -4073,35 +4096,17 @@ jQuery(async () => {
         trigger[0].addEventListener("touchend", function (e) {
           e.preventDefault();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           if (triggerTouchMoved) return;
-          const draftKey = draftKeyMap[inputId];
-          if (!draftKey) return;
-          const hexSel = "#" + inputId.replace("-color", "-hex");
-
-          openMobileColorPicker(draft[draftKey], (hex) => {
-            draft[draftKey] = hex;
-            colorInput.val(hex);
-            trigger.css("background", hex);
-            overlay.find(hexSel).val(hex);
-            refreshPreview();
-          });
+          doOpenPicker();
         }, { passive: false });
-        // PC端回退（click）
-        trigger.on("click", function (e) {
+        // PC端回退（click）——移动端由于 touchend 的 preventDefault 不会触发合成 click
+        trigger[0].addEventListener("click", function (e) {
           e.preventDefault();
           e.stopPropagation();
-          const draftKey = draftKeyMap[inputId];
-          if (!draftKey) return;
-          const hexSel = "#" + inputId.replace("-color", "-hex");
-
-          openMobileColorPicker(draft[draftKey], (hex) => {
-            draft[draftKey] = hex;
-            colorInput.val(hex);
-            trigger.css("background", hex);
-            overlay.find(hexSel).val(hex);
-            refreshPreview();
-          });
-        });
+          e.stopImmediatePropagation();
+          doOpenPicker();
+        }, { capture: true });
       });
     }
 

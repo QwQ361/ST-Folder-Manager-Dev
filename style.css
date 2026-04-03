@@ -6845,17 +6845,12 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   z-index: 2;
 }
 
-/* ========== 移动端颜色选择面板 ========== */
-.cfm-mobile-color-picker-overlay {
+/* ========== 移动端颜色选择面板（独立固定面板，无遮罩） ========== */
+.cfm-mobile-color-picker-standalone {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  z-index: 100020;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.cfm-mobile-color-picker {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 100%;
   max-width: 420px;
   max-height: 85vh;
@@ -6864,14 +6859,15 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   border-radius: 16px 16px 0 0;
   padding: 16px;
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
-  animation: cfm-slide-up 0.2s ease-out;
+  z-index: 100020;
+  animation: cfm-slide-up 0.25s ease-out;
 }
 @keyframes cfm-slide-up {
   from {
-    transform: translateY(100%);
+    transform: translateX(-50%) translateY(100%);
   }
   to {
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 .cfm-mcp-header {
