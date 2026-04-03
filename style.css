@@ -715,6 +715,12 @@
   color: #89b4fa;
   font-weight: 600;
 }
+.cfm-lang-btn.cfm-mode-active {
+  background-color: rgba(137, 180, 250, 0.2);
+  border-color: #89b4fa;
+  color: #89b4fa;
+  font-weight: 600;
+}
 
 /* 标签选择器 */
 #cfm-config-popup select,

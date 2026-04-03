@@ -67,7 +67,17 @@ jQuery(async () => {
     if (!root || !window._cfm_s2t) return;
     const ext = (typeof getContext === "function" ? getContext().extensionSettings : {})?.[extensionName];
     if (ext?.language !== "zh-TW") return;
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        // 跳过标记了 data-cfm-no-convert 的元素及其子节点
+        let el = node.parentElement;
+        while (el) {
+          if (el.hasAttribute && el.hasAttribute("data-cfm-no-convert")) return NodeFilter.FILTER_REJECT;
+          el = el.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
     let node;
     while ((node = walker.nextNode())) {
       const orig = node.nodeValue;
@@ -77,6 +87,8 @@ jQuery(async () => {
     }
     // 同时转换 placeholder / title / aria-label 等属性
     root.querySelectorAll?.("[placeholder],[title],[aria-label]")?.forEach?.((el) => {
+      // 跳过标记了 data-cfm-no-convert 的元素
+      if (el.closest("[data-cfm-no-convert]")) return;
       ["placeholder", "title", "aria-label"].forEach((attr) => {
         const v = el.getAttribute(attr);
         if (v && /[\u4e00-\u9fff]/.test(v)) {
@@ -26225,14 +26237,15 @@ jQuery(async () => {
   // ==================== 共享：界面语言切换（简体/繁体中文） ====================
   function renderLanguageSwitchSection(body) {
     const current = extension_settings[extensionName].language || "zh-CN";
+    const isTW = current === "zh-TW";
     const section = $(`
-      <div class="cfm-config-section">
-        <label>界面语言</label>
+      <div class="cfm-config-section" data-cfm-no-convert>
+        <label>${isTW ? "介面語言" : "界面语言"}</label>
         <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="cfm-lang-btn menu_button ${current === "zh-CN" ? "cfm-mode-active" : ""}" data-lang="zh-CN" style="flex:1;">简体中文</button>
-          <button class="cfm-lang-btn menu_button ${current === "zh-TW" ? "cfm-mode-active" : ""}" data-lang="zh-TW" style="flex:1;">繁體中文</button>
+          <button class="cfm-lang-btn menu_button ${!isTW ? "cfm-mode-active" : ""}" data-lang="zh-CN" style="flex:1;">简体中文</button>
+          <button class="cfm-lang-btn menu_button ${isTW ? "cfm-mode-active" : ""}" data-lang="zh-TW" style="flex:1;">繁體中文</button>
         </div>
-        <div class="cfm-icon-config-hint">切换插件界面显示的中文字体。切换后需重新打开插件生效。</div>
+        <div class="cfm-icon-config-hint">${isTW ? "切換插件介面顯示的中文字體。切換後需重新打開插件生效。" : "切换插件界面显示的中文字体。切换后需重新打开插件生效。"}</div>
       </div>
     `);
     section.find(".cfm-lang-btn").on("click touchend", function (e) {
