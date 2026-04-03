@@ -3415,6 +3415,10 @@ jQuery(async () => {
       borderColor: "#45475a",
       accentColor: "#89b4fa",
       blur: 0,
+      detailBgColor: "#ffffff",
+      detailBgOpacity: 0.03,
+      detailTextColor: "#e0e0e0",
+      detailLabelColor: "#89b4fa",
     },
     light: {
       name: "浅色",
@@ -3423,8 +3427,12 @@ jQuery(async () => {
       bgOpacity: 0.95,
       textColor: "#4c4f69",
       borderColor: "#ccd0da",
-      accentColor: "#1e66f5",
+      accentColor: "#4377deff",
       blur: 0,
+      detailBgColor: "#d0d3de",
+      detailBgOpacity: 0.45,
+      detailTextColor: "#5c5f75",
+      detailLabelColor: "#3e7cf8ff",
     },
     transparent: {
       name: "半透明",
@@ -3435,6 +3443,10 @@ jQuery(async () => {
       borderColor: "#555555",
       accentColor: "#89b4fa",
       blur: 10,
+      detailBgColor: "#ffffff",
+      detailBgOpacity: 0.05,
+      detailTextColor: "#e0e0e0",
+      detailLabelColor: "#89b4fa",
     },
     highContrast: {
       name: "高对比度",
@@ -3445,6 +3457,10 @@ jQuery(async () => {
       borderColor: "#ffffff",
       accentColor: "#00ff00",
       blur: 0,
+      detailBgColor: "#333333",
+      detailBgOpacity: 1.0,
+      detailTextColor: "#ffffff",
+      detailLabelColor: "#00ff00",
     },
   };
 
@@ -3553,6 +3569,16 @@ jQuery(async () => {
     if (style.accentColor) {
       cssVars += `  --SmartThemeQuoteColor: ${style.accentColor} !important;\n`;
     }
+    if (style.detailBgColor) {
+      const detailBgRgba = hexToRgba(style.detailBgColor, style.detailBgOpacity ?? 0.03);
+      cssVars += `  --cfm-detail-bg: ${detailBgRgba} !important;\n`;
+    }
+    if (style.detailTextColor) {
+      cssVars += `  --cfm-detail-text: ${style.detailTextColor} !important;\n`;
+    }
+    if (style.detailLabelColor) {
+      cssVars += `  --cfm-detail-label: ${style.detailLabelColor} !important;\n`;
+    }
 
     let blurCSS = "";
     if (style.blur > 0) {
@@ -3586,11 +3612,20 @@ jQuery(async () => {
     const accentColor =
       config.accentColor || "var(--SmartThemeQuoteColor, #89b4fa)";
     const blur = config.blur || 0;
+    const detailBgRgba = hexToRgba(
+      config.detailBgColor || "#ffffff",
+      config.detailBgOpacity ?? 0.03,
+    );
+    const detailTextColor = config.detailTextColor || "#ffffff";
+    const detailLabelColor = config.detailLabelColor || "#89b4fa";
 
     previewEl.style.setProperty("--preview-bg", bgRgba);
     previewEl.style.setProperty("--preview-text", textColor);
     previewEl.style.setProperty("--preview-border", borderColor);
     previewEl.style.setProperty("--preview-accent", accentColor);
+    previewEl.style.setProperty("--preview-detail-bg", detailBgRgba);
+    previewEl.style.setProperty("--preview-detail-text", detailTextColor);
+    previewEl.style.setProperty("--preview-detail-label", detailLabelColor);
     if (blur > 0) {
       previewEl.style.setProperty(
         "backdrop-filter",
@@ -3621,6 +3656,10 @@ jQuery(async () => {
       borderColor: saved.borderColor || themeDefaults.borderColor,
       accentColor: saved.accentColor || themeDefaults.accentColor,
       blur: saved.blur ?? 0,
+      detailBgColor: saved.detailBgColor || "#ffffff",
+      detailBgOpacity: saved.detailBgOpacity ?? 0.03,
+      detailTextColor: saved.detailTextColor || "#ffffff",
+      detailLabelColor: saved.detailLabelColor || "#89b4fa",
     };
 
     const overlay = $(`
@@ -3652,6 +3691,10 @@ jQuery(async () => {
                   <span class="cfm-theme-preview-name">这是普通文字示例</span>
                 </div>
                 <div class="cfm-theme-preview-border-demo">边框效果展示</div>
+                <div class="cfm-theme-preview-detail">
+                  <span class="cfm-theme-preview-detail-label">条目名称</span>
+                  <span class="cfm-theme-preview-detail-text">详情区域文字</span>
+                </div>
               </div>
             </div>
 
@@ -3709,6 +3752,38 @@ jQuery(async () => {
                 <div class="cfm-theme-row-right">
                   <input type="range" id="cfm-theme-blur" min="0" max="30" value="${draft.blur}" class="cfm-theme-slider">
                   <span class="cfm-theme-slider-val" id="cfm-theme-blur-val">${draft.blur}px</span>
+                </div>
+              </div>
+              <div class="cfm-theme-separator"><span>展开详情区域</span></div>
+              <div class="cfm-theme-row">
+                <label>详情背景颜色</label>
+                <div class="cfm-theme-row-right">
+                  <input type="color" id="cfm-theme-detail-bg-color" value="${draft.detailBgColor}">
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-detail-bg-hex" value="${draft.detailBgColor}" spellcheck="false" autocomplete="off">
+                  <button class="cfm-theme-reset-btn" data-target="detailBgColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <div class="cfm-theme-row">
+                <label>详情背景不透明度</label>
+                <div class="cfm-theme-row-right">
+                  <input type="range" id="cfm-theme-detail-bg-opacity" min="0" max="100" value="${Math.round(draft.detailBgOpacity * 100)}" class="cfm-theme-slider">
+                  <span class="cfm-theme-slider-val" id="cfm-theme-detail-opacity-val">${Math.round(draft.detailBgOpacity * 100)}%</span>
+                </div>
+              </div>
+              <div class="cfm-theme-row">
+                <label>详情文字颜色</label>
+                <div class="cfm-theme-row-right">
+                  <input type="color" id="cfm-theme-detail-text-color" value="${draft.detailTextColor}">
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-detail-text-hex" value="${draft.detailTextColor}" spellcheck="false" autocomplete="off">
+                  <button class="cfm-theme-reset-btn" data-target="detailTextColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <div class="cfm-theme-row">
+                <label>详情条目名称颜色</label>
+                <div class="cfm-theme-row-right">
+                  <input type="color" id="cfm-theme-detail-label-color" value="${draft.detailLabelColor}">
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-detail-label-hex" value="${draft.detailLabelColor}" spellcheck="false" autocomplete="off">
+                  <button class="cfm-theme-reset-btn" data-target="detailLabelColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>
               </div>
             </div>
@@ -3780,6 +3855,21 @@ jQuery(async () => {
       overlay.find("#cfm-theme-accent-hex").val(this.value);
       refreshPreview();
     });
+    overlay.find("#cfm-theme-detail-bg-color").on("input", function () {
+      draft.detailBgColor = this.value;
+      overlay.find("#cfm-theme-detail-bg-hex").val(this.value);
+      refreshPreview();
+    });
+    overlay.find("#cfm-theme-detail-text-color").on("input", function () {
+      draft.detailTextColor = this.value;
+      overlay.find("#cfm-theme-detail-text-hex").val(this.value);
+      refreshPreview();
+    });
+    overlay.find("#cfm-theme-detail-label-color").on("input", function () {
+      draft.detailLabelColor = this.value;
+      overlay.find("#cfm-theme-detail-label-hex").val(this.value);
+      refreshPreview();
+    });
 
     // 色码文本输入框（支持手填 #RRGGBB / #RGB）
     function normalizeHexColor(value) {
@@ -3822,6 +3912,9 @@ jQuery(async () => {
     bindHexInput("#cfm-theme-text-hex", "#cfm-theme-text-color", "textColor");
     bindHexInput("#cfm-theme-border-hex", "#cfm-theme-border-color", "borderColor");
     bindHexInput("#cfm-theme-accent-hex", "#cfm-theme-accent-color", "accentColor");
+    bindHexInput("#cfm-theme-detail-bg-hex", "#cfm-theme-detail-bg-color", "detailBgColor");
+    bindHexInput("#cfm-theme-detail-text-hex", "#cfm-theme-detail-text-color", "detailTextColor");
+    bindHexInput("#cfm-theme-detail-label-hex", "#cfm-theme-detail-label-color", "detailLabelColor");
 
     // 滑块
     overlay.find("#cfm-theme-bg-opacity").on("input", function () {
@@ -3834,6 +3927,11 @@ jQuery(async () => {
       overlay.find("#cfm-theme-blur-val").text(this.value + "px");
       refreshPreview();
     });
+    overlay.find("#cfm-theme-detail-bg-opacity").on("input", function () {
+      draft.detailBgOpacity = parseInt(this.value) / 100;
+      overlay.find("#cfm-theme-detail-opacity-val").text(this.value + "%");
+      refreshPreview();
+    });
 
     // 单项重置按钮
     overlay.find(".cfm-theme-reset-btn").on("click", function () {
@@ -3843,6 +3941,9 @@ jQuery(async () => {
         textColor: themeDefaults.textColor,
         borderColor: themeDefaults.borderColor,
         accentColor: themeDefaults.accentColor,
+        detailBgColor: "#ffffff",
+        detailTextColor: "#ffffff",
+        detailLabelColor: "#89b4fa",
       };
       if (defaults[target]) {
         draft[target] = defaults[target];
@@ -3852,12 +3953,18 @@ jQuery(async () => {
           textColor: "#cfm-theme-text-color",
           borderColor: "#cfm-theme-border-color",
           accentColor: "#cfm-theme-accent-color",
+          detailBgColor: "#cfm-theme-detail-bg-color",
+          detailTextColor: "#cfm-theme-detail-text-color",
+          detailLabelColor: "#cfm-theme-detail-label-color",
         };
         const hexMap = {
           bgColor: "#cfm-theme-bg-hex",
           textColor: "#cfm-theme-text-hex",
           borderColor: "#cfm-theme-border-hex",
           accentColor: "#cfm-theme-accent-hex",
+          detailBgColor: "#cfm-theme-detail-bg-hex",
+          detailTextColor: "#cfm-theme-detail-text-hex",
+          detailLabelColor: "#cfm-theme-detail-label-hex",
         };
         overlay.find(inputMap[target]).val(defaults[target]);
         overlay.find(hexMap[target]).val(defaults[target]);
@@ -3877,6 +3984,10 @@ jQuery(async () => {
       draft.borderColor = preset.borderColor;
       draft.accentColor = preset.accentColor;
       draft.blur = preset.blur;
+      draft.detailBgColor = preset.detailBgColor || "#ffffff";
+      draft.detailBgOpacity = preset.detailBgOpacity ?? 0.03;
+      draft.detailTextColor = preset.detailTextColor || "#ffffff";
+      draft.detailLabelColor = preset.detailLabelColor || "#89b4fa";
       draft.enabled = true;
 
       // 更新表单
@@ -3897,6 +4008,14 @@ jQuery(async () => {
       overlay.find("#cfm-theme-accent-hex").text(preset.accentColor);
       overlay.find("#cfm-theme-blur").val(preset.blur);
       overlay.find("#cfm-theme-blur-val").text(preset.blur + "px");
+      overlay.find("#cfm-theme-detail-bg-color").val(draft.detailBgColor);
+      overlay.find("#cfm-theme-detail-bg-hex").val(draft.detailBgColor);
+      overlay.find("#cfm-theme-detail-bg-opacity").val(Math.round(draft.detailBgOpacity * 100));
+      overlay.find("#cfm-theme-detail-opacity-val").text(Math.round(draft.detailBgOpacity * 100) + "%");
+      overlay.find("#cfm-theme-detail-text-color").val(draft.detailTextColor);
+      overlay.find("#cfm-theme-detail-text-hex").val(draft.detailTextColor);
+      overlay.find("#cfm-theme-detail-label-color").val(draft.detailLabelColor);
+      overlay.find("#cfm-theme-detail-label-hex").val(draft.detailLabelColor);
       updateControlsState();
       refreshPreview();
     });

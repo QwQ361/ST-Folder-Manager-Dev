@@ -4452,7 +4452,7 @@ select.cfm-wi-ctrl {
 .cfm-wi-de-section-title {
   font-size: 11px;
   font-weight: 700;
-  color: #89b4fa;
+  color: var(--cfm-detail-label, #89b4fa);
   letter-spacing: 0.03em;
   margin-bottom: 2px;
 }
@@ -4491,7 +4491,7 @@ select.cfm-wi-ctrl {
 .cfm-wi-de-label {
   font-size: 10px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--cfm-detail-text, rgba(255, 255, 255, 0.55));
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -5517,7 +5517,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   flex-direction: column;
   gap: 10px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--cfm-detail-bg, rgba(255, 255, 255, 0.03));
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   margin: 6px 0 8px;
@@ -5584,7 +5584,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #89b4fa;
+  color: var(--cfm-detail-label, #89b4fa);
 }
 .cfm-persona-detail-label .cfm-chat-actions {
   display: inline-flex;
@@ -5601,7 +5601,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 .cfm-persona-detail-value {
   font-size: 12px;
   line-height: 1.65;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--cfm-detail-text, rgba(255, 255, 255, 0.88));
   white-space: normal;
   word-break: break-word;
 }
@@ -5639,7 +5639,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 }
 .cfm-preset-detail-value {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--cfm-detail-text, rgba(255, 255, 255, 0.55));
 }
 .cfm-preset-detail-filled {
   color: #a6e3a1;
@@ -6533,6 +6533,45 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   font-size: 12px;
   text-align: center;
   opacity: 0.8;
+}
+.cfm-theme-preview-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--preview-detail-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.cfm-theme-preview-detail-label {
+  font-weight: 700;
+  color: var(--preview-detail-label, #89b4fa);
+  font-size: 10px;
+}
+.cfm-theme-preview-detail-text {
+  color: var(--preview-detail-text, rgba(255, 255, 255, 0.88));
+  font-size: 11px;
+}
+
+/* 分隔线 */
+.cfm-theme-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0.55;
+}
+.cfm-theme-separator::before,
+.cfm-theme-separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--SmartThemeBorderColor, #45475a);
+  opacity: 0.5;
 }
 
 /* 启用开关 */
