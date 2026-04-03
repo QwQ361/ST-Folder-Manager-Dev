@@ -3285,6 +3285,67 @@ jQuery(async () => {
   };
 
   /**
+   * 从当前主题中读取实际生效的 CSS 变量值，作为自定义美化弹窗的默认值
+   * 需要先临时移除自定义覆盖样式，读取原生主题值后再恢复
+   */
+  function getComputedThemeDefaults() {
+    // 临时移除自定义覆盖以读取原生主题色
+    const overrideEl = document.getElementById("cfm-custom-style-override");
+    if (overrideEl) overrideEl.remove();
+
+    const ref = document.getElementById("cfm-popup") || document.documentElement;
+    const cs = getComputedStyle(ref);
+
+    /**
+     * 将 CSS 颜色值（rgb/rgba/hex/named）转为 #RRGGBB hex 字符串
+     */
+    function colorToHex(raw) {
+      if (!raw) return null;
+      const s = raw.trim();
+      if (/^#[0-9a-f]{6}$/i.test(s)) return s;
+      if (/^#[0-9a-f]{3}$/i.test(s)) {
+        return "#" + s[1] + s[1] + s[2] + s[2] + s[3] + s[3];
+      }
+      // rgb(r, g, b) / rgba(r, g, b, a)
+      const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (m) {
+        const r = parseInt(m[1]).toString(16).padStart(2, "0");
+        const g = parseInt(m[2]).toString(16).padStart(2, "0");
+        const b = parseInt(m[3]).toString(16).padStart(2, "0");
+        return `#${r}${g}${b}`;
+      }
+      return null;
+    }
+
+    /**
+     * 从 CSS 颜色值中提取 alpha 值
+     */
+    function colorToAlpha(raw) {
+      if (!raw) return 1;
+      const m = raw.trim().match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/i);
+      return m ? parseFloat(m[1]) : 1;
+    }
+
+    const bgRaw = cs.getPropertyValue("--SmartThemeBlurTintColor").trim();
+    const textRaw = cs.getPropertyValue("--SmartThemeBodyColor").trim();
+    const borderRaw = cs.getPropertyValue("--SmartThemeBorderColor").trim();
+    const accentRaw = cs.getPropertyValue("--SmartThemeQuoteColor").trim();
+
+    const defaults = {
+      bgColor: colorToHex(bgRaw) || "#1e1e2e",
+      bgOpacity: bgRaw ? colorToAlpha(bgRaw) : 0.95,
+      textColor: colorToHex(textRaw) || "#cdd6f4",
+      borderColor: colorToHex(borderRaw) || "#45475a",
+      accentColor: colorToHex(accentRaw) || "#89b4fa",
+    };
+
+    // 恢复自定义覆盖
+    if (overrideEl) document.head.appendChild(overrideEl);
+
+    return defaults;
+  }
+
+  /**
    * 将用户的自定义外观应用到所有 CFM 相关元素（主弹窗、子弹窗、浮动按钮）
    * 通过注入/更新一个 <style> 标签，用多选择器覆盖 CSS 自定义属性
    * 这样即使子弹窗 append 到 body 上，也能获得自定义样式
@@ -3384,14 +3445,17 @@ jQuery(async () => {
     const styles = extension_settings[extensionName].customStyles || {};
     const saved = styles[themeName] || {};
 
+    // 读取当前主题的实际颜色作为默认值
+    const themeDefaults = getComputedThemeDefaults();
+
     // 工作副本（修改只影响预览，不影响保存的数据）
     const draft = {
       enabled: saved.enabled ?? false,
-      bgColor: saved.bgColor || "#1e1e2e",
-      bgOpacity: saved.bgOpacity ?? 0.95,
-      textColor: saved.textColor || "#cdd6f4",
-      borderColor: saved.borderColor || "#45475a",
-      accentColor: saved.accentColor || "#89b4fa",
+      bgColor: saved.bgColor || themeDefaults.bgColor,
+      bgOpacity: saved.bgOpacity ?? themeDefaults.bgOpacity,
+      textColor: saved.textColor || themeDefaults.textColor,
+      borderColor: saved.borderColor || themeDefaults.borderColor,
+      accentColor: saved.accentColor || themeDefaults.accentColor,
       blur: saved.blur ?? 0,
     };
 
@@ -3569,10 +3633,10 @@ jQuery(async () => {
     overlay.find(".cfm-theme-reset-btn").on("click", function () {
       const target = $(this).data("target");
       const defaults = {
-        bgColor: "#1e1e2e",
-        textColor: "#cdd6f4",
-        borderColor: "#45475a",
-        accentColor: "#89b4fa",
+        bgColor: themeDefaults.bgColor,
+        textColor: themeDefaults.textColor,
+        borderColor: themeDefaults.borderColor,
+        accentColor: themeDefaults.accentColor,
       };
       if (defaults[target]) {
         draft[target] = defaults[target];
