@@ -3432,7 +3432,7 @@ jQuery(async () => {
       detailBgColor: "#d0d3de",
       detailBgOpacity: 0.45,
       detailTextColor: "#5c5f75",
-      detailLabelColor: "#3e7cf8ff",
+      detailLabelColor: "#74a2ec",
     },
     transparent: {
       name: "半透明",
