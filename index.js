@@ -3505,7 +3505,7 @@ jQuery(async () => {
                 <label>背景颜色</label>
                 <div class="cfm-theme-row-right">
                   <input type="color" id="cfm-theme-bg-color" value="${draft.bgColor}">
-                  <span class="cfm-theme-color-hex" id="cfm-theme-bg-hex">${draft.bgColor}</span>
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-bg-hex" value="${draft.bgColor}" spellcheck="false" autocomplete="off">
                   <button class="cfm-theme-reset-btn" data-target="bgColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>
               </div>
@@ -3520,7 +3520,7 @@ jQuery(async () => {
                 <label>文字颜色</label>
                 <div class="cfm-theme-row-right">
                   <input type="color" id="cfm-theme-text-color" value="${draft.textColor}">
-                  <span class="cfm-theme-color-hex" id="cfm-theme-text-hex">${draft.textColor}</span>
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-text-hex" value="${draft.textColor}" spellcheck="false" autocomplete="off">
                   <button class="cfm-theme-reset-btn" data-target="textColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>
               </div>
@@ -3528,7 +3528,7 @@ jQuery(async () => {
                 <label>边框颜色</label>
                 <div class="cfm-theme-row-right">
                   <input type="color" id="cfm-theme-border-color" value="${draft.borderColor}">
-                  <span class="cfm-theme-color-hex" id="cfm-theme-border-hex">${draft.borderColor}</span>
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-border-hex" value="${draft.borderColor}" spellcheck="false" autocomplete="off">
                   <button class="cfm-theme-reset-btn" data-target="borderColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>
               </div>
@@ -3536,7 +3536,7 @@ jQuery(async () => {
                 <label>强调色</label>
                 <div class="cfm-theme-row-right">
                   <input type="color" id="cfm-theme-accent-color" value="${draft.accentColor}">
-                  <span class="cfm-theme-color-hex" id="cfm-theme-accent-hex">${draft.accentColor}</span>
+                  <input type="text" class="cfm-theme-color-hex" id="cfm-theme-accent-hex" value="${draft.accentColor}" spellcheck="false" autocomplete="off">
                   <button class="cfm-theme-reset-btn" data-target="accentColor" title="重置"><i class="fa-solid fa-rotate-left"></i></button>
                 </div>
               </div>
@@ -3598,24 +3598,66 @@ jQuery(async () => {
     // 颜色选择器
     overlay.find("#cfm-theme-bg-color").on("input", function () {
       draft.bgColor = this.value;
-      overlay.find("#cfm-theme-bg-hex").text(this.value);
+      overlay.find("#cfm-theme-bg-hex").val(this.value);
       refreshPreview();
     });
     overlay.find("#cfm-theme-text-color").on("input", function () {
       draft.textColor = this.value;
-      overlay.find("#cfm-theme-text-hex").text(this.value);
+      overlay.find("#cfm-theme-text-hex").val(this.value);
       refreshPreview();
     });
     overlay.find("#cfm-theme-border-color").on("input", function () {
       draft.borderColor = this.value;
-      overlay.find("#cfm-theme-border-hex").text(this.value);
+      overlay.find("#cfm-theme-border-hex").val(this.value);
       refreshPreview();
     });
     overlay.find("#cfm-theme-accent-color").on("input", function () {
       draft.accentColor = this.value;
-      overlay.find("#cfm-theme-accent-hex").text(this.value);
+      overlay.find("#cfm-theme-accent-hex").val(this.value);
       refreshPreview();
     });
+
+    // 色码文本输入框（支持手填 #RRGGBB / #RGB）
+    function normalizeHexColor(value) {
+      if (!value) return null;
+      const normalized = value.trim().toLowerCase();
+      if (/^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+      if (/^#[0-9a-f]{3}$/.test(normalized)) {
+        return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+      }
+      return null;
+    }
+
+    function bindHexInput(textSelector, colorSelector, draftKey) {
+      const input = overlay.find(textSelector);
+
+      // 输入过程中允许自由编辑，不强制回写，避免删字符时“弹回”
+      input.on("input", function () {
+        const normalized = normalizeHexColor(this.value);
+        if (!normalized) return;
+        draft[draftKey] = normalized;
+        overlay.find(colorSelector).val(normalized);
+        refreshPreview();
+      });
+
+      // 提交或失焦时：合法则规范化，不合法则恢复当前已生效值
+      input.on("change blur", function () {
+        const normalized = normalizeHexColor(this.value);
+        if (normalized) {
+          draft[draftKey] = normalized;
+          overlay.find(colorSelector).val(normalized);
+          $(this).val(normalized);
+          refreshPreview();
+          return;
+        }
+        $(this).val(draft[draftKey]);
+      });
+    }
+
+    bindHexInput("#cfm-theme-bg-hex", "#cfm-theme-bg-color", "bgColor");
+    bindHexInput("#cfm-theme-text-hex", "#cfm-theme-text-color", "textColor");
+    bindHexInput("#cfm-theme-border-hex", "#cfm-theme-border-color", "borderColor");
+    bindHexInput("#cfm-theme-accent-hex", "#cfm-theme-accent-color", "accentColor");
 
     // 滑块
     overlay.find("#cfm-theme-bg-opacity").on("input", function () {
@@ -3654,7 +3696,7 @@ jQuery(async () => {
           accentColor: "#cfm-theme-accent-hex",
         };
         overlay.find(inputMap[target]).val(defaults[target]);
-        overlay.find(hexMap[target]).text(defaults[target]);
+        overlay.find(hexMap[target]).val(defaults[target]);
         refreshPreview();
       }
     });
