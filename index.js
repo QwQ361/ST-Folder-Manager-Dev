@@ -3959,12 +3959,13 @@ jQuery(async () => {
 
       $("body").append(pickerPanel);
 
-      // 阻止面板内所有触摸/点击事件冒泡到 document，防止被外层处理器捕获
+      // 阻止面板内事件冒泡到 document，防止被外层处理器捕获
+      // 注意：使用 bubbling phase（第三参数 false），这样子元素的事件处理器先执行
       pickerPanel[0].addEventListener("touchstart", (e) => e.stopPropagation(), { passive: false });
       pickerPanel[0].addEventListener("touchend", (e) => e.stopPropagation(), { passive: false });
-      pickerPanel[0].addEventListener("click", (e) => e.stopPropagation(), true);
-      pickerPanel[0].addEventListener("mousedown", (e) => e.stopPropagation(), true);
-      pickerPanel[0].addEventListener("mouseup", (e) => e.stopPropagation(), true);
+      pickerPanel[0].addEventListener("click", (e) => e.stopPropagation(), false);
+      pickerPanel[0].addEventListener("mousedown", (e) => e.stopPropagation(), false);
+      pickerPanel[0].addEventListener("mouseup", (e) => e.stopPropagation(), false);
 
       // 用 pickerOverlay 别名保持下面代码兼容
       const pickerOverlay = pickerPanel;
