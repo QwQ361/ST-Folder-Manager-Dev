@@ -4211,20 +4211,31 @@ jQuery(async () => {
     const savedPos = JSON.parse(
       localStorage.getItem(STORAGE_KEY_BTN_POS) || "null",
     );
-    if (savedPos)
+    if (savedPos) {
+      // 边界校正：防止在不同设备/分辨率下按钮超出屏幕
+      let posTop = parseInt(savedPos.top, 10) || 150;
+      let posLeft = parseInt(savedPos.left, 10);
+      const btnSize = 44;
+      const winW = $(window).width();
+      const winH = $(window).height();
+      if (isNaN(posLeft) || posLeft > winW - btnSize) posLeft = winW - btnSize - 10;
+      if (posLeft < 0) posLeft = 10;
+      if (posTop > winH - btnSize) posTop = winH - btnSize - 10;
+      if (posTop < 0) posTop = 10;
       btn.css({
-        top: savedPos.top,
-        left: savedPos.left,
+        top: posTop + "px",
+        left: posLeft + "px",
         right: "auto",
         bottom: "auto",
       });
-    else
+    } else {
       btn.css({
         top: "150px",
         right: "15px",
         left: "auto",
         bottom: "auto",
       });
+    }
 
     let isDragging = false,
       hasMoved = false,
