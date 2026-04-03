@@ -3993,7 +3993,7 @@ jQuery(async () => {
       // 更新表单
       overlay.find("#cfm-theme-enabled").prop("checked", true);
       overlay.find("#cfm-theme-bg-color").val(preset.bgColor);
-      overlay.find("#cfm-theme-bg-hex").text(preset.bgColor);
+      overlay.find("#cfm-theme-bg-hex").val(preset.bgColor);
       overlay
         .find("#cfm-theme-bg-opacity")
         .val(Math.round(preset.bgOpacity * 100));
@@ -4001,11 +4001,11 @@ jQuery(async () => {
         .find("#cfm-theme-opacity-val")
         .text(Math.round(preset.bgOpacity * 100) + "%");
       overlay.find("#cfm-theme-text-color").val(preset.textColor);
-      overlay.find("#cfm-theme-text-hex").text(preset.textColor);
+      overlay.find("#cfm-theme-text-hex").val(preset.textColor);
       overlay.find("#cfm-theme-border-color").val(preset.borderColor);
-      overlay.find("#cfm-theme-border-hex").text(preset.borderColor);
+      overlay.find("#cfm-theme-border-hex").val(preset.borderColor);
       overlay.find("#cfm-theme-accent-color").val(preset.accentColor);
-      overlay.find("#cfm-theme-accent-hex").text(preset.accentColor);
+      overlay.find("#cfm-theme-accent-hex").val(preset.accentColor);
       overlay.find("#cfm-theme-blur").val(preset.blur);
       overlay.find("#cfm-theme-blur-val").text(preset.blur + "px");
       overlay.find("#cfm-theme-detail-bg-color").val(draft.detailBgColor);
