@@ -915,6 +915,9 @@ jQuery(async () => {
         selectedFolder: null,
         expandedNodes: [],
       };
+    // 移动端顶部栏避让开关（默认开启）
+    if (extension_settings[extensionName].mobileTopbarAvoid === undefined)
+      extension_settings[extensionName].mobileTopbarAvoid = true;
     // 角色卡右栏排序模式持久化：null | "az" | "za" | "time"
     if (extension_settings[extensionName].charRightSortMode === undefined)
       extension_settings[extensionName].charRightSortMode = null;
@@ -19892,6 +19895,9 @@ jQuery(async () => {
     _personasPreloadPromise = getCurrentPersonas();
 
     const overlay = $('<div id="cfm-overlay"></div>');
+    if (window.innerWidth <= 768 && extension_settings[extensionName].mobileTopbarAvoid !== false) {
+      overlay.addClass("cfm-topbar-avoid");
+    }
     const popup = $(`
             <div id="cfm-popup">
                 <div class="cfm-header">
@@ -26070,6 +26076,31 @@ jQuery(async () => {
     body.append(section);
   }
 
+  // ==================== 共享：移动端顶部栏避让开关 ====================
+  function renderMobileTopbarAvoidSection(body) {
+    const current = extension_settings[extensionName].mobileTopbarAvoid !== false;
+    const section = $(`
+      <div class="cfm-config-section">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="cfm-mobile-topbar-avoid" ${current ? "checked" : ""}>
+          <span>移动端避让顶部栏</span>
+        </label>
+        <div class="cfm-icon-config-hint">开启后，插件弹窗从酒馆顶部栏下方展开，不遮挡顶部栏按钮；关闭则全屏覆盖。仅影响移动端。</div>
+      </div>
+    `);
+    section.find("#cfm-mobile-topbar-avoid").on("change", function () {
+      const checked = $(this).prop("checked");
+      extension_settings[extensionName].mobileTopbarAvoid = checked;
+      getContext().saveSettingsDebounced();
+      // 实时更新当前已打开的 overlay
+      if (window.innerWidth <= 768) {
+        $("#cfm-overlay").toggleClass("cfm-topbar-avoid", checked);
+      }
+      toastr.success(checked ? "已开启顶部栏避让" : "已关闭顶部栏避让");
+    });
+    body.append(section);
+  }
+
   // ==================== 共享：自定义布局配置区域 ====================
   function renderCustomLayoutSection(body) {
     const layout = extension_settings[extensionName].customLayout;
@@ -26452,6 +26483,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.65 移动端顶部栏避让开关
+    renderMobileTopbarAvoidSection(body);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(body);
 
@@ -26792,6 +26825,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.65 移动端顶部栏避让开关
+    renderMobileTopbarAvoidSection(body);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(body);
 
@@ -27256,6 +27291,7 @@ jQuery(async () => {
     body.append(modeSection);
     renderTopbarIconConfigSection(body);
     renderDefaultPageConfigSection(body);
+    renderMobileTopbarAvoidSection(body);
     renderCustomLayoutSection(body);
 
     // 1. 创建新文件夹
