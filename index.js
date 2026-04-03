@@ -4025,14 +4025,14 @@ jQuery(async () => {
         pickerOverlay.remove();
       });
 
-      // 点击遮罩关闭（延迟绑定，防止 trigger 的 click 冒泡导致立即关闭）
-      setTimeout(() => {
-        pickerOverlay.on("click", function (e) {
-          if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
-            pickerOverlay.remove();
-          }
-        });
-      }, 100);
+      // 点击遮罩关闭（使用时间戳防护，防止触摸穿透导致立即关闭）
+      const pickerCreatedAt = Date.now();
+      pickerOverlay.on("click touchend", function (e) {
+        if (Date.now() - pickerCreatedAt < 400) return; // 忽略创建后400ms内的事件
+        if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
+          pickerOverlay.remove();
+        }
+      });
     }
 
     // 为所有 color input 在移动端覆盖自定义色板触发器
@@ -4062,6 +4062,32 @@ jQuery(async () => {
           "cfm-theme-detail-label-color": "detailLabelColor",
         };
 
+        // 使用 touchend 触发（而非 click），避免移动端触摸穿透
+        let triggerTouchMoved = false;
+        trigger[0].addEventListener("touchstart", function (e) {
+          triggerTouchMoved = false;
+          e.stopPropagation();
+        }, { passive: true });
+        trigger[0].addEventListener("touchmove", function () {
+          triggerTouchMoved = true;
+        }, { passive: true });
+        trigger[0].addEventListener("touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (triggerTouchMoved) return;
+          const draftKey = draftKeyMap[inputId];
+          if (!draftKey) return;
+          const hexSel = "#" + inputId.replace("-color", "-hex");
+
+          openMobileColorPicker(draft[draftKey], (hex) => {
+            draft[draftKey] = hex;
+            colorInput.val(hex);
+            trigger.css("background", hex);
+            overlay.find(hexSel).val(hex);
+            refreshPreview();
+          });
+        }, { passive: false });
+        // PC端回退（click）
         trigger.on("click", function (e) {
           e.preventDefault();
           e.stopPropagation();
