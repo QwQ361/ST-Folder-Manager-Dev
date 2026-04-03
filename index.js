@@ -4025,12 +4025,14 @@ jQuery(async () => {
         pickerOverlay.remove();
       });
 
-      // 点击遮罩关闭
-      pickerOverlay.on("click", function (e) {
-        if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
-          pickerOverlay.remove();
-        }
-      });
+      // 点击遮罩关闭（延迟绑定，防止 trigger 的 click 冒泡导致立即关闭）
+      setTimeout(() => {
+        pickerOverlay.on("click", function (e) {
+          if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
+            pickerOverlay.remove();
+          }
+        });
+      }, 100);
     }
 
     // 为所有 color input 在移动端覆盖自定义色板触发器

@@ -6850,7 +6850,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  z-index: 10100;
+  z-index: 100020;
   display: flex;
   align-items: flex-end;
   justify-content: center;
