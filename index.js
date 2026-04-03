@@ -3851,6 +3851,220 @@ jQuery(async () => {
       refreshPreview();
     });
 
+    // ─── 移动端自定义色板 ───
+    const isMobileDevice = () => "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+    /**
+     * 打开移动端友好的颜色选择面板
+     * @param {string} currentColor - 当前颜色 hex
+     * @param {Function} onSelect - 选中颜色回调 (hex) => void
+     */
+    function openMobileColorPicker(currentColor, onSelect) {
+      // 移除已有面板
+      $(".cfm-mobile-color-picker-overlay").remove();
+
+      // 预定义常用色
+      const swatches = [
+        // 灰阶
+        "#000000", "#1a1a2e", "#2d2d44", "#3c3f55", "#4c4f69", "#5c5f75",
+        "#6c7086", "#7f849c", "#9399b2", "#a6adc8", "#bac2de", "#cdd6f4",
+        "#e0e0e0", "#f0f0f0", "#ffffff",
+        // 红系
+        "#f38ba8", "#e06080", "#d32f2f", "#b71c1c", "#ff5252",
+        // 橙黄系
+        "#fab387", "#ff9800", "#f57c00", "#ffb74d", "#ffd54f",
+        // 绿系
+        "#a6e3a1", "#66bb6a", "#388e3c", "#00c853", "#b9f6ca",
+        // 青蓝系
+        "#89dceb", "#74c7ec", "#89b4fa", "#1e66f5", "#0288d1",
+        // 紫粉系
+        "#cba6f7", "#b4befe", "#9c27b0", "#7b1fa2", "#f5c2e7",
+      ];
+
+      // HSL工具函数
+      function hexToHsl(hex) {
+        hex = hex.replace(/^#/, "");
+        const r = parseInt(hex.substring(0, 2), 16) / 255;
+        const g = parseInt(hex.substring(2, 4), 16) / 255;
+        const b = parseInt(hex.substring(4, 6), 16) / 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max === min) { h = s = 0; }
+        else {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+          }
+        }
+        return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+      }
+
+      function hslToHex(h, s, l) {
+        s /= 100; l /= 100;
+        const a = s * Math.min(l, 1 - l);
+        const f = (n) => {
+          const k = (n + h / 30) % 12;
+          const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+          return Math.round(255 * color).toString(16).padStart(2, "0");
+        };
+        return `#${f(0)}${f(8)}${f(4)}`;
+      }
+
+      let [curH, curS, curL] = hexToHsl(currentColor || "#ffffff");
+      let selectedHex = currentColor || "#ffffff";
+
+      const pickerOverlay = $(`
+        <div class="cfm-mobile-color-picker-overlay">
+          <div class="cfm-mobile-color-picker">
+            <div class="cfm-mcp-header">
+              <span>选择颜色</span>
+              <button class="cfm-mcp-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="cfm-mcp-preview-row">
+              <div class="cfm-mcp-preview-swatch" id="cfm-mcp-preview"></div>
+              <input type="text" class="cfm-mcp-hex-input" id="cfm-mcp-hex" value="${selectedHex}" spellcheck="false" autocomplete="off">
+            </div>
+
+            <div class="cfm-mcp-section-label">色相</div>
+            <div class="cfm-mcp-hue-wrap">
+              <input type="range" class="cfm-mcp-hue-slider" id="cfm-mcp-hue" min="0" max="360" value="${curH}">
+            </div>
+
+            <div class="cfm-mcp-section-label">饱和度</div>
+            <div class="cfm-mcp-slider-wrap">
+              <input type="range" class="cfm-mcp-sat-slider" id="cfm-mcp-sat" min="0" max="100" value="${curS}">
+            </div>
+
+            <div class="cfm-mcp-section-label">亮度</div>
+            <div class="cfm-mcp-slider-wrap">
+              <input type="range" class="cfm-mcp-lit-slider" id="cfm-mcp-lit" min="0" max="100" value="${curL}">
+            </div>
+
+            <div class="cfm-mcp-section-label">常用颜色</div>
+            <div class="cfm-mcp-swatches">
+              ${swatches.map(c => `<div class="cfm-mcp-swatch" data-color="${c}" style="background:${c}"></div>`).join("")}
+            </div>
+
+            <div class="cfm-mcp-footer">
+              <button class="cfm-btn cfm-mcp-cancel">取消</button>
+              <button class="cfm-btn cfm-mcp-confirm">确定</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      $(".cfm-popup-overlay").append(pickerOverlay);
+
+      const previewEl = pickerOverlay.find("#cfm-mcp-preview");
+      const hexInput = pickerOverlay.find("#cfm-mcp-hex");
+      const hueSlider = pickerOverlay.find("#cfm-mcp-hue");
+      const satSlider = pickerOverlay.find("#cfm-mcp-sat");
+      const litSlider = pickerOverlay.find("#cfm-mcp-lit");
+
+      function updateFromHSL() {
+        selectedHex = hslToHex(curH, curS, curL);
+        previewEl.css("background", selectedHex);
+        hexInput.val(selectedHex);
+        // 更新饱和度滑块渐变
+        satSlider.css("background", `linear-gradient(to right, ${hslToHex(curH, 0, curL)}, ${hslToHex(curH, 100, curL)})`);
+        // 更新亮度滑块渐变
+        litSlider.css("background", `linear-gradient(to right, #000000, ${hslToHex(curH, curS, 50)}, #ffffff)`);
+      }
+      updateFromHSL();
+
+      hueSlider.on("input", function () {
+        curH = parseInt(this.value);
+        updateFromHSL();
+      });
+      satSlider.on("input", function () {
+        curS = parseInt(this.value);
+        updateFromHSL();
+      });
+      litSlider.on("input", function () {
+        curL = parseInt(this.value);
+        updateFromHSL();
+      });
+
+      hexInput.on("change blur", function () {
+        const v = normalizeHexColor(this.value);
+        if (v) {
+          selectedHex = v;
+          [curH, curS, curL] = hexToHsl(v);
+          hueSlider.val(curH);
+          satSlider.val(curS);
+          litSlider.val(curL);
+          updateFromHSL();
+        } else {
+          this.value = selectedHex;
+        }
+      });
+
+      // 预定义色板点击
+      pickerOverlay.find(".cfm-mcp-swatch").on("click", function () {
+        const c = $(this).data("color");
+        selectedHex = c;
+        [curH, curS, curL] = hexToHsl(c);
+        hueSlider.val(curH);
+        satSlider.val(curS);
+        litSlider.val(curL);
+        updateFromHSL();
+      });
+
+      // 确定
+      pickerOverlay.find(".cfm-mcp-confirm").on("click", function () {
+        onSelect(selectedHex);
+        pickerOverlay.remove();
+      });
+
+      // 取消/关闭
+      pickerOverlay.find(".cfm-mcp-cancel, .cfm-mcp-close").on("click", function () {
+        pickerOverlay.remove();
+      });
+
+      // 点击遮罩关闭
+      pickerOverlay.on("click", function (e) {
+        if ($(e.target).hasClass("cfm-mobile-color-picker-overlay")) {
+          pickerOverlay.remove();
+        }
+      });
+    }
+
+    // 为所有 color input 在移动端拦截并使用自定义色板
+    if (isMobileDevice()) {
+      overlay.find('input[type="color"]').each(function () {
+        const colorInput = $(this);
+        // 用一个可视色块替代原生 color input 的交互
+        colorInput.on("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const hexSel = "#" + this.id.replace("-color", "-hex");
+          const draftKeyMap = {
+            "cfm-theme-bg-color": "bgColor",
+            "cfm-theme-text-color": "textColor",
+            "cfm-theme-border-color": "borderColor",
+            "cfm-theme-accent-color": "accentColor",
+            "cfm-theme-detail-bg-color": "detailBgColor",
+            "cfm-theme-detail-text-color": "detailTextColor",
+            "cfm-theme-detail-label-color": "detailLabelColor",
+          };
+          const draftKey = draftKeyMap[this.id];
+          if (!draftKey) return;
+
+          openMobileColorPicker(draft[draftKey], (hex) => {
+            draft[draftKey] = hex;
+            colorInput.val(hex);
+            overlay.find(hexSel).val(hex);
+            refreshPreview();
+          });
+          return false;
+        });
+      });
+    }
+
     // 颜色选择器
     overlay.find("#cfm-theme-bg-color").on("input", function () {
       draft.bgColor = this.value;
