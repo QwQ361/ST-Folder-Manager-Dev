@@ -1,9 +1,127 @@
 // 酒馆资源管理器 - Edge收藏夹风格双栏布局
+// 在 jQuery 回调之前捕获当前脚本路径，用于后续动态加载同目录下的资源
+const _cfmCurrentScriptSrc = document.currentScript?.src || "";
 jQuery(async () => {
   const extensionName = "ST-Char-Folder-Manager";
   const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
   const STORAGE_KEY_BTN_POS = "cfm-button-pos";
   const STORAGE_KEY = "cfm-folder-config"; // legacy
+
+  // ==================== 简繁转换模块加载 ====================
+  // 动态加载 s2t.js（简繁逐字转换字典）
+  // 注意：SillyTavern 以 type="module" 加载扩展 JS，document.currentScript 在模块中始终为 null
+  // 因此通过多种降级策略推断实际文件夹路径
+  try {
+    let s2tUrl = "";
+    if (_cfmCurrentScriptSrc) {
+      // 策略1：从 document.currentScript.src 推断（非 module 模式下有效）
+      s2tUrl = _cfmCurrentScriptSrc.replace(/\/[^\/]*$/, "/s2t.js");
+    } else {
+      // 策略2：从 DOM 中已加载的本扩展 <script> 标签推断
+      // SillyTavern 在 addExtensionScript() 中会创建 <script src="/scripts/extensions/third-party/XXX/index.js">
+      const selfScript = document.querySelector('script[src*="Folder-Manager"][src$="index.js"]');
+      if (selfScript) {
+        s2tUrl = selfScript.src.replace(/\/[^\/]*$/, "/s2t.js");
+      } else {
+        // 策略3：从已加载的 CSS <link> 标签推断
+        const cssLink = document.querySelector('link[href*="Folder-Manager"][href$="style.css"]');
+        if (cssLink) {
+          s2tUrl = cssLink.href.replace(/style\.css$/, "s2t.js");
+        } else {
+          // 策略4：最终降级使用硬编码路径
+          s2tUrl = `/${extensionFolderPath}/s2t.js`;
+        }
+      }
+    }
+    const s2tScript = document.createElement("script");
+    s2tScript.src = s2tUrl;
+    document.head.appendChild(s2tScript);
+    await new Promise((resolve, reject) => {
+      s2tScript.onload = resolve;
+      s2tScript.onerror = () => {
+        console.warn("[CFM] s2t.js 加载失败，简繁转换不可用，尝试路径:", s2tUrl);
+        resolve(); // 不阻塞主流程
+      };
+    });
+  } catch (e) {
+    console.warn("[CFM] 加载简繁转换字典异常:", e);
+  }
+
+  /**
+   * 将简体中文文本转换为繁体中文（如果当前设置为繁体）
+   * @param {string} text - 简体中文文本
+   * @returns {string} 转换后的文本
+   */
+  function cfmT(text) {
+    if (!text) return text;
+    const ext = (typeof getContext === "function" ? getContext().extensionSettings : {})?.[extensionName];
+    if (ext?.language !== "zh-TW") return text;
+    return window._cfm_s2t?.toTraditional?.(text) ?? text;
+  }
+
+  /**
+   * 遍历 DOM 子树中的所有文本节点，执行简繁转换
+   * @param {Element} root - 根元素
+   */
+  function cfmConvertDomText(root) {
+    if (!root || !window._cfm_s2t) return;
+    const ext = (typeof getContext === "function" ? getContext().extensionSettings : {})?.[extensionName];
+    if (ext?.language !== "zh-TW") return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while ((node = walker.nextNode())) {
+      const orig = node.nodeValue;
+      if (!orig || !/[\u4e00-\u9fff]/.test(orig)) continue;
+      const converted = window._cfm_s2t.toTraditional(orig);
+      if (converted !== orig) node.nodeValue = converted;
+    }
+    // 同时转换 placeholder / title / aria-label 等属性
+    root.querySelectorAll?.("[placeholder],[title],[aria-label]")?.forEach?.((el) => {
+      ["placeholder", "title", "aria-label"].forEach((attr) => {
+        const v = el.getAttribute(attr);
+        if (v && /[\u4e00-\u9fff]/.test(v)) {
+          const cv = window._cfm_s2t.toTraditional(v);
+          if (cv !== v) el.setAttribute(attr, cv);
+        }
+      });
+    });
+  }
+
+  // CFM 专用 toastr 包装（自动简繁转换，不影响酒馆其他组件）
+  const cfmToastr = {
+    success: (msg, title, ...rest) => toastr.success(cfmT(msg), title ? cfmT(title) : title, ...rest),
+    info: (msg, title, ...rest) => toastr.info(cfmT(msg), title ? cfmT(title) : title, ...rest),
+    warning: (msg, title, ...rest) => toastr.warning(cfmT(msg), title ? cfmT(title) : title, ...rest),
+    error: (msg, title, ...rest) => toastr.error(cfmT(msg), title ? cfmT(title) : title, ...rest),
+  };
+
+  // ==================== 全局 MutationObserver：自动简繁转换 ====================
+  // 监听 body 下 CFM 相关 overlay/popup 的插入与内容变化，自动转换文本
+  (function initCfmS2tObserver() {
+    const observer = new MutationObserver((mutations) => {
+      const ext = (typeof getContext === "function" ? getContext().extensionSettings : {})?.[extensionName];
+      if (ext?.language !== "zh-TW" || !window._cfm_s2t) return;
+      for (const m of mutations) {
+        // 新增节点
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          // 只处理 CFM 相关的元素（id 或 class 包含 cfm）
+          const isCfm = node.id?.startsWith?.("cfm-") ||
+            node.className?.toString?.().includes?.("cfm-") ||
+            node.querySelector?.("[id^='cfm-'],[class*='cfm-']");
+          if (isCfm) cfmConvertDomText(node);
+        }
+      }
+    });
+    // 延迟启动，确保 body 可用
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+      document.addEventListener("DOMContentLoaded", () => {
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+    }
+  })();
 
   // ==================== 资源类型管理 ====================
   let currentResourceType = "chars"; // 'chars' | 'presets' | 'worldinfo' | 'themes' | 'backgrounds'
@@ -918,6 +1036,9 @@ jQuery(async () => {
     // 移动端顶部栏避让开关（默认开启）
     if (extension_settings[extensionName].mobileTopbarAvoid === undefined)
       extension_settings[extensionName].mobileTopbarAvoid = true;
+    // 界面语言："zh-CN"(简体中文，默认) | "zh-TW"(繁体中文)
+    if (!extension_settings[extensionName].language)
+      extension_settings[extensionName].language = "zh-CN";
     // 角色卡右栏排序模式持久化：null | "az" | "za" | "time"
     if (extension_settings[extensionName].charRightSortMode === undefined)
       extension_settings[extensionName].charRightSortMode = null;
@@ -26101,6 +26222,32 @@ jQuery(async () => {
     body.append(section);
   }
 
+  // ==================== 共享：界面语言切换（简体/繁体中文） ====================
+  function renderLanguageSwitchSection(body) {
+    const current = extension_settings[extensionName].language || "zh-CN";
+    const section = $(`
+      <div class="cfm-config-section">
+        <label>界面语言</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="cfm-lang-btn menu_button ${current === "zh-CN" ? "cfm-mode-active" : ""}" data-lang="zh-CN" style="flex:1;">简体中文</button>
+          <button class="cfm-lang-btn menu_button ${current === "zh-TW" ? "cfm-mode-active" : ""}" data-lang="zh-TW" style="flex:1;">繁體中文</button>
+        </div>
+        <div class="cfm-icon-config-hint">切换插件界面显示的中文字体。切换后需重新打开插件生效。</div>
+      </div>
+    `);
+    section.find(".cfm-lang-btn").on("click touchend", function (e) {
+      if (e.type === "touchend") e.preventDefault();
+      const lang = $(this).data("lang");
+      if (lang === (extension_settings[extensionName].language || "zh-CN")) return;
+      extension_settings[extensionName].language = lang;
+      getContext().saveSettingsDebounced();
+      section.find(".cfm-lang-btn").removeClass("cfm-mode-active");
+      $(this).addClass("cfm-mode-active");
+      toastr.success(lang === "zh-TW" ? "已切換為繁體中文，重新打開插件後生效" : "已切换为简体中文，重新打开插件后生效");
+    });
+    body.append(section);
+  }
+
   // ==================== 共享：自定义布局配置区域 ====================
   function renderCustomLayoutSection(body) {
     const layout = extension_settings[extensionName].customLayout;
@@ -26485,6 +26632,8 @@ jQuery(async () => {
     renderDefaultPageConfigSection(body);
     // 0.65 移动端顶部栏避让开关
     renderMobileTopbarAvoidSection(body);
+    // 0.66 界面语言切换
+    renderLanguageSwitchSection(body);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(body);
 
@@ -26827,6 +26976,8 @@ jQuery(async () => {
     renderDefaultPageConfigSection(body);
     // 0.65 移动端顶部栏避让开关
     renderMobileTopbarAvoidSection(body);
+    // 0.66 界面语言切换
+    renderLanguageSwitchSection(body);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(body);
 
@@ -27292,6 +27443,7 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     renderDefaultPageConfigSection(body);
     renderMobileTopbarAvoidSection(body);
+    renderLanguageSwitchSection(body);
     renderCustomLayoutSection(body);
 
     // 1. 创建新文件夹
