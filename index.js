@@ -38280,17 +38280,23 @@ jQuery(async () => {
 
     return new Promise((resolve) => {
       let overlayPressStarted = false;
+      const openedAt = Date.now();
+      const overlayCloseGuardMs = 650;
       const close = (result) => {
         overlay.remove();
         resolve(result);
       };
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
-        overlayPressStarted = $(e.target).hasClass("cfm-edit-popup-overlay");
+        const isOverlayTarget = $(e.target).hasClass("cfm-edit-popup-overlay");
+        const elapsed = Date.now() - openedAt;
+        overlayPressStarted = isOverlayTarget && elapsed >= overlayCloseGuardMs;
       });
       overlay.on("click", (e) => {
         const clickedOverlay = $(e.target).hasClass("cfm-edit-popup-overlay");
-        if (clickedOverlay && overlayPressStarted) close(null);
+        const elapsed = Date.now() - openedAt;
+        if (clickedOverlay && overlayPressStarted && elapsed >= overlayCloseGuardMs)
+          close(null);
         overlayPressStarted = false;
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
