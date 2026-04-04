@@ -20794,6 +20794,7 @@ jQuery(async () => {
           // 恢复左侧面板默认高度
           leftPane.style.height = "";
           leftPane.style.maxHeight = "";
+          leftPane.style.minHeight = "";
         };
 
         const showFullscreenConfirm = () => {
@@ -20824,17 +20825,19 @@ jQuery(async () => {
             overlay.remove();
             dialog.remove();
             _fullscreenConfirmPending = false;
-            // 恢复一点高度，避免卡在最小值
-            leftPane.style.height = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
-            leftPane.style.maxHeight = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+            // 恢复默认高度
+            leftPane.style.height = "";
+            leftPane.style.maxHeight = "";
+            leftPane.style.minHeight = "";
           });
           overlay.on("click touchend", (e) => {
             e.preventDefault();
             overlay.remove();
             dialog.remove();
             _fullscreenConfirmPending = false;
-            leftPane.style.height = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
-            leftPane.style.maxHeight = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+            leftPane.style.height = "";
+            leftPane.style.maxHeight = "";
+            leftPane.style.minHeight = "";
           });
           $("#cfm-popup").append(overlay).append(dialog);
         };
@@ -20865,6 +20868,7 @@ jQuery(async () => {
           );
           leftPane.style.height = `${nextLeftHeight}px`;
           leftPane.style.maxHeight = `${nextLeftHeight}px`;
+          leftPane.style.minHeight = `${nextLeftHeight}px`;
         };
 
         pathEl.addEventListener("pointerdown", (ev) => {
