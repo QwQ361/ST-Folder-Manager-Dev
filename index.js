@@ -20804,8 +20804,6 @@ jQuery(async () => {
         const showFullscreenConfirm = () => {
           if (_fullscreenConfirmPending) return;
           _fullscreenConfirmPending = true;
-          // 记录拖拽开始前的高度，取消时恢复
-          const savedHeight = startLeftHeight;
           // 创建确认弹窗
           const overlay = $('<div class="cfm-fullscreen-confirm-overlay"></div>');
           const dialog = $(`
@@ -20826,24 +20824,19 @@ jQuery(async () => {
             _fullscreenConfirmPending = false;
             enterBottomFullscreen();
           });
-          const restoreHeight = () => {
-            leftPane.style.height = `${savedHeight}px`;
-            leftPane.style.maxHeight = `${savedHeight}px`;
-            leftPane.style.minHeight = `${savedHeight}px`;
-          };
           dialog.find(".cfm-fullscreen-cancel").on("click touchend", (e) => {
             e.preventDefault();
             overlay.remove();
             dialog.remove();
             _fullscreenConfirmPending = false;
-            restoreHeight();
+            // 保持在最顶部（最小高度），不恢复
           });
           overlay.on("click touchend", (e) => {
             e.preventDefault();
             overlay.remove();
             dialog.remove();
             _fullscreenConfirmPending = false;
-            restoreHeight();
+            // 保持在最顶部（最小高度），不恢复
           });
           $("#cfm-popup").append(overlay).append(dialog);
         };
