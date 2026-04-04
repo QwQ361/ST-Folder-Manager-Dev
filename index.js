@@ -6093,21 +6093,6 @@ jQuery(async () => {
         resolve({ action, remember });
       };
 
-      const rememberInput = overlay.find(
-        ".cfm-entry-transfer-complete-remember",
-      );
-      const rememberLabel = overlay.find(".cfm-cb-check-label");
-
-      rememberLabel.on("click", (e) => {
-        if ($(e.target).is('input[type="checkbox"]')) return;
-        e.preventDefault();
-        e.stopPropagation();
-        rememberInput.prop("checked", !rememberInput.prop("checked"));
-      });
-      rememberInput.on("click touchend", (e) => {
-        e.stopPropagation();
-      });
-
       overlay
         .find(".cfm-entry-transfer-complete-target")
         .on("click touchend", (e) => {
