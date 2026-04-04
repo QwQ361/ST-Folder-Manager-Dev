@@ -1204,6 +1204,14 @@ jQuery(async () => {
     // 预设自定义顺序：用于默认排序下保持手动/复制插入后的相对顺序
     if (!Array.isArray(extension_settings[extensionName].presetCustomOrder))
       extension_settings[extensionName].presetCustomOrder = [];
+    // 条目互通完成后的跳转策略："ask" | "target" | "origin"
+    if (extension_settings[extensionName].entryTransferPostAction === undefined)
+      extension_settings[extensionName].entryTransferPostAction = "ask";
+    const transferPostAction = String(
+      extension_settings[extensionName].entryTransferPostAction || "ask",
+    );
+    if (!["ask", "target", "origin"].includes(transferPostAction))
+      extension_settings[extensionName].entryTransferPostAction = "ask";
   }
   ensureSettings();
 
@@ -5997,6 +6005,212 @@ jQuery(async () => {
     });
   }
 
+  function getEntryTransferPostActionMode() {
+    ensureSettings();
+    const saved = String(
+      extension_settings[extensionName].entryTransferPostAction || "ask",
+    );
+    return ["ask", "target", "origin"].includes(saved) ? saved : "ask";
+  }
+
+  function setEntryTransferPostActionMode(mode, save = true) {
+    ensureSettings();
+    const normalized = ["ask", "target", "origin"].includes(String(mode))
+      ? String(mode)
+      : "ask";
+    extension_settings[extensionName].entryTransferPostAction = normalized;
+    if (save) getContext().saveSettingsDebounced();
+    return normalized;
+  }
+
+  function showEntryTransferProgressLoading(
+    sourceEntries,
+    targetType,
+    targetName,
+  ) {
+    const host = $("#cfm-overlay");
+    if (!host.length) return null;
+
+    host.find(".cfm-entry-transfer-progress-loading").remove();
+
+    const entryCount = Array.isArray(sourceEntries) ? sourceEntries.length : 0;
+    const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
+    const loading = $(
+      `<div class="cfm-preset-detail-opening-loading cfm-entry-transfer-progress-loading" aria-live="polite" aria-busy="true">
+        <div class="cfm-preset-detail-opening-loading-box">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>正在将 ${entryCount} 个条目缝合到${targetTypeLabel}「${escapeHtml(targetName)}」...</span>
+        </div>
+      </div>`,
+    );
+
+    host.append(loading);
+    return () => {
+      loading.remove();
+    };
+  }
+
+  function showEntryTransferCompletionDialog(options = {}) {
+    const { targetType = "preset", targetName = "", insertedCount = 0 } =
+      options || {};
+    const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
+
+    return new Promise((resolve) => {
+      const overlay = $(`
+        <div class="cfm-edit-popup-overlay cfm-entry-transfer-complete-overlay">
+          <div class="cfm-edit-popup cfm-entry-transfer-complete-dialog" style="max-width:min(calc(100vw - 24px), 440px);">
+            <div class="cfm-edit-popup-header">
+              <span><i class="fa-solid fa-circle-check"></i> 缝合完成</span>
+            </div>
+            <div class="cfm-entry-transfer-complete-body" style="display:flex;flex-direction:column;gap:10px;padding:16px 18px 10px;">
+              <div class="cfm-entry-transfer-complete-title" style="font-size:14px;font-weight:700;line-height:1.5;color:var(--SmartThemeBodyColor, #eef4ff);">
+                已将 ${insertedCount} 个条目缝合到${targetTypeLabel}「${escapeHtml(targetName)}」
+              </div>
+              <div class="cfm-entry-transfer-complete-desc" style="font-size:12px;line-height:1.6;opacity:0.86;">
+                是否立即跳转到刚刚接收条目的目标${targetTypeLabel}？选择“留在当前页面”则继续停留在当前查看位置。
+              </div>
+              <label class="cfm-cb-check-label" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-top:2px;">
+                <input type="checkbox" class="cfm-entry-transfer-complete-remember" style="margin-top:2px;">
+                <span style="font-size:12px;line-height:1.5;">以后不再提示，并记住这次选择</span>
+              </label>
+            </div>
+            <div class="cfm-edit-popup-footer">
+              <button class="menu_button cfm-entry-transfer-complete-target"><i class="fa-solid fa-arrow-up-right-from-square"></i> 跳到目标${targetTypeLabel}</button>
+              <button class="menu_button cfm-entry-transfer-complete-origin"><i class="fa-solid fa-location-dot"></i> 留在当前页面</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      let settled = false;
+      const settle = (action = "origin") => {
+        if (settled) return;
+        settled = true;
+        const remember = !!overlay
+          .find(".cfm-entry-transfer-complete-remember")
+          .prop("checked");
+        overlay.remove();
+        resolve({ action, remember });
+      };
+
+      overlay
+        .find(".cfm-entry-transfer-complete-target")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settle("target");
+        });
+      overlay
+        .find(".cfm-entry-transfer-complete-origin")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settle("origin");
+        });
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-edit-popup-overlay")) {
+          settle("origin");
+        }
+      });
+
+      const host = $("#cfm-popup");
+      if (host.length) host.append(overlay);
+      else $("body").append(overlay);
+    });
+  }
+
+  function setEntryTransferTargetTab(tabId) {
+    const normalizedTab = tabId === "worldinfo" ? "worldinfo" : "presets";
+    currentResourceType = normalizedTab;
+
+    const overlay = $("#cfm-overlay");
+    if (!overlay.length) return false;
+
+    overlay.find(".cfm-tab").removeClass("cfm-tab-active");
+    overlay
+      .find(`.cfm-tab[data-tab="${normalizedTab}"]`)
+      .addClass("cfm-tab-active");
+
+    overlay.find("#cfm-chars-view").hide();
+    overlay.find("#cfm-presets-view").toggle(normalizedTab === "presets");
+    overlay.find("#cfm-worldinfo-view").toggle(normalizedTab === "worldinfo");
+    overlay.find("#cfm-themes-view").hide();
+    overlay.find("#cfm-backgrounds-view").hide();
+    overlay.find("#cfm-personas-view").hide();
+    overlay.find("#cfm-regex-view").hide();
+    overlay.find("#cfm-qr-view").hide();
+
+    overlay.find("#cfm-global-search-bar").hide();
+    overlay.find("#cfm-preset-search-bar").toggle(normalizedTab === "presets");
+    overlay
+      .find("#cfm-worldinfo-search-bar")
+      .toggle(normalizedTab === "worldinfo");
+    overlay.find("#cfm-theme-search-bar").hide();
+    overlay.find("#cfm-bg-search-bar").hide();
+    overlay.find("#cfm-persona-search-bar").hide();
+    overlay.find("#cfm-regex-search-bar").hide();
+    overlay.find("#cfm-qr-search-bar").hide();
+    overlay.find("#cfm-btn-copymode").hide();
+
+    return true;
+  }
+
+  function revealTransferredPresetTarget(presetName) {
+    const normalizedName = String(presetName || "").trim();
+    if (!normalizedName) return false;
+
+    const groups = getResourceGroups("presets");
+    const tree = getResFolderTree("presets");
+    const folderId = groups[normalizedName];
+    if (folderId && tree[folderId]) {
+      const path = getResFolderPath("presets", folderId);
+      for (const pid of path) presetExpandedNodes.add(pid);
+      selectedPresetFolder = folderId;
+    } else {
+      selectedPresetFolder = "__ungrouped__";
+    }
+
+    cfmPresetDetailExpandedNames.add(normalizedName);
+    setEntryTransferTargetTab("presets");
+    renderPresetsView();
+    scrollElementIntoViewCentered(() =>
+      Array.from(
+        document.querySelectorAll("#cfm-preset-right-list .cfm-row[data-res-id]"),
+      ).find((el) => el.getAttribute("data-res-id") === normalizedName),
+    );
+    return true;
+  }
+
+  async function revealTransferredWorldInfoTarget(bookName) {
+    const normalizedName = String(bookName || "").trim();
+    if (!normalizedName) return false;
+
+    const groups = getResourceGroups("worldinfo");
+    const tree = getResFolderTree("worldinfo");
+    const folderId = groups[normalizedName];
+    if (folderId && tree[folderId]) {
+      const path = getResFolderPath("worldinfo", folderId);
+      for (const pid of path) worldInfoExpandedNodes.add(pid);
+      selectedWorldInfoFolder = folderId;
+    } else {
+      selectedWorldInfoFolder = "__ungrouped__";
+    }
+
+    cfmWorldInfoEntryExpandedNames.add(normalizedName);
+    cfmWorldInfoEntryLastFocusedName = normalizedName;
+    setEntryTransferTargetTab("worldinfo");
+    await renderWorldInfoView();
+    scrollWorldInfoRowIntoView(normalizedName);
+    return true;
+  }
+
+  async function revealEntryTransferTargetResource(targetType, targetName) {
+    if (targetType === "worldinfo") {
+      return await revealTransferredWorldInfoTarget(targetName);
+    }
+    return revealTransferredPresetTarget(targetName);
+  }
+
   /**
    * 执行条目互通复制（含插入位置弹窗和原子回滚）
    */
@@ -6017,27 +6231,67 @@ jQuery(async () => {
       targetName,
       existingItems,
     });
-    if (!insertResult) return;
+    if (!insertResult) return null;
 
     const targetIndex = Number.isInteger(insertResult?.targetIndex)
       ? insertResult.targetIndex
       : existingItems.length;
 
-    if (targetType === "preset") {
-      await transferToPreset(
-        sourceType,
-        sourceEntries,
-        targetName,
-        targetIndex,
-      );
-    } else if (targetType === "worldinfo") {
-      await transferToWorldInfo(
-        sourceType,
-        sourceEntries,
-        targetName,
-        targetIndex,
-      );
+    const hideLoading = showEntryTransferProgressLoading(
+      sourceEntries,
+      targetType,
+      targetName,
+    );
+
+    let transferResult = null;
+    try {
+      if (targetType === "preset") {
+        transferResult = await transferToPreset(
+          sourceType,
+          sourceEntries,
+          targetName,
+          targetIndex,
+        );
+      } else if (targetType === "worldinfo") {
+        transferResult = await transferToWorldInfo(
+          sourceType,
+          sourceEntries,
+          targetName,
+          targetIndex,
+        );
+      }
+    } finally {
+      hideLoading?.();
     }
+
+    if (!transferResult) return null;
+
+    const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
+    const postActionMode = getEntryTransferPostActionMode();
+    let nextAction = postActionMode;
+
+    if (postActionMode === "ask") {
+      const dialogResult = await showEntryTransferCompletionDialog({
+        targetType,
+        targetName,
+        insertedCount: transferResult.insertedCount,
+      });
+      nextAction = dialogResult?.action || "origin";
+      if (dialogResult?.remember) {
+        nextAction = setEntryTransferPostActionMode(nextAction, true);
+        cfmToastr.success(
+          nextAction === "target"
+            ? `已记住：缝合完成后自动跳转到目标${targetTypeLabel}`
+            : "已记住：缝合完成后停留在当前页面",
+        );
+      }
+    }
+
+    if (nextAction === "target") {
+      await revealEntryTransferTargetResource(targetType, targetName);
+    }
+
+    return transferResult;
   }
 
   /**
@@ -6052,7 +6306,7 @@ jQuery(async () => {
     const pm = getContext().getPresetManager();
     if (!pm) {
       cfmToastr.error("无法获取预设管理器");
-      return;
+      return null;
     }
 
     // 临时切换到目标预设
@@ -6060,7 +6314,7 @@ jQuery(async () => {
     const targetValue = findPresetSelectValueByName(pm, targetPresetName);
     if (!targetValue) {
       cfmToastr.error(`找不到预设「${targetPresetName}」`);
-      return;
+      return null;
     }
 
     const needSwitch = currentPresetValue !== targetValue;
@@ -6143,7 +6397,7 @@ jQuery(async () => {
           cfmToastr.error(
             `因为第 ${i + 1} 个条目「${entry.name}」失败，本次缝合已回滚`,
           );
-          return;
+          return null;
         }
       }
 
@@ -6180,10 +6434,21 @@ jQuery(async () => {
           throw new Error(`预设「${targetPresetName}」插入位置保存失败`);
         }
       }
+
       cfmToastr.success(
         `已将 ${insertedPrompts.length} 个条目互通到预设「${targetPresetName}」`,
       );
       if (currentResourceType === "presets") refreshPresetPanelView();
+
+      return {
+        insertedCount: insertedPrompts.length,
+        targetType: "preset",
+        targetName: targetPresetName,
+      };
+    } catch (err) {
+      console.error("[CFM] 条目互通到预设失败", err);
+      cfmToastr.error(err?.message || `互通到预设「${targetPresetName}」失败`);
+      return null;
     } finally {
       // 恢复原预设
       if (needSwitch) {
@@ -6205,129 +6470,141 @@ jQuery(async () => {
     targetBookName,
     insertIndex = null,
   ) {
-    const wiData = await fetchWorldInfoDetailData(targetBookName);
-    if (!wiData) {
-      cfmToastr.error(`无法获取世界书「${targetBookName}」的数据`);
-      return;
-    }
-    if (!wiData.entries) wiData.entries = {};
-
-    const existingSortMode = getWorldInfoEntryDetailSortMode();
-    const existingEntries = getWorldInfoEntriesForDetail(
-      targetBookName,
-      wiData,
-      existingSortMode,
-    );
-
-    // 获取已有条目名（comment）集合用于去重
-    const existingNames = new Set(
-      Object.values(wiData.entries)
-        .map((e) => String(e.comment || ""))
-        .filter(Boolean),
-    );
-
-    // 计算下一个可用 uid
-    let nextUid =
-      Object.keys(wiData.entries).reduce(
-        (max, k) => Math.max(max, parseInt(k, 10) || 0),
-        0,
-      ) + 1;
-
-    const insertedUids = [];
-    const insertedEntries = [];
-
-    for (let i = 0; i < sourceEntries.length; i++) {
-      const entry = sourceEntries[i];
-      try {
-        // 重名加 -1 后缀
-        let newName = entry.name || "新条目";
-        let nameCounter = 0;
-        while (existingNames.has(newName)) {
-          nameCounter++;
-          newName = `${entry.name || "新条目"}-${nameCounter}`;
-        }
-        existingNames.add(newName);
-
-        const uid = nextUid++;
-        let newEntry;
-
-        if (sourceType === "worldinfo" && entry.rawEntry) {
-          // 世界书→世界书：完整复制
-          newEntry = structuredClone(entry.rawEntry);
-          newEntry.uid = uid;
-          newEntry.comment = newName;
-        } else {
-          // 预设→世界书：映射字段
-          newEntry = {
-            uid: uid,
-            key: [newName],
-            keysecondary: [],
-            comment: newName,
-            content: entry.content || "",
-            constant: false,
-            vectorized: false,
-            selective: true,
-            selectiveLogic: 0,
-            addMemo: true,
-            order: 100,
-            position: 0,
-            disable: false,
-            excludeRecursion: false,
-            preventRecursion: false,
-            delayUntilRecursion: false,
-            probability: 100,
-            useProbability: true,
-            depth: 4,
-            group: "",
-            groupOverride: false,
-            groupWeight: 100,
-            scanDepth: null,
-            caseSensitive: null,
-            matchWholeWords: null,
-            useGroupScoring: null,
-            automationId: "",
-            role: null,
-            sticky: null,
-            cooldown: null,
-            delay: null,
-          };
-        }
-
-        wiData.entries[String(uid)] = newEntry;
-        insertedUids.push(String(uid));
-        insertedEntries.push(newEntry);
-      } catch (innerErr) {
-        // 回滚
-        for (const insertedUid of insertedUids) {
-          delete wiData.entries[insertedUid];
-        }
-        cfmToastr.error(
-          `因为第 ${i + 1} 个条目「${entry.name}」失败，本次缝合已回滚`,
-        );
-        return;
+    try {
+      const wiData = await fetchWorldInfoDetailData(targetBookName);
+      if (!wiData) {
+        cfmToastr.error(`无法获取世界书「${targetBookName}」的数据`);
+        return null;
       }
+      if (!wiData.entries) wiData.entries = {};
+
+      const existingSortMode = getWorldInfoEntryDetailSortMode();
+      const existingEntries = getWorldInfoEntriesForDetail(
+        targetBookName,
+        wiData,
+        existingSortMode,
+      );
+
+      // 获取已有条目名（comment）集合用于去重
+      const existingNames = new Set(
+        Object.values(wiData.entries)
+          .map((e) => String(e.comment || ""))
+          .filter(Boolean),
+      );
+
+      // 计算下一个可用 uid
+      let nextUid =
+        Object.keys(wiData.entries).reduce(
+          (max, k) => Math.max(max, parseInt(k, 10) || 0),
+          0,
+        ) + 1;
+
+      const insertedUids = [];
+      const insertedEntries = [];
+
+      for (let i = 0; i < sourceEntries.length; i++) {
+        const entry = sourceEntries[i];
+        try {
+          // 重名加 -1 后缀
+          let newName = entry.name || "新条目";
+          let nameCounter = 0;
+          while (existingNames.has(newName)) {
+            nameCounter++;
+            newName = `${entry.name || "新条目"}-${nameCounter}`;
+          }
+          existingNames.add(newName);
+
+          const uid = nextUid++;
+          let newEntry;
+
+          if (sourceType === "worldinfo" && entry.rawEntry) {
+            // 世界书→世界书：完整复制
+            newEntry = structuredClone(entry.rawEntry);
+            newEntry.uid = uid;
+            newEntry.comment = newName;
+          } else {
+            // 预设→世界书：映射字段
+            newEntry = {
+              uid: uid,
+              key: [newName],
+              keysecondary: [],
+              comment: newName,
+              content: entry.content || "",
+              constant: false,
+              vectorized: false,
+              selective: true,
+              selectiveLogic: 0,
+              addMemo: true,
+              order: 100,
+              position: 0,
+              disable: false,
+              excludeRecursion: false,
+              preventRecursion: false,
+              delayUntilRecursion: false,
+              probability: 100,
+              useProbability: true,
+              depth: 4,
+              group: "",
+              groupOverride: false,
+              groupWeight: 100,
+              scanDepth: null,
+              caseSensitive: null,
+              matchWholeWords: null,
+              useGroupScoring: null,
+              automationId: "",
+              role: null,
+              sticky: null,
+              cooldown: null,
+              delay: null,
+            };
+          }
+
+          wiData.entries[String(uid)] = newEntry;
+          insertedUids.push(String(uid));
+          insertedEntries.push(newEntry);
+        } catch (innerErr) {
+          // 回滚
+          for (const insertedUid of insertedUids) {
+            delete wiData.entries[insertedUid];
+          }
+          cfmToastr.error(
+            `因为第 ${i + 1} 个条目「${entry.name}」失败，本次缝合已回滚`,
+          );
+          return null;
+        }
+      }
+
+      const normalizedInsertIndex = Math.max(
+        0,
+        Math.min(
+          Number.isInteger(insertIndex) ? insertIndex : existingEntries.length,
+          existingEntries.length,
+        ),
+      );
+      const orderedEntries = existingEntries
+        .map((entry) => entry?.raw)
+        .filter((entry) => entry && typeof entry === "object");
+      orderedEntries.splice(normalizedInsertIndex, 0, ...insertedEntries);
+      orderedEntries.forEach((entry, index) => {
+        entry.displayIndex = index;
+      });
+
+      await saveWorldInfoDetailData(targetBookName, wiData);
+      cfmToastr.success(
+        `已将 ${insertedUids.length} 个条目互通到世界书「${targetBookName}」`,
+      );
+      if (currentResourceType === "worldinfo") await renderWorldInfoView();
+
+      return {
+        insertedCount: insertedUids.length,
+        targetType: "worldinfo",
+        targetName: targetBookName,
+      };
+    } catch (err) {
+      console.error("[CFM] 条目互通到世界书失败", err);
+      cfmToastr.error(err?.message || `互通到世界书「${targetBookName}」失败`);
+      return null;
     }
-
-    const normalizedInsertIndex = Math.max(
-      0,
-      Math.min(
-        Number.isInteger(insertIndex) ? insertIndex : existingEntries.length,
-        existingEntries.length,
-      ),
-    );
-    const orderedEntries = existingEntries
-      .map((entry) => entry?.raw)
-      .filter((entry) => entry && typeof entry === "object");
-    orderedEntries.splice(normalizedInsertIndex, 0, ...insertedEntries);
-    orderedEntries.forEach((entry, index) => {
-      entry.displayIndex = index;
-    });
-
-    await saveWorldInfoDetailData(targetBookName, wiData);
-    cfmToastr.success(
-      `已将 ${insertedUids.length} 个条目互通到世界书「${targetBookName}」`,
-    );
-    if (currentResourceType === "worldinfo") renderWorldInfoView();
   }
 
   /**
@@ -28331,6 +28608,65 @@ jQuery(async () => {
     body.append(section);
   }
 
+  // ==================== 共享：条目缝合完成后的跳转策略 ====================
+  function renderEntryTransferPostActionSection(body) {
+    const saved = getEntryTransferPostActionMode();
+    const options = [
+      {
+        value: "ask",
+        label: "每次询问",
+        icon: "fa-circle-question",
+        hint: "每次条目缝合完成后弹出提示，由你决定是否跳转到目标预设/世界书。",
+      },
+      {
+        value: "target",
+        label: "自动跳到目标",
+        icon: "fa-arrow-up-right-from-square",
+        hint: "条目缝合完成后不再弹窗，直接跳到刚刚接收条目的目标预设/世界书。",
+      },
+      {
+        value: "origin",
+        label: "停留当前页",
+        icon: "fa-location-dot",
+        hint: "条目缝合完成后不再弹窗，继续停留在当前页面。",
+      },
+    ];
+
+    const optionsHtml = options
+      .map(
+        (o) =>
+          `<div class="cfm-default-page-option cfm-transfer-post-action-option ${saved === o.value ? "cfm-default-page-active" : ""}" data-value="${o.value}" title="${escapeHtml(o.hint)}"><i class="fa-solid ${o.icon}"></i><span>${o.label}</span></div>`,
+      )
+      .join("");
+
+    const currentHint = options.find((o) => o.value === saved)?.hint || "";
+    const section = $(`
+      <div class="cfm-config-section cfm-default-page-section">
+        <label>条目缝合完成后</label>
+        <div class="cfm-default-page-options">
+          ${optionsHtml}
+        </div>
+        <div class="cfm-icon-config-hint">${escapeHtml(currentHint)}</div>
+      </div>
+    `);
+
+    section
+      .find(".cfm-transfer-post-action-option")
+      .on("click touchend", function (e) {
+        e.preventDefault();
+        const value = $(this).data("value");
+        setEntryTransferPostActionMode(value, true);
+        section
+          .find(".cfm-transfer-post-action-option")
+          .removeClass("cfm-default-page-active");
+        $(this).addClass("cfm-default-page-active");
+        const option = options.find((o) => o.value === value);
+        section.find(".cfm-icon-config-hint").text(option?.hint || "");
+      });
+
+    body.append(section);
+  }
+
   // ==================== 共享：移动端顶部栏避让开关 ====================
   function renderMobileTopbarAvoidSection(body) {
     const current =
@@ -28771,6 +29107,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.63 条目缝合完成后的跳转策略
+    renderEntryTransferPostActionSection(body);
     // 0.65 移动端顶部栏避让开关
     renderMobileTopbarAvoidSection(body);
     // 0.66 界面语言切换
@@ -29115,6 +29453,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.63 条目缝合完成后的跳转策略
+    renderEntryTransferPostActionSection(body);
     // 0.65 移动端顶部栏避让开关
     renderMobileTopbarAvoidSection(body);
     // 0.66 界面语言切换
@@ -29584,6 +29924,7 @@ jQuery(async () => {
     body.append(modeSection);
     renderTopbarIconConfigSection(body);
     renderDefaultPageConfigSection(body);
+    renderEntryTransferPostActionSection(body);
     renderMobileTopbarAvoidSection(body);
     renderLanguageSwitchSection(body);
     renderCustomLayoutSection(body);
