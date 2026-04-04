@@ -38641,6 +38641,13 @@ jQuery(async () => {
     }, 300);
   }
 
+  function getCharacterDetailFieldValue(char, field) {
+    const dataValue = char?.data?.[field];
+    return dataValue !== undefined && dataValue !== null
+      ? dataValue
+      : char?.[field];
+  }
+
   async function showCharacterDetailFieldPopup(char, field) {
     const map = {
       description: {
@@ -38728,16 +38735,16 @@ jQuery(async () => {
     };
 
     const currentAlternateGreetings = normalizeGreetingItems(
-      char?.data?.alternate_greetings,
+      getCharacterDetailFieldValue(char, "alternate_greetings"),
     );
     let currentValue;
     if (field === "first_mes") {
-      currentValue = String(char?.data?.first_mes || "");
+      currentValue = String(getCharacterDetailFieldValue(char, "first_mes") || "");
     } else if (field === "alt_greetings") {
       const altIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
       currentValue = String(currentAlternateGreetings[altIndex] || "");
     } else {
-      currentValue = String(char?.data?.[field] || "");
+      currentValue = String(getCharacterDetailFieldValue(char, field) || "");
     }
     const canAppendGreeting = field === "alt_greetings";
     const deleteButtonText = field === "alt_greetings" ? "删除" : "清空";
@@ -38862,7 +38869,7 @@ jQuery(async () => {
     } else if (field === "alt_greetings") {
       // 其它开场：新增、删除、替换
       const existingGreetings = normalizeGreetingItems(
-        char.data.alternate_greetings,
+        getCharacterDetailFieldValue(char, "alternate_greetings"),
       );
       const currentAltIndex = Math.max(
         charRow.data("cfmAltGreetingIndex") || 0,
@@ -39179,12 +39186,16 @@ jQuery(async () => {
       return results;
     };
 
-    const data = char?.data || {};
+    const descriptionRaw = getCharacterDetailFieldValue(char, "description");
+    const firstMesRaw = getCharacterDetailFieldValue(char, "first_mes");
+    const alternateGreetingsRaw = getCharacterDetailFieldValue(
+      char,
+      "alternate_greetings",
+    );
     const description =
-      typeof data.description === "string" ? data.description.trim() : "";
-    const firstMes =
-      typeof data.first_mes === "string" ? data.first_mes.trim() : "";
-    const alternateGreetings = normalizeGreetingItems(data.alternate_greetings);
+      typeof descriptionRaw === "string" ? descriptionRaw.trim() : "";
+    const firstMes = typeof firstMesRaw === "string" ? firstMesRaw.trim() : "";
+    const alternateGreetings = normalizeGreetingItems(alternateGreetingsRaw);
 
     const sectionHtml = (label, value, extraClass = "", field = "") => `
       <div class="cfm-persona-detail-section cfm-char-detail-section ${extraClass}">
