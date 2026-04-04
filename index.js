@@ -15263,6 +15263,7 @@ jQuery(async () => {
   let _suppressPresetRegexToastDepth = 0;
   let _suppressPresetRegexToastUntil = 0;
   let _originalToastrFnsForPresetRegexToast = null;
+  let _pendingSuppressPresetRegexToastRestoreTimer = null;
 
   function shouldSuppressPresetRegexToast(message) {
     const text = String(message || "").trim();
@@ -15289,8 +15290,53 @@ jQuery(async () => {
     return hasRegexHint && hasReloadHint;
   }
 
+  function clearSuppressPresetRegexToastRestoreTimer() {
+    if (_pendingSuppressPresetRegexToastRestoreTimer) {
+      window.clearTimeout(_pendingSuppressPresetRegexToastRestoreTimer);
+      _pendingSuppressPresetRegexToastRestoreTimer = null;
+    }
+  }
+
+  function restorePresetRegexToastFnsIfNeeded() {
+    clearSuppressPresetRegexToastRestoreTimer();
+    if (_originalToastrFnsForPresetRegexToast && window.toastr) {
+      for (const [level, originalFn] of Object.entries(
+        _originalToastrFnsForPresetRegexToast,
+      )) {
+        window.toastr[level] = originalFn;
+      }
+    }
+    _originalToastrFnsForPresetRegexToast = null;
+    _suppressPresetRegexToastUntil = 0;
+  }
+
+  function scheduleSuppressPresetRegexToastRestore() {
+    if (_suppressPresetRegexToastDepth !== 0) return;
+
+    clearSuppressPresetRegexToastRestoreTimer();
+    const remainingMs = Math.max(
+      0,
+      _suppressPresetRegexToastUntil - Date.now(),
+    );
+    if (remainingMs > 0) {
+      _pendingSuppressPresetRegexToastRestoreTimer = window.setTimeout(() => {
+        _pendingSuppressPresetRegexToastRestoreTimer = null;
+        if (_suppressPresetRegexToastDepth !== 0) return;
+        if (Date.now() < _suppressPresetRegexToastUntil) {
+          scheduleSuppressPresetRegexToastRestore();
+          return;
+        }
+        restorePresetRegexToastFnsIfNeeded();
+      }, remainingMs);
+      return;
+    }
+
+    restorePresetRegexToastFnsIfNeeded();
+  }
+
   function beginSuppressPresetRegexToast(durationMs = 2600) {
     _suppressPresetRegexToastDepth += 1;
+    clearSuppressPresetRegexToastRestoreTimer();
     _suppressPresetRegexToastUntil = Math.max(
       _suppressPresetRegexToastUntil,
       Date.now() + Math.max(0, Number(durationMs) || 0),
@@ -15320,15 +15366,7 @@ jQuery(async () => {
         _suppressPresetRegexToastDepth -= 1;
       }
       if (_suppressPresetRegexToastDepth !== 0) return;
-      if (_originalToastrFnsForPresetRegexToast && window.toastr) {
-        for (const [level, originalFn] of Object.entries(
-          _originalToastrFnsForPresetRegexToast,
-        )) {
-          window.toastr[level] = originalFn;
-        }
-      }
-      _originalToastrFnsForPresetRegexToast = null;
-      _suppressPresetRegexToastUntil = 0;
+      scheduleSuppressPresetRegexToastRestore();
     };
 
     const delay = Math.max(0, Number(delayMs) || 0);
