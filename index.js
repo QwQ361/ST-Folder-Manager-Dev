@@ -20771,6 +20771,74 @@ jQuery(async () => {
         let startY = 0;
         let startLeftHeight = 0;
 
+        // ── 全屏模式辅助 ──
+        let _fullscreenConfirmPending = false;
+
+        const enterBottomFullscreen = () => {
+          $dualPane.addClass("cfm-bottom-fullscreen");
+          // 确保退出按钮存在
+          const $rightHeader = $(rightPane).find(".cfm-right-header");
+          if (!$rightHeader.find(".cfm-exit-fullscreen-btn").length) {
+            const exitBtn = $('<button class="cfm-exit-fullscreen-btn" title="退出全屏"><i class="fa-solid fa-compress"></i></button>');
+            exitBtn.on("click touchend", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              exitBottomFullscreen();
+            });
+            $rightHeader.prepend(exitBtn);
+          }
+        };
+
+        const exitBottomFullscreen = () => {
+          $dualPane.removeClass("cfm-bottom-fullscreen");
+          // 恢复左侧面板默认高度
+          leftPane.style.height = "";
+          leftPane.style.maxHeight = "";
+        };
+
+        const showFullscreenConfirm = () => {
+          if (_fullscreenConfirmPending) return;
+          _fullscreenConfirmPending = true;
+          // 创建确认弹窗
+          const overlay = $('<div class="cfm-fullscreen-confirm-overlay"></div>');
+          const dialog = $(`
+            <div class="cfm-fullscreen-confirm-dialog">
+              <div class="cfm-fullscreen-confirm-icon"><i class="fa-solid fa-expand"></i></div>
+              <div class="cfm-fullscreen-confirm-title">下方内容区全屏</div>
+              <div class="cfm-fullscreen-confirm-desc">将隐藏上方文件夹面板，内容区域全屏显示。可随时点击退出按钮恢复。</div>
+              <div class="cfm-fullscreen-confirm-actions">
+                <button class="cfm-btn cfm-fullscreen-cancel">取消</button>
+                <button class="cfm-btn cfm-fullscreen-ok"><i class="fa-solid fa-check"></i> 确定</button>
+              </div>
+            </div>
+          `);
+          dialog.find(".cfm-fullscreen-ok").on("click touchend", (e) => {
+            e.preventDefault();
+            overlay.remove();
+            dialog.remove();
+            _fullscreenConfirmPending = false;
+            enterBottomFullscreen();
+          });
+          dialog.find(".cfm-fullscreen-cancel").on("click touchend", (e) => {
+            e.preventDefault();
+            overlay.remove();
+            dialog.remove();
+            _fullscreenConfirmPending = false;
+            // 恢复一点高度，避免卡在最小值
+            leftPane.style.height = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+            leftPane.style.maxHeight = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+          });
+          overlay.on("click touchend", (e) => {
+            e.preventDefault();
+            overlay.remove();
+            dialog.remove();
+            _fullscreenConfirmPending = false;
+            leftPane.style.height = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+            leftPane.style.maxHeight = `${MIN_LEFT_PANE_HEIGHT + 40}px`;
+          });
+          $("#cfm-popup").append(overlay).append(dialog);
+        };
+
         const stopDrag = () => {
           if (!dragging) return;
           dragging = false;
@@ -20778,6 +20846,11 @@ jQuery(async () => {
           document.removeEventListener("pointermove", onPointerMove);
           document.removeEventListener("pointerup", stopDrag);
           document.removeEventListener("pointercancel", stopDrag);
+          // 检查是否拖到了最小值 → 触发全屏确认
+          const currentHeight = leftPane.getBoundingClientRect().height;
+          if (currentHeight <= MIN_LEFT_PANE_HEIGHT + 5) {
+            showFullscreenConfirm();
+          }
         };
 
         const onPointerMove = (ev) => {
@@ -20796,6 +20869,8 @@ jQuery(async () => {
 
         pathEl.addEventListener("pointerdown", (ev) => {
           if (window.innerWidth > 768) return;
+          // 如果已经是全屏模式，不启动拖动
+          if ($dualPane.hasClass("cfm-bottom-fullscreen")) return;
           dragging = true;
           startY = ev.clientY;
           startLeftHeight = leftPane.getBoundingClientRect().height;
