@@ -4739,6 +4739,8 @@ select.cfm-wi-ctrl {
     min-width: 0;
     max-width: none;
     width: 100%;
+    text-align: center;
+    text-align-last: center;
   }
   .cfm-wi-ctrl-depth {
     grid-area: depth;
@@ -4753,22 +4755,31 @@ select.cfm-wi-ctrl {
   .cfm-wi-ctrl-prob-wrap {
     grid-area: prob;
     width: 100%;
+    min-height: 44px;
     justify-content: flex-start;
   }
   .cfm-wi-ctrl-prob {
     width: 42px;
   }
-  /* 行内控件更紧凑，但保留可点面积 */
+  .cfm-wi-ctrl-prob-suffix {
+    font-size: 1.02em;
+  }
+  /* 行内控件改为更高的触控尺寸（约为原先两倍），并同步继续放大文字 */
   .cfm-wi-ctrl {
-    font-size: 0.74em;
-    height: 22px;
-    line-height: 20px;
-    padding: 1px 4px;
+    font-size: 1.06em;
+    min-height: 44px;
+    height: 44px;
+    line-height: 42px;
+    padding: 2px 6px;
   }
   select.cfm-wi-ctrl {
-    height: 22px;
-    line-height: 20px;
-    padding: 1px 4px;
+    min-height: 44px;
+    height: 44px;
+    line-height: 42px;
+    padding: 2px 6px;
+  }
+  select.cfm-wi-ctrl option {
+    text-align: center;
   }
   /* 操作按钮保持在名称同一行 */
   .cfm-preset-detail-label .cfm-chat-actions {
@@ -4816,15 +4827,17 @@ select.cfm-wi-ctrl {
     gap: 3px;
   }
   .cfm-wi-ctrl {
-    font-size: 0.7em;
-    padding: 1px 3px;
+    font-size: 1.06em;
+    padding: 2px 6px;
   }
   .cfm-wi-ctrl-state {
     min-width: 36px;
   }
   .cfm-wi-ctrl-position {
     min-width: 0;
-    font-size: 0.68em;
+    font-size: 1.06em;
+    text-align: center;
+    text-align-last: center;
   }
   .cfm-wi-ctrl-depth,
   .cfm-wi-ctrl-order {
