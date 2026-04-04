@@ -21100,6 +21100,8 @@ jQuery(async () => {
           if (!$("#cfm-overlay").length) return;
           // 忽略程序化触发的点击（如 openNativePresetPromptEditor 中的 nativeButton.click()）
           if (e.originalEvent && !e.originalEvent.isTrusted) return;
+          // 临时抑制自动关闭（如 syncNativePersonaUI 中的 selectPersona 调用）
+          if (_cfmSuppressAutoClose) return;
           const target = $(e.target);
           if (
             target.closest("#cfm-overlay").length ||
@@ -35994,6 +35996,7 @@ jQuery(async () => {
    * 在 CFM 编辑 persona 后同步酒馆原生 UI，
    * 使名称/描述等更改立即可见，无需刷新页面。
    */
+  let _cfmSuppressAutoClose = false;
   function syncNativePersonaUI(avatarId) {
     if (!avatarId) return;
     // 延迟执行，确保 saveSettingsDebounced 已完成写入
@@ -36006,8 +36009,10 @@ jQuery(async () => {
           console.warn("[CFM] 刷新原生头像列表失败", e);
         }
       }
-      // 重新选择当前 persona 以触发原生 UI 更新
+      // 临时抑制移动端自动关闭，再重新选择 persona
+      _cfmSuppressAutoClose = true;
       selectPersona(avatarId);
+      setTimeout(() => { _cfmSuppressAutoClose = false; }, 500);
     }, 300);
   }
 
