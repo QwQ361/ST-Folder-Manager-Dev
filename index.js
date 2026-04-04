@@ -20761,11 +20761,15 @@ jQuery(async () => {
         const leftPane = dualPane.querySelector(".cfm-left-pane");
         const rightPane = dualPane.querySelector(".cfm-right-pane");
         const pathEl = dualPane.querySelector(".cfm-right-header .cfm-rh-path");
+        const countEl = dualPane.querySelector(".cfm-right-header .cfm-rh-count");
         if (!leftPane || !rightPane || !pathEl || pathEl.dataset.cfmPaneDragBound === "1") {
           return;
         }
         pathEl.dataset.cfmPaneDragBound = "1";
         pathEl.style.touchAction = "none";
+        if (countEl) {
+          countEl.style.touchAction = "none";
+        }
 
         let dragging = false;
         let startY = 0;
@@ -20871,7 +20875,7 @@ jQuery(async () => {
           leftPane.style.minHeight = `${nextLeftHeight}px`;
         };
 
-        pathEl.addEventListener("pointerdown", (ev) => {
+        const onPointerDown = (ev) => {
           if (window.innerWidth > 768) return;
           // 如果已经是全屏模式，不启动拖动
           if ($dualPane.hasClass("cfm-bottom-fullscreen")) return;
@@ -20882,7 +20886,11 @@ jQuery(async () => {
           document.addEventListener("pointermove", onPointerMove, { passive: false });
           document.addEventListener("pointerup", stopDrag);
           document.addEventListener("pointercancel", stopDrag);
-        });
+        };
+        pathEl.addEventListener("pointerdown", onPointerDown);
+        if (countEl) {
+          countEl.addEventListener("pointerdown", onPointerDown);
+        }
       });
     };
 
