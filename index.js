@@ -21098,10 +21098,26 @@ jQuery(async () => {
         .off("click.cfmMobileAutoClose touchend.cfmMobileAutoClose")
         .on("click.cfmMobileAutoClose touchend.cfmMobileAutoClose", (e) => {
           if (!$("#cfm-overlay").length) return;
+          // 忽略程序化触发的点击（如 openNativePresetPromptEditor 中的 nativeButton.click()）
+          if (e.originalEvent && !e.originalEvent.isTrusted) return;
           const target = $(e.target);
           if (
             target.closest("#cfm-overlay").length ||
             target.closest("#cfm-topbar-button").length
+          ) {
+            return;
+          }
+          // 排除 SillyTavern 原生弹窗（如预设编辑器、世界书编辑器等）
+          if (
+            target.closest(
+              [
+                "#completion_prompt_manager_popup",
+                "#world_info_data_container",
+                ".popup",
+                ".dialogue_popup",
+                ".shadow_popup",
+              ].join(", "),
+            ).length
           ) {
             return;
           }
