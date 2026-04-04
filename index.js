@@ -43043,9 +43043,14 @@ jQuery(async () => {
       !$("#themes").parent().find(".cfm-nf-btn").length
     ) {
       const themeBtn = $(
-        `<div class="cfm-nf-btn menu_button fa-solid fa-folder-tree" data-nf-type="themes" title="文件夹过滤"></div>`,
+        `<div class="cfm-nf-btn menu_button menu_button_icon fa-solid fa-folder-tree" data-nf-type="themes" title="文件夹过滤"></div>`,
       );
-      $("#themes").after(themeBtn);
+      // 插入到原生导入按钮的左边
+      if ($("#ui_preset_import_button").length) {
+        $("#ui_preset_import_button").before(themeBtn);
+      } else {
+        $("#themes").after(themeBtn);
+      }
       themeBtn.on("click touchend", function (e) {
         e.preventDefault();
         e.stopPropagation();
