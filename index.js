@@ -6453,30 +6453,15 @@ jQuery(async () => {
 
       const insertedPrompts = [];
       const insertedFieldKeys = [];
-      const promptDisplayFieldKeys = detailFields
-        .map((field) => String(field?.key || "").trim())
-        .filter((fieldKey) => fieldKey.startsWith("prompts."));
       const normalizedInsertIndex = Math.max(
         0,
         Math.min(
           Number.isInteger(insertIndex)
             ? insertIndex
-            : promptDisplayFieldKeys.length,
-          promptDisplayFieldKeys.length,
+            : currentOrderedFieldKeys.length,
+          currentOrderedFieldKeys.length,
         ),
       );
-      const insertBeforeFieldKey =
-        promptDisplayFieldKeys[normalizedInsertIndex] || null;
-      const insertBeforePromptId = insertBeforeFieldKey?.startsWith("prompts.")
-        ? insertBeforeFieldKey.slice("prompts.".length)
-        : "";
-      let promptListInsertIndex = insertBeforePromptId
-        ? promptList.findIndex(
-            (prompt) =>
-              getPresetPromptIdentifier(prompt) === insertBeforePromptId,
-          )
-        : promptList.length;
-      if (promptListInsertIndex < 0) promptListInsertIndex = promptList.length;
 
       for (let i = 0; i < sourceEntries.length; i++) {
         const entry = sourceEntries[i];
@@ -6517,8 +6502,7 @@ jQuery(async () => {
           if ("prompt" in newPrompt) newPrompt.prompt = newKey;
           newPrompt.name = newLabel;
 
-          promptList.splice(promptListInsertIndex, 0, newPrompt);
-          promptListInsertIndex += 1;
+          promptList.push(newPrompt);
           insertedPrompts.push(newPrompt);
           insertedFieldKeys.push(`prompts.${newKey}`);
         } catch (innerErr) {
@@ -6534,13 +6518,9 @@ jQuery(async () => {
         }
       }
 
-      const orderedInsertIndex = Math.min(
-        normalizedInsertIndex,
-        currentOrderedFieldKeys.length,
-      );
       const nextOrderedFieldKeys = [...currentOrderedFieldKeys];
       nextOrderedFieldKeys.splice(
-        orderedInsertIndex,
+        normalizedInsertIndex,
         0,
         ...insertedFieldKeys,
       );
@@ -12897,7 +12877,33 @@ jQuery(async () => {
   }
 
   function getPresetDataForDetail(pm, name) {
-    return getPresetDataForRename(pm, name);
+    const data = getPresetDataForRename(pm, name);
+    if (!data) return data;
+
+    // 如果查看的是当前正在使用的预设，则从 serviceSettings（活跃设置）
+    // 获取最新的 prompt_order，以反映在酒馆原生 UI 中的 remove/reorder 等操作。
+    // 因为 detachPrompt 只修改 serviceSettings.prompt_order（即 oai_settings），
+    // 而 getCompletionPresetByName 返回的是 presets 数组中的独立对象，
+    // 其 prompt_order 未被同步更新。
+    try {
+      if (isCurrentAppliedPreset(name) && typeof pm.getPresetList === "function") {
+        const { settings } = pm.getPresetList();
+        if (settings) {
+          // 同步 prompt_order：detachPrompt/appendPrompt 等操作只修改 serviceSettings
+          if (Array.isArray(settings.prompt_order)) {
+            data.prompt_order = structuredClone(settings.prompt_order);
+          }
+          // 同步 prompts：deletePrompt 等操作也只修改 serviceSettings.prompts
+          if (Array.isArray(settings.prompts)) {
+            data.prompts = structuredClone(settings.prompts);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Folder-Manager] getPresetDataForDetail: 获取活跃设置失败", e);
+    }
+
+    return data;
   }
 
   const PRESET_PROMPT_ORDER_DUMMY_ID = 100001;
@@ -17532,7 +17538,9 @@ jQuery(async () => {
     const presetData = getPresetDataForDetail(pm, preset.name);
     if (!presetData) return;
 
-    const fields = getPresetDetailFields(presetData);
+    const fields = getPresetDetailFields(presetData).filter(
+      (field) => !String(field?.sourceLabel || "").trim(),
+    );
     const isCurrentApplied = isCurrentAppliedPreset(preset.name);
     const isBatchOwner =
       cfmPresetDetailBatchMode && cfmPresetDetailBatchOwnerName === preset.name;
