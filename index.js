@@ -1951,6 +1951,47 @@ jQuery(async () => {
   const cfmIsTouchDevice = () =>
     "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
+  function recordTouchTapStart(e, prefix = "cfmTouchTap") {
+    const touch = e.originalEvent?.touches?.[0];
+    if (!touch) return;
+    const target = $(e.currentTarget);
+    target.data(`${prefix}StartX`, touch.clientX);
+    target.data(`${prefix}StartY`, touch.clientY);
+  }
+
+  function shouldIgnoreTouchTapAfterMove(
+    e,
+    { prefix = "cfmTouchTap", moveThreshold = 10, clickSuppressMs = 500 } = {},
+  ) {
+    const eventType = e?.type || "";
+    const target = $(e.currentTarget);
+    const now = Date.now();
+    const lastTouchAt = Number(target.data(`${prefix}LastTouchAt`) || 0);
+
+    if (eventType === "touchend") {
+      target.data(`${prefix}LastTouchAt`, now);
+      const touch = e.originalEvent?.changedTouches?.[0];
+      if (touch) {
+        const startX = Number(target.data(`${prefix}StartX`));
+        const startY = Number(target.data(`${prefix}StartY`));
+        if (Number.isFinite(startX) && Number.isFinite(startY)) {
+          const deltaX = Math.abs(touch.clientX - startX);
+          const deltaY = Math.abs(touch.clientY - startY);
+          if (deltaX > moveThreshold || deltaY > moveThreshold) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    return (
+      eventType === "click" &&
+      lastTouchAt &&
+      now - lastTouchAt < clickSuppressMs
+    );
+  }
+
   // ==================== 移动端触摸拖拽管理器 ====================
   const touchDragMgr = {
     active: false,
@@ -15745,16 +15786,10 @@ jQuery(async () => {
     cfmWorldInfoEntryBatchLastClicked = null;
   }
 
-  let cfmWorldInfoEntryLastTouchAt = 0;
   function shouldIgnoreWorldInfoEntryTap(e) {
-    const eventType = e?.type || "";
-    if (eventType === "touchend") {
-      cfmWorldInfoEntryLastTouchAt = Date.now();
-      return false;
-    }
-    return (
-      eventType === "click" && Date.now() - cfmWorldInfoEntryLastTouchAt < 500
-    );
+    return shouldIgnoreTouchTapAfterMove(e, {
+      prefix: "cfmWorldInfoEntryTap",
+    });
   }
 
   function bindWorldInfoEntryCollapseTargets(
@@ -16104,6 +16139,9 @@ jQuery(async () => {
       </div>
     `);
     detailToolbar
+      .find(".cfm-worldinfo-entry-sort-toggle, .cfm-worldinfo-entry-batch-toggle")
+      .on("touchstart", (e) => recordTouchTapStart(e, "cfmWorldInfoEntryTap"));
+    detailToolbar
       .find(".cfm-worldinfo-entry-sort-toggle")
       .on("click touchend", (e) => {
         if (shouldIgnoreWorldInfoEntryTap(e)) {
@@ -16168,6 +16206,11 @@ jQuery(async () => {
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-deactivate"><i class="fa-solid fa-stop"></i> 取消激活</button>
         </div>
       `);
+      batchToolbar
+        .find(
+          ".cfm-worldinfo-entry-batch-selall, .cfm-worldinfo-entry-batch-range, .cfm-entry-transfer-btn, .cfm-worldinfo-entry-batch-activate, .cfm-worldinfo-entry-batch-deactivate",
+        )
+        .on("touchstart", (e) => recordTouchTapStart(e, "cfmWorldInfoEntryTap"));
       batchToolbar
         .find(".cfm-worldinfo-entry-batch-selall")
         .on("click touchend", (e) => {
@@ -16357,6 +16400,11 @@ jQuery(async () => {
           ${isDetailOpen ? buildWorldInfoEntryDetailHtml(entry) : ""}
         </div>
       `);
+      row
+        .find(
+          ".cfm-edit-checkbox, .cfm-worldinfo-entry-active-toggle, .cfm-worldinfo-entry-edit, .cfm-worldinfo-entry-duplicate, .cfm-worldinfo-entry-delete",
+        )
+        .on("touchstart", (e) => recordTouchTapStart(e, "cfmWorldInfoEntryTap"));
 
       if (isBatchOwner) {
         row.on("click", (e) => {
@@ -17013,8 +17061,20 @@ jQuery(async () => {
       </div>
     `);
     detailToolbar
+      .find(".cfm-preset-detail-group-btn, .cfm-preset-detail-batch-toggle")
+      .on("touchstart", (e) => recordTouchTapStart(e, "cfmPresetDetailTap"));
+    detailToolbar
       .find(".cfm-preset-detail-group-btn")
       .on("click touchend", async (e) => {
+        if (
+          shouldIgnoreTouchTapAfterMove(e, {
+            prefix: "cfmPresetDetailTap",
+          })
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         if (!fields.length) return;
@@ -17024,6 +17084,15 @@ jQuery(async () => {
     detailToolbar
       .find(".cfm-preset-detail-batch-toggle")
       .on("click touchend", (e) => {
+        if (
+          shouldIgnoreTouchTapAfterMove(e, {
+            prefix: "cfmPresetDetailTap",
+          })
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         e.preventDefault();
         e.stopPropagation();
         if (!fields.length) return;
@@ -17066,8 +17135,22 @@ jQuery(async () => {
         </div>
       `);
       batchToolbar
+        .find(
+          ".cfm-preset-detail-batch-selall, .cfm-preset-detail-batch-range, .cfm-entry-transfer-btn, .cfm-preset-detail-batch-activate, .cfm-preset-detail-batch-deactivate",
+        )
+        .on("touchstart", (e) => recordTouchTapStart(e, "cfmPresetDetailTap"));
+      batchToolbar
         .find(".cfm-preset-detail-batch-selall")
         .on("click touchend", (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           if (allSel) {
@@ -17084,6 +17167,15 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-preset-detail-batch-range")
         .on("click touchend", (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           cfmPresetDetailBatchRangeMode = !cfmPresetDetailBatchRangeMode;
@@ -17094,6 +17186,15 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-preset-detail-batch-activate")
         .on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           await applyPresetDetailBatchActivation(
@@ -17105,6 +17206,15 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-preset-detail-batch-deactivate")
         .on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           await applyPresetDetailBatchActivation(
@@ -17116,6 +17226,15 @@ jQuery(async () => {
       batchToolbar
         .find(".cfm-entry-transfer-btn")
         .on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const selected = Array.from(cfmPresetDetailBatchSelected);
@@ -17173,6 +17292,11 @@ jQuery(async () => {
             ${sourceMetaHtml}
           </div>
         `);
+        row
+          .find(
+            ".cfm-edit-checkbox, .cfm-preset-field-active-toggle, .cfm-preset-detail-move-up, .cfm-preset-detail-move-down, .cfm-preset-detail-copy, .cfm-preset-detail-delete, .cfm-preset-detail-edit",
+          )
+          .on("touchstart", (e) => recordTouchTapStart(e, "cfmPresetDetailTap"));
 
         if (isBatchOwner) {
           row.on("click", (e) => {
@@ -17186,6 +17310,15 @@ jQuery(async () => {
             refreshPresetPanelView();
           });
           row.find(".cfm-edit-checkbox").on("click touchend", (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             togglePresetDetailBatchItem(fieldKey, e.shiftKey, fields);
@@ -17196,6 +17329,15 @@ jQuery(async () => {
         row
           .find(".cfm-preset-field-active-toggle")
           .on("click touchend", async (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             const el = $(e.currentTarget);
@@ -17217,6 +17359,15 @@ jQuery(async () => {
         row
           .find(".cfm-preset-detail-move-up")
           .on("click touchend", async (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             const currentFieldKey = $(e.currentTarget).data("field");
@@ -17231,6 +17382,15 @@ jQuery(async () => {
         row
           .find(".cfm-preset-detail-move-down")
           .on("click touchend", async (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             const currentFieldKey = $(e.currentTarget).data("field");
@@ -17243,6 +17403,15 @@ jQuery(async () => {
           });
 
         row.find(".cfm-preset-detail-copy").on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const currentFieldKey = $(e.currentTarget).data("field");
@@ -17252,6 +17421,15 @@ jQuery(async () => {
         row
           .find(".cfm-preset-detail-delete")
           .on("click touchend", async (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
             const currentFieldKey = $(e.currentTarget).data("field");
@@ -17259,6 +17437,15 @@ jQuery(async () => {
           });
 
         row.find(".cfm-preset-detail-edit").on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const currentFieldKey = $(e.currentTarget).data("field");
@@ -31341,18 +31528,32 @@ jQuery(async () => {
             row.next(".cfm-regex-sublist").hide().slideDown(150);
           }
         });
-        row.find(".cfm-preset-detail-toggle").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const name = p.name;
-          const detailSubList = row
-            .nextAll(".cfm-preset-detail-sublist")
-            .first();
-          if (cfmPresetDetailExpandedNames.has(name)) {
-            cfmPresetDetailExpandedNames.delete(name);
-            detailSubList.slideUp(150, function () {
-              $(this).remove();
-            });
+        row
+          .find(".cfm-preset-detail-toggle")
+          .on("touchstart", (e) =>
+            recordTouchTapStart(e, "cfmPresetDetailToggleTap"),
+          )
+          .on("click touchend", (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailToggleTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            const name = p.name;
+            const detailSubList = row
+              .nextAll(".cfm-preset-detail-sublist")
+              .first();
+            if (cfmPresetDetailExpandedNames.has(name)) {
+              cfmPresetDetailExpandedNames.delete(name);
+              detailSubList.slideUp(150, function () {
+                $(this).remove();
+              });
             row
               .find(".cfm-preset-detail-toggle i")
               .removeClass("fa-caret-down")
