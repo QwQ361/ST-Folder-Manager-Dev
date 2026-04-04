@@ -28291,6 +28291,18 @@ jQuery(async () => {
     row.find(".cfm-char-detail-toggle").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (e.type === "touchend") {
+        const touch = e.originalEvent?.changedTouches?.[0];
+        if (touch) {
+          const startX = Number(row.data("cfmCharDetailTouchStartX") || 0);
+          const startY = Number(row.data("cfmCharDetailTouchStartY") || 0);
+          const deltaX = Math.abs(touch.clientX - startX);
+          const deltaY = Math.abs(touch.clientY - startY);
+          if (deltaX > 10 || deltaY > 10) {
+            return;
+          }
+        }
+      }
       suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmCharDetailExpandedAvatars.has(avatar)) {
@@ -28359,6 +28371,13 @@ jQuery(async () => {
       }
     });
     // 移动端触摸拖拽
+    row.find(".cfm-char-detail-toggle").on("touchstart", function (e) {
+      const touch = e.originalEvent?.touches?.[0];
+      if (touch) {
+        row.data("cfmCharDetailTouchStartX", touch.clientX);
+        row.data("cfmCharDetailTouchStartY", touch.clientY);
+      }
+    });
     touchDragMgr.bind(row, () => {
       const singleData = {
         type: "char",
