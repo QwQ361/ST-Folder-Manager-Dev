@@ -35974,6 +35974,7 @@ jQuery(async () => {
       getContext().saveSettingsDebounced();
       cfmToastr.success("已更新User名称");
       refreshPersonaPanelView();
+      syncNativePersonaUI(persona.avatarId);
       return;
     }
 
@@ -35986,6 +35987,28 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
     cfmToastr.success(field === "title" ? "已更新User标题" : "已更新User具体设定");
     refreshPersonaPanelView();
+    syncNativePersonaUI(persona.avatarId);
+  }
+
+  /**
+   * 在 CFM 编辑 persona 后同步酒馆原生 UI，
+   * 使名称/描述等更改立即可见，无需刷新页面。
+   */
+  function syncNativePersonaUI(avatarId) {
+    if (!avatarId) return;
+    // 延迟执行，确保 saveSettingsDebounced 已完成写入
+    setTimeout(() => {
+      // 刷新原生头像列表（如果可用）
+      if (typeof getUserAvatarsFunc === "function") {
+        try {
+          getUserAvatarsFunc(true);
+        } catch (e) {
+          console.warn("[CFM] 刷新原生头像列表失败", e);
+        }
+      }
+      // 重新选择当前 persona 以触发原生 UI 更新
+      selectPersona(avatarId);
+    }, 300);
   }
 
   async function showCharacterDetailFieldPopup(char, field) {
