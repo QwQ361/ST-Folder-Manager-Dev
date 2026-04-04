@@ -1768,7 +1768,8 @@
     min-height: 0;
   }
 
-  .cfm-right-header .cfm-rh-path {
+  .cfm-right-header .cfm-rh-path,
+  .cfm-right-header .cfm-rh-count {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
