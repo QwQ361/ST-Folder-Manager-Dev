@@ -401,9 +401,9 @@
 }
 .cfm-row .cfm-row-name {
   flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .cfm-row .cfm-row-meta {
   font-size: 11px;
@@ -1286,11 +1286,10 @@
   gap: 0 6px;
 }
 .cfm-char-name-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* ========== 角色卡创作者/版本信息 ========== */
@@ -2722,9 +2721,9 @@
   flex: 1;
   font-size: 13px;
   color: var(--SmartThemeBodyColor, #cdd6f4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* 插入模式序号 */
@@ -3960,9 +3959,8 @@ option.cfm-nf-hidden {
   font-weight: 500;
   flex-shrink: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 /* 标题标签 */
 .cfm-persona-title {
@@ -4705,9 +4703,8 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 }
 .cfm-wi-preset-item-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
   cursor: pointer;
 }
 .cfm-wi-preset-item-name i {
@@ -4815,9 +4812,8 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 .cfm-wi-bind-entry-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .cfm-wi-bind-remove {
   cursor: pointer;
