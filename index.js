@@ -3627,9 +3627,14 @@ jQuery(async () => {
       ".cfm-edit-popup-overlay",
       ".cfm-edit-popup",
       "#cfm-folder-button",
+      "#cfm-theme-popup-overlay",
       ".cfm-theme-popup-overlay",
+      ".cfm-theme-popup",
+      "#cfm-config-overlay",
       ".cfm-config-overlay",
+      "#cfm-config-popup",
       ".cfm-batch-overlay",
+      ".cfm-batch-popup",
     ].join(",\n");
 
     let cssVars = "";
@@ -3664,7 +3669,14 @@ jQuery(async () => {
     if (style.blur > 0) {
       const blurVal = `blur(${style.blur}px)`;
       // backdrop-filter 只对有背景的容器元素生效
-      const blurSelector = "#cfm-popup, .cfm-edit-popup, #cfm-folder-button";
+      const blurSelector = [
+        "#cfm-popup",
+        ".cfm-edit-popup",
+        "#cfm-folder-button",
+        ".cfm-theme-popup",
+        "#cfm-config-popup",
+        ".cfm-batch-popup",
+      ].join(", ");
       blurCSS = `\n${blurSelector} {\n  backdrop-filter: ${blurVal} !important;\n  -webkit-backdrop-filter: ${blurVal} !important;\n}`;
     }
 
@@ -3907,9 +3919,57 @@ jQuery(async () => {
 
     const previewEl = overlay.find("#cfm-theme-preview")[0];
     const controlsEl = overlay.find("#cfm-theme-controls");
+    const popupEl = overlay.find(".cfm-theme-popup")[0];
+
+    function refreshPopupTheme() {
+      if (!overlay[0] || !popupEl) return;
+
+      if (!draft.enabled) {
+        overlay[0].style.removeProperty("--SmartThemeBlurTintColor");
+        overlay[0].style.removeProperty("--SmartThemeBodyColor");
+        overlay[0].style.removeProperty("--SmartThemeBorderColor");
+        overlay[0].style.removeProperty("--SmartThemeQuoteColor");
+        overlay[0].style.removeProperty("--cfm-detail-bg");
+        overlay[0].style.removeProperty("--cfm-detail-text");
+        overlay[0].style.removeProperty("--cfm-detail-label");
+        popupEl.style.removeProperty("backdrop-filter");
+        popupEl.style.removeProperty("-webkit-backdrop-filter");
+        return;
+      }
+
+      overlay[0].style.setProperty(
+        "--SmartThemeBlurTintColor",
+        hexToRgba(draft.bgColor, draft.bgOpacity ?? 1),
+      );
+      overlay[0].style.setProperty("--SmartThemeBodyColor", draft.textColor);
+      overlay[0].style.setProperty(
+        "--SmartThemeBorderColor",
+        draft.borderColor,
+      );
+      overlay[0].style.setProperty("--SmartThemeQuoteColor", draft.accentColor);
+      overlay[0].style.setProperty(
+        "--cfm-detail-bg",
+        hexToRgba(draft.detailBgColor, draft.detailBgOpacity ?? 0.03),
+      );
+      overlay[0].style.setProperty("--cfm-detail-text", draft.detailTextColor);
+      overlay[0].style.setProperty(
+        "--cfm-detail-label",
+        draft.detailLabelColor,
+      );
+
+      if (draft.blur > 0) {
+        const blurVal = `blur(${draft.blur}px)`;
+        popupEl.style.setProperty("backdrop-filter", blurVal);
+        popupEl.style.setProperty("-webkit-backdrop-filter", blurVal);
+      } else {
+        popupEl.style.removeProperty("backdrop-filter");
+        popupEl.style.removeProperty("-webkit-backdrop-filter");
+      }
+    }
 
     // 初始化预览
     function refreshPreview() {
+      refreshPopupTheme();
       updateThemePreview(previewEl, draft);
     }
     refreshPreview();
