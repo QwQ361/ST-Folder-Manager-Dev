@@ -6069,10 +6069,10 @@ jQuery(async () => {
               <div class="cfm-entry-transfer-complete-desc" style="font-size:12px;line-height:1.6;opacity:0.86;">
                 是否立即跳转到刚刚接收条目的目标${targetTypeLabel}？选择“留在当前页面”则继续停留在当前查看位置。
               </div>
-              <label class="cfm-cb-check-label" style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-top:2px;">
-                <input type="checkbox" class="cfm-entry-transfer-complete-remember" style="margin-top:2px;">
-                <span style="font-size:12px;line-height:1.5;">以后不再提示，并记住这次选择</span>
-              </label>
+              <button type="button" class="cfm-entry-transfer-complete-remember-toggle" data-checked="false" aria-pressed="false" style="display:flex;align-items:flex-start;justify-content:flex-start;gap:8px;width:100%;margin-top:2px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:inherit;cursor:pointer;">
+                <i class="fa-regular fa-square cfm-entry-transfer-complete-remember-icon" aria-hidden="true" style="margin-top:2px;color:rgba(255,255,255,0.72);"></i>
+                <span style="font-size:12px;line-height:1.5;text-align:left;">以后不再提示，并记住这次选择</span>
+              </button>
             </div>
             <div class="cfm-edit-popup-footer">
               <button class="menu_button cfm-entry-transfer-complete-target"><i class="fa-solid fa-arrow-up-right-from-square"></i> 跳到目标${targetTypeLabel}</button>
@@ -6086,12 +6086,59 @@ jQuery(async () => {
       const settle = (action = "origin") => {
         if (settled) return;
         settled = true;
-        const remember = !!overlay
-          .find(".cfm-entry-transfer-complete-remember")
-          .prop("checked");
+        const remember =
+          overlay
+            .find(".cfm-entry-transfer-complete-remember-toggle")
+            .attr("data-checked") === "true";
         overlay.remove();
         resolve({ action, remember });
       };
+
+      const rememberToggle = overlay.find(
+        ".cfm-entry-transfer-complete-remember-toggle",
+      );
+      const rememberIcon = overlay.find(
+        ".cfm-entry-transfer-complete-remember-icon",
+      );
+      const syncRememberToggle = (checked) => {
+        const normalized = !!checked;
+        rememberToggle.attr("data-checked", normalized ? "true" : "false");
+        rememberToggle.attr("aria-pressed", normalized ? "true" : "false");
+        rememberToggle.css({
+          background: normalized
+            ? "rgba(249, 226, 175, 0.14)"
+            : "rgba(255,255,255,0.04)",
+          borderColor: normalized
+            ? "rgba(249, 226, 175, 0.42)"
+            : "rgba(255,255,255,0.08)",
+        });
+        rememberIcon.attr(
+          "class",
+          normalized
+            ? "fa-solid fa-square-check cfm-entry-transfer-complete-remember-icon"
+            : "fa-regular fa-square cfm-entry-transfer-complete-remember-icon",
+        );
+        rememberIcon.css(
+          "color",
+          normalized ? "#f9e2af" : "rgba(255,255,255,0.72)",
+        );
+      };
+      const toggleRememberChecked = () => {
+        syncRememberToggle(rememberToggle.attr("data-checked") !== "true");
+      };
+
+      syncRememberToggle(false);
+      rememberToggle.on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleRememberChecked();
+      });
+      rememberToggle.on("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleRememberChecked();
+      });
 
       overlay
         .find(".cfm-entry-transfer-complete-target")
