@@ -29,12 +29,24 @@
   display: flex;
   align-items: center;
 }
+/* 保持主题原有顶栏图标占位，只避免自定义背景图被压到过小 */
+#cfm-topbar-button .drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 /* 自定义图标模式：使用背景图替换FA图标 */
 #cfm-topbar-button .drawer-icon.cfm-custom-icon {
+  min-width: 1.25em !important;
+  min-height: 1.25em !important;
+  display: inline-block !important;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
-  font-size: 0px !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  line-height: 1 !important;
+  overflow: visible !important;
 }
 /* 元素本身模式：隐藏 ::before 伪元素（避免美化主题的 ::before 遮挡） */
 #cfm-topbar-button
@@ -44,12 +56,14 @@
 }
 /* ::before 伪元素模式：隐藏FA图标文字，通过 ::before 显示自定义图标 */
 #cfm-topbar-button .drawer-icon.cfm-custom-icon.cfm-custom-icon-before {
-  font-size: 0px !important;
+  position: relative;
+  min-width: 1.25em !important;
+  min-height: 1.25em !important;
   color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
   background-image: none !important;
   overflow: visible !important;
-  min-width: 40px !important;
-  min-height: 40px !important;
+  line-height: 1 !important;
 }
 /* 当主题对 .drawer-toggle 设置了自定义图标时，确保可点击 */
 #cfm-topbar-button .drawer-toggle.cfm-custom-toggle-icon {

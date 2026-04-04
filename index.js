@@ -3221,6 +3221,17 @@ jQuery(async () => {
   // ==================== 顶栏图标美化适配 ====================
 
   /**
+   * 判断一个 computed background-image 是否是真正的图片图标
+   * 只接受 url(...) / image-set(...)，排除 linear-gradient(...) 等渐变文本背景
+   * @param {string} bgImage
+   * @returns {boolean}
+   */
+  function isImageIconBackground(bgImage) {
+    if (!bgImage || bgImage === "none" || bgImage === "") return false;
+    return /\b(?:url|image-set)\(/i.test(bgImage);
+  }
+
+  /**
    * 检测邻居按钮（用户设定管理）的实际图标样式
    * 通过 getComputedStyle 直接读取，不依赖 CSS 规则解析
    * @returns {{ cssUrl: string, target: string, styles: Object }|null}
@@ -3245,7 +3256,7 @@ jQuery(async () => {
       // 先检测元素本身的 background-image
       const computed = window.getComputedStyle(neighborIcon);
       const bgImage = computed.backgroundImage;
-      if (bgImage && bgImage !== "none" && bgImage !== "") {
+      if (isImageIconBackground(bgImage)) {
         const extraStyles = {};
         if (cls === ".drawer-toggle") {
           const w = computed.width;
@@ -3269,7 +3280,7 @@ jQuery(async () => {
       // 某些美化主题通过 .drawer-icon::before 设置图标
       const beforeComputed = window.getComputedStyle(neighborIcon, "::before");
       const beforeBgImage = beforeComputed.backgroundImage;
-      if (beforeBgImage && beforeBgImage !== "none" && beforeBgImage !== "") {
+      if (isImageIconBackground(beforeBgImage)) {
         const extraStyles = {};
         const w = beforeComputed.width;
         const h = beforeComputed.height;
@@ -3310,12 +3321,7 @@ jQuery(async () => {
           continue;
         for (const rule of sheet.cssRules) {
           if (!rule.selectorText || !rule.style) continue;
-          if (
-            !rule.style.backgroundImage ||
-            rule.style.backgroundImage === "none" ||
-            rule.style.backgroundImage === ""
-          )
-            continue;
+          if (!isImageIconBackground(rule.style.backgroundImage)) continue;
           // 放宽匹配：任何包含 #xxx 和 .drawer-icon 或 .drawer-toggle 的选择器
           // 同时支持 ::before 伪元素（某些美化主题通过 ::before 设置图标）
           // 支持逗号分隔的多选择器（matchAll 全局匹配）
@@ -3351,14 +3357,14 @@ jQuery(async () => {
         // 先检测元素本身
         const computed = window.getComputedStyle(iconEl);
         const bgImage = computed.backgroundImage;
-        if (bgImage && bgImage !== "none" && bgImage !== "") {
+        if (isImageIconBackground(bgImage)) {
           iconMap[btnId] = bgImage;
           break;
         }
         // 再检测 ::before 伪元素
         const beforeComputed = window.getComputedStyle(iconEl, "::before");
         const beforeBgImage = beforeComputed.backgroundImage;
-        if (beforeBgImage && beforeBgImage !== "none" && beforeBgImage !== "") {
+        if (isImageIconBackground(beforeBgImage)) {
           iconMap[btnId] = beforeBgImage;
           break;
         }
