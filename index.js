@@ -36730,8 +36730,16 @@ jQuery(async () => {
     });
     // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
 
+    // 移动端：记录 touchstart 位置，用于区分滑动和点击
     subList
       .find(".cfm-persona-detail-description")
+      .on("touchstart", function (e) {
+        const touch = e.originalEvent?.touches?.[0];
+        if (touch) {
+          $(this).data("cfmTouchStartX", touch.clientX);
+          $(this).data("cfmTouchStartY", touch.clientY);
+        }
+      })
       .on("click touchend", async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -36740,6 +36748,18 @@ jQuery(async () => {
         const lastTouchAt = Number(target.data("cfmPersonaDescTouchAt") || 0);
         if (e.type === "touchend") {
           target.data("cfmPersonaDescTouchAt", now);
+          // 检测是否为滑动而非点击
+          const touch = e.originalEvent?.changedTouches?.[0];
+          if (touch) {
+            const startX = Number(target.data("cfmTouchStartX") || 0);
+            const startY = Number(target.data("cfmTouchStartY") || 0);
+            const deltaX = Math.abs(touch.clientX - startX);
+            const deltaY = Math.abs(touch.clientY - startY);
+            if (deltaX > 10 || deltaY > 10) {
+              // 位移超过 10px，视为滑动，不触发编辑
+              return;
+            }
+          }
         } else if (lastTouchAt && now - lastTouchAt < 500) {
           return;
         }
