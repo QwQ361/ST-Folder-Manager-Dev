@@ -4709,37 +4709,66 @@ select.cfm-wi-ctrl {
     flex: 1 1 auto;
     min-width: 60px;
   }
-  /* 行内控件组换到新行，占满宽度 */
+  /* 行内控件组改为两行栅格，顺序对齐原生：状态 → 插入位置 → 深度 → 顺序 → 触发% */
   .cfm-wi-entry-controls {
+    display: grid;
+    grid-template-columns:
+      minmax(38px, auto)
+      minmax(0, 1fr)
+      minmax(46px, auto)
+      minmax(46px, auto)
+      minmax(46px, auto);
+    grid-template-areas:
+      "state position position position position"
+      "depth order prob . .";
+    align-items: center;
+    justify-items: stretch;
     flex: 1 0 100%;
-    flex-wrap: wrap;
     order: 10;
     margin-left: 0;
     margin-top: 4px;
-    gap: 3px;
+    gap: 4px;
   }
-  /* 行内控件更紧凑 */
-  .cfm-wi-ctrl {
-    font-size: 0.72em;
-    height: 20px;
-    line-height: 18px;
-    padding: 1px 3px;
-  }
-  select.cfm-wi-ctrl {
-    height: 20px;
-    line-height: 18px;
-    padding: 1px 3px;
+  .cfm-wi-ctrl-state {
+    grid-area: state;
+    min-width: 38px;
+    max-width: none;
   }
   .cfm-wi-ctrl-position {
-    min-width: 50px;
-    max-width: 120px;
+    grid-area: position;
+    min-width: 0;
+    max-width: none;
+    width: 100%;
   }
-  .cfm-wi-ctrl-depth,
+  .cfm-wi-ctrl-depth {
+    grid-area: depth;
+    width: 100%;
+    min-width: 46px;
+  }
   .cfm-wi-ctrl-order {
-    width: 44px;
+    grid-area: order;
+    width: 100%;
+    min-width: 46px;
+  }
+  .cfm-wi-ctrl-prob-wrap {
+    grid-area: prob;
+    width: 100%;
+    justify-content: flex-start;
   }
   .cfm-wi-ctrl-prob {
-    width: 38px;
+    width: 42px;
+  }
+  /* 行内控件更紧凑，但保留可点面积 */
+  .cfm-wi-ctrl {
+    font-size: 0.74em;
+    height: 22px;
+    line-height: 20px;
+    padding: 1px 4px;
+  }
+  select.cfm-wi-ctrl {
+    height: 22px;
+    line-height: 20px;
+    padding: 1px 4px;
   }
   /* 操作按钮保持在名称同一行 */
   .cfm-preset-detail-label .cfm-chat-actions {
@@ -4778,19 +4807,31 @@ select.cfm-wi-ctrl {
 /* 超小屏幕（手机竖屏）进一步压缩 */
 @media (max-width: 480px) {
   .cfm-wi-entry-controls {
-    gap: 2px;
+    grid-template-columns:
+      minmax(36px, auto)
+      minmax(0, 1fr)
+      minmax(40px, auto)
+      minmax(40px, auto)
+      minmax(40px, auto);
+    gap: 3px;
+  }
+  .cfm-wi-ctrl {
+    font-size: 0.7em;
+    padding: 1px 3px;
+  }
+  .cfm-wi-ctrl-state {
+    min-width: 36px;
   }
   .cfm-wi-ctrl-position {
-    min-width: 40px;
-    max-width: 100px;
+    min-width: 0;
     font-size: 0.68em;
   }
   .cfm-wi-ctrl-depth,
   .cfm-wi-ctrl-order {
-    width: 38px;
+    min-width: 40px;
   }
   .cfm-wi-ctrl-prob {
-    width: 34px;
+    width: 36px;
   }
   .cfm-wi-de-field {
     min-width: 60px;
