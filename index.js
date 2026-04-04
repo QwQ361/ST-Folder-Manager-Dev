@@ -5500,6 +5500,51 @@ jQuery(async () => {
     const searchInput = dialog.find(".cfm-entry-transfer-search-input");
     const hintEl = dialog.find(".cfm-entry-transfer-selected-hint");
     const confirmBtn = dialog.find(".cfm-entry-transfer-confirm");
+    const TRANSFER_TAP_MOVE_THRESHOLD = 10;
+
+    function bindTransferTreeTap(target, handler) {
+      target
+        .on("touchstart", function (e) {
+          const touch = e.originalEvent?.touches?.[0];
+          if (!touch) return;
+          $(this).data("cfmTransferTouchStartX", touch.clientX);
+          $(this).data("cfmTransferTouchStartY", touch.clientY);
+        })
+        .on("click touchend", function (e) {
+          const node = $(this);
+          const now = Date.now();
+          const lastTouchAt = Number(node.data("cfmTransferLastTouchAt") || 0);
+
+          if (e.type === "touchend") {
+            node.data("cfmTransferLastTouchAt", now);
+            const touch = e.originalEvent?.changedTouches?.[0];
+            if (touch) {
+              const startX = Number(node.data("cfmTransferTouchStartX"));
+              const startY = Number(node.data("cfmTransferTouchStartY"));
+              if (Number.isFinite(startX) && Number.isFinite(startY)) {
+                const deltaX = Math.abs(touch.clientX - startX);
+                const deltaY = Math.abs(touch.clientY - startY);
+                if (
+                  deltaX > TRANSFER_TAP_MOVE_THRESHOLD ||
+                  deltaY > TRANSFER_TAP_MOVE_THRESHOLD
+                ) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+              }
+            }
+          } else if (lastTouchAt && now - lastTouchAt < 500) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+
+          e.preventDefault();
+          e.stopPropagation();
+          handler.call(this, e);
+        });
+    }
 
     // ── 渲染文件夹树 ──
     function renderTransferTree() {
@@ -5553,9 +5598,7 @@ jQuery(async () => {
             <span class="cfm-transfer-folder-count">${itemsInFolder.length}</span>
           </div>
         `);
-        folderNode.on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTransferTreeTap(folderNode, () => {
           if (transferExpandedFolders.has(folderId)) {
             transferExpandedFolders.delete(folderId);
           } else {
@@ -5578,9 +5621,7 @@ jQuery(async () => {
                 <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
               </div>
             `);
-            itemNode.on("click touchend", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            bindTransferTreeTap(itemNode, () => {
               selectedTargetName = name;
               renderTransferTree();
               updateHint();
@@ -5609,9 +5650,7 @@ jQuery(async () => {
             <span class="cfm-transfer-folder-count">${filteredUngrouped.length}</span>
           </div>
         `);
-        uncatNode.on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTransferTreeTap(uncatNode, () => {
           if (transferExpandedFolders.has(uncatId)) {
             transferExpandedFolders.delete(uncatId);
           } else {
@@ -5630,9 +5669,7 @@ jQuery(async () => {
                 <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
               </div>
             `);
-            itemNode.on("click touchend", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            bindTransferTreeTap(itemNode, () => {
               selectedTargetName = name;
               renderTransferTree();
               updateHint();
