@@ -6438,20 +6438,45 @@ jQuery(async () => {
         throw new Error(`找不到预设「${targetPresetName}」的数据`);
 
       const promptList = ensurePresetPromptList(presetData);
+      const detailFields = getPresetDetailFields(presetData);
       const existingIds = new Set(
         promptList.map((p) => getPresetPromptIdentifier(p)).filter(Boolean),
       );
       const existingLabels = new Set(
-        getPresetDetailFields(presetData)
+        detailFields
           .map((f) => String(f?.label || "").trim())
           .filter(Boolean),
       );
-      const currentOrderedFieldKeys = getPresetDetailFields(presetData)
+      const currentOrderedFieldKeys = detailFields
         .map((field) => String(field?.key || "").trim())
         .filter((fieldKey) => fieldKey.startsWith("prompts."));
 
       const insertedPrompts = [];
       const insertedFieldKeys = [];
+      const promptDisplayFieldKeys = detailFields
+        .map((field) => String(field?.key || "").trim())
+        .filter((fieldKey) => fieldKey.startsWith("prompts."));
+      const normalizedInsertIndex = Math.max(
+        0,
+        Math.min(
+          Number.isInteger(insertIndex)
+            ? insertIndex
+            : promptDisplayFieldKeys.length,
+          promptDisplayFieldKeys.length,
+        ),
+      );
+      const insertBeforeFieldKey =
+        promptDisplayFieldKeys[normalizedInsertIndex] || null;
+      const insertBeforePromptId = insertBeforeFieldKey?.startsWith("prompts.")
+        ? insertBeforeFieldKey.slice("prompts.".length)
+        : "";
+      let promptListInsertIndex = insertBeforePromptId
+        ? promptList.findIndex(
+            (prompt) =>
+              getPresetPromptIdentifier(prompt) === insertBeforePromptId,
+          )
+        : promptList.length;
+      if (promptListInsertIndex < 0) promptListInsertIndex = promptList.length;
 
       for (let i = 0; i < sourceEntries.length; i++) {
         const entry = sourceEntries[i];
@@ -6492,7 +6517,8 @@ jQuery(async () => {
           if ("prompt" in newPrompt) newPrompt.prompt = newKey;
           newPrompt.name = newLabel;
 
-          promptList.push(newPrompt);
+          promptList.splice(promptListInsertIndex, 0, newPrompt);
+          promptListInsertIndex += 1;
           insertedPrompts.push(newPrompt);
           insertedFieldKeys.push(`prompts.${newKey}`);
         } catch (innerErr) {
@@ -6508,28 +6534,17 @@ jQuery(async () => {
         }
       }
 
-      const normalizedInsertIndex = Math.max(
-        0,
-        Math.min(
-          Number.isInteger(insertIndex)
-            ? insertIndex
-            : currentOrderedFieldKeys.length,
-          currentOrderedFieldKeys.length,
-        ),
+      const orderedInsertIndex = Math.min(
+        normalizedInsertIndex,
+        currentOrderedFieldKeys.length,
       );
       const nextOrderedFieldKeys = [...currentOrderedFieldKeys];
       nextOrderedFieldKeys.splice(
-        normalizedInsertIndex,
+        orderedInsertIndex,
         0,
         ...insertedFieldKeys,
       );
-      const appendedFieldKeys = [
-        ...currentOrderedFieldKeys,
-        ...insertedFieldKeys,
-      ];
-      const shouldReorder = appendedFieldKeys.some(
-        (fieldKey, index) => nextOrderedFieldKeys[index] !== fieldKey,
-      );
+      const shouldReorder = orderedInsertIndex < currentOrderedFieldKeys.length;
 
       await saveNormalizedPresetData(pm, targetPresetName, presetData);
       if (shouldReorder && nextOrderedFieldKeys.length > 1) {
@@ -13231,18 +13246,6 @@ jQuery(async () => {
       addPromptField(identifier, promptLabel, promptValue, promptEnabled);
     }
 
-    for (const promptValue of promptMap.values()) {
-      const identifier = getPresetPromptIdentifier(promptValue);
-      if (!identifier) continue;
-      const promptEnabled =
-        typeof promptValue?.enabled === "boolean" ? promptValue.enabled : true;
-      addPromptField(
-        identifier,
-        getPresetPromptLabel(promptValue, identifier),
-        promptValue,
-        promptEnabled,
-      );
-    }
 
     return fields;
   }
