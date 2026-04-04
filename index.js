@@ -15264,14 +15264,58 @@ jQuery(async () => {
   let _suppressPresetRegexToastUntil = 0;
   let _originalToastrFnsForPresetRegexToast = null;
   let _pendingSuppressPresetRegexToastRestoreTimer = null;
+  let _lastPresetRegexToastFingerprint = "";
+  let _lastPresetRegexToastAt = 0;
 
-  function shouldSuppressPresetRegexToast(message) {
-    const text = String(message || "").trim();
+  function normalizePresetRegexToastTextPart(value) {
+    if (value == null) return "";
     if (
-      _suppressPresetRegexToastDepth <= 0 ||
-      Date.now() > _suppressPresetRegexToastUntil ||
-      !text
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
     ) {
+      return String(value);
+    }
+    if (value instanceof HTMLElement) {
+      return String(value.innerText || value.textContent || "");
+    }
+    if (value?.jquery && typeof value.text === "function") {
+      return String(value.text() || "");
+    }
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => normalizePresetRegexToastTextPart(item))
+        .join(" ");
+    }
+    if (typeof value === "object") {
+      return [
+        value.message,
+        value.msg,
+        value.title,
+        value.text,
+        value.innerText,
+        value.textContent,
+      ]
+        .map((item) => normalizePresetRegexToastTextPart(item))
+        .filter(Boolean)
+        .join(" ");
+    }
+    return "";
+  }
+
+  function collectPresetRegexToastText(toastArgs = []) {
+    return toastArgs
+      .slice(0, 2)
+      .map((item) => normalizePresetRegexToastTextPart(item))
+      .join(" ")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function shouldSuppressPresetRegexToast(toastArgs = []) {
+    const text = collectPresetRegexToastText(toastArgs);
+    if (!text) {
       return false;
     }
 
@@ -15287,7 +15331,30 @@ jQuery(async () => {
       text.includes("重载") ||
       normalized.includes("reload");
 
-    return hasRegexHint && hasReloadHint;
+    if (!(hasRegexHint && hasReloadHint)) {
+      return false;
+    }
+
+    const fingerprint = normalized.replace(/\s+/g, " ").trim();
+    const now = Date.now();
+    if (
+      fingerprint &&
+      _lastPresetRegexToastFingerprint === fingerprint &&
+      now - _lastPresetRegexToastAt <= 2500
+    ) {
+      return true;
+    }
+
+    if (
+      _suppressPresetRegexToastDepth <= 0 ||
+      now > _suppressPresetRegexToastUntil
+    ) {
+      return false;
+    }
+
+    _lastPresetRegexToastFingerprint = fingerprint;
+    _lastPresetRegexToastAt = now;
+    return true;
   }
 
   function clearSuppressPresetRegexToastRestoreTimer() {
@@ -15334,7 +15401,7 @@ jQuery(async () => {
     restorePresetRegexToastFnsIfNeeded();
   }
 
-  function beginSuppressPresetRegexToast(durationMs = 2600) {
+  function beginSuppressPresetRegexToast(durationMs = 9000) {
     _suppressPresetRegexToastDepth += 1;
     clearSuppressPresetRegexToastRestoreTimer();
     _suppressPresetRegexToastUntil = Math.max(
@@ -15352,7 +15419,7 @@ jQuery(async () => {
       const originalFn = window.toastr[level].bind(window.toastr);
       _originalToastrFnsForPresetRegexToast[level] = originalFn;
       window.toastr[level] = function (...args) {
-        if (shouldSuppressPresetRegexToast(args[0])) {
+        if (shouldSuppressPresetRegexToast(args)) {
           return null;
         }
         return originalFn(...args);
@@ -27152,6 +27219,29 @@ jQuery(async () => {
       cfmPresetRegexExpandedNames.clear();
       cfmPresetRegexTargetName = null;
       cfmPresetRegexHighlightPath = [];
+
+      cfmPresetDetailBatchMode = false;
+      cfmPresetDetailBatchOwnerName = null;
+      cfmPresetDetailBatchSelected.clear();
+      cfmPresetDetailBatchRangeMode = false;
+      cfmPresetDetailBatchLastClicked = null;
+
+      cfmWorldInfoEntryBatchMode = false;
+      cfmWorldInfoEntryBatchOwnerName = null;
+      cfmWorldInfoEntryBatchSelected.clear();
+      cfmWorldInfoEntryBatchRangeMode = false;
+      cfmWorldInfoEntryBatchLastClicked = null;
+
+      cfmRegexBatchMode = false;
+      cfmRegexBatchSelected.clear();
+      cfmRegexBatchRangeMode = false;
+      cfmRegexBatchLastClicked = null;
+
+      cfmMultiSelectMode = false;
+      clearMultiSelect();
+      cfmMultiSelectRangeMode = false;
+      $(".cfm-multisel-toggle").removeClass("cfm-multisel-active");
+      $("#cfm-popup").removeClass("cfm-multisel-on");
     };
     if (sortDirty) {
       // 排序已更改，弹出确认框
