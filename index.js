@@ -5236,6 +5236,554 @@ jQuery(async () => {
     setTimeout(() => input.focus(), 100);
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // 预设/世界书 条目互通缝合
+  // ══════════════════════════════════════════════════════════════
+
+  /**
+   * 显示条目互通弹窗
+   * @param {"preset"|"worldinfo"} sourceType - 来源类型
+   * @param {string} sourceName - 来源预设名 或 世界书名
+   * @param {string[]} selectedKeys - 选中的条目 key 列表
+   */
+  async function showEntryTransferPopup(sourceType, sourceName, selectedKeys) {
+    if (!selectedKeys || selectedKeys.length === 0) {
+      cfmToastr.warning("请先选择要互通的条目");
+      return;
+    }
+
+    // ── 收集源条目数据 ──
+    let sourceEntries = [];
+    if (sourceType === "preset") {
+      const pm = getContext().getPresetManager();
+      if (!pm) { cfmToastr.error("无法获取预设管理器"); return; }
+      const presetData = getPresetDataForDetail(pm, sourceName);
+      if (!presetData) { cfmToastr.error(`找不到预设「${sourceName}」`); return; }
+      const fields = getPresetDetailFields(presetData);
+      for (const key of selectedKeys) {
+        const field = fields.find(f => f.key === key);
+        if (field) {
+          const promptKey = key.startsWith("prompts.") ? key.slice("prompts.".length) : key;
+          const promptObj = getPresetPromptByKey(presetData, promptKey);
+          sourceEntries.push({
+            name: field.label || promptKey,
+            content: typeof promptObj === "object" ? (promptObj.content ?? promptObj.prompt ?? "") : String(promptObj ?? ""),
+            role: typeof promptObj === "object" ? (promptObj.role || "system") : "system",
+            rawPrompt: promptObj,
+            fieldKey: key,
+          });
+        }
+      }
+    } else if (sourceType === "worldinfo") {
+      // selectedKeys 格式: "bookName::uid"
+      const wiData = await fetchWorldInfoDetailData(sourceName);
+      if (!wiData?.entries) { cfmToastr.error(`无法获取世界书「${sourceName}」的数据`); return; }
+      const entriesMap = new Map();
+      for (const [uid, entry] of Object.entries(wiData.entries)) {
+        entriesMap.set(getWorldInfoEntrySelectionKey(sourceName, uid), { ...entry, uid });
+      }
+      for (const key of selectedKeys) {
+        const entry = entriesMap.get(key);
+        if (entry) {
+          sourceEntries.push({
+            name: entry.comment || (Array.isArray(entry.key) ? entry.key[0] : String(entry.key || "")) || `条目${entry.uid}`,
+            content: entry.content || "",
+            rawEntry: entry,
+          });
+        }
+      }
+    }
+
+    if (sourceEntries.length === 0) {
+      cfmToastr.warning("未找到可互通的条目数据");
+      return;
+    }
+
+    // ── 构建目标选择弹窗 ──
+    const presets = getCurrentPresets();
+    const wiNames = await getWorldInfoNames();
+    const presetGroups = getResourceGroups("presets");
+    const wiGroups = getResourceGroups("worldinfo");
+    const presetTree = getResFolderTree("presets");
+    const wiTree = getResFolderTree("worldinfo");
+
+    let selectedTargetType = sourceType === "worldinfo" ? "worldinfo" : "preset";
+    let selectedTargetName = null;
+    let transferExpandedFolders = new Set();
+
+    const overlay = $('<div class="cfm-edit-popup-overlay cfm-entry-transfer-overlay"></div>');
+    const dialog = $(`
+      <div class="cfm-edit-popup cfm-entry-transfer-dialog">
+        <div class="cfm-edit-popup-header">
+          <span><i class="fa-solid fa-right-left"></i> 条目互通 (${sourceEntries.length} 个条目)</span>
+        </div>
+        <div class="cfm-entry-transfer-body">
+          <div class="cfm-entry-transfer-type-row">
+            <label><input type="radio" name="cfm-transfer-target-type" value="preset" ${selectedTargetType === "preset" ? "checked" : ""}> 预设</label>
+            <label><input type="radio" name="cfm-transfer-target-type" value="worldinfo" ${selectedTargetType === "worldinfo" ? "checked" : ""}> 世界书</label>
+          </div>
+          <div class="cfm-entry-transfer-search">
+            <input type="text" class="cfm-entry-transfer-search-input" placeholder="搜索..." />
+            <button class="cfm-entry-transfer-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
+            <button class="cfm-entry-transfer-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
+          </div>
+          <div class="cfm-entry-transfer-tree-container"></div>
+          <div class="cfm-entry-transfer-selected-hint"></div>
+        </div>
+        <div class="cfm-edit-popup-footer">
+          <button class="menu_button cfm-entry-transfer-confirm" disabled><i class="fa-solid fa-check"></i> 确认互通</button>
+          <button class="menu_button cfm-entry-transfer-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+        </div>
+      </div>
+    `);
+
+    const treeContainer = dialog.find(".cfm-entry-transfer-tree-container");
+    const searchInput = dialog.find(".cfm-entry-transfer-search-input");
+    const hintEl = dialog.find(".cfm-entry-transfer-selected-hint");
+    const confirmBtn = dialog.find(".cfm-entry-transfer-confirm");
+
+    // ── 渲染文件夹树 ──
+    function renderTransferTree() {
+      const query = String(searchInput.val() || "").trim().toLowerCase();
+      treeContainer.empty();
+
+      const tree = selectedTargetType === "preset" ? presetTree : wiTree;
+      const groups = selectedTargetType === "preset" ? presetGroups : wiGroups;
+      const items = selectedTargetType === "preset"
+        ? presets.map(p => p.name)
+        : [...wiNames];
+
+      // 构建文件夹→项目映射
+      const folderItems = {};
+      const ungrouped = [];
+      for (const name of items) {
+        if (query && !name.toLowerCase().includes(query)) continue;
+        const fid = groups[name] || null;
+        if (fid && tree[fid]) {
+          if (!folderItems[fid]) folderItems[fid] = [];
+          folderItems[fid].push(name);
+        } else {
+          ungrouped.push(name);
+        }
+      }
+
+      // 递归渲染文件夹
+      function renderFolder(folderId, depth) {
+        const displayName = selectedTargetType === "preset"
+          ? getResFolderDisplayName("presets", folderId)
+          : getResFolderDisplayName("worldinfo", folderId);
+        const isExpanded = transferExpandedFolders.has(folderId);
+        const childFolders = Object.keys(tree).filter(id => (tree[id]?.parentId || null) === folderId);
+        const itemsInFolder = folderItems[folderId] || [];
+        const hasContent = itemsInFolder.length > 0 || childFolders.length > 0;
+
+        if (query && !hasContent && !displayName.toLowerCase().includes(query)) return;
+
+        const folderNode = $(`
+          <div class="cfm-transfer-folder" data-folder-id="${escapeHtml(folderId)}" style="padding-left:${depth * 16 + 8}px;">
+            <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></span>
+            <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-folder${isExpanded ? "-open" : ""}"></i></span>
+            <span class="cfm-transfer-folder-name">${escapeHtml(displayName)}</span>
+            <span class="cfm-transfer-folder-count">${itemsInFolder.length}</span>
+          </div>
+        `);
+        folderNode.on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (transferExpandedFolders.has(folderId)) {
+            transferExpandedFolders.delete(folderId);
+          } else {
+            transferExpandedFolders.add(folderId);
+          }
+          renderTransferTree();
+        });
+        treeContainer.append(folderNode);
+
+        if (isExpanded || query) {
+          for (const childId of childFolders) renderFolder(childId, depth + 1);
+          for (const name of itemsInFolder) {
+            // 排除当前源（不能互通到自身）
+            if (selectedTargetType === sourceType && name === sourceName) continue;
+            const isSelected = selectedTargetName === name;
+            const itemNode = $(`
+              <div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-name="${escapeHtml(name)}" style="padding-left:${(depth + 1) * 16 + 8}px;">
+                <span class="cfm-transfer-item-icon"><i class="fa-solid fa-${selectedTargetType === "preset" ? "sliders" : "book"}"></i></span>
+                <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
+              </div>
+            `);
+            itemNode.on("click touchend", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              selectedTargetName = name;
+              renderTransferTree();
+              updateHint();
+            });
+            treeContainer.append(itemNode);
+          }
+        }
+      }
+
+      // 渲染根级文件夹
+      const rootFolders = Object.keys(tree).filter(id => !(tree[id]?.parentId));
+      for (const fid of rootFolders) renderFolder(fid, 0);
+
+      // 渲染未归类项目（包裹在可展开节点中）
+      const filteredUngrouped = ungrouped.filter(name => !(selectedTargetType === sourceType && name === sourceName));
+      if (filteredUngrouped.length > 0) {
+        const uncatId = "__ungrouped__";
+        const isUncatExpanded = transferExpandedFolders.has(uncatId);
+        const uncatNode = $(`
+          <div class="cfm-transfer-folder cfm-transfer-folder-ungrouped" style="padding-left:8px;">
+            <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isUncatExpanded ? "down" : "right"}"></i></span>
+            <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-box-open"></i></span>
+            <span class="cfm-transfer-folder-name">未归类</span>
+            <span class="cfm-transfer-folder-count">${filteredUngrouped.length}</span>
+          </div>
+        `);
+        uncatNode.on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (transferExpandedFolders.has(uncatId)) {
+            transferExpandedFolders.delete(uncatId);
+          } else {
+            transferExpandedFolders.add(uncatId);
+          }
+          renderTransferTree();
+        });
+        treeContainer.append(uncatNode);
+
+        if (isUncatExpanded || query) {
+          for (const name of filteredUngrouped) {
+            const isSelected = selectedTargetName === name;
+            const itemNode = $(`
+              <div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-name="${escapeHtml(name)}" style="padding-left:24px;">
+                <span class="cfm-transfer-item-icon"><i class="fa-solid fa-${selectedTargetType === "preset" ? "sliders" : "book"}"></i></span>
+                <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
+              </div>
+            `);
+            itemNode.on("click touchend", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              selectedTargetName = name;
+              renderTransferTree();
+              updateHint();
+            });
+            treeContainer.append(itemNode);
+          }
+        }
+      }
+
+      if (treeContainer.children().length === 0) {
+        treeContainer.html('<div style="padding:16px;opacity:0.5;text-align:center;">无可选目标</div>');
+      }
+    }
+
+    function updateHint() {
+      if (selectedTargetName) {
+        hintEl.html(`已选目标：<strong>${escapeHtml(selectedTargetName)}</strong>`);
+        confirmBtn.prop("disabled", false);
+      } else {
+        hintEl.text("请选择目标预设或世界书");
+        confirmBtn.prop("disabled", true);
+      }
+    }
+
+    // ── 事件绑定 ──
+    dialog.find(".cfm-entry-transfer-expand-all").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tree = selectedTargetType === "preset" ? presetTree : wiTree;
+      for (const id of Object.keys(tree)) transferExpandedFolders.add(id);
+      transferExpandedFolders.add("__ungrouped__");
+      renderTransferTree();
+    });
+    dialog.find(".cfm-entry-transfer-collapse-all").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      transferExpandedFolders.clear();
+      renderTransferTree();
+    });
+
+    dialog.find('input[name="cfm-transfer-target-type"]').on("change", function () {
+      selectedTargetType = $(this).val();
+      selectedTargetName = null;
+      updateHint();
+      renderTransferTree();
+    });
+
+    searchInput.on("input", () => renderTransferTree());
+
+    dialog.find(".cfm-entry-transfer-cancel").on("click", (e) => {
+      e.preventDefault();
+      overlay.remove();
+      dialog.remove();
+    });
+    overlay.on("click", (e) => {
+      if ($(e.target).hasClass("cfm-entry-transfer-overlay")) {
+        overlay.remove();
+        dialog.remove();
+      }
+    });
+
+    // ── 确认互通 ──
+    confirmBtn.on("click", async (e) => {
+      e.preventDefault();
+      if (!selectedTargetName) return;
+
+      overlay.remove();
+      dialog.remove();
+
+      try {
+        await executeEntryTransfer(sourceType, sourceName, sourceEntries, selectedTargetType, selectedTargetName);
+      } catch (err) {
+        console.error("[CFM] 条目互通失败:", err);
+        cfmToastr.error(`互通失败: ${err?.message || err}`);
+      }
+    });
+
+    renderTransferTree();
+    updateHint();
+    overlay.append(dialog);
+    $("#cfm-popup").append(overlay);
+  }
+
+  /**
+   * 执行条目互通复制（含排序弹窗和原子回滚）
+   */
+  async function executeEntryTransfer(sourceType, sourceName, sourceEntries, targetType, targetName) {
+    if (targetType === "preset") {
+      await transferToPreset(sourceType, sourceEntries, targetName);
+    } else if (targetType === "worldinfo") {
+      await transferToWorldInfo(sourceType, sourceEntries, targetName);
+    }
+  }
+
+  /**
+   * 互通到预设
+   */
+  async function transferToPreset(sourceType, sourceEntries, targetPresetName) {
+    const pm = getContext().getPresetManager();
+    if (!pm) { cfmToastr.error("无法获取预设管理器"); return; }
+
+    // 临时切换到目标预设
+    const currentPresetValue = String(pm.select.val() || "");
+    const targetValue = findPresetSelectValueByName(pm, targetPresetName);
+    if (!targetValue) { cfmToastr.error(`找不到预设「${targetPresetName}」`); return; }
+
+    const needSwitch = currentPresetValue !== targetValue;
+    if (needSwitch) {
+      beginSuppressPresetRegexToast();
+      pm.select.val(targetValue);
+      pm.select.trigger("change");
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    try {
+      const presetData = getPresetDataForDetail(pm, targetPresetName);
+      if (!presetData) throw new Error(`找不到预设「${targetPresetName}」的数据`);
+
+      const promptList = ensurePresetPromptList(presetData);
+      const existingIds = new Set(promptList.map(p => getPresetPromptIdentifier(p)).filter(Boolean));
+      const existingLabels = new Set(getPresetDetailFields(presetData).map(f => String(f?.label || "").trim()).filter(Boolean));
+
+      const insertedPrompts = [];
+
+      for (let i = 0; i < sourceEntries.length; i++) {
+        const entry = sourceEntries[i];
+        try {
+          // 生成唯一 key
+          let newKey = buildDuplicatedPresetPromptKey(existingIds, entry.name || "prompt");
+          existingIds.add(newKey);
+          // 生成唯一 label（重名加 -1 后缀）
+          let newLabel = entry.name || "新条目";
+          let labelCounter = 0;
+          while (existingLabels.has(newLabel)) {
+            labelCounter++;
+            newLabel = `${entry.name || "新条目"}-${labelCounter}`;
+          }
+          existingLabels.add(newLabel);
+
+          let newPrompt;
+          if (sourceType === "preset" && entry.rawPrompt && typeof entry.rawPrompt === "object") {
+            newPrompt = structuredClone(entry.rawPrompt);
+          } else {
+            newPrompt = {
+              content: entry.content || "",
+              role: entry.role || "system",
+              injection_position: 0,
+              injection_depth: 4,
+            };
+          }
+          newPrompt.identifier = newKey;
+          if ("id" in newPrompt) newPrompt.id = newKey;
+          if ("key" in newPrompt) newPrompt.key = newKey;
+          if ("prompt" in newPrompt) newPrompt.prompt = newKey;
+          newPrompt.name = newLabel;
+
+          promptList.push(newPrompt);
+          insertedPrompts.push(newPrompt);
+        } catch (innerErr) {
+          // 回滚已插入的
+          for (const inserted of insertedPrompts) {
+            const idx = promptList.indexOf(inserted);
+            if (idx >= 0) promptList.splice(idx, 1);
+          }
+          cfmToastr.error(`因为第 ${i + 1} 个条目「${entry.name}」失败，本次缝合已回滚`);
+          return;
+        }
+      }
+
+      // 保存
+      await persistPresetData(pm, targetPresetName);
+      cfmToastr.success(`已将 ${insertedPrompts.length} 个条目互通到预设「${targetPresetName}」`);
+      // 刷新视图
+      if (currentResourceType === "presets") refreshPresetPanelView();
+    } finally {
+      // 恢复原预设
+      if (needSwitch) {
+        try {
+          pm.select.val(currentPresetValue);
+          pm.select.trigger("change");
+        } catch {};
+        setTimeout(() => endSuppressPresetRegexToast(), 300);
+      }
+    }
+  }
+
+  /**
+   * 互通到世界书
+   */
+  async function transferToWorldInfo(sourceType, sourceEntries, targetBookName) {
+    const wiData = await fetchWorldInfoDetailData(targetBookName);
+    if (!wiData) { cfmToastr.error(`无法获取世界书「${targetBookName}」的数据`); return; }
+    if (!wiData.entries) wiData.entries = {};
+
+    // 获取已有条目名（comment）集合用于去重
+    const existingNames = new Set(
+      Object.values(wiData.entries).map(e => String(e.comment || "")).filter(Boolean)
+    );
+
+    // 计算下一个可用 uid
+    let nextUid = Object.keys(wiData.entries).reduce((max, k) => Math.max(max, parseInt(k, 10) || 0), 0) + 1;
+
+    const insertedUids = [];
+
+    for (let i = 0; i < sourceEntries.length; i++) {
+      const entry = sourceEntries[i];
+      try {
+        // 重名加 -1 后缀
+        let newName = entry.name || "新条目";
+        let nameCounter = 0;
+        while (existingNames.has(newName)) {
+          nameCounter++;
+          newName = `${entry.name || "新条目"}-${nameCounter}`;
+        }
+        existingNames.add(newName);
+
+        const uid = nextUid++;
+        let newEntry;
+
+        if (sourceType === "worldinfo" && entry.rawEntry) {
+          // 世界书→世界书：完整复制
+          newEntry = structuredClone(entry.rawEntry);
+          newEntry.uid = uid;
+          newEntry.comment = newName;
+        } else {
+          // 预设→世界书：映射字段
+          newEntry = {
+            uid: uid,
+            key: [newName],
+            keysecondary: [],
+            comment: newName,
+            content: entry.content || "",
+            constant: false,
+            vectorized: false,
+            selective: true,
+            selectiveLogic: 0,
+            addMemo: true,
+            order: 100,
+            position: 0,
+            disable: false,
+            excludeRecursion: false,
+            preventRecursion: false,
+            delayUntilRecursion: false,
+            probability: 100,
+            useProbability: true,
+            depth: 4,
+            group: "",
+            groupOverride: false,
+            groupWeight: 100,
+            scanDepth: null,
+            caseSensitive: null,
+            matchWholeWords: null,
+            useGroupScoring: null,
+            automationId: "",
+            role: null,
+            sticky: null,
+            cooldown: null,
+            delay: null,
+          };
+        }
+
+        wiData.entries[String(uid)] = newEntry;
+        insertedUids.push(String(uid));
+      } catch (innerErr) {
+        // 回滚
+        for (const insertedUid of insertedUids) {
+          delete wiData.entries[insertedUid];
+        }
+        cfmToastr.error(`因为第 ${i + 1} 个条目「${entry.name}」失败，本次缝合已回滚`);
+        return;
+      }
+    }
+
+    // 保存
+    await saveWorldInfoDetailData(targetBookName, wiData);
+    cfmToastr.success(`已将 ${insertedUids.length} 个条目互通到世界书「${targetBookName}」`);
+    // 刷新视图
+    if (currentResourceType === "worldinfo") renderWorldInfoView();
+  }
+
+  /**
+   * 持久化预设数据到文件
+   */
+  async function persistPresetData(pm, presetName) {
+    try {
+      const presetList = typeof pm.getPresetList === "function" ? pm.getPresetList() : null;
+      if (!presetList) throw new Error("无法获取预设列表");
+      const { presets: presetsArr, preset_names } = presetList;
+      if (!Array.isArray(presetsArr) || !preset_names) throw new Error("预设列表格式异常");
+
+      const idx = preset_names.indexOf(presetName);
+      if (idx < 0) {
+        // 尝试模糊匹配
+        const trimmed = String(presetName || "").trim();
+        for (let i = 0; i < preset_names.length; i++) {
+          if (String(preset_names[i] || "").trim() === trimmed) {
+            const data = JSON.stringify(presetsArr[i], null, 4);
+            await fetch("/api/presets/save-openai", {
+              method: "POST",
+              headers: getContext().getRequestHeaders(),
+              body: JSON.stringify({ name: preset_names[i], preset: data }),
+            });
+            return;
+          }
+        }
+        throw new Error(`预设列表中找不到「${presetName}」`);
+      }
+
+      const data = JSON.stringify(presetsArr[idx], null, 4);
+      await fetch("/api/presets/save-openai", {
+        method: "POST",
+        headers: getContext().getRequestHeaders(),
+        body: JSON.stringify({ name: preset_names[idx], preset: data }),
+      });
+    } catch (e) {
+      console.error("[CFM] 持久化预设失败:", e);
+      throw e;
+    }
+  }
+
   function rerenderCurrentView() {
     if (currentResourceType === "chars") renderRightPane();
     else if (currentResourceType === "presets") renderPresetsView();
@@ -15003,6 +15551,7 @@ jQuery(async () => {
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-selall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button>
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-range ${cfmWorldInfoEntryBatchRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmWorldInfoEntryBatchRangeMode ? "(开)" : ""}</button>
           <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
+          <button class="cfm-btn cfm-btn-sm cfm-entry-transfer-btn"><i class="fa-solid fa-right-left"></i> 互通</button>
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-activate"><i class="fa-solid fa-play"></i> 激活</button>
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-deactivate"><i class="fa-solid fa-stop"></i> 取消激活</button>
         </div>
@@ -15082,6 +15631,23 @@ jQuery(async () => {
             console.error("[CFM] 批量取消激活世界书条目失败:", error);
             cfmToastr.error(`保存失败: ${error.message || error}`);
           }
+        });
+      batchToolbar
+        .find(".cfm-entry-transfer-btn")
+        .on("click touchend", async (e) => {
+          if (shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const selected = Array.from(cfmWorldInfoEntryBatchSelected);
+          if (selected.length === 0) {
+            cfmToastr.warning("请先选择要互通的条目");
+            return;
+          }
+          await showEntryTransferPopup("worldinfo", normalizedName, selected);
         });
       detailCard.append(batchToolbar);
     }
@@ -15692,7 +16258,6 @@ jQuery(async () => {
     const fields = getPresetDetailFields(presetData);
     const isCurrentApplied = isCurrentAppliedPreset(preset.name);
     const isBatchOwner =
-      isCurrentApplied &&
       cfmPresetDetailBatchMode &&
       cfmPresetDetailBatchOwnerName === preset.name;
     const subList = $(
@@ -15705,7 +16270,7 @@ jQuery(async () => {
     const detailToolbar = $(`
       <div class="cfm-regex-toolbar cfm-preset-detail-toolbar">
         <button class="cfm-btn cfm-btn-sm cfm-preset-detail-group-btn" title="${isCurrentApplied ? "预设条目激活分组" : "仅当前应用的预设可使用分组"}" ${fields.length === 0 || !isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-layer-group"></i> 分组</button>
-        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="${isCurrentApplied ? "批量操作模式" : "仅当前应用的预设可使用批量操作"}" ${fields.length === 0 || !isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
+        <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-toggle ${isBatchOwner ? "cfm-regex-batch-active" : ""}" title="批量操作模式" ${fields.length === 0 ? "disabled" : ""}><i class="fa-solid fa-list-check"></i> ${isBatchOwner ? "退出批量" : "批量操作"}</button>
         <span class="cfm-regex-count">${fields.length} 个条目</span>
       </div>
     `);
@@ -15724,7 +16289,6 @@ jQuery(async () => {
         e.preventDefault();
         e.stopPropagation();
         if (!fields.length) return;
-        if (!ensureCurrentAppliedPreset(preset.name, "批量操作")) return;
         if (isBatchOwner) {
           cfmPresetDetailBatchMode = false;
           cfmPresetDetailBatchOwnerName = null;
@@ -15758,8 +16322,9 @@ jQuery(async () => {
             <i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmPresetDetailBatchRangeMode ? "(开)" : ""}
           </button>
           <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
-          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-activate" title="批量激活"><i class="fa-solid fa-play"></i> 激活</button>
-          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-deactivate" title="批量取消激活"><i class="fa-solid fa-stop"></i> 取消激活</button>
+          <button class="cfm-btn cfm-btn-sm cfm-entry-transfer-btn" title="条目互通"><i class="fa-solid fa-right-left"></i> 互通</button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-activate" title="${isCurrentApplied ? "批量激活" : "仅当前应用的预设可使用激活"}" ${!isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-play"></i> 激活</button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-deactivate" title="${isCurrentApplied ? "批量取消激活" : "仅当前应用的预设可使用取消激活"}" ${!isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-stop"></i> 取消激活</button>
         </div>
       `);
       batchToolbar
@@ -15809,6 +16374,18 @@ jQuery(async () => {
             Array.from(cfmPresetDetailBatchSelected),
             false,
           );
+        });
+      batchToolbar
+        .find(".cfm-entry-transfer-btn")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const selected = Array.from(cfmPresetDetailBatchSelected);
+          if (selected.length === 0) {
+            cfmToastr.warning("请先选择要互通的条目");
+            return;
+          }
+          await showEntryTransferPopup("preset", preset.name, selected);
         });
       detailCard.append(batchToolbar);
     }
