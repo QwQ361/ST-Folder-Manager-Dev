@@ -6496,13 +6496,16 @@ jQuery(async () => {
               injection_depth: 4,
             };
           }
+          const promptEnabled = entry.enabled !== false;
           newPrompt.identifier = newKey;
           if ("id" in newPrompt) newPrompt.id = newKey;
           if ("key" in newPrompt) newPrompt.key = newKey;
           if ("prompt" in newPrompt) newPrompt.prompt = newKey;
           newPrompt.name = newLabel;
+          newPrompt.enabled = promptEnabled;
 
           promptList.push(newPrompt);
+          setPresetPromptEnabled(presetData, newKey, promptEnabled);
           insertedPrompts.push(newPrompt);
           insertedFieldKeys.push(`prompts.${newKey}`);
         } catch (innerErr) {
@@ -6524,7 +6527,8 @@ jQuery(async () => {
         0,
         ...insertedFieldKeys,
       );
-      const shouldReorder = orderedInsertIndex < currentOrderedFieldKeys.length;
+      const shouldReorder =
+        normalizedInsertIndex < currentOrderedFieldKeys.length;
 
       await saveNormalizedPresetData(pm, targetPresetName, presetData);
       if (shouldReorder && nextOrderedFieldKeys.length > 1) {
