@@ -20850,6 +20850,7 @@ jQuery(async () => {
           if (!dragging) return;
           dragging = false;
           pathEl.classList.remove("cfm-rh-path-dragging");
+          if (countEl) countEl.classList.remove("cfm-rh-path-dragging");
           document.removeEventListener("pointermove", onPointerMove);
           document.removeEventListener("pointerup", stopDrag);
           document.removeEventListener("pointercancel", stopDrag);
@@ -20883,6 +20884,7 @@ jQuery(async () => {
           startY = ev.clientY;
           startLeftHeight = leftPane.getBoundingClientRect().height;
           pathEl.classList.add("cfm-rh-path-dragging");
+          if (countEl) countEl.classList.add("cfm-rh-path-dragging");
           document.addEventListener("pointermove", onPointerMove, { passive: false });
           document.addEventListener("pointerup", stopDrag);
           document.addEventListener("pointercancel", stopDrag);

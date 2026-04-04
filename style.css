@@ -322,7 +322,8 @@
   border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
   background-color: rgba(0, 0, 0, 0.05);
 }
-.cfm-right-header .cfm-rh-path.cfm-rh-path-dragging {
+.cfm-right-header .cfm-rh-path.cfm-rh-path-dragging,
+.cfm-right-header .cfm-rh-count.cfm-rh-path-dragging {
   opacity: 1;
   color: var(--SmartThemeQuoteColor, #89b4fa);
 }
