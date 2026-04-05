@@ -1849,6 +1849,17 @@
     margin-left: 4px;
   }
 
+  /* 移动端禁用收藏按钮 hover 视觉，避免滑动后残留悬停态 */
+  .cfm-row-star:hover {
+    color: rgba(255, 255, 255, 0.2);
+    transform: none;
+  }
+
+  .cfm-row-star.cfm-star-active:hover {
+    color: #f9e2af;
+    transform: none;
+  }
+
   /* 头部按钮增大 */
   .cfm-header-actions button {
     padding: 8px 12px;
