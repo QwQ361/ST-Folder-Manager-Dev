@@ -16934,7 +16934,10 @@ jQuery(async () => {
         <div class="cfm-wi-de-section">
           <div class="cfm-wi-de-row cfm-wi-de-content-header">
             <label class="cfm-wi-de-label">内容 (Content)</label>
-            <span class="cfm-wi-de-meta">UID: ${escapeHtml(entry.uid)} | Tokens: <span class="cfm-wi-de-token-count">计算中...</span></span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <button type="button" class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-collapse-btn" data-entry-uid="${escapeHtml(entry.uid)}" title="收起当前条目并定位回该条目"><i class="fa-solid fa-chevron-up"></i> 收起并定位</button>
+              <span class="cfm-wi-de-meta">UID: ${escapeHtml(entry.uid)} | Tokens: <span class="cfm-wi-de-token-count">计算中...</span></span>
+            </div>
           </div>
           <textarea class="cfm-wi-de-input cfm-wi-de-content" name="cfm_wi_content" rows="6" placeholder="发送给 AI 的文本内容">${escapeHtml(entry.content)}</textarea>
         </div>
@@ -17102,6 +17105,25 @@ jQuery(async () => {
       renderWorldInfoEntrySubList(bookRow, normalizedName, refreshFn, {
         cachedEntries: entries,
       });
+    };
+    const scrollToEntryRow = (entryUid) => {
+      const safeUid = String(entryUid || "");
+      if (!safeUid) return;
+      setTimeout(() => {
+        const targetSubList = bookRow.next(".cfm-worldinfo-entry-sublist");
+        const targetRow = targetSubList
+          .find(".cfm-preset-detail-row")
+          .filter(function () {
+            return $(this).attr("data-entry-uid") === safeUid;
+          })
+          .first();
+        if (targetRow.length) {
+          targetRow[0].scrollIntoView({
+            block: "center",
+            behavior: "smooth",
+          });
+        }
+      }, 0);
     };
     try {
       if (!cachedEntries) {
@@ -17736,6 +17758,17 @@ jQuery(async () => {
               }, "保存次触发词");
             });
           });
+
+        bindTouchSafeTap(
+          detailPanel.find(".cfm-worldinfo-entry-collapse-btn"),
+          () => {
+            cfmWorldInfoEntryLastFocusedName = normalizedName;
+            toggleWorldInfoEntryDetail(normalizedName, entry.uid);
+            setWorldInfoEntryBookExpanded(normalizedName, true);
+            rerenderCurrentSubList();
+            scrollToEntryRow(entry.uid);
+          },
+        );
 
         // --- 4. 条目备注 ---
         detailPanel.find('[name="cfm_wi_comment"]').on("input", function () {
