@@ -21661,7 +21661,7 @@ jQuery(async () => {
           pinIcon.addEventListener("click", (e) => {
             e.stopPropagation();
             e.preventDefault();
-            toggleChatPin(elAvatar, elFile);
+            togglePinChat(elAvatar, elFile);
           });
           nameEl.parentNode.insertBefore(pinIcon, nameEl.nextSibling);
         }
@@ -21809,7 +21809,7 @@ jQuery(async () => {
           pinIndicator.addEventListener("click", (e) => {
             e.stopPropagation();
             e.preventDefault();
-            toggleChatPin(pin.avatar, pin.chatFileName);
+            togglePinChat(pin.avatar, pin.chatFileName);
           });
         }
 
