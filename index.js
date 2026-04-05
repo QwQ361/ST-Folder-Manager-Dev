@@ -28735,9 +28735,7 @@ jQuery(async () => {
             </div>
         `);
     // 点击星标切换收藏
-    row.find(".cfm-row-star").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTouchSafeTap(row.find(".cfm-row-star"), () => {
       const nowFav = toggleFavorite(char.avatar);
       const starEl = row.find(".cfm-row-star");
       starEl.toggleClass("cfm-star-active", nowFav);
@@ -28758,15 +28756,11 @@ jQuery(async () => {
       suppressRowClickUntil = Date.now() + 450;
     };
     // 单个铅笔按钮点击事件
-    row.find(".cfm-row-edit-btn").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTouchSafeTap(row.find(".cfm-row-edit-btn"), () => {
       executeCharEdit([char.avatar]);
     });
     // 聊天模式下小三角点击：展开/折叠聊天记录
-    row.find(".cfm-chat-toggle").on("click touchend", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTouchSafeTap(row.find(".cfm-chat-toggle"), async () => {
       suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmChatExpandedAvatars.has(avatar)) {
@@ -28795,9 +28789,7 @@ jQuery(async () => {
       }
     });
     // 正则模式下小三角点击：展开/折叠正则脚本
-    row.find(".cfm-regex-toggle").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTouchSafeTap(row.find(".cfm-regex-toggle"), () => {
       suppressNextRowClick();
       const avatar = char.avatar;
       if (cfmCharRegexExpandedAvatars.has(avatar)) {
@@ -36042,9 +36034,7 @@ jQuery(async () => {
           el.attr("title", newState ? "点击取消激活" : "点击激活");
         });
       });
-      row.find(".cfm-row-star").on("click touchend", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      bindTouchSafeTap(row.find(".cfm-row-star"), () => {
         toggleResFavorite("quickreply", n);
         executeQrSearch();
       });
@@ -36741,9 +36731,7 @@ jQuery(async () => {
         `);
 
         // 展开三角事件
-        row.find(".cfm-qr-expand-arrow").on("click touchend", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-qr-expand-arrow"), () => {
           cfmQrLastFocusedSetName = n;
           if (qrItemExpandedSets.has(n)) {
             qrItemExpandedSets.delete(n);
@@ -36754,9 +36742,7 @@ jQuery(async () => {
         });
 
         // 激活开关事件
-        row.find(".cfm-wi-toggle").on("click touchend", function (e) {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-wi-toggle"), function () {
           const newState = !qrActiveSet.has(n);
           toggleQrSetActivation(n, newState).then(() => {
             if (newState) qrActiveSet.add(n);
@@ -36773,9 +36759,7 @@ jQuery(async () => {
         });
 
         // 星标事件
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("quickreply", n);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -36796,9 +36780,7 @@ jQuery(async () => {
         });
 
         // 备注编辑按钮
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           const currentNote = getQrNote(n);
           const newNote = prompt("请输入备注:", currentNote);
           if (newNote !== null) {
@@ -36809,9 +36791,7 @@ jQuery(async () => {
 
         // 行点击事件
         // 重命名按钮事件
-        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-rename-btn"), () => {
           executeQrRename([n]);
         });
 
@@ -41005,9 +40985,7 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("personas", p.avatarId);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -41028,20 +41006,14 @@ jQuery(async () => {
           if (selectedPersonaFolder === "__favorites__") renderPersonasView();
         });
         // 单个复制按钮
-        row.find(".cfm-row-copy-btn").on("click touchend", async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-copy-btn"), async () => {
           await duplicatePersona(p);
         });
         // 单个备注编辑按钮
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           executePersonaNoteEdit([p.avatarId]);
         });
-        row.find(".cfm-persona-toggle").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-persona-toggle"), () => {
           if (personaItemExpandedIds.has(p.avatarId)) {
             personaItemExpandedIds.delete(p.avatarId);
             row.next(".cfm-chat-sublist").slideUp(150, function () {
@@ -41387,20 +41359,14 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
-        row.find(".cfm-row-copy-btn").on("click touchend", async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-copy-btn"), async () => {
           await duplicatePersona(p);
         });
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           toggleResFavorite("personas", p.avatarId);
           executePersonaSearch();
         });
-        row.find(".cfm-persona-toggle").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-persona-toggle"), () => {
           if (personaItemExpandedIds.has(p.avatarId)) {
             personaItemExpandedIds.delete(p.avatarId);
             row.next(".cfm-chat-sublist").slideUp(150, function () {
