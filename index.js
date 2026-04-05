@@ -19381,8 +19381,8 @@ jQuery(async () => {
       .removeClass("fa-comments")
       .addClass("fa-comments");
     $("#cfm-chat-mode-btn").attr("title", "关闭聊天记录");
-    // 立即渲染：三角箭头通过乐观渲染策略立即显示（缓存 undefined → 默认显示）
-    rerenderCurrentView();
+    // 立即渲染并同步当前角色目标：如果已有当前角色，则自动跳转到该角色并展开聊天记录
+    refreshChatModeTargetFromCurrent();
     // 非阻塞后台预加载：加载完成后精确刷新三角（移除无聊天记录的角色的三角）
     const characters = getCharacters();
     Promise.all(characters.map((c) => getCharChats(c.avatar)))
