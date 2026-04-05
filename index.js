@@ -1230,6 +1230,28 @@ jQuery(async () => {
     );
   }
 
+  let Popup = null;
+  let POPUP_TYPE = null;
+  try {
+    const popupModule = await import("../../../popup.js");
+    Popup = popupModule.Popup;
+    POPUP_TYPE = popupModule.POPUP_TYPE;
+    console.log("[CFM] 成功获取 Popup 和 POPUP_TYPE");
+  } catch (e) {
+    console.warn("[CFM] 无法导入 popup.js 模块，头像裁剪弹窗不可用:", e);
+  }
+
+  let ensureImageFormatSupported = null;
+  let getBase64Async = null;
+  try {
+    const utilsModule = await import("../../../utils.js");
+    ensureImageFormatSupported = utilsModule.ensureImageFormatSupported;
+    getBase64Async = utilsModule.getBase64Async;
+    console.log("[CFM] 成功获取 ensureImageFormatSupported 和 getBase64Async");
+  } catch (e) {
+    console.warn("[CFM] 无法导入 utils.js 模块，头像裁剪预处理不可用:", e);
+  }
+
   function getTagList() {
     return getContext().tags || [];
   }
@@ -39227,6 +39249,181 @@ jQuery(async () => {
     }, 300);
   }
 
+  function pickDetailAvatarFile() {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.style.display = "none";
+      const cleanup = () => input.remove();
+      input.addEventListener(
+        "change",
+        () => {
+          const file = input.files?.[0] || null;
+          cleanup();
+          resolve(file);
+        },
+        { once: true },
+      );
+      input.addEventListener(
+        "cancel",
+        () => {
+          cleanup();
+          resolve(null);
+        },
+        { once: true },
+      );
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  async function prepareDetailAvatarUpload(file) {
+    if (!(file instanceof File)) return null;
+
+    let uploadFile = file;
+    if (typeof ensureImageFormatSupported === "function") {
+      uploadFile = await ensureImageFormatSupported(file);
+    }
+
+    const ctx = getContext();
+    const shouldCrop = !ctx?.powerUserSettings?.never_resize_avatars;
+    let cropData;
+
+    if (
+      shouldCrop &&
+      typeof Popup === "function" &&
+      POPUP_TYPE?.CROP !== undefined &&
+      typeof getBase64Async === "function"
+    ) {
+      const dataUrl = await getBase64Async(uploadFile);
+      const dlg = new Popup(
+        "Set the crop position of the avatar image",
+        POPUP_TYPE.CROP,
+        "",
+        { cropImage: dataUrl },
+      );
+      const croppedImage = await dlg.show();
+      if (!croppedImage) {
+        return null;
+      }
+      cropData = dlg.cropData;
+    }
+
+    return { file: uploadFile, cropData };
+  }
+
+  async function bustDetailThumbnailCache(type, file) {
+    if (!type || !file) return;
+    try {
+      await fetch(getThumbnailUrl(type, file), {
+        method: "GET",
+        cache: "no-cache",
+        headers: {
+          pragma: "no-cache",
+          "cache-control": "no-cache",
+        },
+      });
+    } catch (e) {
+      console.warn(`[CFM] 刷新 ${type} 缩略图缓存失败:`, e);
+    }
+  }
+
+  async function replaceCharacterDetailAvatar(charRow, char) {
+    if (!char?.avatar) {
+      cfmToastr.error("无法获取角色头像信息");
+      return;
+    }
+
+    const file = await pickDetailAvatarFile();
+    if (!file) return;
+
+    const prepared = await prepareDetailAvatarUpload(file);
+    if (!prepared?.file) return;
+
+    const ctx = getContext();
+    const formData = new FormData();
+    formData.append("avatar", prepared.file);
+    formData.append("avatar_url", char.avatar);
+
+    let url = "/api/characters/edit-avatar";
+    if (prepared.cropData !== undefined) {
+      url += `?crop=${encodeURIComponent(JSON.stringify(prepared.cropData))}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: ctx.getRequestHeaders({ omitContentType: true }),
+        body: formData,
+        cache: "no-cache",
+      });
+      if (!response.ok) {
+        throw new Error((await response.text()) || `HTTP ${response.status}`);
+      }
+
+      await bustDetailThumbnailCache("avatar", char.avatar);
+      if (typeof ctx.getCharacters === "function") {
+        try {
+          await ctx.getCharacters();
+        } catch (e) {
+          console.warn("[CFM] 刷新角色列表数据失败", e);
+        }
+      }
+      cfmToastr.success("已更新角色头像");
+      rerenderCurrentView();
+    } catch (e) {
+      console.error("[CFM] 更新角色头像失败:", e);
+      cfmToastr.error("角色头像更新失败");
+      if (charRow?.length) {
+        renderCharacterDetailSubList(charRow, char);
+        charRow.next(".cfm-char-detail-sublist").show();
+      }
+    }
+  }
+
+  async function replacePersonaDetailAvatar(persona) {
+    if (!persona?.avatarId) {
+      cfmToastr.error("无法获取User头像信息");
+      return;
+    }
+
+    const file = await pickDetailAvatarFile();
+    if (!file) return;
+
+    const prepared = await prepareDetailAvatarUpload(file);
+    if (!prepared?.file) return;
+
+    const ctx = getContext();
+    const formData = new FormData();
+    formData.append("avatar", prepared.file);
+    formData.append("overwrite_name", persona.avatarId);
+
+    let url = "/api/avatars/upload";
+    if (prepared.cropData !== undefined) {
+      url += `?crop=${encodeURIComponent(JSON.stringify(prepared.cropData))}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: ctx.getRequestHeaders({ omitContentType: true }),
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error((await response.text()) || `HTTP ${response.status}`);
+      }
+
+      await bustDetailThumbnailCache("persona", persona.avatarId);
+      cfmToastr.success("已更新User头像");
+      refreshPersonaPanelView();
+      syncNativePersonaUI(persona.avatarId);
+    } catch (e) {
+      console.error("[CFM] 更新User头像失败:", e);
+      cfmToastr.error("User头像更新失败");
+    }
+  }
+
   function getCharacterDetailFieldValue(char, field) {
     const dataValue = char?.data?.[field];
     if (dataValue !== undefined && dataValue !== null) return dataValue;
@@ -40098,6 +40295,14 @@ jQuery(async () => {
       '<div class="cfm-chat-toolbar cfm-persona-detail-card cfm-char-detail-card"></div>',
     );
 
+    detailCard.append(`
+      <div class="cfm-detail-avatar-action" style="display:flex;justify-content:flex-start;padding:0 0 8px 0;">
+        <button type="button" class="cfm-btn cfm-char-detail-avatar-btn">
+          <i class="fa-solid fa-image"></i> 修改图像
+        </button>
+      </div>
+    `);
+
     detailCard.append(sectionHtml("描述", description, "", "description"));
 
     // 第一条消息（主开场白）：只有编辑按钮，不能切换
@@ -40159,6 +40364,47 @@ jQuery(async () => {
     subList.on("click touchend", (e) => {
       e.stopPropagation();
     });
+
+    subList.on("touchstart", ".cfm-char-detail-avatar-btn", function (e) {
+      const touch = e.originalEvent?.touches?.[0];
+      if (touch) {
+        $(this).data("cfmTouchStartX", touch.clientX);
+        $(this).data("cfmTouchStartY", touch.clientY);
+      }
+    });
+    subList.on(
+      "click touchend",
+      ".cfm-char-detail-avatar-btn",
+      async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = $(this);
+        const now = Date.now();
+        const lastTouchAt = Number(target.data("cfmCharAvatarTouchAt") || 0);
+        if (e.type === "touchend") {
+          target.data("cfmCharAvatarTouchAt", now);
+          const touch = e.originalEvent?.changedTouches?.[0];
+          if (touch) {
+            const startX = Number(target.data("cfmTouchStartX") || 0);
+            const startY = Number(target.data("cfmTouchStartY") || 0);
+            const deltaX = Math.abs(touch.clientX - startX);
+            const deltaY = Math.abs(touch.clientY - startY);
+            if (deltaX > 10 || deltaY > 10) {
+              return;
+            }
+          }
+        } else if (lastTouchAt && now - lastTouchAt < 500) {
+          return;
+        }
+        if (target.prop("disabled")) return;
+        target.prop("disabled", true);
+        try {
+          await replaceCharacterDetailAvatar(charRow, char);
+        } finally {
+          target.prop("disabled", false);
+        }
+      },
+    );
 
     // 编辑按钮事件（委托 + 移动端防误触）
     subList.on("touchstart", ".cfm-char-detail-edit", function (e) {
@@ -40311,6 +40557,14 @@ jQuery(async () => {
     );
 
     detailCard.append(`
+      <div class="cfm-detail-avatar-action" style="display:flex;justify-content:flex-start;padding:0 0 8px 0;">
+        <button type="button" class="cfm-btn cfm-persona-detail-avatar-btn">
+          <i class="fa-solid fa-image"></i> 修改图像
+        </button>
+      </div>
+    `);
+
+    detailCard.append(`
       <div class="cfm-persona-detail-section">
         <div class="cfm-persona-detail-label">名称
           <div class="cfm-chat-actions">
@@ -40370,6 +40624,47 @@ jQuery(async () => {
 
     subList.append(detailCard);
     personaRow.after(subList);
+
+    subList.on("touchstart", ".cfm-persona-detail-avatar-btn", function (e) {
+      const touch = e.originalEvent?.touches?.[0];
+      if (touch) {
+        $(this).data("cfmTouchStartX", touch.clientX);
+        $(this).data("cfmTouchStartY", touch.clientY);
+      }
+    });
+    subList.on(
+      "click touchend",
+      ".cfm-persona-detail-avatar-btn",
+      async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = $(this);
+        const now = Date.now();
+        const lastTouchAt = Number(target.data("cfmPersonaAvatarTouchAt") || 0);
+        if (e.type === "touchend") {
+          target.data("cfmPersonaAvatarTouchAt", now);
+          const touch = e.originalEvent?.changedTouches?.[0];
+          if (touch) {
+            const startX = Number(target.data("cfmTouchStartX") || 0);
+            const startY = Number(target.data("cfmTouchStartY") || 0);
+            const deltaX = Math.abs(touch.clientX - startX);
+            const deltaY = Math.abs(touch.clientY - startY);
+            if (deltaX > 10 || deltaY > 10) {
+              return;
+            }
+          }
+        } else if (lastTouchAt && now - lastTouchAt < 500) {
+          return;
+        }
+        if (target.prop("disabled")) return;
+        target.prop("disabled", true);
+        try {
+          await replacePersonaDetailAvatar(persona);
+        } finally {
+          target.prop("disabled", false);
+        }
+      },
+    );
 
     subList.find(".cfm-persona-detail-edit").on("click touchend", async (e) => {
       e.preventDefault();
