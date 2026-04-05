@@ -38582,35 +38582,49 @@ jQuery(async () => {
         if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
           return;
         }
-        const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        const nextRect = popupNode.getBoundingClientRect();
         const viewportWidth = Math.max(
-          0,
-          visualViewport?.width ||
-            window.innerWidth ||
-            document.documentElement?.clientWidth ||
-            nextRect.width,
+          document.documentElement?.clientWidth || 0,
+          window.innerWidth || 0,
+          visualViewport?.width || 0,
+          nextRect.width,
+        );
+        const physicalViewportHeight = Math.round(
+          (window.screen?.availHeight || window.screen?.height || 0) /
+            Math.max(window.devicePixelRatio || 1, 1),
+        );
+        const viewportHeight = Math.max(
+          document.documentElement?.clientHeight || 0,
+          window.innerHeight || 0,
+          physicalViewportHeight || 0,
+          visualViewport?.height || 0,
+          nextRect.height,
         );
         const safeWidth = Math.min(
-          nextRect.width,
+          Math.max(nextRect.width, 280),
           Math.max(0, viewportWidth - 24),
         );
+        const safeHeight = Math.max(
+          mobileMaximizedLock.rect?.height || 0,
+          nextRect.height,
+          Math.max(0, viewportHeight - 80),
+        );
         mobileMaximizedLock.rect = {
-          top: Math.max(0, nextRect.top),
-          left: Math.max(12, Math.round((viewportWidth - safeWidth) / 2)),
+          top: Math.max(12, mobileMaximizedLock.rect?.top ?? nextRect.top),
           width: safeWidth,
-          height: nextRect.height,
+          height: safeHeight,
         };
         popup.css({
           position: "fixed",
           top: `${mobileMaximizedLock.rect.top}px`,
-          left: `${mobileMaximizedLock.rect.left}px`,
+          left: "50%",
           right: "auto",
           bottom: "auto",
           width: `${mobileMaximizedLock.rect.width}px`,
           height: `${mobileMaximizedLock.rect.height}px`,
           minHeight: `${mobileMaximizedLock.rect.height}px`,
           maxHeight: `${mobileMaximizedLock.rect.height}px`,
-          transform: "none",
+          transform: "translateX(-50%)",
           margin: "0",
           zIndex: "100001",
         });
@@ -39015,35 +39029,49 @@ jQuery(async () => {
         if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
           return;
         }
-        const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        const nextRect = popupNode.getBoundingClientRect();
         const viewportWidth = Math.max(
-          0,
-          visualViewport?.width ||
-            window.innerWidth ||
-            document.documentElement?.clientWidth ||
-            nextRect.width,
+          document.documentElement?.clientWidth || 0,
+          window.innerWidth || 0,
+          visualViewport?.width || 0,
+          nextRect.width,
+        );
+        const physicalViewportHeight = Math.round(
+          (window.screen?.availHeight || window.screen?.height || 0) /
+            Math.max(window.devicePixelRatio || 1, 1),
+        );
+        const viewportHeight = Math.max(
+          document.documentElement?.clientHeight || 0,
+          window.innerHeight || 0,
+          physicalViewportHeight || 0,
+          visualViewport?.height || 0,
+          nextRect.height,
         );
         const safeWidth = Math.min(
-          nextRect.width,
+          Math.max(nextRect.width, 280),
           Math.max(0, viewportWidth - 24),
         );
+        const safeHeight = Math.max(
+          mobileMaximizedLock.rect?.height || 0,
+          nextRect.height,
+          Math.max(0, viewportHeight - 80),
+        );
         mobileMaximizedLock.rect = {
-          top: Math.max(0, nextRect.top),
-          left: Math.max(12, Math.round((viewportWidth - safeWidth) / 2)),
+          top: Math.max(12, mobileMaximizedLock.rect?.top ?? nextRect.top),
           width: safeWidth,
-          height: nextRect.height,
+          height: safeHeight,
         };
         popup.css({
           position: "fixed",
           top: `${mobileMaximizedLock.rect.top}px`,
-          left: `${mobileMaximizedLock.rect.left}px`,
+          left: "50%",
           right: "auto",
           bottom: "auto",
           width: `${mobileMaximizedLock.rect.width}px`,
           height: `${mobileMaximizedLock.rect.height}px`,
           minHeight: `${mobileMaximizedLock.rect.height}px`,
           maxHeight: `${mobileMaximizedLock.rect.height}px`,
-          transform: "none",
+          transform: "translateX(-50%)",
           margin: "0",
           zIndex: "100001",
         });
