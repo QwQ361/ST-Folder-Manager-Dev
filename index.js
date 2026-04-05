@@ -2236,12 +2236,22 @@ jQuery(async () => {
       ".cfm-row-bglink-btn",
       ".cfm-row-target-btn",
       ".cfm-wi-toggle",
+      ".cfm-tnode-rename",
+      ".cfm-tnode-arrow",
+      ".cfm-qr-expand-arrow",
+      ".cfm-chat-toggle",
+      ".cfm-regex-toggle",
+      ".cfm-char-detail-toggle",
+      ".cfm-preset-detail-toggle",
+      ".cfm-persona-toggle",
       ".cfm-persona-bind-btn",
       ".cfm-chat-action-btn",
       ".cfm-wi-preset-bind",
+      ".cfm-wi-preset-bind-toggle",
       ".cfm-wi-bind-remove",
+      ".cfm-user-preset-action-btn",
     ].join(", ");
-    const moveThreshold = 10;
+    const moveThreshold = 6;
     const clickSuppressMs = 500;
     let activeTouch = null;
 
@@ -2252,6 +2262,24 @@ jQuery(async () => {
 
     const getTouchPoint = (ev) =>
       ev.changedTouches?.[0] || ev.touches?.[0] || null;
+
+    const getScrollableAncestor = (el) => {
+      let node = el instanceof Element ? el.parentElement : null;
+      while (node && node !== document.body && node !== document.documentElement) {
+        const style = window.getComputedStyle(node);
+        const overflowY = style?.overflowY || "";
+        const overflowX = style?.overflowX || "";
+        const canScrollY =
+          /(auto|scroll|overlay)/.test(overflowY) &&
+          node.scrollHeight > node.clientHeight + 1;
+        const canScrollX =
+          /(auto|scroll|overlay)/.test(overflowX) &&
+          node.scrollWidth > node.clientWidth + 1;
+        if (canScrollY || canScrollX) return node;
+        node = node.parentElement;
+      }
+      return document.scrollingElement || document.documentElement || document.body;
+    };
 
     const stopEvent = (ev) => {
       ev.preventDefault();
@@ -2276,12 +2304,16 @@ jQuery(async () => {
         }
         const touch = getTouchPoint(ev);
         if (!touch) return;
+        const scrollEl = getScrollableAncestor(el);
         activeTouch = {
           el,
           startX: touch.clientX,
           startY: touch.clientY,
           moved: false,
           identifier: touch.identifier,
+          scrollEl,
+          startScrollTop: scrollEl?.scrollTop || 0,
+          startScrollLeft: scrollEl?.scrollLeft || 0,
         };
       },
       { capture: true, passive: true },
@@ -2298,7 +2330,18 @@ jQuery(async () => {
         if (!touch) return;
         const deltaX = Math.abs(touch.clientX - activeTouch.startX);
         const deltaY = Math.abs(touch.clientY - activeTouch.startY);
-        if (deltaX > moveThreshold || deltaY > moveThreshold) {
+        const scrollDeltaY = Math.abs(
+          (activeTouch.scrollEl?.scrollTop || 0) - activeTouch.startScrollTop,
+        );
+        const scrollDeltaX = Math.abs(
+          (activeTouch.scrollEl?.scrollLeft || 0) - activeTouch.startScrollLeft,
+        );
+        if (
+          deltaX > moveThreshold ||
+          deltaY > moveThreshold ||
+          scrollDeltaX > 0 ||
+          scrollDeltaY > 0
+        ) {
           activeTouch.moved = true;
         }
       },
@@ -2309,10 +2352,25 @@ jQuery(async () => {
       "touchend",
       (ev) => {
         const touch = activeTouch ? getTouchPoint(ev) : null;
-        if (activeTouch && touch) {
-          const deltaX = Math.abs(touch.clientX - activeTouch.startX);
-          const deltaY = Math.abs(touch.clientY - activeTouch.startY);
-          if (deltaX > moveThreshold || deltaY > moveThreshold) {
+        if (activeTouch) {
+          const deltaX = touch
+            ? Math.abs(touch.clientX - activeTouch.startX)
+            : 0;
+          const deltaY = touch
+            ? Math.abs(touch.clientY - activeTouch.startY)
+            : 0;
+          const scrollDeltaY = Math.abs(
+            (activeTouch.scrollEl?.scrollTop || 0) - activeTouch.startScrollTop,
+          );
+          const scrollDeltaX = Math.abs(
+            (activeTouch.scrollEl?.scrollLeft || 0) - activeTouch.startScrollLeft,
+          );
+          if (
+            deltaX > moveThreshold ||
+            deltaY > moveThreshold ||
+            scrollDeltaX > 0 ||
+            scrollDeltaY > 0
+          ) {
             activeTouch.moved = true;
           }
         }
