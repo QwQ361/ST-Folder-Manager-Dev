@@ -3402,9 +3402,19 @@ input.cfm-rv-search {
 @media (max-width: 768px) {
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized {
     align-self: flex-start;
-    height: calc(100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px);
+    height: calc(100vh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px);
+    min-height: calc(
+      100vh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
+    );
     max-height: calc(
-      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
+      100vh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
+    );
+    height: calc(100lvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px);
+    min-height: calc(
+      100lvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
+    );
+    max-height: calc(
+      100lvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
     );
     margin: 12px auto 12px;
   }
