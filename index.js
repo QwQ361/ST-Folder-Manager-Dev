@@ -16925,9 +16925,9 @@ jQuery(async () => {
             </div>
           </div>
         </div>
-        <!-- 区域2: 条目备注 -->
+        <!-- 区域2: 条目名称 -->
         <div class="cfm-wi-de-section">
-          <label class="cfm-wi-de-label">条目备注 (Comment)</label>
+          <label class="cfm-wi-de-label">条目名称 (Comment)</label>
           <textarea class="cfm-wi-de-input" name="cfm_wi_comment" rows="2" placeholder="条目的备注/标签">${escapeHtml(entry.comment)}</textarea>
         </div>
         <!-- 区域3: 内容 -->
@@ -17100,6 +17100,25 @@ jQuery(async () => {
     const sortMode = getWorldInfoEntryDetailSortMode();
     let worldInfoData = null;
     let entries = cachedEntries ? Array.from(cachedEntries) : [];
+    const syncLocalEntrySnapshot = (entryUid, nextEntry, activeEntry = null) => {
+      const safeUid = String(entryUid || "");
+      if (!safeUid || !nextEntry) return;
+      const clonedEntry = JSON.parse(JSON.stringify(nextEntry));
+      const applySnapshot = (targetEntry) => {
+        if (!targetEntry || String(targetEntry.uid || "") !== safeUid) return;
+        Object.keys(targetEntry).forEach((key) => {
+          if (!(key in clonedEntry)) delete targetEntry[key];
+        });
+        Object.assign(targetEntry, clonedEntry);
+      };
+      applySnapshot(activeEntry);
+      const listEntry = entries.find(
+        (item) => String(item?.uid || "") === safeUid,
+      );
+      if (listEntry && listEntry !== activeEntry) {
+        applySnapshot(listEntry);
+      }
+    };
     const rerenderCurrentSubList = () => {
       cfmWorldInfoEntryLastFocusedName = normalizedName;
       renderWorldInfoEntrySubList(bookRow, normalizedName, refreshFn, {
@@ -17714,6 +17733,7 @@ jQuery(async () => {
             const target = wiData?.entries?.[entry.uid];
             if (!target) return;
             fieldSetter(target, wiData);
+            syncLocalEntrySnapshot(entry.uid, target, entry);
             await saveWorldInfoDetailData(normalizedName, wiData);
           } catch (err) {
             console.error(`[CFM] ${errorLabel}失败:`, err);
@@ -17770,13 +17790,13 @@ jQuery(async () => {
           },
         );
 
-        // --- 4. 条目备注 ---
+        // --- 4. 条目名称 ---
         detailPanel.find('[name="cfm_wi_comment"]').on("input", function () {
           const val = $(this).val();
           debouncedSave(async () => {
             await saveField((t) => {
               t.comment = val;
-            }, "保存条目备注");
+            }, "保存条目名称");
           });
         });
 
