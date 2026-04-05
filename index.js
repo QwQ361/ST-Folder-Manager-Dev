@@ -38568,13 +38568,39 @@ jQuery(async () => {
         .toggleClass("fa-expand", !isMaximized)
         .toggleClass("fa-compress", isMaximized);
     };
+    const isMobileViewport = () =>
+      window.matchMedia?.("(max-width: 768px)")?.matches ||
+      window.innerWidth <= 768;
+    const settleMobileViewport = (callback) => {
+      const visualViewport = window.visualViewport;
+      let settled = false;
+      let settleTimer = null;
+      let fallbackTimer = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (settleTimer) clearTimeout(settleTimer);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        visualViewport?.removeEventListener("resize", handleViewportChange);
+        visualViewport?.removeEventListener("scroll", handleViewportChange);
+        callback();
+      };
+      const scheduleFinish = () => {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(finish, 120);
+      };
+      const handleViewportChange = () => {
+        scheduleFinish();
+      };
+      scheduleFinish();
+      fallbackTimer = setTimeout(finish, 420);
+      visualViewport?.addEventListener("resize", handleViewportChange);
+      visualViewport?.addEventListener("scroll", handleViewportChange);
+    };
     const syncMobileMaximizedLock = () => {
       clearMobileMaximizedLock();
       if (!popup.hasClass("cfm-edit-popup-maximized")) return;
-      const isMobileViewport =
-        window.matchMedia?.("(max-width: 768px)")?.matches ||
-        window.innerWidth <= 768;
-      if (!isMobileViewport) return;
+      if (!isMobileViewport()) return;
       const popupNode = popup[0];
       if (!popupNode) return;
       const visualViewport = window.visualViewport;
@@ -38683,25 +38709,51 @@ jQuery(async () => {
       maximizeBtn.on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        popup.toggleClass("cfm-edit-popup-maximized");
-        updateMaximizeButton();
-        if (popup.hasClass("cfm-edit-popup-maximized")) {
-          requestAnimationFrame(() => syncMobileMaximizedLock());
-        } else {
-          clearMobileMaximizedLock();
+        const willMaximize = !popup.hasClass("cfm-edit-popup-maximized");
+        const shouldResetKeyboardViewport =
+          willMaximize &&
+          isMobileViewport() &&
+          document.activeElement === node &&
+          !!window.visualViewport &&
+          window.visualViewport.height < window.innerHeight - 80;
+        const restoreCaret = () => {
+          input.trigger("focus");
+          if (
+            node &&
+            input.is("textarea") &&
+            typeof node.selectionStart === "number"
+          ) {
+            const nextCaret = node.selectionStart;
+            setTimeout(() => {
+              if (!node.isConnected) return;
+              revealTextareaCaret(node, nextCaret);
+            }, 0);
+          }
+        };
+        const applyToggle = () => {
+          popup.toggleClass("cfm-edit-popup-maximized");
+          updateMaximizeButton();
+          if (popup.hasClass("cfm-edit-popup-maximized")) {
+            requestAnimationFrame(() => syncMobileMaximizedLock());
+          } else {
+            clearMobileMaximizedLock();
+          }
+          restoreCaret();
+        };
+        if (!shouldResetKeyboardViewport) {
+          applyToggle();
+          return;
         }
-        input.trigger("focus");
-        if (
-          node &&
-          input.is("textarea") &&
-          typeof node.selectionStart === "number"
-        ) {
-          const nextCaret = node.selectionStart;
-          setTimeout(() => {
-            if (!node.isConnected) return;
-            revealTextareaCaret(node, nextCaret);
-          }, 0);
+        if (node && typeof node.selectionStart === "number") {
+          try {
+            node.setSelectionRange(node.selectionStart, node.selectionEnd);
+          } catch {}
         }
+        input.trigger("blur");
+        settleMobileViewport(() => {
+          if (!overlay[0]?.isConnected) return;
+          applyToggle();
+        });
       });
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
@@ -39015,13 +39067,39 @@ jQuery(async () => {
         .toggleClass("fa-expand", !isMaximized)
         .toggleClass("fa-compress", isMaximized);
     };
+    const isMobileViewport = () =>
+      window.matchMedia?.("(max-width: 768px)")?.matches ||
+      window.innerWidth <= 768;
+    const settleMobileViewport = (callback) => {
+      const visualViewport = window.visualViewport;
+      let settled = false;
+      let settleTimer = null;
+      let fallbackTimer = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (settleTimer) clearTimeout(settleTimer);
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        visualViewport?.removeEventListener("resize", handleViewportChange);
+        visualViewport?.removeEventListener("scroll", handleViewportChange);
+        callback();
+      };
+      const scheduleFinish = () => {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(finish, 120);
+      };
+      const handleViewportChange = () => {
+        scheduleFinish();
+      };
+      scheduleFinish();
+      fallbackTimer = setTimeout(finish, 420);
+      visualViewport?.addEventListener("resize", handleViewportChange);
+      visualViewport?.addEventListener("scroll", handleViewportChange);
+    };
     const syncMobileMaximizedLock = () => {
       clearMobileMaximizedLock();
       if (!popup.hasClass("cfm-edit-popup-maximized")) return;
-      const isMobileViewport =
-        window.matchMedia?.("(max-width: 768px)")?.matches ||
-        window.innerWidth <= 768;
-      if (!isMobileViewport) return;
+      if (!isMobileViewport()) return;
       const popupNode = popup[0];
       if (!popupNode) return;
       const visualViewport = window.visualViewport;
@@ -39130,25 +39208,51 @@ jQuery(async () => {
       maximizeBtn.on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        popup.toggleClass("cfm-edit-popup-maximized");
-        updateMaximizeButton();
-        if (popup.hasClass("cfm-edit-popup-maximized")) {
-          requestAnimationFrame(() => syncMobileMaximizedLock());
-        } else {
-          clearMobileMaximizedLock();
+        const willMaximize = !popup.hasClass("cfm-edit-popup-maximized");
+        const shouldResetKeyboardViewport =
+          willMaximize &&
+          isMobileViewport() &&
+          document.activeElement === node &&
+          !!window.visualViewport &&
+          window.visualViewport.height < window.innerHeight - 80;
+        const restoreCaret = () => {
+          input.trigger("focus");
+          if (
+            node &&
+            input.is("textarea") &&
+            typeof node.selectionStart === "number"
+          ) {
+            const nextCaret = node.selectionStart;
+            setTimeout(() => {
+              if (!node.isConnected) return;
+              revealTextareaCaret(node, nextCaret);
+            }, 0);
+          }
+        };
+        const applyToggle = () => {
+          popup.toggleClass("cfm-edit-popup-maximized");
+          updateMaximizeButton();
+          if (popup.hasClass("cfm-edit-popup-maximized")) {
+            requestAnimationFrame(() => syncMobileMaximizedLock());
+          } else {
+            clearMobileMaximizedLock();
+          }
+          restoreCaret();
+        };
+        if (!shouldResetKeyboardViewport) {
+          applyToggle();
+          return;
         }
-        input.trigger("focus");
-        if (
-          node &&
-          input.is("textarea") &&
-          typeof node.selectionStart === "number"
-        ) {
-          const nextCaret = node.selectionStart;
-          setTimeout(() => {
-            if (!node.isConnected) return;
-            revealTextareaCaret(node, nextCaret);
-          }, 0);
+        if (node && typeof node.selectionStart === "number") {
+          try {
+            node.setSelectionRange(node.selectionStart, node.selectionEnd);
+          } catch {}
         }
+        input.trigger("blur");
+        settleMobileViewport(() => {
+          if (!overlay[0]?.isConnected) return;
+          applyToggle();
+        });
       });
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
