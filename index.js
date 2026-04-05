@@ -38643,9 +38643,34 @@ jQuery(async () => {
 
   function getCharacterDetailFieldValue(char, field) {
     const dataValue = char?.data?.[field];
-    return dataValue !== undefined && dataValue !== null
-      ? dataValue
-      : char?.[field];
+    if (dataValue !== undefined && dataValue !== null) return dataValue;
+
+    const topLevelValue = char?.[field];
+    if (topLevelValue !== undefined && topLevelValue !== null) {
+      return topLevelValue;
+    }
+
+    if (!char?.json_data) return undefined;
+
+    try {
+      const jsonData =
+        typeof char.json_data === "string"
+          ? JSON.parse(char.json_data)
+          : char.json_data;
+      const jsonDataValue = jsonData?.data?.[field];
+      if (jsonDataValue !== undefined && jsonDataValue !== null) {
+        return jsonDataValue;
+      }
+
+      const jsonTopLevelValue = jsonData?.[field];
+      if (jsonTopLevelValue !== undefined && jsonTopLevelValue !== null) {
+        return jsonTopLevelValue;
+      }
+    } catch (parseErr) {
+      console.debug("[CFM] 读取角色详情 json_data 失败:", parseErr);
+    }
+
+    return undefined;
   }
 
   async function showCharacterDetailFieldPopup(char, field) {
