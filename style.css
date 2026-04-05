@@ -3401,15 +3401,15 @@ input.cfm-rv-search {
 }
 @media (max-width: 768px) {
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized {
-    height: calc(100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px);
+    align-self: flex-start;
+    height: auto;
     max-height: calc(
-      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px
+      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
     );
-    margin-top: 6px;
-    margin-bottom: calc(max(env(safe-area-inset-bottom, 0px), 56px) + 6px);
+    margin: 12px auto calc(max(env(safe-area-inset-bottom, 0px), 56px) + 12px);
   }
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized .cfm-edit-popup-actions {
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 .cfm-edit-popup-names {
