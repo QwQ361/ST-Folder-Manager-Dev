@@ -21587,6 +21587,11 @@ jQuery(async () => {
     }
   }
 
+  // 兼容旧调用名，避免历史残留逻辑调用 toggleChatPin 时失效
+  function toggleChatPin(avatar, chatFileName) {
+    return togglePinChat(avatar, chatFileName);
+  }
+
   /**
    * 将置顶聊天应用到酒馆的 welcome-screen "最近聊天" 列表
    * 通过操作 DOM 将置顶项移动/插入到列表最前面
