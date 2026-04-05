@@ -21847,26 +21847,37 @@ jQuery(async () => {
     const chatEl = document.getElementById("chat");
     if (!chatEl) return;
 
+    const schedulePinnedApply = () => {
+      requestAnimationFrame(() => applyPinnedChatsToWelcomeScreen());
+      setTimeout(() => applyPinnedChatsToWelcomeScreen(), 120);
+      setTimeout(() => applyPinnedChatsToWelcomeScreen(), 400);
+    };
+
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
           if (
-            node.nodeType === Node.ELEMENT_NODE &&
-            (node.classList?.contains("welcomePanel") ||
-              node.querySelector?.(".welcomePanel"))
+            node.classList?.contains("welcomePanel") ||
+            node.querySelector?.(".welcomePanel") ||
+            node.classList?.contains("recentChat") ||
+            node.querySelector?.(".recentChat") ||
+            node.classList?.contains("recentChatList") ||
+            node.querySelector?.(".recentChatList")
           ) {
-            // welcomePanel 被插入，延迟一帧应用置顶
-            requestAnimationFrame(() => applyPinnedChatsToWelcomeScreen());
+            // welcomePanel 或最近聊天列表/条目被插入后，分阶段重试应用置顶
+            schedulePinnedApply();
             return;
           }
         }
       }
     });
 
-    observer.observe(chatEl, { childList: true, subtree: false });
-    // 如果当前已有 welcomePanel，立即应用
+    observer.observe(chatEl, { childList: true, subtree: true });
+    // 如果当前已有 welcomePanel，延迟多次应用，兼容刷新后异步渲染最近聊天列表
     if (chatEl.querySelector(".welcomePanel")) {
-      applyPinnedChatsToWelcomeScreen();
+      schedulePinnedApply();
     }
   }
 
