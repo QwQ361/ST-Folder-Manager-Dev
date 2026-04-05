@@ -11300,9 +11300,22 @@ jQuery(async () => {
     overlay.find("#cfm-wi-preset-name-input").focus();
 
     // 关闭
-    overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
-    overlay.on("click", (e) => {
-      if ($(e.target).is(overlay)) overlay.remove();
+    overlay
+      .find(".cfm-edit-popup")
+      .on("click mousedown mouseup touchstart touchend", (e) => {
+        e.stopPropagation();
+      });
+    overlay.find(".cfm-edit-popup-cancel").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      overlay.remove();
+    });
+    overlay.on("click touchend", (e) => {
+      if ($(e.target).is(overlay)) {
+        e.preventDefault();
+        e.stopPropagation();
+        overlay.remove();
+      }
     });
 
     // 保存当前分组
