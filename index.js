@@ -2220,6 +2220,134 @@ jQuery(async () => {
     );
   }
 
+  const mobileTouchTapGuardState = new WeakMap();
+
+  function setupMobileTouchTapGuard() {
+    if (!isTouchDevice || setupMobileTouchTapGuard._initialized) return;
+    setupMobileTouchTapGuard._initialized = true;
+
+    const protectedSelector = [
+      ".cfm-row-star",
+      ".cfm-row-edit-btn",
+      ".cfm-row-note-btn",
+      ".cfm-row-rename-btn",
+      ".cfm-row-copy-btn",
+      ".cfm-regex-edit-btn",
+      ".cfm-row-bglink-btn",
+      ".cfm-row-target-btn",
+      ".cfm-wi-toggle",
+      ".cfm-persona-bind-btn",
+      ".cfm-chat-action-btn",
+      ".cfm-wi-preset-bind",
+      ".cfm-wi-bind-remove",
+    ].join(", ");
+    const moveThreshold = 10;
+    const clickSuppressMs = 500;
+    let activeTouch = null;
+
+    const getGuardTarget = (target) => {
+      if (!(target instanceof Element)) return null;
+      return target.closest(protectedSelector);
+    };
+
+    const getTouchPoint = (ev) =>
+      ev.changedTouches?.[0] || ev.touches?.[0] || null;
+
+    const stopEvent = (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === "function") {
+        ev.stopImmediatePropagation();
+      }
+    };
+
+    const markSuppressed = (el) => {
+      if (!el) return;
+      mobileTouchTapGuardState.set(el, { lastTouchAt: Date.now() });
+    };
+
+    document.addEventListener(
+      "touchstart",
+      (ev) => {
+        const el = getGuardTarget(ev.target);
+        if (!el) {
+          activeTouch = null;
+          return;
+        }
+        const touch = getTouchPoint(ev);
+        if (!touch) return;
+        activeTouch = {
+          el,
+          startX: touch.clientX,
+          startY: touch.clientY,
+          moved: false,
+          identifier: touch.identifier,
+        };
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "touchmove",
+      (ev) => {
+        if (!activeTouch) return;
+        const touchList = Array.from(ev.touches || []);
+        const touch =
+          touchList.find((item) => item.identifier === activeTouch.identifier) ||
+          getTouchPoint(ev);
+        if (!touch) return;
+        const deltaX = Math.abs(touch.clientX - activeTouch.startX);
+        const deltaY = Math.abs(touch.clientY - activeTouch.startY);
+        if (deltaX > moveThreshold || deltaY > moveThreshold) {
+          activeTouch.moved = true;
+        }
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "touchend",
+      (ev) => {
+        const touch = activeTouch ? getTouchPoint(ev) : null;
+        if (activeTouch && touch) {
+          const deltaX = Math.abs(touch.clientX - activeTouch.startX);
+          const deltaY = Math.abs(touch.clientY - activeTouch.startY);
+          if (deltaX > moveThreshold || deltaY > moveThreshold) {
+            activeTouch.moved = true;
+          }
+        }
+
+        if (activeTouch?.moved) {
+          markSuppressed(activeTouch.el);
+          stopEvent(ev);
+        }
+        activeTouch = null;
+      },
+      { capture: true, passive: false },
+    );
+
+    document.addEventListener(
+      "touchcancel",
+      () => {
+        activeTouch = null;
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "click",
+      (ev) => {
+        const el = getGuardTarget(ev.target);
+        if (!el) return;
+        const state = mobileTouchTapGuardState.get(el);
+        if (!state?.lastTouchAt) return;
+        if (Date.now() - state.lastTouchAt >= clickSuppressMs) return;
+        stopEvent(ev);
+      },
+      true,
+    );
+  }
+
   // ==================== 移动端触摸拖拽管理器 ====================
   const touchDragMgr = {
     active: false,
@@ -46930,6 +47058,7 @@ jQuery(async () => {
   injectNativeFilterButtons();
   setupNativePresetGroupButtonObserver();
   setupWorldInfoButtonAutoShowAll();
+  setupMobileTouchTapGuard();
   setupCharWorldPopupFilterObserver();
   setupPersonaSelectionPopupEnhancer();
   initPinnedChatHook(); // 初始化聊天置顶 welcome-screen hook
