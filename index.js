@@ -2273,7 +2273,9 @@ jQuery(async () => {
               g.textContent = `📦 共 ${data.count} 项`;
             } else {
               g.textContent =
-                (data.type === "folder" || data.type === "res-folder"
+                (data.type === "folder" ||
+                data.type === "res-folder" ||
+                data.type === "regex-folder"
                   ? "📁 "
                   : data.type === "preset"
                     ? "📄 "
@@ -2285,7 +2287,9 @@ jQuery(async () => {
                           ? "🖼️ "
                           : data.type === "quickreply"
                             ? "💬 "
-                            : "👤 ") + (data.name || "");
+                            : data.type === "regex-script"
+                              ? "</> "
+                              : "👤 ") + (data.name || data.scriptName || "");
             }
             g.style.left = sx + "px";
             g.style.top = sy - 50 + "px";
