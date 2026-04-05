@@ -38577,15 +38577,27 @@ jQuery(async () => {
       if (!isMobileViewport) return;
       const popupNode = popup[0];
       if (!popupNode) return;
+      const visualViewport = window.visualViewport;
       const applyLockedRect = () => {
         if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
           return;
         }
         const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        const viewportWidth = Math.max(
+          0,
+          visualViewport?.width ||
+            window.innerWidth ||
+            document.documentElement?.clientWidth ||
+            nextRect.width,
+        );
+        const safeWidth = Math.min(
+          nextRect.width,
+          Math.max(0, viewportWidth - 24),
+        );
         mobileMaximizedLock.rect = {
           top: Math.max(0, nextRect.top),
-          left: Math.max(0, nextRect.left),
-          width: nextRect.width,
+          left: Math.max(12, Math.round((viewportWidth - safeWidth) / 2)),
+          width: safeWidth,
           height: nextRect.height,
         };
         popup.css({
@@ -38604,7 +38616,6 @@ jQuery(async () => {
         });
       };
       requestAnimationFrame(applyLockedRect);
-      const visualViewport = window.visualViewport;
       const handleViewportChange = () => {
         requestAnimationFrame(applyLockedRect);
       };
@@ -38999,15 +39010,27 @@ jQuery(async () => {
       if (!isMobileViewport) return;
       const popupNode = popup[0];
       if (!popupNode) return;
+      const visualViewport = window.visualViewport;
       const applyLockedRect = () => {
         if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
           return;
         }
         const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        const viewportWidth = Math.max(
+          0,
+          visualViewport?.width ||
+            window.innerWidth ||
+            document.documentElement?.clientWidth ||
+            nextRect.width,
+        );
+        const safeWidth = Math.min(
+          nextRect.width,
+          Math.max(0, viewportWidth - 24),
+        );
         mobileMaximizedLock.rect = {
           top: Math.max(0, nextRect.top),
-          left: Math.max(0, nextRect.left),
-          width: nextRect.width,
+          left: Math.max(12, Math.round((viewportWidth - safeWidth) / 2)),
+          width: safeWidth,
           height: nextRect.height,
         };
         popup.css({
@@ -39026,7 +39049,6 @@ jQuery(async () => {
         });
       };
       requestAnimationFrame(applyLockedRect);
-      const visualViewport = window.visualViewport;
       const handleViewportChange = () => {
         requestAnimationFrame(applyLockedRect);
       };
