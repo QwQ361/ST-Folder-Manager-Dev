@@ -21844,40 +21844,64 @@ jQuery(async () => {
    * 使用 MutationObserver 监听 #chat 容器，当 welcomePanel 被插入时自动应用置顶
    */
   function initPinnedChatHook() {
-    const chatEl = document.getElementById("chat");
-    if (!chatEl) return;
-
     const schedulePinnedApply = () => {
       requestAnimationFrame(() => applyPinnedChatsToWelcomeScreen());
       setTimeout(() => applyPinnedChatsToWelcomeScreen(), 120);
       setTimeout(() => applyPinnedChatsToWelcomeScreen(), 400);
+      setTimeout(() => applyPinnedChatsToWelcomeScreen(), 1000);
     };
 
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const bindPinnedObserver = (chatEl) => {
+      if (!chatEl || chatEl.dataset.cfmPinnedHookBound === "1") return;
+      chatEl.dataset.cfmPinnedHookBound = "1";
 
-          if (
-            node.classList?.contains("welcomePanel") ||
-            node.querySelector?.(".welcomePanel") ||
-            node.classList?.contains("recentChat") ||
-            node.querySelector?.(".recentChat") ||
-            node.classList?.contains("recentChatList") ||
-            node.querySelector?.(".recentChatList")
-          ) {
-            // welcomePanel 或最近聊天列表/条目被插入后，分阶段重试应用置顶
-            schedulePinnedApply();
-            return;
+      const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+            if (
+              node.classList?.contains("welcomePanel") ||
+              node.querySelector?.(".welcomePanel") ||
+              node.classList?.contains("recentChat") ||
+              node.querySelector?.(".recentChat") ||
+              node.classList?.contains("recentChatList") ||
+              node.querySelector?.(".recentChatList")
+            ) {
+              // welcomePanel 或最近聊天列表/条目被插入后，分阶段重试应用置顶
+              schedulePinnedApply();
+              return;
+            }
           }
         }
+      });
+
+      observer.observe(chatEl, { childList: true, subtree: true });
+      if (chatEl.querySelector(".welcomePanel")) {
+        schedulePinnedApply();
       }
+    };
+
+    const existingChatEl = document.getElementById("chat");
+    if (existingChatEl) {
+      bindPinnedObserver(existingChatEl);
+      return;
+    }
+
+    const rootObserver = new MutationObserver(() => {
+      const chatEl = document.getElementById("chat");
+      if (!chatEl) return;
+      rootObserver.disconnect();
+      bindPinnedObserver(chatEl);
+      schedulePinnedApply();
     });
 
-    observer.observe(chatEl, { childList: true, subtree: true });
-    // 如果当前已有 welcomePanel，延迟多次应用，兼容刷新后异步渲染最近聊天列表
-    if (chatEl.querySelector(".welcomePanel")) {
-      schedulePinnedApply();
+    if (document.body) {
+      rootObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+      document.addEventListener("DOMContentLoaded", () => {
+        rootObserver.observe(document.body, { childList: true, subtree: true });
+      });
     }
   }
 
@@ -22035,22 +22059,32 @@ jQuery(async () => {
 
   /**
    * 初始化 welcome-screen 备注显示 hook
-   * 扩展 initPinnedChatHook 的 MutationObserver，当 welcomePanel 出现时也应用备注
+   * 扩展 initPinnedChatHook 的 MutationObserver，当 welcomePanel 或 recentChat 条目出现时也应用备注
    */
   function initRecentChatNotesHook() {
+    const scheduleNotesApply = () => {
+      requestAnimationFrame(() => enhanceRecentChatsWithNotes());
+      setTimeout(() => enhanceRecentChatsWithNotes(), 120);
+      setTimeout(() => enhanceRecentChatsWithNotes(), 400);
+    };
+
     const chatEl = document.getElementById("chat");
     if (!chatEl) return;
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
           if (
-            node.nodeType === Node.ELEMENT_NODE &&
-            (node.classList?.contains("welcomePanel") ||
-              node.querySelector?.(".welcomePanel"))
+            node.classList?.contains("welcomePanel") ||
+            node.querySelector?.(".welcomePanel") ||
+            node.classList?.contains("recentChat") ||
+            node.querySelector?.(".recentChat") ||
+            node.classList?.contains("recentChatList") ||
+            node.querySelector?.(".recentChatList")
           ) {
-            // welcomePanel 被插入，延迟一帧应用备注
-            requestAnimationFrame(() => enhanceRecentChatsWithNotes());
+            // welcomePanel 或最近聊天列表/条目被插入，分阶段重试应用备注
+            scheduleNotesApply();
             return;
           }
         }
@@ -22060,7 +22094,7 @@ jQuery(async () => {
     observer.observe(chatEl, { childList: true, subtree: true });
     // 如果当前已有 welcomePanel，立即应用
     if (chatEl.querySelector(".welcomePanel")) {
-      requestAnimationFrame(() => enhanceRecentChatsWithNotes());
+      scheduleNotesApply();
     }
   }
 
@@ -48216,6 +48250,12 @@ jQuery(async () => {
       eventSource.on(event_types.CHAT_CHANGED, () => {
         // 延迟执行，确保角色信息已更新
         scheduleAutoApplyBoundGroups();
+        // 聊天切换/关闭后，welcome-screen 会被重建，需要重新应用置顶和备注
+        // 使用多阶段延迟确保 DOM 已完成渲染
+        requestAnimationFrame(() => applyPinnedChatsToWelcomeScreen());
+        setTimeout(() => applyPinnedChatsToWelcomeScreen(), 300);
+        setTimeout(() => applyPinnedChatsToWelcomeScreen(), 800);
+        setTimeout(() => applyPinnedChatsToWelcomeScreen(), 1500);
       });
     }
     // 预设切换时自动应用/关闭世界书分组和快速回复分组
