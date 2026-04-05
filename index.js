@@ -1397,9 +1397,16 @@ jQuery(async () => {
     // 当前已应用的世界书分组索引集合（用于自动应用/关闭追踪）
     if (!extension_settings[extensionName]._wiAppliedPresetIndices)
       extension_settings[extensionName]._wiAppliedPresetIndices = [];
-    // 正则激活分组预设：[{name, scripts}]  scripts 为脚本ID数组
+    // 正则激活分组预设：[{name, scripts, scope, bindChars, bindPresets, bindChats}]
     if (!extension_settings[extensionName].regexActivePresets)
       extension_settings[extensionName].regexActivePresets = [];
+    for (const p of extension_settings[extensionName].regexActivePresets) {
+      if (!p.scope) p.scope = "global";
+      if (p.scope === "char" || p.scope === "preset") p.scope = "bound";
+      if (!Array.isArray(p.bindChars)) p.bindChars = [];
+      if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+      if (!Array.isArray(p.bindChats)) p.bindChats = [];
+    }
     // 当前已应用的正则分组索引集合（用于应用/取消追踪）
     if (!extension_settings[extensionName]._regexAppliedPresetIndices)
       extension_settings[extensionName]._regexAppliedPresetIndices = [];
@@ -2289,7 +2296,11 @@ jQuery(async () => {
 
     const getScrollableAncestor = (el) => {
       let node = el instanceof Element ? el.parentElement : null;
-      while (node && node !== document.body && node !== document.documentElement) {
+      while (
+        node &&
+        node !== document.body &&
+        node !== document.documentElement
+      ) {
         const style = window.getComputedStyle(node);
         const overflowY = style?.overflowY || "";
         const overflowX = style?.overflowX || "";
@@ -2302,7 +2313,9 @@ jQuery(async () => {
         if (canScrollY || canScrollX) return node;
         node = node.parentElement;
       }
-      return document.scrollingElement || document.documentElement || document.body;
+      return (
+        document.scrollingElement || document.documentElement || document.body
+      );
     };
 
     const stopEvent = (ev) => {
@@ -2349,8 +2362,9 @@ jQuery(async () => {
         if (!activeTouch) return;
         const touchList = Array.from(ev.touches || []);
         const touch =
-          touchList.find((item) => item.identifier === activeTouch.identifier) ||
-          getTouchPoint(ev);
+          touchList.find(
+            (item) => item.identifier === activeTouch.identifier,
+          ) || getTouchPoint(ev);
         if (!touch) return;
         const deltaX = Math.abs(touch.clientX - activeTouch.startX);
         const deltaY = Math.abs(touch.clientY - activeTouch.startY);
@@ -2387,7 +2401,8 @@ jQuery(async () => {
             (activeTouch.scrollEl?.scrollTop || 0) - activeTouch.startScrollTop,
           );
           const scrollDeltaX = Math.abs(
-            (activeTouch.scrollEl?.scrollLeft || 0) - activeTouch.startScrollLeft,
+            (activeTouch.scrollEl?.scrollLeft || 0) -
+              activeTouch.startScrollLeft,
           );
           if (
             deltaX > moveThreshold ||
@@ -17100,7 +17115,11 @@ jQuery(async () => {
     const sortMode = getWorldInfoEntryDetailSortMode();
     let worldInfoData = null;
     let entries = cachedEntries ? Array.from(cachedEntries) : [];
-    const syncLocalEntrySnapshot = (entryUid, nextEntry, activeEntry = null) => {
+    const syncLocalEntrySnapshot = (
+      entryUid,
+      nextEntry,
+      activeEntry = null,
+    ) => {
       const safeUid = String(entryUid || "");
       if (!safeUid || !nextEntry) return;
       const clonedEntry = JSON.parse(JSON.stringify(nextEntry));
@@ -17116,7 +17135,9 @@ jQuery(async () => {
         bookName: normalizedName,
         uid: safeUid,
         label: String(
-          clonedEntry.comment || primaryKeys[0] || `条目 ${safeUid || "未命名"}`,
+          clonedEntry.comment ||
+            primaryKeys[0] ||
+            `条目 ${safeUid || "未命名"}`,
         ),
         comment: String(clonedEntry.comment || ""),
         content: String(clonedEntry.content || ""),
@@ -38986,7 +39007,10 @@ jQuery(async () => {
       mobileMaximizedLock.cleanup = () => {
         visualViewport?.removeEventListener("resize", handleViewportChange);
         visualViewport?.removeEventListener("scroll", handleViewportChange);
-        window.removeEventListener("orientationchange", handleOrientationChange);
+        window.removeEventListener(
+          "orientationchange",
+          handleOrientationChange,
+        );
       };
     };
     const caretIndex = Number.isFinite(options?.caretIndex)
@@ -39507,7 +39531,10 @@ jQuery(async () => {
       mobileMaximizedLock.cleanup = () => {
         visualViewport?.removeEventListener("resize", handleViewportChange);
         visualViewport?.removeEventListener("scroll", handleViewportChange);
-        window.removeEventListener("orientationchange", handleOrientationChange);
+        window.removeEventListener(
+          "orientationchange",
+          handleOrientationChange,
+        );
       };
     };
     const caretIndex = Number.isFinite(options?.caretIndex)
@@ -42905,6 +42932,26 @@ jQuery(async () => {
     let presetChanged = false;
     for (const preset of presets) {
       if (!preset || typeof preset !== "object") continue;
+      if (!preset.scope) {
+        preset.scope = "global";
+        presetChanged = true;
+      }
+      if (preset.scope === "char" || preset.scope === "preset") {
+        preset.scope = "bound";
+        presetChanged = true;
+      }
+      if (!Array.isArray(preset.bindChars)) {
+        preset.bindChars = [];
+        presetChanged = true;
+      }
+      if (!Array.isArray(preset.bindPresets)) {
+        preset.bindPresets = [];
+        presetChanged = true;
+      }
+      if (!Array.isArray(preset.bindChats)) {
+        preset.bindChats = [];
+        presetChanged = true;
+      }
       const prevScripts = Array.isArray(preset.scripts) ? preset.scripts : [];
       const nextScripts = filterExistingRegexScriptIds(
         prevScripts,
@@ -42954,9 +43001,20 @@ jQuery(async () => {
     const presets = getRegexActivePresets();
     const existing = presets.find((p) => p.name === name);
     if (existing) {
-      existing.scripts = scriptIds;
+      existing.scripts = [...scriptIds];
+      if (!existing.scope) existing.scope = "global";
+      if (!Array.isArray(existing.bindChars)) existing.bindChars = [];
+      if (!Array.isArray(existing.bindPresets)) existing.bindPresets = [];
+      if (!Array.isArray(existing.bindChats)) existing.bindChats = [];
     } else {
-      presets.push({ name, scripts: scriptIds });
+      presets.push({
+        name,
+        scripts: [...scriptIds],
+        scope: "global",
+        bindChars: [],
+        bindPresets: [],
+        bindChats: [],
+      });
     }
     extension_settings[extensionName].regexActivePresets = presets;
     getContext().saveSettingsDebounced();
@@ -43009,17 +43067,269 @@ jQuery(async () => {
     return false;
   }
 
+  function setRegexPresetScope(presetIdx, scope) {
+    const presets = getRegexActivePresets();
+    if (presets[presetIdx]) {
+      presets[presetIdx].scope = scope;
+      if (scope === "global") {
+        presets[presetIdx].bindChars = [];
+        presets[presetIdx].bindPresets = [];
+        presets[presetIdx].bindChats = [];
+      }
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function bindRegexPresetToChar(presetIdx, charAvatar) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindChars)) p.bindChars = [];
+    if (!p.bindChars.includes(charAvatar)) {
+      p.bindChars.push(charAvatar);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function bindRegexPresetToChat(presetIdx, charAvatar, chatFileName) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    const bindKey = makeChatBindKey(charAvatar, chatFileName);
+    if (!p || !bindKey) return;
+    if (!Array.isArray(p.bindChats)) p.bindChats = [];
+    if (!p.bindChats.includes(bindKey)) {
+      p.bindChats.push(bindKey);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function bindRegexPresetToPreset(presetIdx, presetName) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    if (!p) return;
+    if (!Array.isArray(p.bindPresets)) p.bindPresets = [];
+    if (!p.bindPresets.includes(presetName)) {
+      p.bindPresets.push(presetName);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function unbindRegexPresetFromChar(presetIdx, charAvatar) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindChars)) return;
+    const idx = p.bindChars.indexOf(charAvatar);
+    if (idx !== -1) {
+      p.bindChars.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function unbindRegexPresetFromChat(presetIdx, bindKey) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindChats)) return;
+    const idx = p.bindChats.indexOf(bindKey);
+    if (idx !== -1) {
+      p.bindChats.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function unbindRegexPresetFromPreset(presetIdx, presetName) {
+    const presets = getRegexActivePresets();
+    const p = presets[presetIdx];
+    if (!p || !Array.isArray(p.bindPresets)) return;
+    const idx = p.bindPresets.indexOf(presetName);
+    if (idx !== -1) {
+      p.bindPresets.splice(idx, 1);
+      getContext().saveSettingsDebounced();
+    }
+  }
+
+  function getRegexAutoApplyPresetIndices() {
+    const presets = getRegexActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentPreset = getCurrentPresetName();
+    const currentChatKey = getCurrentChatBindKey();
+    const indices = [];
+    const details = {};
+    for (let i = 0; i < presets.length; i++) {
+      const p = presets[i];
+      if (!p || !Array.isArray(p.scripts) || p.scripts.length === 0) continue;
+      if (p.scope === "global") continue;
+      const hasBindings =
+        (p.bindChars && p.bindChars.length > 0) ||
+        (p.bindPresets && p.bindPresets.length > 0) ||
+        (p.bindChats && p.bindChats.length > 0);
+      if (!hasBindings) continue;
+      const chatMatch = !!(
+        currentChatKey &&
+        p.bindChats &&
+        p.bindChats.includes(currentChatKey)
+      );
+      const charMatch = !!(
+        !chatMatch &&
+        currentChar &&
+        p.bindChars &&
+        p.bindChars.includes(currentChar)
+      );
+      const presetMatch = !!(
+        currentPreset &&
+        p.bindPresets &&
+        p.bindPresets.includes(currentPreset)
+      );
+      if (chatMatch || charMatch || presetMatch) {
+        indices.push(i);
+        details[i] = { chatMatch, charMatch, presetMatch };
+      }
+    }
+    return { indices, details };
+  }
+
+  async function unapplyRegexPresetIndex(presetIdx) {
+    const allPresets = getRegexActivePresets();
+    const preset = allPresets[presetIdx];
+    if (!preset) return 0;
+    const applied =
+      extension_settings[extensionName]._regexAppliedPresetIndices || [];
+    const otherApplied = applied.filter(
+      (i) => i !== presetIdx && allPresets[i],
+    );
+    const otherScripts = new Set();
+    for (const oi of otherApplied) {
+      for (const sid of allPresets[oi].scripts) otherScripts.add(sid);
+    }
+    let removedCount = 0;
+    let changed = false;
+    for (const sid of preset.scripts) {
+      if (!otherScripts.has(sid) && toggleRegexScriptActivation(sid, false)) {
+        removedCount++;
+        changed = true;
+      }
+    }
+    extension_settings[extensionName]._regexAppliedPresetIndices = otherApplied;
+    getContext().saveSettingsDebounced();
+    if (changed) await syncNativeRegexState();
+    return removedCount;
+  }
+
+  async function autoApplyRegexPresets(silent = false) {
+    try {
+      const presets = getRegexActivePresets();
+      const { indices: shouldApply, details } =
+        getRegexAutoApplyPresetIndices();
+      const prevApplied =
+        extension_settings[extensionName]._regexAppliedPresetIndices || [];
+      const currentCharName = getCurrentCharName();
+      const currentPresetName = getCurrentPresetName();
+      const currentChatName = getCurrentChatFileName();
+      const toDeactivate = prevApplied.filter((i) => !shouldApply.includes(i));
+      const toActivate = shouldApply.filter((i) => !prevApplied.includes(i));
+      const stillApplied = shouldApply.filter((i) => prevApplied.includes(i));
+      if (
+        toDeactivate.length === 0 &&
+        toActivate.length === 0 &&
+        stillApplied.length === 0
+      )
+        return;
+
+      const scriptsToDeactivate = new Set();
+      for (const idx of toDeactivate) {
+        if (presets[idx]) {
+          for (const sid of presets[idx].scripts) scriptsToDeactivate.add(sid);
+        }
+      }
+      const scriptsToActivate = new Set();
+      for (const idx of shouldApply) {
+        if (presets[idx]) {
+          for (const sid of presets[idx].scripts) scriptsToActivate.add(sid);
+        }
+      }
+      for (const sid of scriptsToActivate) scriptsToDeactivate.delete(sid);
+
+      let changed = false;
+      for (const sid of scriptsToDeactivate) {
+        changed = toggleRegexScriptActivation(sid, false) || changed;
+      }
+      for (const sid of scriptsToActivate) {
+        changed = toggleRegexScriptActivation(sid, true) || changed;
+      }
+
+      extension_settings[extensionName]._regexAppliedPresetIndices = [
+        ...shouldApply,
+      ];
+      getContext().saveSettingsDebounced();
+      if (changed) {
+        await syncNativeRegexState();
+      }
+
+      function describeMatchReason(idx) {
+        const d = details[idx];
+        if (!d) return "";
+        const reasons = [];
+        if (d.chatMatch && currentChatName)
+          reasons.push(`聊天「${currentChatName}」`);
+        if (d.charMatch && currentCharName)
+          reasons.push(`角色「${currentCharName}」`);
+        if (d.presetMatch && currentPresetName)
+          reasons.push(`预设「${currentPresetName}」`);
+        return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
+      }
+
+      const msgParts = [];
+      for (const idx of toActivate) {
+        const name = presets[idx]?.name;
+        if (name)
+          msgParts.push(`✅ 已开启「${name}」${describeMatchReason(idx)}`);
+      }
+      for (const idx of toDeactivate) {
+        const name = presets[idx]?.name;
+        if (name) {
+          const p = presets[idx];
+          const reasons = [];
+          if (p.bindChats && p.bindChats.length > 0) reasons.push("聊天不匹配");
+          if (p.bindChars && p.bindChars.length > 0) reasons.push("角色不匹配");
+          if (p.bindPresets && p.bindPresets.length > 0)
+            reasons.push("预设不匹配");
+          msgParts.push(`❌ 已关闭「${name}」（${reasons.join("且")}）`);
+        }
+      }
+      if (
+        (toActivate.length > 0 || toDeactivate.length > 0) &&
+        stillApplied.length > 0
+      ) {
+        for (const idx of stillApplied) {
+          const name = presets[idx]?.name;
+          if (name)
+            msgParts.push(`🔄 「${name}」保持开启${describeMatchReason(idx)}`);
+        }
+      }
+      if (!silent && msgParts.length > 0) {
+        cfmToastr.info(msgParts.join("<br>"), "正则分组", {
+          timeOut: 4000,
+          escapeHtml: false,
+        });
+      }
+    } catch (e) {
+      console.error("[CFM] 自动应用正则分组失败", e);
+    }
+  }
+
   /**
    * 显示正则激活分组面板（保存 + 已有分组列表）
    */
   async function showRegexPresetPanel() {
     if ($("#cfm-regex-preset-panel-overlay").length > 0) return;
-    const globalScripts = extension_settings.regex ?? [];
     const enabledIds = getEnabledRegexScriptIds();
-    const presets = getRegexActivePresets();
-
-    // 检测当前启用组合是否与某个已有分组完全相同
     const enabledSet = new Set(enabledIds);
+    const presets = getRegexActivePresets();
+    const currentChar = getCurrentCharAvatar();
+    const currentCharName = getCurrentCharName();
+    const currentPresetName = getCurrentPresetName();
+    const scopeLabels = { global: "全局", bound: "已绑定" };
+    const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
+
     let matchedPresetName = null;
     for (const p of presets) {
       if (
@@ -43031,24 +43341,39 @@ jQuery(async () => {
       }
     }
 
-    // 构建已有分组列表
+    const appliedPresetIndices = new Set(
+      extension_settings[extensionName]._regexAppliedPresetIndices || [],
+    );
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
         : presets
             .map((p, idx) => {
+              const scope = p.scope || "global";
+              const hasBindings =
+                (p.bindChars && p.bindChars.length > 0) ||
+                (p.bindPresets && p.bindPresets.length > 0) ||
+                (p.bindChats && p.bindChats.length > 0);
+              const isApplied =
+                appliedPresetIndices.has(idx) ||
+                (p.scripts.length > 0 &&
+                  p.scripts.every((id) => enabledSet.has(id)));
               return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <div class="cfm-wi-preset-item-left">
             <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name)}</span>
+            <span class="cfm-wi-preset-scope-tag" style="color:${scopeColors[scope]};border-color:${scopeColors[scope]}40;background:${scopeColors[scope]}15;">${scopeLabels[scope]}</span>
             <span class="cfm-wi-preset-item-count">${p.scripts.length} 个</span>
+            ${hasBindings ? '<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>' : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用分组"></i>
+            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用到全局"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
+            <i class="fa-solid fa-link cfm-regex-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
             <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
           </span>
+          ${hasBindings ? '<div class="cfm-wi-preset-bind-dropdown" style="display:none;"></div>' : ""}
         </div>
       `;
             })
@@ -43080,13 +43405,11 @@ jQuery(async () => {
     $("body").append(overlay);
     overlay.find("#cfm-regex-preset-name-input").focus();
 
-    // 关闭
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
     });
 
-    // 保存当前分组
     overlay.find("#cfm-regex-preset-name-input").on("keydown", (e) => {
       if (e.key === "Enter")
         overlay.find("#cfm-regex-preset-save-confirm").trigger("click");
@@ -43110,7 +43433,6 @@ jQuery(async () => {
       overlay.remove();
     });
 
-    // 应用分组
     overlay.find(".cfm-wi-preset-apply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -43130,8 +43452,30 @@ jQuery(async () => {
         const otherApplied = applied.filter(
           (i) => i !== idx && currentPresets[i],
         );
+        const autoAppliedState = getRegexAutoApplyPresetIndices();
+        const autoDetail = autoAppliedState.details[idx] || {};
+        const currentEnabledSet = new Set(getEnabledRegexScriptIds());
+        const isActuallyApplied = preset.scripts.every((sid) =>
+          currentEnabledSet.has(sid),
+        );
+        if (
+          autoAppliedState.indices.includes(idx) &&
+          isActuallyApplied &&
+          (autoDetail.charMatch ||
+            autoDetail.presetMatch ||
+            autoDetail.chatMatch)
+        ) {
+          const reasons = [];
+          if (autoDetail.chatMatch) reasons.push("当前聊天");
+          if (autoDetail.charMatch) reasons.push("当前角色");
+          if (autoDetail.presetMatch) reasons.push("当前预设");
+          cfmToastr.info(
+            `分组「${preset.name}」已因${reasons.join("和")}绑定自动生效`,
+          );
+          return;
+        }
 
-        let mode = "stack"; // 默认叠加
+        let mode = "stack";
         if (otherApplied.length > 0) {
           const otherNames = otherApplied
             .map((i) => currentPresets[i].name)
@@ -43169,7 +43513,6 @@ jQuery(async () => {
         }
 
         if (mode === "replace") {
-          // 替换模式：先禁用其他已应用分组的独占脚本
           const keepScripts = new Set(preset.scripts);
           for (const oi of otherApplied) {
             if (currentPresets[oi]) {
@@ -43182,17 +43525,13 @@ jQuery(async () => {
           }
         }
 
-        // 启用当前分组的脚本
         for (const sid of preset.scripts) {
           toggleRegexScriptActivation(sid, true);
         }
 
-        // 保存设置
         getContext().saveSettingsDebounced();
-        // 同步原生正则引擎
         await syncNativeRegexState();
 
-        // 更新追踪
         const newApplied =
           mode === "replace"
             ? [idx]
@@ -43212,7 +43551,6 @@ jQuery(async () => {
       }
     });
 
-    // 取消应用分组
     overlay.find(".cfm-wi-preset-unapply").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -43233,7 +43571,24 @@ jQuery(async () => {
           cfmToastr.warning(`分组「${preset.name}」当前未处于应用状态`);
           return;
         }
-        // 计算其他已应用分组覆盖的脚本
+        const { indices: autoIndices, details: autoDetails } =
+          getRegexAutoApplyPresetIndices();
+        if (autoIndices.includes(idx)) {
+          const detail = autoDetails[idx] || {};
+          const reasons = [];
+          if (detail.chatMatch)
+            reasons.push(
+              `聊天「${escapeHtml(getCurrentChatFileName() || getCurrentChatBindKey())}」`,
+            );
+          if (detail.charMatch)
+            reasons.push(
+              `角色「${escapeHtml(getCurrentCharName() || getCurrentCharAvatar())}」`,
+            );
+          if (detail.presetMatch)
+            reasons.push(`预设「${escapeHtml(getCurrentPresetName())}」`);
+          const confirmMsg = `分组「${preset.name}」当前因${reasons.join(" 和 ")}自动应用，确认取消应用吗？`;
+          if (!cfmConfirm(confirmMsg)) return;
+        }
         const otherApplied = applied.filter(
           (i) => i !== idx && currentPresets[i],
         );
@@ -43241,7 +43596,6 @@ jQuery(async () => {
         for (const oi of otherApplied) {
           for (const sid of currentPresets[oi].scripts) otherScripts.add(sid);
         }
-        // 只禁用该分组独占的脚本
         let removedCount = 0;
         for (const sid of preset.scripts) {
           if (!otherScripts.has(sid)) {
@@ -43249,11 +43603,8 @@ jQuery(async () => {
             removedCount++;
           }
         }
-        // 保存设置
         getContext().saveSettingsDebounced();
-        // 同步原生正则引擎
         await syncNativeRegexState();
-        // 从追踪中移除
         extension_settings[extensionName]._regexAppliedPresetIndices =
           otherApplied;
         getContext().saveSettingsDebounced();
@@ -43269,7 +43620,269 @@ jQuery(async () => {
       }
     });
 
-    // 编辑分组
+    overlay.find(".cfm-regex-preset-bind").on("click", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      const btn = $(this);
+      const item = btn.closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      $(".cfm-wi-preset-bind-menu").remove();
+      const menu = $(`
+        <div class="cfm-wi-preset-bind-menu">
+          <div class="cfm-wi-preset-bind-menu-title">应用方式</div>
+          <div class="cfm-wi-preset-bind-menu-item" data-action="global"><i class="fa-solid fa-globe" style="color:#a6e3a1;"></i> 应用到全局</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentPresetName ? "cfm-disabled" : ""}" data-action="preset"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定到当前预设${currentPresetName ? "「" + escapeHtml(currentPresetName) + "」" : "（无预设）"}</div>
+          <div class="cfm-wi-preset-bind-menu-item ${!currentChar ? "cfm-disabled" : ""}" data-action="char">
+            <span style="display:flex;align-items:center;min-width:0;flex:1;"><i class="fa-solid fa-user" style="color:#f9e2af;"></i><span style="margin-left:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">绑定到当前角色${currentCharName ? "「" + escapeHtml(currentCharName) + "」" : "（无角色）"}</span></span>
+            <i class="fa-solid fa-caret-down cfm-wi-bind-chat-toggle" style="margin-left:auto;opacity:.7;"></i>
+          </div>
+          <div class="cfm-wi-preset-bind-menu-item cfm-wi-preset-bind-subitem ${!getCurrentChatBindKey() ? "cfm-disabled" : ""}" data-action="chat" style="display:none;"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定到当前聊天${getCurrentChatFileName() ? "「" + escapeHtml(getCurrentChatFileName()) + "」" : "（无聊天）"}</div>
+        </div>
+      `);
+      overlay.append(menu);
+      const btnRect = btn[0].getBoundingClientRect();
+      let menuTop = btnRect.bottom + 4;
+      let menuLeft = btnRect.right - 240;
+      if (menuLeft < 8) menuLeft = 8;
+      if (menuTop + 160 > window.innerHeight) menuTop = btnRect.top - 160;
+      menu.css({ top: menuTop + "px", left: menuLeft + "px" });
+
+      menu.find(".cfm-wi-bind-chat-toggle").on("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const chatItem = menu.find('[data-action="chat"]');
+        if (!chatItem.length) return;
+        const willShow = !chatItem.is(":visible");
+        chatItem.stop(true, true).slideToggle(150);
+        $(this)
+          .toggleClass("fa-caret-down", !willShow)
+          .toggleClass("fa-caret-up", willShow);
+      });
+
+      menu
+        .find(".cfm-wi-preset-bind-menu-item")
+        .on("click", async function (ev) {
+          ev.stopPropagation();
+          if ($(ev.target).closest(".cfm-wi-bind-chat-toggle").length) return;
+          if ($(this).hasClass("cfm-disabled")) return;
+          const action = $(this).data("action");
+          const allPresets = getRegexActivePresets();
+          const preset = allPresets[idx];
+          if (!preset) return;
+
+          if (action === "global") {
+            setRegexPresetScope(idx, "global");
+            menu.remove();
+            overlay
+              .find(
+                `.cfm-wi-preset-item[data-preset-idx="${idx}"] .cfm-wi-preset-apply`,
+              )
+              .trigger("click");
+            return;
+          }
+
+          if (action === "preset") {
+            if (!currentPresetName) return;
+            const alreadyBound =
+              Array.isArray(preset.bindPresets) &&
+              preset.bindPresets.includes(currentPresetName);
+            const autoApplied = getRegexAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.presetMatch
+              ) {
+                cfmToastr.info(
+                  `分组「${preset.name}」已绑定当前预设，且已处于应用状态`,
+                );
+              } else {
+                cfmToastr.info(`当前预设已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setRegexPresetScope(idx, "bound");
+              bindRegexPresetToPreset(idx, currentPresetName);
+              await autoApplyRegexPresets(true);
+              cfmToastr.success(
+                `已将分组「${preset.name}」绑定到预设「${currentPresetName}」`,
+              );
+            }
+          } else if (action === "char") {
+            if (!currentChar) return;
+            const alreadyBound =
+              Array.isArray(preset.bindChars) &&
+              preset.bindChars.includes(currentChar);
+            const autoApplied = getRegexAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.charMatch
+              ) {
+                cfmToastr.info(
+                  `分组「${preset.name}」已绑定当前角色，且已处于应用状态`,
+                );
+              } else {
+                cfmToastr.info(`当前角色已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setRegexPresetScope(idx, "bound");
+              bindRegexPresetToChar(idx, currentChar);
+              await autoApplyRegexPresets(true);
+              cfmToastr.success(
+                `已将分组「${preset.name}」绑定到角色「${currentCharName}」`,
+              );
+            }
+          } else if (action === "chat") {
+            const currentChatKey = getCurrentChatBindKey();
+            const currentChatName = getCurrentChatFileName();
+            if (!currentChar || !currentChatKey || !currentChatName) return;
+            const alreadyBound =
+              Array.isArray(preset.bindChats) &&
+              preset.bindChats.includes(currentChatKey);
+            const autoApplied = getRegexAutoApplyPresetIndices();
+            if (alreadyBound) {
+              if (
+                autoApplied.indices.includes(idx) &&
+                autoApplied.details[idx]?.chatMatch
+              ) {
+                cfmToastr.info(
+                  `分组「${preset.name}」已绑定当前聊天，且已处于应用状态`,
+                );
+              } else {
+                cfmToastr.info(`当前聊天已绑定分组「${preset.name}」`);
+              }
+            } else {
+              if (preset.scope === "global") setRegexPresetScope(idx, "bound");
+              bindRegexPresetToChat(idx, currentChar, currentChatName);
+              await autoApplyRegexPresets(true);
+              cfmToastr.success(
+                `已将分组「${preset.name}」绑定到聊天「${currentChatName}」`,
+              );
+            }
+          }
+          menu.remove();
+          overlay.remove();
+          showRegexPresetPanel();
+        });
+
+      setTimeout(() => {
+        $(document).one("click", () => menu.remove());
+      }, 10);
+    });
+
+    overlay.find(".cfm-wi-preset-bind-toggle").on("click", function (e) {
+      e.stopPropagation();
+      const item = $(this).closest(".cfm-wi-preset-item");
+      const idx = parseInt(item.attr("data-preset-idx"), 10);
+      const dropdown = item.find(".cfm-wi-preset-bind-dropdown");
+      const icon = $(this).find("i");
+      if (dropdown.is(":visible")) {
+        dropdown.slideUp(150);
+        icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+        return;
+      }
+      const allPresets = getRegexActivePresets();
+      const preset = allPresets[idx];
+      if (!preset) return;
+      let html = "";
+      if (preset.bindChars && preset.bindChars.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-user" style="color:#f9e2af;"></i> 绑定的角色卡</div>';
+        for (const av of preset.bindChars) {
+          const ch = chars.find((c) => c.avatar === av);
+          const name = ch ? ch.name : av;
+          const isCurrentChar = !!currentChar && currentChar === av;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChar ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="char" data-bind-id="${escapeHtml(av)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
+      if (preset.bindChats && preset.bindChats.length > 0) {
+        const chars = getCharacters();
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-comments" style="color:#cba6f7;"></i> 绑定的聊天</div>';
+        for (const bindKey of preset.bindChats) {
+          const parsed = parseChatBindKey(bindKey);
+          const ch = chars.find((c) => c.avatar === parsed.avatar);
+          const charName = ch ? ch.name : parsed.avatar;
+          const name = `${charName}（${parsed.chatFileName || bindKey}）`;
+          const isCurrentChat = getCurrentChatBindKey() === bindKey;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentChat ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="chat" data-bind-id="${escapeHtml(bindKey)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(name)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
+      if (preset.bindPresets && preset.bindPresets.length > 0) {
+        html +=
+          '<div class="cfm-wi-bind-section-title"><i class="fa-solid fa-sliders" style="color:#89b4fa;"></i> 绑定的预设</div>';
+        for (const pn of preset.bindPresets) {
+          const isCurrentPreset =
+            !!currentPresetName && currentPresetName === pn;
+          html += `<div class="cfm-wi-bind-entry ${isCurrentPreset ? "cfm-wi-bind-entry-current" : ""}" data-bind-type="preset" data-bind-id="${escapeHtml(pn)}"><span class="cfm-wi-bind-entry-name">${escapeHtml(pn)}</span><i class="fa-solid fa-xmark cfm-wi-bind-remove" title="取消绑定"></i></div>`;
+        }
+      }
+      if (!html) html = '<div class="cfm-wi-bind-empty">无绑定</div>';
+      dropdown.html(html);
+      dropdown.slideDown(150);
+      icon.removeClass("fa-caret-down").addClass("fa-caret-up");
+
+      dropdown.find(".cfm-wi-bind-remove").on("click", async function (ev) {
+        ev.stopPropagation();
+        const entry = $(this).closest(".cfm-wi-bind-entry");
+        const bindType = entry.data("bind-type");
+        const bindId = entry.data("bind-id");
+        const displayName = entry.find(".cfm-wi-bind-entry-name").text();
+        if (
+          !cfmConfirm(
+            `确定取消分组「${preset.name}」与${bindType === "char" ? "角色" : bindType === "chat" ? "聊天" : "预设"}「${displayName}」的绑定？`,
+          )
+        )
+          return;
+        if (bindType === "char") unbindRegexPresetFromChar(idx, bindId);
+        else if (bindType === "chat") unbindRegexPresetFromChat(idx, bindId);
+        else unbindRegexPresetFromPreset(idx, bindId);
+
+        const applied =
+          extension_settings[extensionName]._regexAppliedPresetIndices || [];
+        if (applied.includes(idx)) {
+          const { indices: stillAutoIndices } =
+            getRegexAutoApplyPresetIndices();
+          if (!stillAutoIndices.includes(idx)) {
+            const removedCount = await unapplyRegexPresetIndex(idx);
+            cfmToastr.info(
+              `已取消绑定，分组「${preset.name}」不再匹配当前条件，已自动取消应用（禁用 ${removedCount} 个正则脚本）`,
+            );
+          } else {
+            cfmToastr.success(
+              "已取消绑定（分组仍因其他绑定条件匹配而保持应用）",
+            );
+          }
+        } else {
+          cfmToastr.success("已取消绑定");
+        }
+        const updated = getRegexActivePresets()[idx];
+        const stillHasBindings =
+          updated &&
+          ((updated.bindChars && updated.bindChars.length > 0) ||
+            (updated.bindPresets && updated.bindPresets.length > 0) ||
+            (updated.bindChats && updated.bindChats.length > 0));
+        if (!stillHasBindings) {
+          if (updated) setRegexPresetScope(idx, "global");
+          overlay.remove();
+          showRegexPresetPanel();
+        } else {
+          entry.remove();
+          item
+            .find(".cfm-wi-preset-scope-tag")
+            .text("已绑定")
+            .attr(
+              "style",
+              "color:#cba6f7;border-color:#cba6f740;background:#cba6f715;",
+            );
+          if (dropdown.find(".cfm-wi-bind-entry").length === 0) {
+            dropdown.slideUp(150);
+            icon.removeClass("fa-caret-up").addClass("fa-caret-down");
+          }
+        }
+      });
+    });
+
     overlay.find(".cfm-wi-preset-edit").on("click", async function (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -43284,7 +43897,6 @@ jQuery(async () => {
       showRegexPresetEditPopup(preset);
     });
 
-    // 删除分组
     overlay.find(".cfm-wi-preset-del").on("click", function (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -43296,7 +43908,6 @@ jQuery(async () => {
       const preset = currentPresets[idx];
       if (!preset) return;
       if (!cfmConfirm(`确定删除激活分组「${preset.name}」？`)) return;
-      // 如果该分组正在应用中，从追踪中移除
       const applied =
         extension_settings[extensionName]._regexAppliedPresetIndices || [];
       if (applied.includes(idx)) {
@@ -47245,9 +47856,11 @@ jQuery(async () => {
 
     let autoApplyWiTimer = null;
     let autoApplyQrTimer = null;
+    let autoApplyRegexTimer = null;
     const scheduleAutoApplyBoundGroups = () => {
       if (autoApplyWiTimer) clearTimeout(autoApplyWiTimer);
       if (autoApplyQrTimer) clearTimeout(autoApplyQrTimer);
+      if (autoApplyRegexTimer) clearTimeout(autoApplyRegexTimer);
       autoApplyWiTimer = setTimeout(() => {
         autoApplyWiTimer = null;
         autoApplyWiPresets();
@@ -47256,6 +47869,10 @@ jQuery(async () => {
         autoApplyQrTimer = null;
         autoApplyQrPresets();
       }, 350);
+      autoApplyRegexTimer = setTimeout(() => {
+        autoApplyRegexTimer = null;
+        autoApplyRegexPresets();
+      }, 400);
     };
 
     // 角色/聊天切换时自动应用/关闭世界书分组和快速回复分组
