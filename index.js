@@ -17104,12 +17104,39 @@ jQuery(async () => {
       const safeUid = String(entryUid || "");
       if (!safeUid || !nextEntry) return;
       const clonedEntry = JSON.parse(JSON.stringify(nextEntry));
+      const primaryKeys = Array.isArray(clonedEntry.key)
+        ? clonedEntry.key.map((item) => String(item || "")).filter(Boolean)
+        : [];
+      const secondaryKeys = Array.isArray(clonedEntry.keysecondary)
+        ? clonedEntry.keysecondary
+            .map((item) => String(item || ""))
+            .filter(Boolean)
+        : [];
+      const syncedEntry = {
+        bookName: normalizedName,
+        uid: safeUid,
+        label: String(
+          clonedEntry.comment || primaryKeys[0] || `条目 ${safeUid || "未命名"}`,
+        ),
+        comment: String(clonedEntry.comment || ""),
+        content: String(clonedEntry.content || ""),
+        primaryKeys,
+        secondaryKeys,
+        order: Number(clonedEntry.order ?? 0),
+        displayIndex: Number(
+          clonedEntry.displayIndex ?? Number.MAX_SAFE_INTEGER,
+        ),
+        depth: Number(clonedEntry.depth ?? 0),
+        constant: !!clonedEntry.constant,
+        enabled: !clonedEntry.disable,
+        raw: clonedEntry,
+      };
       const applySnapshot = (targetEntry) => {
         if (!targetEntry || String(targetEntry.uid || "") !== safeUid) return;
         Object.keys(targetEntry).forEach((key) => {
-          if (!(key in clonedEntry)) delete targetEntry[key];
+          if (!(key in syncedEntry)) delete targetEntry[key];
         });
-        Object.assign(targetEntry, clonedEntry);
+        Object.assign(targetEntry, syncedEntry);
       };
       applySnapshot(activeEntry);
       const listEntry = entries.find(
