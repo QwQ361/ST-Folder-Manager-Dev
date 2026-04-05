@@ -38499,13 +38499,23 @@ jQuery(async () => {
         ? `<textarea class="cfm-edit-input" id="cfm-persona-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
         : `<input type="text" class="cfm-edit-input" id="cfm-persona-detail-input" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(meta.placeholder)}">`;
 
+    const canMaximize = meta.rows > 1;
     const overlay = $(`
       <div class="cfm-edit-popup-overlay">
-        <div class="cfm-edit-popup">
+        <div class="cfm-edit-popup ${canMaximize ? "cfm-edit-popup-expandable" : ""}">
           <div class="cfm-edit-popup-title">${meta.title}</div>
           <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(persona.name || persona.avatarId)}</div></div>
           <div class="cfm-edit-popup-field">
-            <label>${meta.label}</label>
+            ${
+              canMaximize
+                ? `<div class="cfm-edit-popup-field-header">
+            <label for="cfm-persona-detail-input">${meta.label}</label>
+            <button type="button" class="cfm-edit-popup-maximize" title="最大化编辑窗口" aria-pressed="false">
+              <i class="fa-solid fa-expand"></i>
+            </button>
+          </div>`
+                : `<label for="cfm-persona-detail-input">${meta.label}</label>`
+            }
             ${inputHtml}
           </div>
           <div class="cfm-edit-popup-actions">
@@ -38517,11 +38527,27 @@ jQuery(async () => {
       </div>
     `);
     $("body").append(overlay);
+    const popup = overlay.find(".cfm-edit-popup");
     const input = overlay.find("#cfm-persona-detail-input");
+    const maximizeBtn = overlay.find(".cfm-edit-popup-maximize");
+    const updateMaximizeButton = () => {
+      if (!maximizeBtn.length) return;
+      const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
+      maximizeBtn.attr(
+        "title",
+        isMaximized ? "还原编辑窗口" : "最大化编辑窗口",
+      );
+      maximizeBtn.attr("aria-pressed", isMaximized ? "true" : "false");
+      maximizeBtn
+        .find("i")
+        .toggleClass("fa-expand", !isMaximized)
+        .toggleClass("fa-compress", isMaximized);
+    };
     const caretIndex = Number.isFinite(options?.caretIndex)
       ? Math.max(0, Math.trunc(options.caretIndex))
       : null;
     const node = input[0];
+    updateMaximizeButton();
     input.trigger("focus");
     if (node && typeof node.selectionStart === "number") {
       const nextCaret = Math.min(
@@ -38546,6 +38572,24 @@ jQuery(async () => {
         overlay.remove();
         resolve(result);
       };
+      maximizeBtn.on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        popup.toggleClass("cfm-edit-popup-maximized");
+        updateMaximizeButton();
+        input.trigger("focus");
+        if (
+          node &&
+          input.is("textarea") &&
+          typeof node.selectionStart === "number"
+        ) {
+          const nextCaret = node.selectionStart;
+          setTimeout(() => {
+            if (!node.isConnected) return;
+            revealTextareaCaret(node, nextCaret);
+          }, 0);
+        }
+      });
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
         const isOverlayTarget = $(e.target).hasClass("cfm-edit-popup-overlay");
@@ -38788,13 +38832,23 @@ jQuery(async () => {
         ? `<textarea class="cfm-edit-input" id="cfm-char-detail-input" rows="${meta.rows}" placeholder="${escapeHtml(meta.placeholder)}">${escapeHtml(currentValue)}</textarea>`
         : `<input type="text" class="cfm-edit-input" id="cfm-char-detail-input" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(meta.placeholder)}">`;
 
+    const canMaximize = meta.rows > 1;
     const overlay = $(`
       <div class="cfm-edit-popup-overlay">
-        <div class="cfm-edit-popup">
+        <div class="cfm-edit-popup ${canMaximize ? "cfm-edit-popup-expandable" : ""}">
           <div class="cfm-edit-popup-title">${meta.title}</div>
           <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(char.name || char.avatar || "未知角色")}</div></div>
           <div class="cfm-edit-popup-field">
-            <label>${meta.label}</label>
+            ${
+              canMaximize
+                ? `<div class="cfm-edit-popup-field-header">
+            <label for="cfm-char-detail-input">${meta.label}</label>
+            <button type="button" class="cfm-edit-popup-maximize" title="最大化编辑窗口" aria-pressed="false">
+              <i class="fa-solid fa-expand"></i>
+            </button>
+          </div>`
+                : `<label for="cfm-char-detail-input">${meta.label}</label>`
+            }
             ${inputHtml}
           </div>
           <div class="cfm-edit-popup-actions">
@@ -38807,11 +38861,27 @@ jQuery(async () => {
       </div>
     `);
     $("body").append(overlay);
+    const popup = overlay.find(".cfm-edit-popup");
     const input = overlay.find("#cfm-char-detail-input");
+    const maximizeBtn = overlay.find(".cfm-edit-popup-maximize");
+    const updateMaximizeButton = () => {
+      if (!maximizeBtn.length) return;
+      const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
+      maximizeBtn.attr(
+        "title",
+        isMaximized ? "还原编辑窗口" : "最大化编辑窗口",
+      );
+      maximizeBtn.attr("aria-pressed", isMaximized ? "true" : "false");
+      maximizeBtn
+        .find("i")
+        .toggleClass("fa-expand", !isMaximized)
+        .toggleClass("fa-compress", isMaximized);
+    };
     const caretIndex = Number.isFinite(options?.caretIndex)
       ? Math.max(0, Math.trunc(options.caretIndex))
       : null;
     const node = input[0];
+    updateMaximizeButton();
     input.trigger("focus");
     if (node && typeof node.selectionStart === "number") {
       const nextCaret = Math.min(
@@ -38836,6 +38906,24 @@ jQuery(async () => {
         overlay.remove();
         resolve(result);
       };
+      maximizeBtn.on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        popup.toggleClass("cfm-edit-popup-maximized");
+        updateMaximizeButton();
+        input.trigger("focus");
+        if (
+          node &&
+          input.is("textarea") &&
+          typeof node.selectionStart === "number"
+        ) {
+          const nextCaret = node.selectionStart;
+          setTimeout(() => {
+            if (!node.isConnected) return;
+            revealTextareaCaret(node, nextCaret);
+          }, 0);
+        }
+      });
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
         const isOverlayTarget = $(e.target).hasClass("cfm-edit-popup-overlay");
