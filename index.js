@@ -38722,29 +38722,45 @@ jQuery(async () => {
           document.activeElement === node &&
           !!window.visualViewport &&
           window.visualViewport.height < window.innerHeight - 80;
-        const restoreCaret = () => {
-          input.trigger("focus");
-          if (
-            node &&
-            input.is("textarea") &&
-            typeof node.selectionStart === "number"
-          ) {
-            const nextCaret = node.selectionStart;
-            setTimeout(() => {
-              if (!node.isConnected) return;
-              revealTextareaCaret(node, nextCaret);
-            }, 0);
+        const restoreCaret = (deferForMobileLock = false) => {
+          const runRestore = () => {
+            if (!overlay[0]?.isConnected) return;
+            input.trigger("focus");
+            if (
+              node &&
+              input.is("textarea") &&
+              typeof node.selectionStart === "number"
+            ) {
+              const nextCaret = node.selectionStart;
+              setTimeout(() => {
+                if (!node.isConnected) return;
+                revealTextareaCaret(node, nextCaret);
+              }, 0);
+            }
+          };
+          if (!deferForMobileLock) {
+            runRestore();
+            return;
           }
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              runRestore();
+            });
+          });
         };
         const applyToggle = () => {
           popup.toggleClass("cfm-edit-popup-maximized");
           updateMaximizeButton();
+          const shouldDeferFocusRestore =
+            popup.hasClass("cfm-edit-popup-maximized") &&
+            canMaximize &&
+            isMobileViewport();
           if (canMaximize && isMobileViewport()) {
             requestAnimationFrame(() => syncMobileMaximizedLock());
           } else {
             clearMobileMaximizedLock();
           }
-          restoreCaret();
+          restoreCaret(shouldDeferFocusRestore);
         };
         if (!shouldResetKeyboardViewport) {
           applyToggle();
@@ -39227,29 +39243,45 @@ jQuery(async () => {
           document.activeElement === node &&
           !!window.visualViewport &&
           window.visualViewport.height < window.innerHeight - 80;
-        const restoreCaret = () => {
-          input.trigger("focus");
-          if (
-            node &&
-            input.is("textarea") &&
-            typeof node.selectionStart === "number"
-          ) {
-            const nextCaret = node.selectionStart;
-            setTimeout(() => {
-              if (!node.isConnected) return;
-              revealTextareaCaret(node, nextCaret);
-            }, 0);
+        const restoreCaret = (deferForMobileLock = false) => {
+          const runRestore = () => {
+            if (!overlay[0]?.isConnected) return;
+            input.trigger("focus");
+            if (
+              node &&
+              input.is("textarea") &&
+              typeof node.selectionStart === "number"
+            ) {
+              const nextCaret = node.selectionStart;
+              setTimeout(() => {
+                if (!node.isConnected) return;
+                revealTextareaCaret(node, nextCaret);
+              }, 0);
+            }
+          };
+          if (!deferForMobileLock) {
+            runRestore();
+            return;
           }
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              runRestore();
+            });
+          });
         };
         const applyToggle = () => {
           popup.toggleClass("cfm-edit-popup-maximized");
           updateMaximizeButton();
+          const shouldDeferFocusRestore =
+            popup.hasClass("cfm-edit-popup-maximized") &&
+            canMaximize &&
+            isMobileViewport();
           if (canMaximize && isMobileViewport()) {
             requestAnimationFrame(() => syncMobileMaximizedLock());
           } else {
             clearMobileMaximizedLock();
           }
-          restoreCaret();
+          restoreCaret(shouldDeferFocusRestore);
         };
         if (!shouldResetKeyboardViewport) {
           applyToggle();
