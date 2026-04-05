@@ -38530,6 +38530,31 @@ jQuery(async () => {
     const popup = overlay.find(".cfm-edit-popup");
     const input = overlay.find("#cfm-persona-detail-input");
     const maximizeBtn = overlay.find(".cfm-edit-popup-maximize");
+    const mobileMaximizedLock = {
+      cleanup: null,
+      rect: null,
+    };
+    const clearMobileMaximizedLock = () => {
+      if (typeof mobileMaximizedLock.cleanup === "function") {
+        mobileMaximizedLock.cleanup();
+      }
+      mobileMaximizedLock.cleanup = null;
+      mobileMaximizedLock.rect = null;
+      popup.css({
+        position: "",
+        top: "",
+        left: "",
+        right: "",
+        bottom: "",
+        width: "",
+        height: "",
+        minHeight: "",
+        maxHeight: "",
+        transform: "",
+        margin: "",
+        zIndex: "",
+      });
+    };
     const updateMaximizeButton = () => {
       if (!maximizeBtn.length) return;
       const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
@@ -38542,6 +38567,63 @@ jQuery(async () => {
         .find("i")
         .toggleClass("fa-expand", !isMaximized)
         .toggleClass("fa-compress", isMaximized);
+    };
+    const syncMobileMaximizedLock = () => {
+      clearMobileMaximizedLock();
+      if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+      const isMobileViewport =
+        window.matchMedia?.("(max-width: 768px)")?.matches ||
+        window.innerWidth <= 768;
+      if (!isMobileViewport) return;
+      const popupNode = popup[0];
+      if (!popupNode) return;
+      const applyLockedRect = () => {
+        if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
+          return;
+        }
+        const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        mobileMaximizedLock.rect = {
+          top: Math.max(0, nextRect.top),
+          left: Math.max(0, nextRect.left),
+          width: nextRect.width,
+          height: nextRect.height,
+        };
+        popup.css({
+          position: "fixed",
+          top: `${mobileMaximizedLock.rect.top}px`,
+          left: `${mobileMaximizedLock.rect.left}px`,
+          right: "auto",
+          bottom: "auto",
+          width: `${mobileMaximizedLock.rect.width}px`,
+          height: `${mobileMaximizedLock.rect.height}px`,
+          minHeight: `${mobileMaximizedLock.rect.height}px`,
+          maxHeight: `${mobileMaximizedLock.rect.height}px`,
+          transform: "none",
+          margin: "0",
+          zIndex: "100001",
+        });
+      };
+      requestAnimationFrame(applyLockedRect);
+      const visualViewport = window.visualViewport;
+      const handleViewportChange = () => {
+        requestAnimationFrame(applyLockedRect);
+      };
+      const handleOrientationChange = () => {
+        mobileMaximizedLock.rect = null;
+        clearMobileMaximizedLock();
+        requestAnimationFrame(() => {
+          if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+          syncMobileMaximizedLock();
+        });
+      };
+      visualViewport?.addEventListener("resize", handleViewportChange);
+      visualViewport?.addEventListener("scroll", handleViewportChange);
+      window.addEventListener("orientationchange", handleOrientationChange);
+      mobileMaximizedLock.cleanup = () => {
+        visualViewport?.removeEventListener("resize", handleViewportChange);
+        visualViewport?.removeEventListener("scroll", handleViewportChange);
+        window.removeEventListener("orientationchange", handleOrientationChange);
+      };
     };
     const caretIndex = Number.isFinite(options?.caretIndex)
       ? Math.max(0, Math.trunc(options.caretIndex))
@@ -38569,6 +38651,7 @@ jQuery(async () => {
       const openedAt = Date.now();
       const overlayCloseGuardMs = 650;
       const close = (result) => {
+        clearMobileMaximizedLock();
         overlay.remove();
         resolve(result);
       };
@@ -38577,6 +38660,11 @@ jQuery(async () => {
         e.stopPropagation();
         popup.toggleClass("cfm-edit-popup-maximized");
         updateMaximizeButton();
+        if (popup.hasClass("cfm-edit-popup-maximized")) {
+          requestAnimationFrame(() => syncMobileMaximizedLock());
+        } else {
+          clearMobileMaximizedLock();
+        }
         input.trigger("focus");
         if (
           node &&
@@ -38864,6 +38952,31 @@ jQuery(async () => {
     const popup = overlay.find(".cfm-edit-popup");
     const input = overlay.find("#cfm-char-detail-input");
     const maximizeBtn = overlay.find(".cfm-edit-popup-maximize");
+    const mobileMaximizedLock = {
+      cleanup: null,
+      rect: null,
+    };
+    const clearMobileMaximizedLock = () => {
+      if (typeof mobileMaximizedLock.cleanup === "function") {
+        mobileMaximizedLock.cleanup();
+      }
+      mobileMaximizedLock.cleanup = null;
+      mobileMaximizedLock.rect = null;
+      popup.css({
+        position: "",
+        top: "",
+        left: "",
+        right: "",
+        bottom: "",
+        width: "",
+        height: "",
+        minHeight: "",
+        maxHeight: "",
+        transform: "",
+        margin: "",
+        zIndex: "",
+      });
+    };
     const updateMaximizeButton = () => {
       if (!maximizeBtn.length) return;
       const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
@@ -38876,6 +38989,63 @@ jQuery(async () => {
         .find("i")
         .toggleClass("fa-expand", !isMaximized)
         .toggleClass("fa-compress", isMaximized);
+    };
+    const syncMobileMaximizedLock = () => {
+      clearMobileMaximizedLock();
+      if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+      const isMobileViewport =
+        window.matchMedia?.("(max-width: 768px)")?.matches ||
+        window.innerWidth <= 768;
+      if (!isMobileViewport) return;
+      const popupNode = popup[0];
+      if (!popupNode) return;
+      const applyLockedRect = () => {
+        if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
+          return;
+        }
+        const nextRect = mobileMaximizedLock.rect || popupNode.getBoundingClientRect();
+        mobileMaximizedLock.rect = {
+          top: Math.max(0, nextRect.top),
+          left: Math.max(0, nextRect.left),
+          width: nextRect.width,
+          height: nextRect.height,
+        };
+        popup.css({
+          position: "fixed",
+          top: `${mobileMaximizedLock.rect.top}px`,
+          left: `${mobileMaximizedLock.rect.left}px`,
+          right: "auto",
+          bottom: "auto",
+          width: `${mobileMaximizedLock.rect.width}px`,
+          height: `${mobileMaximizedLock.rect.height}px`,
+          minHeight: `${mobileMaximizedLock.rect.height}px`,
+          maxHeight: `${mobileMaximizedLock.rect.height}px`,
+          transform: "none",
+          margin: "0",
+          zIndex: "100001",
+        });
+      };
+      requestAnimationFrame(applyLockedRect);
+      const visualViewport = window.visualViewport;
+      const handleViewportChange = () => {
+        requestAnimationFrame(applyLockedRect);
+      };
+      const handleOrientationChange = () => {
+        mobileMaximizedLock.rect = null;
+        clearMobileMaximizedLock();
+        requestAnimationFrame(() => {
+          if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+          syncMobileMaximizedLock();
+        });
+      };
+      visualViewport?.addEventListener("resize", handleViewportChange);
+      visualViewport?.addEventListener("scroll", handleViewportChange);
+      window.addEventListener("orientationchange", handleOrientationChange);
+      mobileMaximizedLock.cleanup = () => {
+        visualViewport?.removeEventListener("resize", handleViewportChange);
+        visualViewport?.removeEventListener("scroll", handleViewportChange);
+        window.removeEventListener("orientationchange", handleOrientationChange);
+      };
     };
     const caretIndex = Number.isFinite(options?.caretIndex)
       ? Math.max(0, Math.trunc(options.caretIndex))
@@ -38903,6 +39073,7 @@ jQuery(async () => {
       const openedAt = Date.now();
       const overlayCloseGuardMs = 650;
       const close = (result) => {
+        clearMobileMaximizedLock();
         overlay.remove();
         resolve(result);
       };
@@ -38911,6 +39082,11 @@ jQuery(async () => {
         e.stopPropagation();
         popup.toggleClass("cfm-edit-popup-maximized");
         updateMaximizeButton();
+        if (popup.hasClass("cfm-edit-popup-maximized")) {
+          requestAnimationFrame(() => syncMobileMaximizedLock());
+        } else {
+          clearMobileMaximizedLock();
+        }
         input.trigger("focus");
         if (
           node &&
