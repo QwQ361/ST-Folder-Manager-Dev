@@ -47292,11 +47292,23 @@ jQuery(async () => {
       const globalWIBtn = $(
         `<div class="cfm-nf-btn menu_button menu_button_icon fa-solid fa-folder-tree" data-nf-type="globalworldinfo" title="文件夹过滤" style="flex-shrink:0;"></div>`,
       );
+      const globalWIGroupBtn = $(
+        `<div class="cfm-native-global-wi-group-btn menu_button menu_button_icon fa-solid fa-layer-group" title="世界书激活分组" style="flex-shrink:0;"></div>`,
+      );
       const rangeBlock = $("#world_info").closest(".range-block-range");
       rangeBlock.css({ display: "flex", alignItems: "center", gap: "4px" });
       // 把 select2 容器设为 flex:1
       rangeBlock.find(".select2-container").css({ flex: "1", minWidth: "0" });
-      rangeBlock.append(globalWIBtn);
+      const toolColumn = $(
+        `<div class="cfm-native-global-wi-tool-column" style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;"></div>`,
+      );
+      toolColumn.append(globalWIBtn, globalWIGroupBtn);
+      rangeBlock.append(toolColumn);
+      globalWIGroupBtn.on("click touchend", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showWiPresetPanel();
+      });
       globalWIBtn.on("click touchend", function (e) {
         e.preventDefault();
         e.stopPropagation();
