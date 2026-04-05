@@ -767,7 +767,9 @@ jQuery(async () => {
 
   function normalizeImportedThemeData(themeData, fallbackName = "") {
     const normalizedData =
-      themeData && typeof themeData === "object" ? structuredClone(themeData) : {};
+      themeData && typeof themeData === "object"
+        ? structuredClone(themeData)
+        : {};
 
     const normalizedName = String(
       normalizedData.name ?? fallbackName ?? "",
@@ -842,7 +844,8 @@ jQuery(async () => {
         }
 
         const themesSelect = document.getElementById("themes");
-        const movingUIPresetsSelect = document.getElementById("movingUIPresets");
+        const movingUIPresetsSelect =
+          document.getElementById("movingUIPresets");
         if (themesSelect) {
           themesSelect.replaceChildren();
         }
@@ -38547,7 +38550,12 @@ jQuery(async () => {
       overlay.on("mousedown touchstart", (e) => {
         const isOverlayTarget = $(e.target).hasClass("cfm-edit-popup-overlay");
         const elapsed = Date.now() - openedAt;
-        overlayPressStarted = isOverlayTarget && elapsed >= overlayCloseGuardMs;
+        const isPrimaryPress =
+          e.type === "touchstart" ||
+          typeof e.button !== "number" ||
+          e.button === 0;
+        overlayPressStarted =
+          isOverlayTarget && elapsed >= overlayCloseGuardMs && isPrimaryPress;
       });
       overlay.on("click", (e) => {
         const clickedOverlay = $(e.target).hasClass("cfm-edit-popup-overlay");
@@ -38673,7 +38681,7 @@ jQuery(async () => {
     return undefined;
   }
 
-  async function showCharacterDetailFieldPopup(char, field) {
+  async function showCharacterDetailFieldPopup(char, field, options = {}) {
     const map = {
       description: {
         title: "编辑角色描述",
@@ -38764,7 +38772,9 @@ jQuery(async () => {
     );
     let currentValue;
     if (field === "first_mes") {
-      currentValue = String(getCharacterDetailFieldValue(char, "first_mes") || "");
+      currentValue = String(
+        getCharacterDetailFieldValue(char, "first_mes") || "",
+      );
     } else if (field === "alt_greetings") {
       const altIndex = Math.max(char?.__cfmEditingGreetingIndex || 0, 0);
       currentValue = String(currentAlternateGreetings[altIndex] || "");
@@ -38798,22 +38808,55 @@ jQuery(async () => {
     `);
     $("body").append(overlay);
     const input = overlay.find("#cfm-char-detail-input");
+    const caretIndex = Number.isFinite(options?.caretIndex)
+      ? Math.max(0, Math.trunc(options.caretIndex))
+      : null;
+    const node = input[0];
     input.trigger("focus");
-    if (input.is("textarea")) {
-      const node = input[0];
-      if (node && typeof node.selectionStart === "number") {
-        node.selectionStart = node.selectionEnd = node.value.length;
+    if (node && typeof node.selectionStart === "number") {
+      const nextCaret = Math.min(
+        caretIndex === null ? node.value.length : caretIndex,
+        node.value.length,
+      );
+      node.selectionStart = node.selectionEnd = nextCaret;
+      if (input.is("textarea") && caretIndex !== null) {
+        setTimeout(() => {
+          if (!node.isConnected) return;
+          revealTextareaCaret(node, nextCaret);
+          flashTextareaCaretSelection(node, nextCaret);
+        }, 0);
       }
     }
 
     return new Promise((resolve) => {
+      let overlayPressStarted = false;
+      const openedAt = Date.now();
+      const overlayCloseGuardMs = 650;
       const close = (result) => {
         overlay.remove();
         resolve(result);
       };
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
+      overlay.on("mousedown touchstart", (e) => {
+        const isOverlayTarget = $(e.target).hasClass("cfm-edit-popup-overlay");
+        const elapsed = Date.now() - openedAt;
+        const isPrimaryPress =
+          e.type === "touchstart" ||
+          typeof e.button !== "number" ||
+          e.button === 0;
+        overlayPressStarted =
+          isOverlayTarget && elapsed >= overlayCloseGuardMs && isPrimaryPress;
+      });
       overlay.on("click", (e) => {
-        if ($(e.target).hasClass("cfm-edit-popup-overlay")) close(null);
+        const clickedOverlay = $(e.target).hasClass("cfm-edit-popup-overlay");
+        const elapsed = Date.now() - openedAt;
+        if (
+          clickedOverlay &&
+          overlayPressStarted &&
+          elapsed >= overlayCloseGuardMs
+        )
+          close(null);
+        overlayPressStarted = false;
       });
       overlay.find(".cfm-edit-popup-clear").on("click", () => {
         const confirmMessage =
@@ -38845,8 +38888,8 @@ jQuery(async () => {
     });
   }
 
-  async function editCharacterDetailField(charRow, char, field) {
-    const result = await showCharacterDetailFieldPopup(char, field);
+  async function editCharacterDetailField(charRow, char, field, options = {}) {
+    const result = await showCharacterDetailFieldPopup(char, field, options);
     if (result === null || !char?.avatar) return;
     if (!char.data) char.data = {};
 
@@ -39232,7 +39275,7 @@ jQuery(async () => {
           </div>`
             : ""
         }</div>
-        <div class="cfm-persona-detail-value cfm-char-detail-value ${extraClass}">${value ? escapeHtml(value).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+        <div class="cfm-persona-detail-value cfm-char-detail-value ${extraClass}"${field ? ` data-field="${field}"` : ""}>${value ? escapeHtml(value).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
       </div>
     `;
 
@@ -39267,7 +39310,7 @@ jQuery(async () => {
               <div class="cfm-chat-action-btn cfm-char-greeting-nav" data-dir="next" title="下一条开场白"><i class="fa-solid fa-caret-right"></i></div>
             </div>
           </div>
-          <div class="cfm-persona-detail-value cfm-char-detail-value cfm-char-detail-block">${currentAltGreeting ? escapeHtml(currentAltGreeting).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
+          <div class="cfm-persona-detail-value cfm-char-detail-value cfm-char-detail-block" data-field="alt_greetings">${currentAltGreeting ? escapeHtml(currentAltGreeting).replace(/\n/g, "<br>") : '<span class="cfm-persona-detail-empty">无</span>'}</div>
         </div>
       `);
     } else {
@@ -39300,11 +39343,43 @@ jQuery(async () => {
       charRow.next(".cfm-char-detail-sublist").show();
     });
 
-    // 编辑按钮事件
-    subList.find(".cfm-char-detail-edit").on("click touchend", async (e) => {
+    // 阻止详情子面板点击冒泡到外层统一点击逻辑
+    subList.on("click touchend", (e) => {
+      e.stopPropagation();
+    });
+
+    // 编辑按钮事件（委托 + 移动端防误触）
+    subList.on("touchstart", ".cfm-char-detail-edit", function (e) {
+      const touch = e.originalEvent?.touches?.[0];
+      if (touch) {
+        $(this).data("cfmTouchStartX", touch.clientX);
+        $(this).data("cfmTouchStartY", touch.clientY);
+      }
+    });
+    subList.on("click touchend", ".cfm-char-detail-edit", async function (e) {
       e.preventDefault();
       e.stopPropagation();
-      const field = $(e.currentTarget).data("field");
+      const target = $(this);
+      const now = Date.now();
+      const lastTouchAt = Number(target.data("cfmCharDetailEditTouchAt") || 0);
+      if (e.type === "touchend") {
+        target.data("cfmCharDetailEditTouchAt", now);
+        const touch = e.originalEvent?.changedTouches?.[0];
+        if (touch) {
+          const startX = Number(target.data("cfmTouchStartX") || 0);
+          const startY = Number(target.data("cfmTouchStartY") || 0);
+          const deltaX = Math.abs(touch.clientX - startX);
+          const deltaY = Math.abs(touch.clientY - startY);
+          if (deltaX > 10 || deltaY > 10) {
+            return;
+          }
+        }
+      } else if (lastTouchAt && now - lastTouchAt < 500) {
+        return;
+      }
+
+      const field = String(target.data("field") || "");
+      if (!field) return;
       if (field === "alt_greetings") {
         char.__cfmEditingGreetingIndex = Math.max(
           charRow.data("cfmAltGreetingIndex") || 0,
@@ -39316,6 +39391,86 @@ jQuery(async () => {
       await editCharacterDetailField(charRow, char, field);
       delete char.__cfmEditingGreetingIndex;
     });
+
+    const charDetailConfirmMap = {
+      description: "确认编辑角色描述吗？",
+      first_mes: "确认编辑第一条消息吗？",
+      alt_greetings: "确认编辑其它开场吗？",
+    };
+
+    subList.on(
+      "touchstart",
+      ".cfm-char-detail-value[data-field]",
+      function (e) {
+        const touch = e.originalEvent?.touches?.[0];
+        if (touch) {
+          $(this).data("cfmTouchStartX", touch.clientX);
+          $(this).data("cfmTouchStartY", touch.clientY);
+        }
+      },
+    );
+    subList.on(
+      "click touchend",
+      ".cfm-char-detail-value[data-field]",
+      async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = $(this);
+        const now = Date.now();
+        const lastTouchAt = Number(target.data("cfmCharDetailTouchAt") || 0);
+        if (e.type === "touchend") {
+          target.data("cfmCharDetailTouchAt", now);
+          const touch = e.originalEvent?.changedTouches?.[0];
+          if (touch) {
+            const startX = Number(target.data("cfmTouchStartX") || 0);
+            const startY = Number(target.data("cfmTouchStartY") || 0);
+            const deltaX = Math.abs(touch.clientX - startX);
+            const deltaY = Math.abs(touch.clientY - startY);
+            if (deltaX > 10 || deltaY > 10) {
+              return;
+            }
+          }
+        } else if (lastTouchAt && now - lastTouchAt < 500) {
+          return;
+        }
+
+        const field = String(target.data("field") || "");
+        if (!field) return;
+        if (
+          !cfmConfirm(charDetailConfirmMap[field] || "确认编辑角色设定吗？")
+        ) {
+          return;
+        }
+
+        let fieldText = "";
+        if (field === "description") {
+          fieldText = String(
+            getCharacterDetailFieldValue(char, "description") || "",
+          );
+        } else if (field === "first_mes") {
+          fieldText = String(
+            getCharacterDetailFieldValue(char, "first_mes") || "",
+          );
+        } else if (field === "alt_greetings") {
+          const currentAltIndex = Math.max(
+            charRow.data("cfmAltGreetingIndex") || 0,
+            0,
+          );
+          fieldText = String(alternateGreetings[currentAltIndex] || "");
+          char.__cfmEditingGreetingIndex = currentAltIndex;
+        } else {
+          return;
+        }
+
+        const clickedOffset = getTextOffsetFromPoint(this, e);
+        await editCharacterDetailField(charRow, char, field, {
+          caretIndex: Number.isFinite(clickedOffset)
+            ? Math.max(0, Math.min(clickedOffset, fieldText.length))
+            : fieldText.length,
+        });
+        delete char.__cfmEditingGreetingIndex;
+      },
+    );
   }
 
   function renderPersonaDetailSubList(personaRow, persona) {
