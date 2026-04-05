@@ -1860,6 +1860,11 @@
     transform: none;
   }
 
+  .cfm-char-detail-value,
+  .cfm-persona-detail-description {
+    height: 156px;
+  }
+
   /* 头部按钮增大 */
   .cfm-header-actions button {
     padding: 8px 12px;
@@ -6221,17 +6226,31 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   font-size: 11px;
   line-height: 1.4;
 }
-.cfm-char-detail-section.cfm-char-detail-block .cfm-char-detail-value {
+.cfm-char-detail-value {
   padding: 8px 10px;
   background: rgba(0, 0, 0, 0.16);
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .cfm-persona-detail-description {
   padding: 8px 10px;
   background: rgba(0, 0, 0, 0.16);
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .cfm-persona-detail-tags {
   display: flex;
