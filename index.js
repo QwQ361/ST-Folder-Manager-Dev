@@ -2369,7 +2369,9 @@ jQuery(async () => {
       if (!el) return;
 
       const tnode = el.closest(".cfm-tnode[data-id]");
-      const row = el.closest(".cfm-row[data-folder-id]");
+      const row = el.closest(
+        ".cfm-row[data-folder-id], .cfm-row[data-target-folder]",
+      );
       const uncatNode = el.closest(".cfm-tnode-uncategorized");
       const rightList = el.closest(".cfm-right-list");
 
@@ -2379,7 +2381,10 @@ jQuery(async () => {
       }
       if (!target) return;
 
-      const targetId = target.dataset?.id || target.dataset?.folderId;
+      const targetId =
+        target.dataset?.id ||
+        target.dataset?.folderId ||
+        target.dataset?.targetFolder;
 
       // 三区域判定
       let zone = "into";
@@ -2435,12 +2440,17 @@ jQuery(async () => {
       if (!el || !this.data) return;
 
       const tnode = el.closest(".cfm-tnode[data-id]");
-      const row = el.closest(".cfm-row[data-folder-id]");
+      const row = el.closest(
+        ".cfm-row[data-folder-id], .cfm-row[data-target-folder]",
+      );
       const uncatNode = el.closest(".cfm-tnode-uncategorized");
       const rightList = el.closest(".cfm-right-list");
 
       let target = tnode || row || uncatNode;
-      let targetId = target?.dataset?.id || target?.dataset?.folderId;
+      let targetId =
+        target?.dataset?.id ||
+        target?.dataset?.folderId ||
+        target?.dataset?.targetFolder;
 
       let zone = "into";
       if ((tnode || row) && !uncatNode && target) {
@@ -2857,6 +2867,60 @@ jQuery(async () => {
           );
           if (d.multiSelect) clearMultiSelect();
           renderQRView();
+        }
+      } else if (d.type === "regex-script") {
+        const regexGroups =
+          extension_settings[extensionName].regexGlobalGroups || {};
+        const regexFolderTree =
+          extension_settings[extensionName].regexFolderTree || {};
+        const scriptIds =
+          d.multiSelect && d.selectedIds ? d.selectedIds : [d.scriptId];
+        const scriptCount = scriptIds.length;
+        const targetRegexFolderId =
+          targetId && regexFolderTree[targetId] ? targetId : null;
+        const currentSelectedRegexFolder =
+          selectedRegexNode &&
+          selectedRegexNode !== "__ungrouped__" &&
+          selectedRegexNode !== "__favorites__" &&
+          regexFolderTree[selectedRegexNode]
+            ? selectedRegexNode
+            : null;
+        if (uncatNode) {
+          scriptIds.forEach((sid) => {
+            delete regexGroups[sid];
+          });
+          getContext().saveSettingsDebounced();
+          cfmToastr.success(
+            scriptCount > 1
+              ? `已将 ${scriptCount} 个脚本移出文件夹`
+              : `已将「${d.scriptName}」移出文件夹`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderRegexView();
+        } else if (targetRegexFolderId) {
+          scriptIds.forEach((sid) => {
+            regexGroups[sid] = targetRegexFolderId;
+          });
+          getContext().saveSettingsDebounced();
+          cfmToastr.success(
+            scriptCount > 1
+              ? `已将 ${scriptCount} 个脚本移入「${regexFolderTree[targetRegexFolderId]?.displayName || targetRegexFolderId}」`
+              : `已将「${d.scriptName}」移入「${regexFolderTree[targetRegexFolderId]?.displayName || targetRegexFolderId}」`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderRegexView();
+        } else if (!target && rightList && currentSelectedRegexFolder) {
+          scriptIds.forEach((sid) => {
+            regexGroups[sid] = currentSelectedRegexFolder;
+          });
+          getContext().saveSettingsDebounced();
+          cfmToastr.success(
+            scriptCount > 1
+              ? `已将 ${scriptCount} 个脚本移入「${regexFolderTree[currentSelectedRegexFolder]?.displayName || currentSelectedRegexFolder}」`
+              : `已将「${d.scriptName}」移入「${regexFolderTree[currentSelectedRegexFolder]?.displayName || currentSelectedRegexFolder}」`,
+          );
+          if (d.multiSelect) clearMultiSelect();
+          renderRegexView();
         }
       }
     },
