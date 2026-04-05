@@ -3399,6 +3399,19 @@ input.cfm-rv-search {
 .cfm-edit-popup-expandable.cfm-edit-popup-maximized textarea.cfm-edit-input {
   min-height: 0;
 }
+@media (max-width: 768px) {
+  .cfm-edit-popup-expandable.cfm-edit-popup-maximized {
+    height: calc(100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px);
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px
+    );
+    margin-top: 6px;
+    margin-bottom: calc(max(env(safe-area-inset-bottom, 0px), 56px) + 6px);
+  }
+  .cfm-edit-popup-expandable.cfm-edit-popup-maximized .cfm-edit-popup-actions {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px);
+  }
+}
 .cfm-edit-popup-names {
   max-height: 120px;
   overflow-y: auto;
