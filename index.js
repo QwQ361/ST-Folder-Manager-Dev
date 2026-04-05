@@ -2220,6 +2220,30 @@ jQuery(async () => {
     );
   }
 
+  function bindTouchSafeTap(target, handler, options = {}) {
+    const $target = target instanceof jQuery ? target : $(target);
+    if (!$target.length || typeof handler !== "function") return $target;
+
+    const tapOptions = {
+      prefix: options.prefix || "cfmTouchTap",
+      moveThreshold: options.moveThreshold ?? 10,
+      clickSuppressMs: options.clickSuppressMs ?? 500,
+    };
+
+    $target.on("touchstart", function (e) {
+      recordTouchTapStart(e, tapOptions.prefix);
+    });
+
+    $target.on("click touchend", function (e) {
+      if (shouldIgnoreTouchTapAfterMove(e, tapOptions)) return;
+      if (options.preventDefault !== false) e.preventDefault();
+      if (options.stopPropagation !== false) e.stopPropagation();
+      return handler.call(this, e);
+    });
+
+    return $target;
+  }
+
   const mobileTouchTapGuardState = new WeakMap();
 
   function setupMobileTouchTapGuard() {
@@ -32576,9 +32600,7 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("presets", p.name);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -32599,21 +32621,15 @@ jQuery(async () => {
           if (selectedPresetFolder === "__favorites__") renderPresetsView();
         });
         // 单个备注编辑按钮
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           executePresetNoteEdit([p.name]);
         });
         // 单个重命名按钮
-        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-rename-btn"), () => {
           executePresetRename([p.name]);
         });
         // 正则模式下小三角点击：展开/折叠正则脚本
-        row.find(".cfm-regex-toggle").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-regex-toggle"), () => {
           const name = p.name;
           if (cfmPresetRegexExpandedNames.has(name)) {
             // 折叠
@@ -33439,9 +33455,7 @@ jQuery(async () => {
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
           </div>
         `);
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("themes", name);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -33461,21 +33475,15 @@ jQuery(async () => {
           if (selectedThemeFolder === "__favorites__") renderThemesView();
         });
         // 单个备注编辑按钮
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           executeThemeNoteEdit([name]);
         });
         // 单个重命名按钮
-        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-rename-btn"), () => {
           executeThemeRename([name]);
         });
         // 绑定背景按钮
-        row.find(".cfm-row-bglink-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-bglink-btn"), () => {
           handleThemeBgLink(name);
         });
         row.on("click", (e) => {
@@ -34172,9 +34180,7 @@ jQuery(async () => {
         const row = $(
           `<div class="cfm-row cfm-row-char cfm-row-bg ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(name)}" draggable="true">${msCheckHtml}<div class="cfm-row-icon cfm-bg-thumb" style="background-image:url('${thumbUrl}');background-size:cover;background-position:center;"></div><div class="cfm-row-name"><span class="cfm-theme-name-text">${escapeHtml(getBackgroundDisplayName(name))}</span>${orientHtml}${noteHtml}</div>${singleRenameBtn}${singleNoteBtn}<div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div></div>`,
         );
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("backgrounds", name);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -34194,15 +34200,11 @@ jQuery(async () => {
           }
           if (selectedBgFolder === "__favorites__") renderBackgroundsView();
         });
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           executeBgNoteEdit([name]);
         });
         // 单个重命名按钮
-        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-rename-btn"), () => {
           executeBgRename([name]);
         });
         row.on("click", (e) => {
@@ -35383,9 +35385,7 @@ jQuery(async () => {
             el.attr("title", newState ? "点击取消激活" : "点击激活");
           });
         });
-        row.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-star"), () => {
           const nowFav = toggleResFavorite("worldinfo", n);
           const starEl = row.find(".cfm-row-star");
           starEl.toggleClass("cfm-star-active", nowFav);
@@ -35406,15 +35406,11 @@ jQuery(async () => {
             refreshWorldInfoPanelView();
         });
         // 单个备注编辑按钮
-        row.find(".cfm-row-note-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-note-btn"), () => {
           executeWorldInfoNoteEdit([n]);
         });
         // 单个重命名按钮
-        row.find(".cfm-row-rename-btn").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(row.find(".cfm-row-rename-btn"), () => {
           executeWorldInfoRename([n]);
         });
         row.on("click", (e) => {
@@ -44445,9 +44441,7 @@ jQuery(async () => {
         if (isExportSel) scriptRow.addClass("cfm-export-row-selected");
         if (isMSel) scriptRow.addClass("cfm-multisel-row-selected");
         // 收藏星标点击事件
-        scriptRow.find(".cfm-row-star").on("click touchend", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+        bindTouchSafeTap(scriptRow.find(".cfm-row-star"), () => {
           if (!s.id) return;
           const nowFav = toggleResFavorite("regex", s.id);
           const starEl = scriptRow.find(".cfm-row-star");
@@ -44705,11 +44699,25 @@ jQuery(async () => {
 
     // --- 绑定正则脚本编辑按钮点击事件 ---
     rightList
-      .off("click.rxedit")
+      .off(".rxedit")
       .on(
-        "click.rxedit",
+        "touchstart.rxedit",
         ".cfm-regex-script-row .cfm-regex-edit-btn",
         function (e) {
+          recordTouchTapStart(e, "cfmRegexEditTap");
+        },
+      )
+      .on(
+        "click.rxedit touchend.rxedit",
+        ".cfm-regex-script-row .cfm-regex-edit-btn",
+        function (e) {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmRegexEditTap",
+            })
+          ) {
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           const row = $(this).closest(".cfm-regex-script-row");
