@@ -3401,7 +3401,14 @@ input.cfm-rv-search {
 }
 @media (max-width: 768px) {
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translateX(-50%);
     align-self: flex-start;
+    margin: 0;
     height: calc(100vh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px);
     min-height: calc(
       100vh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
@@ -3416,7 +3423,7 @@ input.cfm-rv-search {
     max-height: calc(
       100lvh - max(env(safe-area-inset-bottom, 0px), 56px) - 24px
     );
-    margin: 12px auto 12px;
+    z-index: 100001;
   }
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized .cfm-edit-popup-actions {
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
