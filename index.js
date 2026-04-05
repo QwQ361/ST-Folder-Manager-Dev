@@ -38599,16 +38599,16 @@ jQuery(async () => {
     };
     const syncMobileMaximizedLock = () => {
       clearMobileMaximizedLock();
-      if (!popup.hasClass("cfm-edit-popup-maximized")) return;
-      if (!isMobileViewport()) return;
+      if (!canMaximize || !isMobileViewport()) return;
       const popupNode = popup[0];
       if (!popupNode) return;
       const visualViewport = window.visualViewport;
       const applyLockedRect = () => {
-        if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
+        if (!popupNode.isConnected || !isMobileViewport()) {
           return;
         }
         const nextRect = popupNode.getBoundingClientRect();
+        const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
         const viewportWidth = Math.max(
           document.documentElement?.clientWidth || 0,
           window.innerWidth || 0,
@@ -38630,11 +38630,13 @@ jQuery(async () => {
           Math.max(nextRect.width, 280),
           Math.max(0, viewportWidth - 24),
         );
-        const safeHeight = Math.max(
-          mobileMaximizedLock.rect?.height || 0,
-          nextRect.height,
-          Math.max(0, viewportHeight - 80),
-        );
+        const safeHeight = isMaximized
+          ? Math.max(
+              mobileMaximizedLock.rect?.height || 0,
+              nextRect.height,
+              Math.max(0, viewportHeight - 80),
+            )
+          : Math.max(mobileMaximizedLock.rect?.height || 0, nextRect.height);
         mobileMaximizedLock.rect = {
           top: Math.max(12, mobileMaximizedLock.rect?.top ?? nextRect.top),
           width: safeWidth,
@@ -38655,6 +38657,7 @@ jQuery(async () => {
           zIndex: "100001",
         });
       };
+      applyLockedRect();
       requestAnimationFrame(applyLockedRect);
       const handleViewportChange = () => {
         requestAnimationFrame(applyLockedRect);
@@ -38663,7 +38666,7 @@ jQuery(async () => {
         mobileMaximizedLock.rect = null;
         clearMobileMaximizedLock();
         requestAnimationFrame(() => {
-          if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+          if (!popupNode.isConnected) return;
           syncMobileMaximizedLock();
         });
       };
@@ -38681,6 +38684,9 @@ jQuery(async () => {
       : null;
     const node = input[0];
     updateMaximizeButton();
+    if (canMaximize) {
+      syncMobileMaximizedLock();
+    }
     input.trigger("focus");
     if (node && typeof node.selectionStart === "number") {
       const nextCaret = Math.min(
@@ -38733,7 +38739,7 @@ jQuery(async () => {
         const applyToggle = () => {
           popup.toggleClass("cfm-edit-popup-maximized");
           updateMaximizeButton();
-          if (popup.hasClass("cfm-edit-popup-maximized")) {
+          if (canMaximize && isMobileViewport()) {
             requestAnimationFrame(() => syncMobileMaximizedLock());
           } else {
             clearMobileMaximizedLock();
@@ -39098,16 +39104,16 @@ jQuery(async () => {
     };
     const syncMobileMaximizedLock = () => {
       clearMobileMaximizedLock();
-      if (!popup.hasClass("cfm-edit-popup-maximized")) return;
-      if (!isMobileViewport()) return;
+      if (!canMaximize || !isMobileViewport()) return;
       const popupNode = popup[0];
       if (!popupNode) return;
       const visualViewport = window.visualViewport;
       const applyLockedRect = () => {
-        if (!popupNode.isConnected || !popup.hasClass("cfm-edit-popup-maximized")) {
+        if (!popupNode.isConnected || !isMobileViewport()) {
           return;
         }
         const nextRect = popupNode.getBoundingClientRect();
+        const isMaximized = popup.hasClass("cfm-edit-popup-maximized");
         const viewportWidth = Math.max(
           document.documentElement?.clientWidth || 0,
           window.innerWidth || 0,
@@ -39129,11 +39135,13 @@ jQuery(async () => {
           Math.max(nextRect.width, 280),
           Math.max(0, viewportWidth - 24),
         );
-        const safeHeight = Math.max(
-          mobileMaximizedLock.rect?.height || 0,
-          nextRect.height,
-          Math.max(0, viewportHeight - 80),
-        );
+        const safeHeight = isMaximized
+          ? Math.max(
+              mobileMaximizedLock.rect?.height || 0,
+              nextRect.height,
+              Math.max(0, viewportHeight - 80),
+            )
+          : Math.max(mobileMaximizedLock.rect?.height || 0, nextRect.height);
         mobileMaximizedLock.rect = {
           top: Math.max(12, mobileMaximizedLock.rect?.top ?? nextRect.top),
           width: safeWidth,
@@ -39154,6 +39162,7 @@ jQuery(async () => {
           zIndex: "100001",
         });
       };
+      applyLockedRect();
       requestAnimationFrame(applyLockedRect);
       const handleViewportChange = () => {
         requestAnimationFrame(applyLockedRect);
@@ -39162,7 +39171,7 @@ jQuery(async () => {
         mobileMaximizedLock.rect = null;
         clearMobileMaximizedLock();
         requestAnimationFrame(() => {
-          if (!popup.hasClass("cfm-edit-popup-maximized")) return;
+          if (!popupNode.isConnected) return;
           syncMobileMaximizedLock();
         });
       };
@@ -39180,6 +39189,9 @@ jQuery(async () => {
       : null;
     const node = input[0];
     updateMaximizeButton();
+    if (canMaximize) {
+      syncMobileMaximizedLock();
+    }
     input.trigger("focus");
     if (node && typeof node.selectionStart === "number") {
       const nextCaret = Math.min(
@@ -39232,7 +39244,7 @@ jQuery(async () => {
         const applyToggle = () => {
           popup.toggleClass("cfm-edit-popup-maximized");
           updateMaximizeButton();
-          if (popup.hasClass("cfm-edit-popup-maximized")) {
+          if (canMaximize && isMobileViewport()) {
             requestAnimationFrame(() => syncMobileMaximizedLock());
           } else {
             clearMobileMaximizedLock();
