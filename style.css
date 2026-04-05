@@ -1862,7 +1862,7 @@
 
   .cfm-char-detail-value,
   .cfm-persona-detail-description {
-    height: 156px;
+    max-height: 78px;
   }
 
   /* 头部按钮增大 */
@@ -6231,7 +6231,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   background: rgba(0, 0, 0, 0.16);
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  height: 180px;
+  max-height: 90px;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -6244,7 +6244,7 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   background: rgba(0, 0, 0, 0.16);
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  height: 180px;
+  max-height: 90px;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
