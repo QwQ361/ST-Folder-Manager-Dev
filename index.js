@@ -23273,6 +23273,7 @@ jQuery(async () => {
                     <div class="cfm-header-actions">
                         <button id="cfm-btn-copymode" class="cfm-copymode-btn ${cfmCopyMode ? "cfm-copymode-active" : ""}" title="${cfmCopyMode ? "当前：复制模式（拖拽角色会保留原位置）" : "当前：移动模式（拖拽角色会从原位置移除）"}"><i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}</button>
                         <button id="cfm-btn-theme" title="自定义外观"><i class="fa-solid fa-palette"></i></button>
+                        <button id="cfm-btn-char-scan" title="扫描角色卡数据"><i class="fa-solid fa-arrows-rotate"></i></button>
                         <button id="cfm-btn-config" title="标签管理"><i class="fa-solid fa-gear"></i></button>
                         <button id="cfm-btn-backup" title="导入/导出"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
                         <button class="cfm-btn-close" id="cfm-btn-close-main">&times;</button>
@@ -24096,9 +24097,75 @@ jQuery(async () => {
           closeMainPopup();
         });
     }
+    const showCharacterDataScanLoading = (
+      message = "正在扫描角色卡数据，请稍候...",
+    ) => {
+      const host = $("#cfm-popup");
+      host.find(".cfm-character-data-scan-loading").remove();
+      const loading = $(
+        `<div class="cfm-preset-detail-opening-loading cfm-character-data-scan-loading" aria-live="polite" aria-busy="true">
+          <div class="cfm-preset-detail-opening-loading-box">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>${escapeHtml(message)}</span>
+          </div>
+        </div>`,
+      );
+      host.append(loading);
+      return () => loading.remove();
+    };
+
+    const setCharacterDataScanButtonState = (isLoading) => {
+      const button = popup.find("#cfm-btn-char-scan");
+      if (!button.length) return;
+      button.prop("disabled", isLoading);
+      button.attr(
+        "title",
+        isLoading ? "正在扫描角色卡数据..." : "扫描角色卡数据",
+      );
+      button.html(
+        isLoading
+          ? '<i class="fa-solid fa-spinner fa-spin"></i>'
+          : '<i class="fa-solid fa-arrows-rotate"></i>',
+      );
+    };
+
+    const scanCharacterCardData = async () => {
+      const refreshCharacters = getContext()?.getCharacters;
+      if (typeof refreshCharacters !== "function") {
+        cfmToastr.error("当前环境不支持扫描角色卡数据");
+        return;
+      }
+      const button = popup.find("#cfm-btn-char-scan");
+      if (button.prop("disabled")) return;
+
+      const hideLoading = showCharacterDataScanLoading();
+      setCharacterDataScanButtonState(true);
+      try {
+        await refreshCharacters();
+        rerenderCurrentView();
+        const charCount = getCharacters().length;
+        cfmToastr.success(
+          charCount > 0
+            ? `角色卡数据扫描完成，共刷新 ${charCount} 个角色`
+            : "角色卡数据扫描完成",
+        );
+      } catch (error) {
+        console.error("[CFM] 扫描角色卡数据失败:", error);
+        cfmToastr.error("扫描角色卡数据失败");
+      } finally {
+        hideLoading();
+        setCharacterDataScanButtonState(false);
+      }
+    };
+
     popup.find("#cfm-btn-theme").on("click touchend", (e) => {
       e.preventDefault();
       showThemeCustomizePopup();
+    });
+    popup.find("#cfm-btn-char-scan").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      scanCharacterCardData();
     });
     popup.find("#cfm-btn-config").on("click touchend", (e) => {
       e.preventDefault();
