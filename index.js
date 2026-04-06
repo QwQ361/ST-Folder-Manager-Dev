@@ -1689,6 +1689,14 @@ jQuery(async () => {
     extension_settings[extensionName].batchTemplates[type] = templates;
     getContext().saveSettingsDebounced();
   }
+  function updateBatchTemplate(type, index, name, content) {
+    const templates = getBatchTemplates(type);
+    if (index >= 0 && index < templates.length) {
+      templates[index] = { name, content };
+      extension_settings[extensionName].batchTemplates[type] = templates;
+      getContext().saveSettingsDebounced();
+    }
+  }
   function deleteBatchTemplate(type, index) {
     const templates = getBatchTemplates(type);
     if (index >= 0 && index < templates.length) {
@@ -1698,15 +1706,16 @@ jQuery(async () => {
     }
   }
   // 生成模板区域HTML
-  function buildBatchTemplateHtml(type) {
+  function buildBatchTemplateHtml(type, editingIndex = -1, editingName = "") {
     const templates = getBatchTemplates(type);
+    const isEditing = editingIndex >= 0 && editingIndex < templates.length;
     let listHtml = "";
     if (templates.length > 0) {
       listHtml = templates
-        .map(
-          (t, i) =>
-            `<div class="cfm-tpl-item" data-tpl-idx="${i}"><span class="cfm-tpl-name" title="点击加载此模板">${escapeHtml(t.name)}</span><button class="cfm-tpl-del" data-tpl-idx="${i}" title="删除模板"><i class="fa-solid fa-xmark"></i></button></div>`,
-        )
+        .map((t, i) => {
+          const isEditingItem = i === editingIndex;
+          return `<div class="cfm-tpl-item ${isEditingItem ? "cfm-tpl-item-editing" : ""}" data-tpl-idx="${i}"><span class="cfm-tpl-name" title="点击加载此模板">${escapeHtml(t.name)}</span><span style="display:flex;align-items:center;gap:6px;"><button class="cfm-tpl-edit" data-tpl-idx="${i}" title="编辑模板"><i class="fa-solid fa-pen-to-square"></i></button><button class="cfm-tpl-del" data-tpl-idx="${i}" title="删除模板"><i class="fa-solid fa-xmark"></i></button></span></div>`;
+        })
         .join("");
     } else {
       listHtml = '<div class="cfm-tpl-empty">暂无保存的模板</div>';
@@ -1715,21 +1724,55 @@ jQuery(async () => {
       <div class="cfm-tpl-section">
         <div class="cfm-tpl-header">
           <span class="cfm-tpl-label"><i class="fa-solid fa-bookmark"></i> 模板</span>
-          <button class="cfm-btn cfm-tpl-save-btn"><i class="fa-solid fa-floppy-disk"></i> 保存当前为模板</button>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            ${isEditing ? '<button class="cfm-btn cfm-tpl-cancel-edit-btn"><i class="fa-solid fa-xmark"></i> 取消编辑</button>' : ""}
+            <button class="cfm-btn cfm-tpl-save-btn"><i class="fa-solid fa-floppy-disk"></i> ${isEditing ? "保存对当前模板的修改" : "保存当前为模板"}</button>
+          </div>
         </div>
+        ${isEditing ? `<div class="cfm-create-tag-hint" style="margin-bottom:8px;">正在编辑模板「${escapeHtml(editingName || templates[editingIndex]?.name || "") }」，可修改结构后保存；如需改名，可再次点击该模板右侧的编辑按钮。</div>` : ""}
         <div class="cfm-tpl-list">${listHtml}</div>
       </div>
     `;
   }
   // 绑定模板区域事件（type: 模板类型, popup: jQuery弹窗, textareaSelector: textarea选择器, refreshFn: 刷新模板列表的回调）
   function bindBatchTemplateEvents(type, popup, textareaSelector, refreshFn) {
-    // 保存模板
+    function getEditingIndex() {
+      const idx = Number.parseInt(
+        popup.data("cfmEditingTemplateIndex"),
+        10,
+      );
+      return Number.isNaN(idx) ? -1 : idx;
+    }
+    function clearEditingState() {
+      popup.removeData("cfmEditingTemplateIndex");
+      popup.removeData("cfmEditingTemplateName");
+    }
+
+    // 保存模板 / 更新模板
     popup.find(".cfm-tpl-save-btn").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const content = popup.find(textareaSelector).val().trim();
+      const content = popup.find(textareaSelector).val().toString().trim();
       if (!content) {
         cfmToastr.warning("请先输入文件夹结构");
+        return;
+      }
+      const editingIdx = getEditingIndex();
+      if (editingIdx >= 0) {
+        const templates = getBatchTemplates(type);
+        if (!templates[editingIdx]) {
+          clearEditingState();
+          refreshFn();
+          cfmToastr.warning("当前编辑的模板不存在，已退出编辑状态");
+          return;
+        }
+        const editingName =
+          popup.data("cfmEditingTemplateName")?.toString().trim() ||
+          templates[editingIdx].name;
+        updateBatchTemplate(type, editingIdx, editingName, content);
+        clearEditingState();
+        cfmToastr.success(`模板「${editingName}」已更新`);
+        refreshFn();
         return;
       }
       const name = prompt("请输入模板名称：");
@@ -1738,6 +1781,16 @@ jQuery(async () => {
       cfmToastr.success(`模板「${name.trim()}」已保存`);
       refreshFn();
     });
+
+    // 取消编辑
+    popup.find(".cfm-tpl-cancel-edit-btn").on("click touchend", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearEditingState();
+      cfmToastr.info("已取消模板编辑");
+      refreshFn();
+    });
+
     // 加载模板
     popup
       .find(".cfm-tpl-item .cfm-tpl-name")
@@ -1751,6 +1804,59 @@ jQuery(async () => {
           cfmToastr.info(`已加载模板「${templates[idx].name}」`);
         }
       });
+
+    // 编辑模板
+    popup.find(".cfm-tpl-edit").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const idx = parseInt($(this).attr("data-tpl-idx"));
+      const templates = getBatchTemplates(type);
+      const template = templates[idx];
+      if (!template) return;
+
+      let editMode = prompt(
+        "请选择修改方式：\n名字 / 结构 / 都要\n（也支持输入 1 / 2 / 3）",
+        "都要",
+      );
+      if (!editMode) return;
+      editMode = editMode.toString().trim();
+      if (editMode === "1") editMode = "名字";
+      else if (editMode === "2") editMode = "结构";
+      else if (editMode === "3") editMode = "都要";
+
+      if (!["名字", "结构", "都要"].includes(editMode)) {
+        cfmToastr.warning("请输入：名字、结构、都要，或 1、2、3");
+        return;
+      }
+
+      if (editMode === "名字") {
+        const nextName = prompt("请输入新的模板名称：", template.name);
+        if (!nextName || !nextName.trim()) return;
+        updateBatchTemplate(type, idx, nextName.trim(), template.content);
+        if (getEditingIndex() === idx) clearEditingState();
+        cfmToastr.success(`模板已重命名为「${nextName.trim()}」`);
+        refreshFn();
+        return;
+      }
+
+      let editingName = template.name;
+      if (editMode === "都要") {
+        const nextName = prompt("请输入新的模板名称：", template.name);
+        if (!nextName || !nextName.trim()) return;
+        editingName = nextName.trim();
+      }
+
+      popup.data("cfmEditingTemplateIndex", idx);
+      popup.data("cfmEditingTemplateName", editingName);
+      popup.find(textareaSelector).val(template.content);
+      cfmToastr.info(
+        editMode === "结构"
+          ? `已载入模板「${template.name}」的结构，修改后点击“保存对当前模板的修改”`
+          : `已载入模板「${template.name}」，修改后点击“保存对当前模板的修改”`,
+      );
+      refreshFn();
+    });
+
     // 删除模板
     popup.find(".cfm-tpl-del").on("click touchend", function (e) {
       e.preventDefault();
@@ -1761,7 +1867,13 @@ jQuery(async () => {
         templates[idx] &&
         cfmConfirm(`确定删除模板「${templates[idx].name}」？`)
       ) {
+        const editingIdx = getEditingIndex();
         deleteBatchTemplate(type, idx);
+        if (editingIdx === idx) {
+          clearEditingState();
+        } else if (editingIdx > idx) {
+          popup.data("cfmEditingTemplateIndex", editingIdx - 1);
+        }
         cfmToastr.success("模板已删除");
         refreshFn();
       }
@@ -30356,7 +30468,7 @@ jQuery(async () => {
     // 2. 当前文件夹树形展示（支持拖拽 + 点击选中）
     const treeSection = $(`
             <div class="cfm-config-section">
-                <label>当前文件夹结构 <span class="cfm-drag-hint">点击选中为目标父级</span></label>
+                <label>当前文件夹结构 <span style="font-size:11px;opacity:0.5;color:#57f287;">点击选中为目标父级</span></label>
                 <div class="cfm-config-tree-actions">
                     <button id="cfm-config-expand-all" class="cfm-btn cfm-btn-sm" title="展开全部"><i class="fa-solid fa-angles-down"></i> 展开</button>
                     <button id="cfm-config-collapse-all" class="cfm-btn cfm-btn-sm" title="收起全部"><i class="fa-solid fa-angles-up"></i> 收起</button>
@@ -30654,7 +30766,7 @@ jQuery(async () => {
     // 3. 当前文件夹树形结构
     const treeSection = $(`
       <div class="cfm-config-section">
-        <label>当前文件夹结构 <span style="font-size:11px;opacity:0.5;">(${allFolderIds.length} 个)</span></label>
+        <label>当前文件夹结构 <span style="font-size:11px;opacity:0.5;">(${allFolderIds.length} 个)</span> <span style="font-size:11px;opacity:0.5;color:#57f287;">点击选中为目标父级</span></label>
         <div class="cfm-config-tree-actions">
           <button id="cfm-res-config-expand-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-down"></i> 展开</button>
           <button id="cfm-res-config-collapse-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-up"></i> 收起</button>
@@ -31468,7 +31580,18 @@ jQuery(async () => {
     const tplType = type === "presets" ? "presets" : "worldinfo";
     function refreshResBatchTemplates() {
       const tplArea = popup.find("#cfm-res-batch-tpl-area");
-      tplArea.html(buildBatchTemplateHtml(tplType));
+      const editingIdx = Number.parseInt(
+        popup.data("cfmEditingTemplateIndex"),
+        10,
+      );
+      const editingName = popup.data("cfmEditingTemplateName") || "";
+      tplArea.html(
+        buildBatchTemplateHtml(
+          tplType,
+          Number.isNaN(editingIdx) ? -1 : editingIdx,
+          editingName.toString(),
+        ),
+      );
       bindBatchTemplateEvents(
         tplType,
         popup,
@@ -31998,7 +32121,18 @@ jQuery(async () => {
     // 渲染模板区域
     function refreshBatchTemplates() {
       const tplArea = popup.find("#cfm-batch-tpl-area");
-      tplArea.html(buildBatchTemplateHtml("characters"));
+      const editingIdx = Number.parseInt(
+        popup.data("cfmEditingTemplateIndex"),
+        10,
+      );
+      const editingName = popup.data("cfmEditingTemplateName") || "";
+      tplArea.html(
+        buildBatchTemplateHtml(
+          "characters",
+          Number.isNaN(editingIdx) ? -1 : editingIdx,
+          editingName.toString(),
+        ),
+      );
       bindBatchTemplateEvents(
         "characters",
         popup,
