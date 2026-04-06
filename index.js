@@ -21598,20 +21598,20 @@ jQuery(async () => {
   }
 
   let welcomeRecentChatRefreshToken = 0;
+  let welcomeRecentChatRefreshFrameId = 0;
   const cfmPendingMissingPinnedFetches = new Set();
 
   function scheduleWelcomeRecentChatRefresh() {
     const token = ++welcomeRecentChatRefreshToken;
-    const run = () => {
+    if (welcomeRecentChatRefreshFrameId) {
+      cancelAnimationFrame(welcomeRecentChatRefreshFrameId);
+    }
+    welcomeRecentChatRefreshFrameId = requestAnimationFrame(() => {
+      welcomeRecentChatRefreshFrameId = 0;
       if (token !== welcomeRecentChatRefreshToken) return;
       applyPinnedChatsToWelcomeScreen();
       requestAnimationFrame(() => enhanceRecentChatsWithNotes());
-    };
-
-    requestAnimationFrame(run);
-    setTimeout(run, 120);
-    setTimeout(run, 350);
-    setTimeout(run, 800);
+    });
   }
 
   /**
