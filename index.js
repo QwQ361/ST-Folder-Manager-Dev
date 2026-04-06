@@ -45934,6 +45934,47 @@ jQuery(async () => {
       };
     }
 
+    if (scope === "all" || scope === "regex") {
+      ensureResourceSettings();
+      const globalScripts = getRegexGlobalScripts();
+      const regexGroups =
+        extension_settings[extensionName].regexGlobalGroups || {};
+      const regexFavIds = new Set(getResFavorites("regex"));
+      const assignments = {};
+      const favorites = [];
+
+      for (const script of globalScripts) {
+        const scriptName = String(script?.scriptName || "").trim();
+        const scriptId = String(script?.id || "").trim();
+        if (!scriptName || !scriptId) continue;
+        const folderId = regexGroups[scriptId];
+        if (folderId) assignments[scriptName] = folderId;
+        if (regexFavIds.has(scriptId)) favorites.push(scriptName);
+      }
+
+      data.regex = {
+        folderTree: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].regexFolderTree || {}),
+        ),
+        assignments,
+        favorites: Array.from(new Set(favorites)),
+      };
+    }
+
+    if (scope === "all" || scope === "quickreply") {
+      ensureResourceSettings();
+      data.quickreply = {
+        folderTree: JSON.parse(
+          JSON.stringify(getResFolderTree("quickreply")),
+        ),
+        groups: JSON.parse(JSON.stringify(getResourceGroups("quickreply"))),
+        favorites: [...getResFavorites("quickreply")],
+        notes: JSON.parse(
+          JSON.stringify(extension_settings[extensionName].qrNotes || {}),
+        ),
+      };
+    }
+
     return data;
   }
 
@@ -45957,7 +45998,11 @@ jQuery(async () => {
                 ? "背景"
                 : scope === "personas"
                   ? "User"
-                  : "世界书";
+                  : scope === "regex"
+                    ? "正则"
+                    : scope === "quickreply"
+                      ? "QR"
+                      : "世界书";
     a.download = `cfm-backup-${scopeLabel}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
@@ -45974,6 +46019,8 @@ jQuery(async () => {
       themes: { matched: 0, skipped: 0 },
       backgrounds: { matched: 0, skipped: 0 },
       personas: { matched: 0, skipped: 0 },
+      regex: { matched: 0, skipped: 0 },
+      quickreply: { matched: 0, skipped: 0 },
       foldersCreated: 0,
       favoritesRestored: 0,
     };
@@ -46375,6 +46422,125 @@ jQuery(async () => {
       }
     }
 
+    if (jsonData.regex) {
+      const { folderTree, assignments, favorites } = jsonData.regex;
+      ensureResourceSettings();
+      let regexChanged = false;
+
+      if (folderTree) {
+        const existingTree = extension_settings[extensionName].regexFolderTree || {};
+        extension_settings[extensionName].regexFolderTree = existingTree;
+        for (const [folderId, folderData] of Object.entries(folderTree)) {
+          if (!existingTree[folderId]) {
+            existingTree[folderId] = { ...folderData };
+            report.foldersCreated++;
+            regexChanged = true;
+          }
+        }
+      }
+
+      const globalScripts = getRegexGlobalScripts();
+      const scriptNameToIds = new Map();
+      for (const script of globalScripts) {
+        const scriptName = String(script?.scriptName || "").trim();
+        const scriptId = String(script?.id || "").trim();
+        if (!scriptName || !scriptId) continue;
+        if (!scriptNameToIds.has(scriptName)) scriptNameToIds.set(scriptName, []);
+        scriptNameToIds.get(scriptName).push(scriptId);
+      }
+
+      if (assignments) {
+        const existingFolderIds = new Set(
+          Object.keys(extension_settings[extensionName].regexFolderTree || {}),
+        );
+        const currentGroups = {
+          ...(extension_settings[extensionName].regexGlobalGroups || {}),
+        };
+
+        for (const [scriptName, folderId] of Object.entries(assignments)) {
+          const matchedIds = scriptNameToIds.get(String(scriptName || "").trim()) || [];
+          if (matchedIds.length > 0 && existingFolderIds.has(folderId)) {
+            for (const scriptId of matchedIds) currentGroups[scriptId] = folderId;
+            report.regex.matched += matchedIds.length;
+            regexChanged = true;
+          } else {
+            report.regex.skipped++;
+          }
+        }
+
+        extension_settings[extensionName].regexGlobalGroups = currentGroups;
+      }
+
+      if (favorites) {
+        const currentFavs = new Set(getResFavorites("regex"));
+        for (const scriptName of favorites) {
+          const matchedIds = scriptNameToIds.get(String(scriptName || "").trim()) || [];
+          for (const scriptId of matchedIds) {
+            if (!currentFavs.has(scriptId)) {
+              currentFavs.add(scriptId);
+              report.favoritesRestored++;
+              regexChanged = true;
+            }
+          }
+        }
+        extension_settings[extensionName].regexFavorites = [...currentFavs];
+      }
+
+      if (regexChanged) {
+        getContext().saveSettingsDebounced();
+      }
+    }
+
+    if (jsonData.quickreply) {
+      const { folderTree, groups, favorites } = jsonData.quickreply;
+      ensureResourceSettings();
+
+      if (folderTree) {
+        const existingTree = getResFolderTree("quickreply");
+        for (const [folderId, folderData] of Object.entries(folderTree)) {
+          if (!existingTree[folderId]) {
+            existingTree[folderId] = { ...folderData };
+            report.foldersCreated++;
+          }
+        }
+        saveResTree("quickreply");
+      }
+
+      if (groups) {
+        const qrNameSet = getExistingQrSetNameSet();
+        const existingFolderIds = new Set(getResFolderIds("quickreply"));
+
+        for (const [setName, folderName] of Object.entries(groups)) {
+          if (qrNameSet.has(setName) && existingFolderIds.has(folderName)) {
+            setItemGroup("quickreply", setName, folderName);
+            report.quickreply.matched++;
+          } else {
+            report.quickreply.skipped++;
+          }
+        }
+      }
+
+      if (favorites) {
+        const qrNameSet = getExistingQrSetNameSet();
+        for (const name of favorites) {
+          if (qrNameSet.has(name) && !isResFavorite("quickreply", name)) {
+            toggleResFavorite("quickreply", name);
+            report.favoritesRestored++;
+          }
+        }
+      }
+
+      const qrNotes = jsonData.quickreply.notes;
+      if (qrNotes && typeof qrNotes === "object") {
+        const qrNameSet = getExistingQrSetNameSet();
+        for (const [name, note] of Object.entries(qrNotes)) {
+          if (qrNameSet.has(name) && note) {
+            setQrNote(name, note);
+          }
+        }
+      }
+    }
+
     return report;
   }
 
@@ -46394,7 +46560,11 @@ jQuery(async () => {
               ? "背景"
               : currentResourceType === "personas"
                 ? "User"
-                : "世界书";
+                : currentResourceType === "regex"
+                  ? "正则"
+                  : currentResourceType === "quickreply"
+                    ? "QR"
+                    : "世界书";
     const popup = $(`
       <div class="cfm-batch-popup" style="max-width:480px;">
         <div class="cfm-config-header">
@@ -46476,6 +46646,10 @@ jQuery(async () => {
             html += `背景：匹配 ${report.backgrounds.matched} 个，跳过 ${report.backgrounds.skipped} 个<br>`;
           if (jsonData.personas)
             html += `User：匹配 ${report.personas.matched} 个，跳过 ${report.personas.skipped} 个<br>`;
+          if (jsonData.regex)
+            html += `正则：匹配 ${report.regex.matched} 个，跳过 ${report.regex.skipped} 个<br>`;
+          if (jsonData.quickreply)
+            html += `QR：匹配 ${report.quickreply.matched} 个，跳过 ${report.quickreply.skipped} 个<br>`;
           if (report.favoritesRestored > 0)
             html += `恢复了 ${report.favoritesRestored} 个收藏<br>`;
           html += `</div>`;
