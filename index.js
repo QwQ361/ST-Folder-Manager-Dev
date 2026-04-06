@@ -6,6 +6,45 @@ jQuery(async () => {
   const extensionFolderPath = `scripts/extensions/third-party/${extensionName}`;
   const STORAGE_KEY_BTN_POS = "cfm-button-pos";
   const STORAGE_KEY = "cfm-folder-config"; // legacy
+  const BACKUP_BRIDGE_PROTOCOL_VERSION = 1;
+
+  function publishBackupBridgeSignal(status = "ready", extra = {}) {
+    try {
+      const signal = {
+        source: "cfm-backup-bridge",
+        extensionName,
+        status,
+        protocolVersion: BACKUP_BRIDGE_PROTOCOL_VERSION,
+        timestamp: Date.now(),
+        ...extra,
+      };
+      window.__CFM_BACKUP_BRIDGE__ = signal;
+      window.__CFM_PUBLISH_BACKUP_BRIDGE__ = publishBackupBridgeSignal;
+      document.documentElement?.setAttribute?.(
+        "data-cfm-backup-bridge",
+        status,
+      );
+      document.documentElement?.setAttribute?.(
+        "data-cfm-backup-bridge-extension",
+        extensionName,
+      );
+      document.documentElement?.setAttribute?.(
+        "data-cfm-backup-bridge-protocol",
+        String(BACKUP_BRIDGE_PROTOCOL_VERSION),
+      );
+      window.dispatchEvent(
+        new CustomEvent("cfm-backup-bridge", {
+          detail: signal,
+        }),
+      );
+      return signal;
+    } catch (e) {
+      console.warn("[CFM] 发布备份桥接信号失败:", e);
+      return null;
+    }
+  }
+
+  publishBackupBridgeSignal("loading");
 
   // ==================== 简繁转换模块加载 ====================
   // 动态加载 s2t.js（简繁逐字转换字典）
@@ -48618,6 +48657,22 @@ jQuery(async () => {
       });
     }
   }
+
+  publishBackupBridgeSignal("ready", {
+    displayName: "酒馆资源管理器",
+    bridgeVersion: "0.1.0",
+    capabilities: [
+      "handshake",
+      "chars",
+      "worldinfo",
+      "presets",
+      "themes",
+      "backgrounds",
+      "personas",
+      "regex",
+      "qr"
+    ],
+  });
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
