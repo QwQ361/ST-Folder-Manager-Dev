@@ -7,6 +7,105 @@ jQuery(async () => {
   const STORAGE_KEY_BTN_POS = "cfm-button-pos";
   const STORAGE_KEY = "cfm-folder-config"; // legacy
   const BACKUP_BRIDGE_PROTOCOL_VERSION = 1;
+  const BACKUP_BRIDGE_VERSION = "0.2.0";
+
+  function safeCloneBridgeValue(value, depth = 0) {
+    if (value == null) return value;
+    if (depth >= 4) return "[MaxDepth]";
+    if (Array.isArray(value)) {
+      return value.slice(0, 200).map((item) => safeCloneBridgeValue(item, depth + 1));
+    }
+    if (typeof value === "object") {
+      const out = {};
+      for (const [key, val] of Object.entries(value).slice(0, 500)) {
+        if (typeof val === "function") continue;
+        out[key] = safeCloneBridgeValue(val, depth + 1);
+      }
+      return out;
+    }
+    return value;
+  }
+
+  function getBridgeObjectKeyCount(obj) {
+    return obj && typeof obj === "object" ? Object.keys(obj).length : 0;
+  }
+
+  function getBackupBridgeDetails() {
+    const extSettings = extension_settings?.[extensionName] || {};
+    let charFolders = {};
+    try {
+      if (config?.folders && typeof config.folders === "object") {
+        charFolders = config.folders;
+      }
+    } catch (e) {
+      charFolders = {};
+    }
+
+    return {
+      source: "cfm-backup-bridge",
+      extensionName,
+      displayName: "酒馆资源管理器",
+      protocolVersion: BACKUP_BRIDGE_PROTOCOL_VERSION,
+      bridgeVersion: BACKUP_BRIDGE_VERSION,
+      status: window.__CFM_BACKUP_BRIDGE__?.status || "unknown",
+      timestamp: Date.now(),
+      detailsAvailable: true,
+      supportedResourceTypes: [
+        "chars",
+        "worldinfo",
+        "presets",
+        "themes",
+        "backgrounds",
+        "personas",
+        "regex",
+        "qr",
+      ],
+      counts: {
+        charFolders: getBridgeObjectKeyCount(charFolders),
+        presetGroups: getBridgeObjectKeyCount(extSettings.presetGroups),
+        worldInfoGroups: getBridgeObjectKeyCount(extSettings.worldInfoGroups),
+        themeGroups: getBridgeObjectKeyCount(extSettings.themeGroups),
+        bgGroups: getBridgeObjectKeyCount(extSettings.bgGroups),
+        personaGroups: getBridgeObjectKeyCount(extSettings.personaGroups),
+        resourceFolderTreePresets: getBridgeObjectKeyCount(
+          extSettings.resourceFolderTree?.presets,
+        ),
+        resourceFolderTreeWorldinfo: getBridgeObjectKeyCount(
+          extSettings.resourceFolderTree?.worldinfo,
+        ),
+        resourceFolderTreeThemes: getBridgeObjectKeyCount(
+          extSettings.resourceFolderTree?.themes,
+        ),
+        resourceFolderTreeBackgrounds: getBridgeObjectKeyCount(
+          extSettings.resourceFolderTree?.backgrounds,
+        ),
+        resourceFolderTreePersonas: getBridgeObjectKeyCount(
+          extSettings.resourceFolderTree?.personas,
+        ),
+        regexFolders: getBridgeObjectKeyCount(extSettings.regexFolderTree),
+        qrFolders: getBridgeObjectKeyCount(extSettings.qrFolderTree),
+      },
+      trees: {
+        chars: safeCloneBridgeValue(charFolders),
+        resources: safeCloneBridgeValue(extSettings.resourceFolderTree || {}),
+        regex: safeCloneBridgeValue(extSettings.regexFolderTree || {}),
+        qr: safeCloneBridgeValue(extSettings.qrFolderTree || {}),
+      },
+      mappings: {
+        presetGroups: safeCloneBridgeValue(extSettings.presetGroups || {}),
+        worldInfoGroups: safeCloneBridgeValue(extSettings.worldInfoGroups || {}),
+        themeGroups: safeCloneBridgeValue(extSettings.themeGroups || {}),
+        bgGroups: safeCloneBridgeValue(extSettings.bgGroups || {}),
+        personaGroups: safeCloneBridgeValue(extSettings.personaGroups || {}),
+      },
+      metadata: {
+        topLevelSettingKeys: Object.keys(extSettings),
+        hasDefaultBackground:
+          typeof extSettings.defaultBackground === "string" &&
+          extSettings.defaultBackground.length > 0,
+      },
+    };
+  }
 
   function publishBackupBridgeSignal(status = "ready", extra = {}) {
     try {
@@ -15,11 +114,14 @@ jQuery(async () => {
         extensionName,
         status,
         protocolVersion: BACKUP_BRIDGE_PROTOCOL_VERSION,
+        bridgeVersion: BACKUP_BRIDGE_VERSION,
+        detailsAvailable: true,
         timestamp: Date.now(),
         ...extra,
       };
       window.__CFM_BACKUP_BRIDGE__ = signal;
       window.__CFM_PUBLISH_BACKUP_BRIDGE__ = publishBackupBridgeSignal;
+      window.__CFM_BACKUP_BRIDGE_GET_DETAILS__ = getBackupBridgeDetails;
       document.documentElement?.setAttribute?.(
         "data-cfm-backup-bridge",
         status,
@@ -31,6 +133,10 @@ jQuery(async () => {
       document.documentElement?.setAttribute?.(
         "data-cfm-backup-bridge-protocol",
         String(BACKUP_BRIDGE_PROTOCOL_VERSION),
+      );
+      document.documentElement?.setAttribute?.(
+        "data-cfm-backup-bridge-details",
+        "available",
       );
       window.dispatchEvent(
         new CustomEvent("cfm-backup-bridge", {
