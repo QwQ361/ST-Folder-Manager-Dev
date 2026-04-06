@@ -29047,7 +29047,7 @@ jQuery(async () => {
       }
     });
     // 角色名旁小三角：展开/折叠角色卡具体设定
-    row.find(".cfm-char-detail-toggle").on("click touchend", (e) => {
+    row.find(".cfm-char-detail-toggle").on("click touchend", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.type === "touchend") {
@@ -29082,6 +29082,14 @@ jQuery(async () => {
           .find(".cfm-char-detail-toggle i")
           .removeClass("fa-caret-right")
           .addClass("fa-caret-down");
+        const needsHydration = !hasCharacterDetailPayload(char);
+        if (needsHydration && typeof getContext().getCharacters === "function") {
+          try {
+            await getContext().getCharacters();
+          } catch (e) {
+            console.debug("[CFM] 展开角色详情时刷新角色列表失败:", e);
+          }
+        }
         renderCharacterDetailSubList(row, char);
         row.nextAll(".cfm-char-detail-sublist").first().hide().slideDown(150);
       }
@@ -39423,6 +39431,7 @@ jQuery(async () => {
   }
 
   async function replaceCharacterDetailAvatar(charRow, char) {
+    char = resolveCharacterDetailChar(char);
     if (!char?.avatar) {
       cfmToastr.error("无法获取角色头像信息");
       return;
@@ -39517,36 +39526,73 @@ jQuery(async () => {
     }
   }
 
-  function getCharacterDetailFieldValue(char, field) {
-    const dataValue = char?.data?.[field];
-    if (dataValue !== undefined && dataValue !== null) return dataValue;
+  function resolveCharacterDetailChar(char) {
+    const avatar = char?.avatar;
+    if (!avatar) return char;
+    const liveChar = getCharacters().find((item) => item?.avatar === avatar);
+    if (!liveChar) return char;
+    if (
+      char &&
+      char !== liveChar &&
+      Object.prototype.hasOwnProperty.call(char, "__cfmEditingGreetingIndex")
+    ) {
+      liveChar.__cfmEditingGreetingIndex = char.__cfmEditingGreetingIndex;
+    }
+    return liveChar;
+  }
 
-    const topLevelValue = char?.[field];
-    if (topLevelValue !== undefined && topLevelValue !== null) {
-      return topLevelValue;
+  function getCharacterDetailFieldValue(char, field) {
+    const resolvedChar = resolveCharacterDetailChar(char);
+    const aliasFields =
+      field === "alternate_greetings"
+        ? ["alternate_greetings", "alt_greetings"]
+        : field === "alt_greetings"
+          ? ["alt_greetings", "alternate_greetings"]
+          : [field];
+
+    for (const key of aliasFields) {
+      const dataValue = resolvedChar?.data?.[key];
+      if (dataValue !== undefined && dataValue !== null) return dataValue;
+
+      const topLevelValue = resolvedChar?.[key];
+      if (topLevelValue !== undefined && topLevelValue !== null) {
+        return topLevelValue;
+      }
     }
 
-    if (!char?.json_data) return undefined;
+    if (!resolvedChar?.json_data) return undefined;
 
     try {
       const jsonData =
-        typeof char.json_data === "string"
-          ? JSON.parse(char.json_data)
-          : char.json_data;
-      const jsonDataValue = jsonData?.data?.[field];
-      if (jsonDataValue !== undefined && jsonDataValue !== null) {
-        return jsonDataValue;
-      }
+        typeof resolvedChar.json_data === "string"
+          ? JSON.parse(resolvedChar.json_data)
+          : resolvedChar.json_data;
+      for (const key of aliasFields) {
+        const jsonDataValue = jsonData?.data?.[key];
+        if (jsonDataValue !== undefined && jsonDataValue !== null) {
+          return jsonDataValue;
+        }
 
-      const jsonTopLevelValue = jsonData?.[field];
-      if (jsonTopLevelValue !== undefined && jsonTopLevelValue !== null) {
-        return jsonTopLevelValue;
+        const jsonTopLevelValue = jsonData?.[key];
+        if (jsonTopLevelValue !== undefined && jsonTopLevelValue !== null) {
+          return jsonTopLevelValue;
+        }
       }
     } catch (parseErr) {
       console.debug("[CFM] 读取角色详情 json_data 失败:", parseErr);
     }
 
     return undefined;
+  }
+
+  function hasCharacterDetailPayload(char) {
+    const detailFields = ["description", "first_mes", "alternate_greetings"];
+    return detailFields.some((field) => {
+      const value = getCharacterDetailFieldValue(char, field);
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === "string") return value.trim().length > 0;
+      return value !== undefined && value !== null;
+    });
   }
 
   async function showCharacterDetailFieldPopup(char, field, options = {}) {
@@ -39606,6 +39652,7 @@ jQuery(async () => {
         rows: 8,
       },
     };
+    char = resolveCharacterDetailChar(char);
     const meta = map[field];
     if (!meta || !char) return null;
 
@@ -39991,6 +40038,7 @@ jQuery(async () => {
   }
 
   async function editCharacterDetailField(charRow, char, field, options = {}) {
+    char = resolveCharacterDetailChar(char);
     const result = await showCharacterDetailFieldPopup(char, field, options);
     if (result === null || !char?.avatar) return;
     if (!char.data) char.data = {};
@@ -40328,6 +40376,7 @@ jQuery(async () => {
   // 来自 @habc12138 老师的超级好用user人设生成器~做了小小联动
 
   function renderCharacterDetailSubList(charRow, char) {
+    char = resolveCharacterDetailChar(char);
     charRow.next(".cfm-char-detail-sublist").remove();
 
     const normalizeGreetingItems = (input) => {
