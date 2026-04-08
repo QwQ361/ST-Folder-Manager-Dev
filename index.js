@@ -51,9 +51,110 @@ jQuery(async () => {
       resourceReadAvailable: true,
       supportedExportResourceTypes,
       stableIdModes: ["path-based"],
-      fingerprintModes: [],
+      fingerprintModes: ["contenthash"],
       contentModes: ["json", "base64"],
     };
+  }
+
+  function normalizeBackupBridgeTimestamp(value) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return Math.round(value);
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+
+      const numericValue = Number(trimmed);
+      if (Number.isFinite(numericValue) && numericValue > 0) {
+        return Math.round(numericValue);
+      }
+
+      const parsedValue = Date.parse(trimmed);
+      if (Number.isFinite(parsedValue)) {
+        return parsedValue;
+      }
+    }
+
+    return null;
+  }
+
+  function resolveBackupBridgeUpdatedAt(...sources) {
+    const candidateKeys = [
+      "updatedAt",
+      "updateAt",
+      "lastModified",
+      "modifiedAt",
+      "mtime",
+      "timestamp",
+      "create_date",
+      "date_last_chat",
+      "dateAdded",
+      "createdAt",
+    ];
+
+    for (const source of sources) {
+      const directValue = normalizeBackupBridgeTimestamp(source);
+      if (directValue != null) {
+        return directValue;
+      }
+
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        continue;
+      }
+
+      for (const key of candidateKeys) {
+        const timestampValue = normalizeBackupBridgeTimestamp(source[key]);
+        if (timestampValue != null) {
+          return timestampValue;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function getBackupBridgeStableString(value) {
+    if (value == null) return "null";
+
+    const valueType = typeof value;
+    if (valueType === "string") return JSON.stringify(value);
+    if (valueType === "number" || valueType === "boolean") {
+      return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => getBackupBridgeStableString(item)).join(",")}]`;
+    }
+
+    if (valueType === "object") {
+      const keys = Object.keys(value).sort();
+      return `{${keys
+        .map(
+          (key) =>
+            `${JSON.stringify(key)}:${getBackupBridgeStableString(value[key])}`,
+        )
+        .join(",")}}`;
+    }
+
+    return JSON.stringify(String(value));
+  }
+
+  function hashBackupBridgeString(value) {
+    const text = String(value || "");
+    let hash = 2166136261;
+
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function createBackupBridgeFingerprint(value, mode = "json") {
+    const stableString = getBackupBridgeStableString(value);
+    return `fnv1a32:${mode}:${hashBackupBridgeString(stableString)}:${stableString.length}`;
   }
 
   function normalizeBackupBridgeResourceType(value) {
@@ -225,8 +326,8 @@ jQuery(async () => {
       folderPath,
       sourcePath: normalizedSourcePath,
       identityMode: "path-based",
-      updatedAt: Number.isFinite(updatedAt) ? updatedAt : null,
-      fingerprint: fingerprint || null,
+      updatedAt: resolveBackupBridgeUpdatedAt(updatedAt),
+      fingerprint: fingerprint ? String(fingerprint).trim() || null : null,
       contentLocator: contentLocator || null,
       readModes: normalizedReadModes,
       extensionHint: normalizedExtensionHint || null,
@@ -395,8 +496,11 @@ jQuery(async () => {
                 resourceType: "chars",
                 displayName,
                 folderSegments,
-                identityPath: [...folderSegments, displayName].join("/"),
+                identityPath: avatar
+                  ? `avatar/${avatar}`
+                  : [...folderSegments, displayName].join("/"),
                 sourcePath: avatar ? `characters/${avatar}` : null,
+                updatedAt: resolveBackupBridgeUpdatedAt(char),
                 readModes: ["base64"],
                 extensionHint: getBackupBridgeFileExtension(avatar),
               }),
@@ -444,15 +548,25 @@ jQuery(async () => {
             const folderId = groups[displayName];
             const folderSegments = buildBackupBridgeTreeFolderPath(tree, folderId);
             const presetValue = String(preset?.value || "").trim();
+            const presetUpdatedAt = resolveBackupBridgeUpdatedAt(preset);
+            const presetFingerprint = createBackupBridgeFingerprint(
+              preset && typeof preset === "object"
+                ? { ...preset, name: displayName }
+                : { name: displayName, value: presetValue || null },
+            );
             items.push(
               createBackupBridgeResourceItem({
                 resourceType: "presets",
                 displayName,
                 folderSegments,
-                identityPath: [...folderSegments, displayName].join("/"),
+                identityPath: presetValue
+                  ? `id/${presetValue}`
+                  : [...folderSegments, displayName].join("/"),
                 sourcePath: presetValue
                   ? `presets/${presetValue}`
                   : `presets/${displayName}`,
+                updatedAt: presetUpdatedAt,
+                fingerprint: presetFingerprint,
                 readModes: ["json"],
                 extensionHint: ".json",
                 mimeType: "application/json",
@@ -562,13 +676,23 @@ jQuery(async () => {
               "未命名正则";
             const folderId = groups[scriptId];
             const folderSegments = buildBackupBridgeTreeFolderPath(tree, folderId);
+            const regexUpdatedAt = resolveBackupBridgeUpdatedAt(script);
+            const regexFingerprint = createBackupBridgeFingerprint(
+              script && typeof script === "object"
+                ? script
+                : { id: scriptId || null, scriptName: displayName },
+            );
             items.push(
               createBackupBridgeResourceItem({
                 resourceType: "regex",
                 displayName,
                 folderSegments,
-                identityPath: [...folderSegments, displayName].join("/"),
+                identityPath: scriptId
+                  ? `id/${scriptId}`
+                  : [...folderSegments, displayName].join("/"),
                 sourcePath: scriptId ? `regex/${scriptId}` : `regex/${displayName}`,
+                updatedAt: regexUpdatedAt,
+                fingerprint: regexFingerprint,
                 readModes: ["json"],
                 extensionHint: ".json",
                 mimeType: "application/json",
@@ -697,6 +821,9 @@ jQuery(async () => {
             size: Number.isFinite(blob.size) ? blob.size : null,
           },
           {
+            updatedAt: item.updatedAt || null,
+            fingerprint:
+              item.fingerprint || createBackupBridgeFingerprint(data, "base64"),
             extensionHint:
               item.extensionHint || getBackupBridgeFileExtension(avatar) || ".png",
             mimeType: item.mimeType || blob.type || "image/png",
@@ -727,6 +854,9 @@ jQuery(async () => {
             size: Number.isFinite(blob.size) ? blob.size : null,
           },
           {
+            updatedAt: item.updatedAt || null,
+            fingerprint:
+              item.fingerprint || createBackupBridgeFingerprint(data, "base64"),
             extensionHint:
               item.extensionHint ||
               getBackupBridgeFileExtension(sourcePath) ||
@@ -864,6 +994,9 @@ jQuery(async () => {
           size: getBackupBridgeJsonByteSize(data),
         },
         {
+          updatedAt: item.updatedAt || resolveBackupBridgeUpdatedAt(data),
+          fingerprint:
+            item.fingerprint || createBackupBridgeFingerprint(data, "json"),
           extensionHint: item.extensionHint || ".json",
           mimeType: item.mimeType || "application/json",
         },
