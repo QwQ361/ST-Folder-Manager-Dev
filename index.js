@@ -580,7 +580,32 @@ jQuery(async () => {
 
         if (resourceType === "qr") {
           ensureResourceSettings();
-          const names = getQrSetNames();
+          const names = await (async () => {
+            const collectNames = () =>
+              Array.from(
+                new Set(
+                  getQrSetNames()
+                    .map((name) => String(name || "").trim())
+                    .filter(Boolean),
+                ),
+              );
+
+            const immediateNames = collectNames();
+            if (immediateNames.length > 0) {
+              return immediateNames;
+            }
+
+            const timeoutAt = Date.now() + 2500;
+            while (Date.now() < timeoutAt) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+              const retriedNames = collectNames();
+              if (retriedNames.length > 0) {
+                return retriedNames;
+              }
+            }
+
+            return collectNames();
+          })();
           const groups = getResourceGroups("quickreply") || {};
           const tree = getResFolderTree("quickreply") || {};
 
@@ -36927,16 +36952,14 @@ jQuery(async () => {
   function getQrSetNames() {
     try {
       const api = typeof globalThis !== "undefined" && globalThis.quickReplyApi;
-      if (!api) return [];
-      const QuickReplySet = api.listSets
-        ? null
-        : globalThis.QuickReplySet || null;
+      const QuickReplySet =
+        typeof globalThis !== "undefined" ? globalThis.QuickReplySet || null : null;
       // 尝试通过 api.listSets() 获取
-      if (api.listSets) {
+      if (api && typeof api.listSets === "function") {
         return api.listSets().map((s) => (typeof s === "string" ? s : s.name));
       }
       // 尝试通过 QuickReplySet.list
-      if (QuickReplySet && QuickReplySet.list) {
+      if (QuickReplySet && Array.isArray(QuickReplySet.list)) {
         return QuickReplySet.list.map((s) => s.name);
       }
       // 从 DOM 读取
