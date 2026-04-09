@@ -852,7 +852,7 @@ jQuery(async () => {
 
         if (resourceType === "backgrounds") {
           ensureResourceSettings();
-          const names = getBackgroundNames();
+          const names = await getBackgroundNamesForBridge();
           const groups = getResourceGroups("backgrounds") || {};
           const tree = getResFolderTree("backgrounds") || {};
 
@@ -2759,6 +2759,61 @@ jQuery(async () => {
       if (bgfile) names.push(bgfile);
     });
     return names;
+  }
+
+  async function getBackgroundNamesForBridge() {
+    const collectNames = () =>
+      Array.from(
+        new Set(
+          getBackgroundNames()
+            .map((name) => String(name || "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+    const immediateNames = collectNames();
+    if (immediateNames.length > 0) {
+      return immediateNames;
+    }
+
+    try {
+      const bgModule = await import("../../../backgrounds.js");
+      if (typeof bgModule.getBackgrounds === "function") {
+        await bgModule.getBackgrounds();
+      }
+    } catch (error) {
+      console.warn("[CFM] 刷新背景列表失败，尝试 API 回退", error);
+    }
+
+    const refreshedNames = collectNames();
+    if (refreshedNames.length > 0) {
+      return refreshedNames;
+    }
+
+    try {
+      const bgResp = await fetch("/api/backgrounds/all", {
+        method: "POST",
+        headers: getContext().getRequestHeaders(),
+        body: JSON.stringify({}),
+      });
+
+      if (!bgResp.ok) {
+        throw new Error(`HTTP ${bgResp.status}`);
+      }
+
+      const payload = await bgResp.json();
+      const apiNames = Array.isArray(payload?.images)
+        ? payload.images
+            .map((name) => String(name || "").trim())
+            .filter(Boolean)
+        : [];
+
+      return Array.from(new Set(apiNames));
+    } catch (error) {
+      console.warn("[CFM] 读取背景列表 API 失败", error);
+    }
+
+    return refreshedNames;
   }
 
   // 获取背景的友好显示名（去掉扩展名）
