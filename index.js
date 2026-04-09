@@ -279,6 +279,74 @@ jQuery(async () => {
     return label ? [...parentPath, label] : parentPath;
   }
 
+  function buildBackupBridgeFolderDefinition(folderId, folderPath, node) {
+    const normalizedFolderId = String(folderId || "").trim();
+    const normalizedFolderPath = Array.isArray(folderPath)
+      ? folderPath
+          .map((segment) => String(segment || "").trim())
+          .filter(Boolean)
+      : [];
+    const normalizedParentId = String(node?.parentId || "").trim() || null;
+    const normalizedSortOrder = Number(node?.sortOrder);
+
+    if (!normalizedFolderId && normalizedFolderPath.length === 0) {
+      return null;
+    }
+
+    return {
+      folderId: normalizedFolderId || null,
+      displayName:
+        normalizedFolderPath.length > 0
+          ? normalizedFolderPath[normalizedFolderPath.length - 1]
+          : null,
+      folderPath: normalizedFolderPath,
+      parentId: normalizedParentId,
+      sortOrder: Number.isFinite(normalizedSortOrder)
+        ? normalizedSortOrder
+        : null,
+    };
+  }
+
+  function buildBackupBridgeTreeFolderDefinitions(tree) {
+    if (!tree || typeof tree !== "object") return [];
+
+    return Object.keys(tree)
+      .map((folderId) =>
+        buildBackupBridgeFolderDefinition(
+          folderId,
+          buildBackupBridgeTreeFolderPath(tree, folderId),
+          tree[folderId],
+        ),
+      )
+      .filter((entry) => entry && entry.folderPath.length > 0);
+  }
+
+  function buildBackupBridgeCharFolderDefinitions(charFolders) {
+    if (!charFolders || typeof charFolders !== "object") return [];
+
+    return Object.keys(charFolders)
+      .map((folderId) =>
+        buildBackupBridgeFolderDefinition(
+          folderId,
+          buildBackupBridgeCharFolderPath(folderId),
+          charFolders[folderId],
+        ),
+      )
+      .filter((entry) => entry && entry.folderPath.length > 0);
+  }
+
+  function buildBackupBridgeResourceFolderDefinitionsMap(resourceFolderTree) {
+    if (!resourceFolderTree || typeof resourceFolderTree !== "object") {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(resourceFolderTree).map(([resourceType, tree]) => {
+        return [resourceType, buildBackupBridgeTreeFolderDefinitions(tree)];
+      }),
+    );
+  }
+
   function buildBackupBridgeResourceId(
     resourceType,
     identityPath,
@@ -1621,6 +1689,19 @@ jQuery(async () => {
     }
 
     const exportCapabilities = getBackupBridgeExportCapabilities();
+    const resourceFolderDefinitions =
+      buildBackupBridgeResourceFolderDefinitionsMap(
+        extSettings.resourceFolderTree || {},
+      );
+    const regexFolderDefinitions = buildBackupBridgeTreeFolderDefinitions(
+      extSettings.regexFolderTree || {},
+    );
+    const qrFolderDefinitions = buildBackupBridgeTreeFolderDefinitions(
+      extSettings.qrFolderTree || {},
+    );
+    const charFolderDefinitions = buildBackupBridgeCharFolderDefinitions(
+      charFolders,
+    );
 
     return {
       source: "cfm-backup-bridge",
@@ -1671,6 +1752,12 @@ jQuery(async () => {
         resources: safeCloneBridgeValue(extSettings.resourceFolderTree || {}),
         regex: safeCloneBridgeValue(extSettings.regexFolderTree || {}),
         qr: safeCloneBridgeValue(extSettings.qrFolderTree || {}),
+      },
+      folderDefinitions: {
+        chars: safeCloneBridgeValue(charFolderDefinitions),
+        resources: safeCloneBridgeValue(resourceFolderDefinitions),
+        regex: safeCloneBridgeValue(regexFolderDefinitions),
+        qr: safeCloneBridgeValue(qrFolderDefinitions),
       },
       mappings: {
         presetGroups: safeCloneBridgeValue(extSettings.presetGroups || {}),
