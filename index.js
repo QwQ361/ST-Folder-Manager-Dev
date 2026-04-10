@@ -9,19 +9,19 @@ jQuery(async () => {
   const BACKUP_BRIDGE_PROTOCOL_VERSION = 1;
   const BACKUP_BRIDGE_VERSION = "0.3.0";
 
-  function safeCloneBridgeValue(value, depth = 0) {
+  function safeCloneBridgeValue(value, depth = 0, maxDepth = 4) {
     if (value == null) return value;
-    if (depth >= 4) return "[MaxDepth]";
+    if (depth >= maxDepth) return "[MaxDepth]";
     if (Array.isArray(value)) {
       return value
         .slice(0, 200)
-        .map((item) => safeCloneBridgeValue(item, depth + 1));
+        .map((item) => safeCloneBridgeValue(item, depth + 1, maxDepth));
     }
     if (typeof value === "object") {
       const out = {};
       for (const [key, val] of Object.entries(value).slice(0, 500)) {
         if (typeof val === "function") continue;
-        out[key] = safeCloneBridgeValue(val, depth + 1);
+        out[key] = safeCloneBridgeValue(val, depth + 1, maxDepth);
       }
       return out;
     }
@@ -1689,15 +1689,17 @@ jQuery(async () => {
     }
 
     const exportCapabilities = getBackupBridgeExportCapabilities();
+    const resourceFolderTree = extSettings.resourceFolderTree || {};
+    const regexFolderTree = extSettings.regexFolderTree || {};
+    const qrFolderTree =
+      resourceFolderTree.quickreply || extSettings.qrFolderTree || {};
     const resourceFolderDefinitions =
-      buildBackupBridgeResourceFolderDefinitionsMap(
-        extSettings.resourceFolderTree || {},
-      );
+      buildBackupBridgeResourceFolderDefinitionsMap(resourceFolderTree);
     const regexFolderDefinitions = buildBackupBridgeTreeFolderDefinitions(
-      extSettings.regexFolderTree || {},
+      regexFolderTree,
     );
     const qrFolderDefinitions = buildBackupBridgeTreeFolderDefinitions(
-      extSettings.qrFolderTree || {},
+      qrFolderTree,
     );
     const charFolderDefinitions = buildBackupBridgeCharFolderDefinitions(
       charFolders,
@@ -1730,34 +1732,34 @@ jQuery(async () => {
         bgGroups: getBridgeObjectKeyCount(extSettings.bgGroups),
         personaGroups: getBridgeObjectKeyCount(extSettings.personaGroups),
         resourceFolderTreePresets: getBridgeObjectKeyCount(
-          extSettings.resourceFolderTree?.presets,
+          resourceFolderTree.presets,
         ),
         resourceFolderTreeWorldinfo: getBridgeObjectKeyCount(
-          extSettings.resourceFolderTree?.worldinfo,
+          resourceFolderTree.worldinfo,
         ),
         resourceFolderTreeThemes: getBridgeObjectKeyCount(
-          extSettings.resourceFolderTree?.themes,
+          resourceFolderTree.themes,
         ),
         resourceFolderTreeBackgrounds: getBridgeObjectKeyCount(
-          extSettings.resourceFolderTree?.backgrounds,
+          resourceFolderTree.backgrounds,
         ),
         resourceFolderTreePersonas: getBridgeObjectKeyCount(
-          extSettings.resourceFolderTree?.personas,
+          resourceFolderTree.personas,
         ),
-        regexFolders: getBridgeObjectKeyCount(extSettings.regexFolderTree),
-        qrFolders: getBridgeObjectKeyCount(extSettings.qrFolderTree),
+        regexFolders: getBridgeObjectKeyCount(regexFolderTree),
+        qrFolders: getBridgeObjectKeyCount(qrFolderTree),
       },
       trees: {
-        chars: safeCloneBridgeValue(charFolders),
-        resources: safeCloneBridgeValue(extSettings.resourceFolderTree || {}),
-        regex: safeCloneBridgeValue(extSettings.regexFolderTree || {}),
-        qr: safeCloneBridgeValue(extSettings.qrFolderTree || {}),
+        chars: safeCloneBridgeValue(charFolders, 0, 8),
+        resources: safeCloneBridgeValue(resourceFolderTree, 0, 8),
+        regex: safeCloneBridgeValue(regexFolderTree, 0, 8),
+        qr: safeCloneBridgeValue(qrFolderTree, 0, 8),
       },
       folderDefinitions: {
-        chars: safeCloneBridgeValue(charFolderDefinitions),
-        resources: safeCloneBridgeValue(resourceFolderDefinitions),
-        regex: safeCloneBridgeValue(regexFolderDefinitions),
-        qr: safeCloneBridgeValue(qrFolderDefinitions),
+        chars: safeCloneBridgeValue(charFolderDefinitions, 0, 8),
+        resources: safeCloneBridgeValue(resourceFolderDefinitions, 0, 8),
+        regex: safeCloneBridgeValue(regexFolderDefinitions, 0, 8),
+        qr: safeCloneBridgeValue(qrFolderDefinitions, 0, 8),
       },
       mappings: {
         presetGroups: safeCloneBridgeValue(extSettings.presetGroups || {}),
