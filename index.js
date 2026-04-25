@@ -25322,20 +25322,29 @@ jQuery(async () => {
           const scriptIds =
             data.multiSelect && data.selectedIds
               ? data.selectedIds
-              : [data.scriptId];
+              : [data.scriptId || data.id].filter(Boolean);
+          if (!scriptIds.length) return [];
+          const regexGlobalGroups =
+            extension_settings[extensionName].regexGlobalGroups || {};
           if (target.targetKind === "ungrouped") {
             scriptIds.forEach((sid) => {
-              delete globalGroups[sid];
+              delete regexGlobalGroups[sid];
             });
           } else {
             scriptIds.forEach((sid) => {
-              globalGroups[sid] = target.folderId;
+              regexGlobalGroups[sid] = target.folderId;
             });
           }
+          extension_settings[extensionName].regexGlobalGroups = regexGlobalGroups;
+          if (data.multiSelect) clearMultiSelect();
           getContext().saveSettingsDebounced();
           return scriptIds;
         },
-        firstName: (data) => data.scriptName,
+        firstName: (data) =>
+          data.scriptName ||
+          globalScripts.find((sc) => sc.id === (data.scriptId || data.id))?.scriptName ||
+          data.scriptId ||
+          data.id,
       },
       folder: {
         groupType: "chars",
@@ -25508,11 +25517,13 @@ jQuery(async () => {
             currentResourceType,
             targetResType: dragData?.resType ?? fallbackMeta.groupType ?? null,
           });
+          const regexFolderTree =
+            extension_settings[extensionName].regexFolderTree || {};
           const targetName =
             fallbackMeta.groupType === "chars"
               ? getTagName(fallbackTarget.folderId)
               : fallbackMeta.groupType === "regex"
-                ? folderTree[fallbackTarget.folderId]?.displayName ||
+                ? regexFolderTree[fallbackTarget.folderId]?.displayName ||
                   fallbackTarget.folderId
                 : dragData?.type === "res-folder"
                   ? getResFolderDisplayName(
