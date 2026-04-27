@@ -535,29 +535,33 @@
 }
 .cfm-config-top-tabs {
   display: flex;
-  gap: 8px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 46, 0.92));
-  backdrop-filter: blur(6px);
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 8px;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  border-radius: 8px;
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  position: relative;
+  z-index: 0;
+  box-sizing: border-box;
 }
 .cfm-config-top-tab {
   flex: 1;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--SmartThemeBorderColor, #45475a);
-  background-color: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background-color: rgba(255, 255, 255, 0.03);
   color: var(--SmartThemeBodyColor, #cdd6f4);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
+  line-height: 1.15;
   transition: all 0.15s;
+  box-sizing: border-box;
 }
 .cfm-config-top-tab:hover {
   background-color: rgba(255, 255, 255, 0.1);
@@ -570,6 +574,7 @@
 }
 .cfm-config-tab-panel {
   min-width: 0;
+  padding-top: 2px;
 }
 
 /* 按钮模式切换 */
