@@ -538,7 +538,7 @@
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  opacity: 0.5;
+  opacity: 1;
   letter-spacing: 0.5px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
@@ -549,7 +549,9 @@
   position: sticky;
   top: -1px;
   z-index: 8;
-  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+  background-color: var(--SmartThemeBlurTintColor, #1e1e2e);
+  background-image: none;
+  box-shadow: 0 1px 0 var(--SmartThemeBorderColor, #45475a);
   box-sizing: border-box;
   width: 100%;
 }
