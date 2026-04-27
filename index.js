@@ -29599,11 +29599,13 @@ jQuery(async () => {
             ? msCheckHtml ||
               `<div class="cfm-edit-checkbox ${isRenameSel ? "cfm-edit-checked" : ""}"><i class="fa-${isRenameSel ? "solid" : "regular"} fa-square${isRenameSel ? "-check" : ""}"></i></div>`
             : msCheckHtml;
+        const isPresetDetailExpanded = cfmPresetDetailExpandedNames.has(p.name);
+        const presetDetailToggleHtml = `<div class="cfm-char-detail-toggle cfm-preset-detail-toggle" title="展开/折叠预设详情"><i class="fa-solid fa-caret-${isPresetDetailExpanded ? "down" : "right"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char cfm-search-result ${isActive ? "cfm-rv-item-active" : ""} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExpSel ? "cfm-export-row-selected" : ""} ${isNoteSel ? "cfm-edit-row-selected" : ""} ${isRenameSel ? "cfm-edit-row-selected" : ""} ${isMSel ? "cfm-multisel-row-selected" : ""}" data-res-id="${escapeHtml(p.name)}">
             ${finalCheckHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-file-lines" style="font-size:20px;color:#8b9dfc;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-preset-name-text">${escapeHtml(p.name)}</span>${noteHtml}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline">${presetDetailToggleHtml}<span class="cfm-preset-name-text">${escapeHtml(p.name)}</span></span>${noteHtml}${pFolderPath ? `<div class="cfm-row-folder-path">${escapeHtml(pFolderPath)}</div>` : ""}</div>
             ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
@@ -29633,10 +29635,52 @@ jQuery(async () => {
           e.stopPropagation();
           executePresetRename([p.name]);
         });
+        row
+          .find(".cfm-preset-detail-toggle")
+          .on("touchstart", (e) =>
+            recordTouchTapStart(e, "cfmPresetDetailToggleTap"),
+          )
+          .on("click touchend", (e) => {
+            if (
+              shouldIgnoreTouchTapAfterMove(e, {
+                prefix: "cfmPresetDetailToggleTap",
+              })
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            const name = p.name;
+            const detailSubList = row.nextAll(".cfm-preset-detail-sublist").first();
+            if (cfmPresetDetailExpandedNames.has(name)) {
+              cfmPresetDetailExpandedNames.delete(name);
+              detailSubList.slideUp(150, function () {
+                $(this).remove();
+              });
+              row
+                .find(".cfm-preset-detail-toggle i")
+                .removeClass("fa-caret-down")
+                .addClass("fa-caret-right");
+            } else {
+              cfmPresetDetailExpandedNames.add(name);
+              row
+                .find(".cfm-preset-detail-toggle i")
+                .removeClass("fa-caret-right")
+                .addClass("fa-caret-down");
+              renderPresetDetailSubList(row, p);
+              row
+                .nextAll(".cfm-preset-detail-sublist")
+                .first()
+                .hide()
+                .slideDown(150);
+            }
+          });
         row.on("click", (e) => {
           if (
             $(e.target).closest(
-              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn",
+              ".cfm-row-star, .cfm-row-note-btn, .cfm-row-rename-btn, .cfm-preset-detail-toggle",
             ).length
           )
             return;
@@ -29685,6 +29729,9 @@ jQuery(async () => {
           return getMultiDragData(singleData);
         });
         rightList.append(row);
+        if (cfmPresetDetailExpandedNames.has(p.name)) {
+          renderPresetDetailSubList(row, p);
+        }
       }
 
       // 删除工具栏（搜索预设）
@@ -39109,6 +39156,8 @@ jQuery(async () => {
         ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>`
         : "";
       const toggleHtml = `<div class="cfm-wi-toggle ${qrIsActive ? "cfm-wi-toggle-on" : ""}" title="${qrIsActive ? "点击取消激活" : "点击激活"}" data-qr-name="${escapeHtml(n)}"><i class="fa-solid fa-toggle-${qrIsActive ? "on" : "off"}"></i></div>`;
+      const isSetExpanded = qrItemExpandedSets.has(n);
+      const expandArrowHtml = `<div class="cfm-qr-expand-arrow ${isSetExpanded ? "cfm-qr-arrow-expanded" : ""}" title="${isSetExpanded ? "收起快速回复" : "展开快速回复"}" data-qr-set="${escapeHtml(n)}"><i class="fa-solid fa-caret-right"></i></div>`;
       const grpLabel = groups[n]
         ? `<span class="cfm-theme-note">${escapeHtml(getResFolderDisplayName("quickreply", groups[n]))}</span>`
         : "";
@@ -39117,10 +39166,19 @@ jQuery(async () => {
           ${msCheckHtml}
           ${toggleHtml}
           <div class="cfm-row-icon"><i class="fa-solid fa-reply-all" style="font-size:20px;color:#89b4fa;"></i></div>
-          <div class="cfm-row-name"><span class="cfm-qr-name-text">${escapeHtml(n)}</span>${grpLabel}</div>
+          <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-qr-name-inline">${expandArrowHtml}<span class="cfm-qr-name-text">${escapeHtml(n)}</span></span>${grpLabel}</div>
           <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
         </div>
       `);
+      bindTouchSafeTap(row.find(".cfm-qr-expand-arrow"), () => {
+        cfmQrLastFocusedSetName = n;
+        if (qrItemExpandedSets.has(n)) {
+          qrItemExpandedSets.delete(n);
+        } else {
+          qrItemExpandedSets.add(n);
+        }
+        executeQrSearch();
+      });
       row.find(".cfm-wi-toggle").on("click touchend", function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -39145,7 +39203,7 @@ jQuery(async () => {
       row.on("click", (e) => {
         if (
           $(e.target).closest(
-            ".cfm-row-star, .cfm-wi-toggle, .cfm-multisel-checkbox",
+            ".cfm-row-star, .cfm-wi-toggle, .cfm-multisel-checkbox, .cfm-qr-expand-arrow",
           ).length
         )
           return;
@@ -39168,6 +39226,41 @@ jQuery(async () => {
         renderQRView();
       });
       rightList.append(row);
+      if (isSetExpanded) {
+        const qrItems = getQrSetItems(n);
+        if (qrItems.length > 0) {
+          const subContainer = $('<div class="cfm-qr-sub-items"></div>');
+          for (let qrIdx = 0; qrIdx < qrItems.length; qrIdx++) {
+            const qr = qrItems[qrIdx];
+            const label = qr.label || qr.title || "(未命名)";
+            const isHidden = qr.isHidden || qr.hidden || false;
+            const subRow = $(`
+              <div class="cfm-qr-sub-item ${isHidden ? "cfm-qr-sub-hidden" : ""}" data-qr-set="${escapeHtml(n)}" data-qr-index="${qrIdx}">
+                <div class="cfm-qr-sub-icon"><i class="fa-solid fa-comment${isHidden ? "-slash" : ""}" style="color:${isHidden ? "#6c7086" : "#a6e3a1"};"></i></div>
+                <div class="cfm-qr-sub-info">
+                  <div class="cfm-qr-sub-label" title="${escapeHtml(label)}">${escapeHtml(label)}</div>
+                </div>
+                <div class="cfm-qr-sub-actions">
+                  <div class="cfm-qr-sub-edit-btn" title="查看/编辑内容"><i class="fa-solid fa-pen-to-square"></i></div>
+                </div>
+              </div>
+            `);
+            subRow
+              .find(".cfm-qr-sub-edit-btn")
+              .on("click touchend", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openQrItemEditor(n, qrIdx, qr);
+              });
+            subContainer.append(subRow);
+          }
+          rightList.append(subContainer);
+        } else {
+          rightList.append(
+            '<div class="cfm-qr-sub-items"><div class="cfm-qr-sub-empty">此集合中没有快速回复</div></div>',
+          );
+        }
+      }
     }
 
     if (cfmMultiSelectMode) {
