@@ -32568,6 +32568,8 @@ jQuery(async () => {
       { value: "themes", label: "美化", icon: "fa-palette" },
       { value: "backgrounds", label: "背景", icon: "fa-panorama" },
       { value: "personas", label: "User", icon: "fa-user-pen" },
+      { value: "regex", label: "正则", icon: "fa-code" },
+      { value: "quickreply", label: "QR", icon: "fa-reply" },
       { value: "last", label: "记住上次页面", icon: "fa-clock-rotate-left" },
     ];
 
