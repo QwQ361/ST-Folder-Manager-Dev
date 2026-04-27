@@ -3530,29 +3530,68 @@ jQuery(async () => {
     default: { label: "设置默认背景", icon: "fa-image" },
   };
 
+  function ensureTabMenuConfig() {
+    const layout = extension_settings[extensionName].customLayout;
+    if (!layout) return;
+    if (!layout.tabMenu || typeof layout.tabMenu !== "object") {
+      layout.tabMenu = { enabled: false };
+    }
+    if (layout.tabMenu.enabled === undefined) layout.tabMenu.enabled = false;
+    const orderedTabs = layout.tabs || [];
+    for (const tab of orderedTabs) {
+      if (tab.menu === undefined) tab.menu = false;
+    }
+  }
+
+  function getTabMenuConfig() {
+    ensureTabMenuConfig();
+    return extension_settings[extensionName].customLayout?.tabMenu || {
+      enabled: false,
+    };
+  }
+
   /** 获取当前生效的标签页列表（已排序、已过滤不可见） */
   function getVisibleTabs() {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabs) return CFM_TAB_META.map((t) => t.id);
+    ensureTabMenuConfig();
     // 确保新增标签页也被包含（防止新增标签页在已有布局中缺失）
     const existing = new Set(layout.tabs.map((t) => t.id));
     const allTabs = [...layout.tabs];
     for (const meta of CFM_TAB_META) {
-      if (!existing.has(meta.id)) allTabs.push({ id: meta.id, visible: true });
+      if (!existing.has(meta.id))
+        allTabs.push({ id: meta.id, visible: true, menu: false });
     }
-    return allTabs.filter((t) => t.visible !== false).map((t) => t.id);
+    const menuEnabled = getTabMenuConfig().enabled;
+    return allTabs
+      .filter((t) => t.visible !== false && !(menuEnabled && t.menu === true))
+      .map((t) => t.id);
+  }
+
+  function getMenuTabs() {
+    const layout = extension_settings[extensionName].customLayout;
+    if (!layout || !layout.tabs) return [];
+    ensureTabMenuConfig();
+    if (!getTabMenuConfig().enabled) return [];
+    return getOrderedTabs()
+      .filter((t) => t.visible !== false && t.menu === true)
+      .map((t) => t.id);
   }
 
   /** 获取当前生效的标签页列表（已排序，含不可见） */
   function getOrderedTabs() {
     const layout = extension_settings[extensionName].customLayout;
     if (!layout || !layout.tabs)
-      return CFM_TAB_META.map((t) => ({ id: t.id, visible: true }));
+      return CFM_TAB_META.map((t) => ({ id: t.id, visible: true, menu: false }));
+    ensureTabMenuConfig();
     // 确保所有标签页都在列表中（防止新增标签页丢失）
     const existing = new Set(layout.tabs.map((t) => t.id));
     const result = [...layout.tabs];
     for (const meta of CFM_TAB_META) {
-      if (!existing.has(meta.id)) result.push({ id: meta.id, visible: true });
+      if (!existing.has(meta.id)) result.push({ id: meta.id, visible: true, menu: false });
+    }
+    for (const tab of result) {
+      if (tab.menu === undefined) tab.menu = false;
     }
     return result;
   }
@@ -26015,6 +26054,12 @@ jQuery(async () => {
     ) {
       overlay.addClass("cfm-topbar-avoid");
     }
+    const visibleTabs = getVisibleTabs();
+    const menuTabs = getMenuTabs();
+    const activeVisibleTab = visibleTabs.includes(initialTab)
+      ? initialTab
+      : visibleTabs[0] || menuTabs[0] || "chars";
+    const activeMenuTab = menuTabs.includes(initialTab);
     const popup = $(`
             <div id="cfm-popup">
                 <div class="cfm-header">
@@ -26028,15 +26073,23 @@ jQuery(async () => {
                     </div>
                 </div>
                 <div class="cfm-resource-tabs">
-                    ${getVisibleTabs()
+                    ${visibleTabs
                       .map((tabId) => {
                         const meta = CFM_TAB_META.find((m) => m.id === tabId);
                         if (!meta) return "";
                         const isActive =
-                          tabId === initialTab ? "cfm-tab-active" : "";
+                          tabId === activeVisibleTab ? "cfm-tab-active" : "";
                         return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
                       })
                       .join("")}
+                    ${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${activeMenuTab ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
+                      .map((tabId) => {
+                        const meta = CFM_TAB_META.find((m) => m.id === tabId);
+                        if (!meta) return "";
+                        const isActive = tabId === initialTab ? "cfm-tab-menu-item-active" : "";
+                        return `<button type="button" class="cfm-tab-menu-item ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i><span>${meta.label}</span></button>`;
+                      })
+                      .join("")}</div></div>` : ""}
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
                     <div class="cfm-search-input-wrapper">
@@ -26686,6 +26739,12 @@ jQuery(async () => {
       popup
         .find(`.cfm-tab[data-tab="${initialTab}"]`)
         .addClass("cfm-tab-active");
+      if (menuTabs.includes(initialTab)) {
+        popup.find(".cfm-tab-menu-btn").addClass("cfm-tab-active");
+        popup
+          .find(`.cfm-tab-menu-item[data-tab="${initialTab}"]`)
+          .addClass("cfm-tab-menu-item-active");
+      }
       // 切换视图
       popup.find("#cfm-chars-view").hide();
       popup.find("#cfm-presets-view").toggle(initialTab === "presets");
@@ -26722,17 +26781,29 @@ jQuery(async () => {
     // 应用工具栏按钮可见性（根据自定义布局配置）
     applyAllToolbarVisibility();
 
-    // 资源类型标签切换
-    popup.find(".cfm-tab").on("click touchend", function (e) {
-      e.preventDefault();
-      const tab = $(this).data("tab");
+    function switchResourceTab(tab, triggerEl = null) {
       if (tab === currentResourceType) {
         handleCurrentTabRelocate(tab);
         return;
       }
       currentResourceType = tab;
       popup.find(".cfm-tab").removeClass("cfm-tab-active");
-      $(this).addClass("cfm-tab-active");
+      popup.find(".cfm-tab-menu-item").removeClass("cfm-tab-menu-item-active");
+      popup.find(".cfm-tab-menu-btn").removeClass("cfm-tab-active");
+      if (triggerEl?.hasClass("cfm-tab-menu-item")) {
+        popup.find(".cfm-tab-menu-btn").addClass("cfm-tab-active");
+        triggerEl.addClass("cfm-tab-menu-item-active");
+      } else if (triggerEl) {
+        triggerEl.addClass("cfm-tab-active");
+      } else {
+        popup.find(`.cfm-tab[data-tab="${tab}"]`).addClass("cfm-tab-active");
+        if (popup.find(`.cfm-tab-menu-item[data-tab="${tab}"]`).length) {
+          popup.find(".cfm-tab-menu-btn").addClass("cfm-tab-active");
+          popup
+            .find(`.cfm-tab-menu-item[data-tab="${tab}"]`)
+            .addClass("cfm-tab-menu-item-active");
+        }
+      }
       // 切换标签时清空多选状态并关闭多选模式
       cfmMultiSelectMode = false;
       clearMultiSelect();
@@ -26780,6 +26851,39 @@ jQuery(async () => {
       popup.find("#cfm-persona-search-bar").toggle(tab === "personas");
       popup.find("#cfm-regex-search-bar").toggle(tab === "regex");
       popup.find("#cfm-qr-search-bar").toggle(tab === "quickreply");
+      popup.find(".cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
+      popup.find(".cfm-tab-menu-btn").attr("aria-expanded", "false");
+    }
+
+    // 资源类型标签切换
+    popup.find(".cfm-tab[data-tab]").on("click touchend", function (e) {
+      e.preventDefault();
+      switchResourceTab($(this).data("tab"), $(this));
+    });
+
+    popup.find(".cfm-tab-menu-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = $(this).closest(".cfm-tab-menu-wrap");
+      const willOpen = !wrap.hasClass("cfm-tab-menu-open");
+      popup.find(".cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
+      popup.find(".cfm-tab-menu-btn").attr("aria-expanded", "false");
+      if (willOpen) {
+        wrap.addClass("cfm-tab-menu-open");
+        $(this).attr("aria-expanded", "true");
+      }
+    });
+
+    popup.find(".cfm-tab-menu-item").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      switchResourceTab($(this).data("tab"), $(this));
+    });
+
+    popup.on("click touchend", function (e) {
+      if ($(e.target).closest(".cfm-tab-menu-wrap").length) return;
+      popup.find(".cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
+      popup.find(".cfm-tab-menu-btn").attr("aria-expanded", "false");
       if (tab === "presets") renderPresetsView();
       else if (tab === "worldinfo") renderWorldInfoView();
       else if (tab === "themes") renderThemesView();
@@ -32685,12 +32789,18 @@ jQuery(async () => {
     const orderedTabs = getOrderedTabs();
 
     // --- 标签页排序/可见性 ---
+    ensureTabMenuConfig();
+    const tabMenuCfg = getTabMenuConfig();
     let tabItemsHtml = orderedTabs
       .map((t) => {
         const meta = CFM_TAB_META.find((m) => m.id === t.id);
         if (!meta) return "";
         const checked = t.visible !== false ? "checked" : "";
+        const menuChecked = t.menu === true ? "cfm-layout-menu-check-checked" : "";
         return `<div class="cfm-layout-item" data-id="${t.id}">
+          <button type="button" class="cfm-layout-menu-check ${menuChecked} ${tabMenuCfg.enabled ? "" : "cfm-layout-menu-check-hidden"}" data-tab-menu-toggle="${t.id}" title="收纳到标签页菜单" aria-pressed="${t.menu === true ? "true" : "false"}">
+            <i class="fa-solid fa-check"></i>
+          </button>
           <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
           <span class="cfm-layout-label">${meta.label}</span>
@@ -32707,6 +32817,13 @@ jQuery(async () => {
         <div class="cfm-layout-header-row"><label>自定义布局</label><button class="cfm-layout-reset-btn" title="恢复默认布局"><i class="fa-solid fa-rotate-left"></i> 恢复默认</button></div>
         <div class="cfm-layout-hint">拖拽或使用箭头调整标签页顺序，开关控制显示/隐藏</div>
         <div class="cfm-layout-tabs-title">标签页</div>
+        <div class="cfm-layout-menu-switch">
+          <label class="cfm-layout-menu-switch-label">
+            <input type="checkbox" id="cfm-layout-tab-menu-enabled">
+            <span>标签页收纳</span>
+          </label>
+          <span class="cfm-layout-menu-switch-hint">开启后，勾选前方方块的标签页会进入顶部标签菜单。</span>
+        </div>
         <div class="cfm-layout-tabs-list">
           ${tabItemsHtml}
         </div>
@@ -32742,9 +32859,14 @@ jQuery(async () => {
       section.find(".cfm-layout-tabs-list .cfm-layout-item").each(function () {
         const id = $(this).data("id");
         const visible = $(this).find("input[type=checkbox]").prop("checked");
-        newOrder.push({ id, visible });
+        const menu = $(this)
+          .find(".cfm-layout-menu-check")
+          .hasClass("cfm-layout-menu-check-checked");
+        newOrder.push({ id, visible, menu });
       });
       layout.tabs = newOrder;
+      layout.tabMenu = layout.tabMenu || { enabled: false };
+      layout.tabMenu.enabled = !!section.find("#cfm-layout-tab-menu-enabled").prop("checked");
       getContext().saveSettingsDebounced();
       updateArrowStyles();
     }
@@ -32753,7 +32875,6 @@ jQuery(async () => {
     section
       .find(".cfm-layout-tabs-list")
       .on("change", "input[type=checkbox]", function () {
-        // 至少保留一个可见标签页
         const allChecks = section.find(
           ".cfm-layout-tabs-list input[type=checkbox]",
         );
@@ -32764,7 +32885,27 @@ jQuery(async () => {
           return;
         }
         saveTabOrder();
+      })
+      .on("click touchend", ".cfm-layout-menu-check", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if ($(this).hasClass("cfm-layout-menu-check-hidden")) return;
+        $(this).toggleClass("cfm-layout-menu-check-checked");
+        $(this).attr(
+          "aria-pressed",
+          $(this).hasClass("cfm-layout-menu-check-checked") ? "true" : "false",
+        );
+        saveTabOrder();
       });
+    section.find("#cfm-layout-tab-menu-enabled").on("change", function () {
+      layout.tabMenu = layout.tabMenu || { enabled: false };
+      layout.tabMenu.enabled = !!$(this).prop("checked");
+      getContext().saveSettingsDebounced();
+      renderConfigBody();
+      cfmToastr.success(
+        $(this).prop("checked") ? "已开启标签页收纳" : "已关闭标签页收纳",
+      );
+    });
 
     // 标签页箭头移动
     section
