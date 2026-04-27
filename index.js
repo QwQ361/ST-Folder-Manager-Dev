@@ -13363,8 +13363,17 @@ jQuery(async () => {
       const currentCharName = getCurrentCharName();
       const currentPresetName = getCurrentPresetName();
 
-      // 计算需要关闭的分组（之前应用但现在不需要的）
-      const toDeactivate = prevApplied.filter((i) => !shouldApply.includes(i));
+      // 计算需要关闭的分组（之前由自动绑定应用、但现在已不匹配的分组）
+      const toDeactivate = prevApplied.filter((i) => {
+        if (shouldApply.includes(i)) return false;
+        const p = presets[i];
+        if (!p || p.scope === "global") return false;
+        const hasBindings =
+          (p.bindChars && p.bindChars.length > 0) ||
+          (p.bindPresets && p.bindPresets.length > 0) ||
+          (p.bindChats && p.bindChats.length > 0);
+        return hasBindings;
+      });
       // 计算需要新激活的分组
       const toActivate = shouldApply.filter((i) => !prevApplied.includes(i));
       // 计算保持应用的分组（之前应用且现在仍需应用）
@@ -41027,8 +41036,15 @@ jQuery(async () => {
 
     if (isActive) {
       presets.forEach((preset, idx) => {
+        const hasBindings =
+          preset &&
+          ((preset.bindChars && preset.bindChars.length > 0) ||
+            (preset.bindPresets && preset.bindPresets.length > 0) ||
+            (preset.bindChats && preset.bindChats.length > 0));
         if (
           preset &&
+          preset.scope !== "global" &&
+          hasBindings &&
           preset.books.includes(bookName) &&
           preset.books.every((b) => activeSet.has(b)) &&
           !nextApplied.includes(idx)
