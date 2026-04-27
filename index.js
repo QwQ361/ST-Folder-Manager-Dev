@@ -45993,7 +45993,7 @@ jQuery(async () => {
         '<div class="cfm-edit-popup-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.12);z-index:100000;display:flex;align-items:center;justify-content:center;"></div>',
       );
       const dialog = $(`
-        <div class="cfm-edit-popup" style="width:min(560px,calc(100vw - 32px));max-width:560px;max-height:calc(100vh - 32px);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;z-index:100001;display:flex;flex-direction:column;overflow:hidden;">
+        <div class="cfm-edit-popup cfm-regex-transfer-dialog-popup" style="width:min(560px,calc(100vw - 32px));max-width:560px;max-height:calc(100vh - 32px);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;z-index:100001;display:flex;flex-direction:column;overflow:hidden;">
           <div class="cfm-edit-popup-header">
             <span><i class="fa-solid fa-right-left"></i> 正则互通</span>
           </div>

@@ -2063,6 +2063,36 @@
     opacity: 0.5;
     pointer-events: none;
   }
+
+  .cfm-regex-transfer-dialog-popup {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px
+    ) !important;
+    top: 8px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    margin: 0 !important;
+  }
+
+  .cfm-regex-transfer-dialog-popup .cfm-edit-popup-body {
+    padding-bottom: 8px;
+  }
+
+  .cfm-regex-transfer-dialog-popup .cfm-regex-transfer-preset-tree {
+    max-height: min(38vh, 320px) !important;
+  }
+
+  .cfm-regex-transfer-dialog-popup .cfm-edit-popup-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-top: 0;
+    padding: 10px 0 max(env(safe-area-inset-bottom, 0px), 12px);
+    background: var(--SmartThemeBlurTintColor, #1e1e2e);
+    border-top: 1px solid var(--SmartThemeBorderColor, #45475a);
+  }
 }
 
 /* ========== 移动端下方内容区全屏模式 ========== */
@@ -3788,6 +3818,10 @@ textarea.cfm-edit-input {
   gap: 6px;
   flex: 1 1 0;
   min-width: 0;
+}
+
+.cfm-regex-transfer-dialog-popup {
+  max-height: min(calc(100vh - 32px), calc(100dvh - 32px));
 }
 .cfm-edit-popup-actions .cfm-btn {
   padding: 6px 16px;
