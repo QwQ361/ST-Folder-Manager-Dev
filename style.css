@@ -528,6 +528,49 @@
   margin-bottom: 6px;
   font-weight: 600;
 }
+.cfm-config-tab-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cfm-config-top-tabs {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--SmartThemeBorderColor, #45475a);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 46, 0.92));
+  backdrop-filter: blur(6px);
+}
+.cfm-config-top-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--SmartThemeBorderColor, #45475a);
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.cfm-config-top-tab:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.cfm-config-top-tab.cfm-config-top-tab-active {
+  background-color: rgba(137, 180, 250, 0.2);
+  border-color: #89b4fa;
+  color: #89b4fa;
+  font-weight: 600;
+}
+.cfm-config-tab-panel {
+  min-width: 0;
+}
 
 /* 按钮模式切换 */
 .cfm-mode-section {

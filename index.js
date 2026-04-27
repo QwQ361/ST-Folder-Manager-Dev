@@ -32733,6 +32733,50 @@ jQuery(async () => {
     body.append(section);
   }
 
+  function createConfigTabShell(defaultTab = "settings") {
+    const shell = $(`
+      <div class="cfm-config-tab-shell">
+        <div class="cfm-config-top-tabs">
+          <button class="cfm-config-top-tab" data-tab="settings"><i class="fa-solid fa-sliders"></i> 设置</button>
+          <button class="cfm-config-top-tab" data-tab="layout"><i class="fa-solid fa-table-cells-large"></i> 布局</button>
+          <button class="cfm-config-top-tab" data-tab="create"><i class="fa-solid fa-folder-plus"></i> 新建文件夹</button>
+        </div>
+        <div class="cfm-config-tab-panel" data-panel="settings"></div>
+        <div class="cfm-config-tab-panel" data-panel="layout"></div>
+        <div class="cfm-config-tab-panel" data-panel="create"></div>
+      </div>
+    `);
+
+    const switchTab = (tab) => {
+      const currentTab = ["settings", "layout", "create"].includes(tab)
+        ? tab
+        : "settings";
+      shell
+        .find(".cfm-config-top-tab")
+        .removeClass("cfm-mode-active cfm-config-top-tab-active");
+      shell
+        .find(`.cfm-config-top-tab[data-tab="${currentTab}"]`)
+        .addClass("cfm-mode-active cfm-config-top-tab-active");
+      shell.find(".cfm-config-tab-panel").hide();
+      shell.find(`.cfm-config-tab-panel[data-panel="${currentTab}"]`).show();
+    };
+
+    shell.find(".cfm-config-top-tab").on("click touchend", function (e) {
+      e.preventDefault();
+      switchTab($(this).data("tab"));
+    });
+
+    switchTab(defaultTab);
+
+    return {
+      shell,
+      settingsPanel: shell.find('.cfm-config-tab-panel[data-panel="settings"]'),
+      layoutPanel: shell.find('.cfm-config-tab-panel[data-panel="layout"]'),
+      createPanel: shell.find('.cfm-config-tab-panel[data-panel="create"]'),
+      switchTab,
+    };
+  }
+
   function renderConfigBody() {
     const body = $("#cfm-config-body");
     body.empty();
@@ -32755,6 +32799,11 @@ jQuery(async () => {
     }
 
     // ===== 以下为角色卡（chars）配置 =====
+    const tabShell = createConfigTabShell("settings");
+    const settingsBody = tabShell.settingsPanel;
+    const layoutBody = tabShell.layoutPanel;
+    const createBody = tabShell.createPanel;
+    body.append(tabShell.shell);
 
     // 0. 按钮位置设置
     const currentMode = getButtonMode();
@@ -32782,22 +32831,22 @@ jQuery(async () => {
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
-    body.append(modeSection);
+    settingsBody.append(modeSection);
 
     // 0.5 自定义顶栏图标（共享函数）
-    renderTopbarIconConfigSection(body);
+    renderTopbarIconConfigSection(settingsBody);
     // 0.6 默认打开页面（共享函数）
-    renderDefaultPageConfigSection(body);
+    renderDefaultPageConfigSection(settingsBody);
     // 0.62 默认搜索范围
-    renderDefaultSearchScopeSection(body);
+    renderDefaultSearchScopeSection(settingsBody);
     // 0.63 条目缝合完成后的跳转策略
-    renderEntryTransferPostActionSection(body);
+    renderEntryTransferPostActionSection(settingsBody);
     // 0.65 移动端顶部栏避让开关
-    renderMobileTopbarAvoidSection(body);
+    renderMobileTopbarAvoidSection(settingsBody);
     // 0.66 界面语言切换
-    renderLanguageSwitchSection(body);
+    renderLanguageSwitchSection(settingsBody);
     // 0.7 自定义布局（共享函数）
-    renderCustomLayoutSection(body);
+    renderCustomLayoutSection(layoutBody);
 
     // 1. 标签导入区域（一键导入 + 单个添加）
     const existingFolderIds = getFolderTagIds();
@@ -32860,7 +32909,7 @@ jQuery(async () => {
       cfmToastr.success(`已将「${getTagName(tagId)}」添加为${parentHint}`);
       renderConfigBody();
     });
-    body.append(addSection);
+    createBody.append(addSection);
 
     const selectedHintText =
       configSelectedFolderIds.size > 0
@@ -32913,7 +32962,7 @@ jQuery(async () => {
         createSection.find("#cfm-create-tag-btn").trigger("click");
       }
     });
-    body.append(createSection);
+    createBody.append(createSection);
 
     // 1.8 批量创建 & 批量删除
     const batchSection = $(`
@@ -32938,7 +32987,7 @@ jQuery(async () => {
       cfmDeleteLastClickedId = null;
       renderConfigBody();
     });
-    body.append(batchSection);
+    createBody.append(batchSection);
 
     // 删除模式下显示操作栏（紧跟在批量操作区域下方）
     if (cfmDeleteMode) {
@@ -33020,7 +33069,7 @@ jQuery(async () => {
         e.preventDefault();
         executeMultiDelete();
       });
-      body.append(deleteBar);
+      createBody.append(deleteBar);
     }
 
     // 2. 当前文件夹树形展示（支持拖拽 + 点击选中）
@@ -33034,7 +33083,7 @@ jQuery(async () => {
                 <div class="cfm-tree" id="cfm-folder-tree"></div>
             </div>
         `);
-    body.append(treeSection);
+    createBody.append(treeSection);
 
     treeSection.find("#cfm-config-expand-all").on("click touchend", (e) => {
       e.preventDefault();
@@ -33104,6 +33153,12 @@ jQuery(async () => {
                 ? qrConfigExpandedNodes
                 : worldInfoConfigExpandedNodes;
 
+    const tabShell = createConfigTabShell("settings");
+    const settingsBody = tabShell.settingsPanel;
+    const layoutBody = tabShell.layoutPanel;
+    const createBody = tabShell.createPanel;
+    body.append(tabShell.shell);
+
     // 0. 按钮位置设置（共享）
     const currentMode = getButtonMode();
     const modeSection = $(`
@@ -33130,22 +33185,22 @@ jQuery(async () => {
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
-    body.append(modeSection);
+    settingsBody.append(modeSection);
 
     // 0.5 自定义顶栏图标（共享函数）
-    renderTopbarIconConfigSection(body);
+    renderTopbarIconConfigSection(settingsBody);
     // 0.6 默认打开页面（共享函数）
-    renderDefaultPageConfigSection(body);
+    renderDefaultPageConfigSection(settingsBody);
     // 0.62 默认搜索范围
-    renderDefaultSearchScopeSection(body);
+    renderDefaultSearchScopeSection(settingsBody);
     // 0.63 条目缝合完成后的跳转策略
-    renderEntryTransferPostActionSection(body);
+    renderEntryTransferPostActionSection(settingsBody);
     // 0.65 移动端顶部栏避让开关
-    renderMobileTopbarAvoidSection(body);
+    renderMobileTopbarAvoidSection(settingsBody);
     // 0.66 界面语言切换
-    renderLanguageSwitchSection(body);
+    renderLanguageSwitchSection(settingsBody);
     // 0.7 自定义布局（共享函数）
-    renderCustomLayoutSection(body);
+    renderCustomLayoutSection(layoutBody);
 
     // 1. 创建新文件夹（支持空格分隔批量创建）
     const resSelectedHintText =
@@ -33202,7 +33257,7 @@ jQuery(async () => {
         createSection.find("#cfm-res-create-btn").trigger("click");
       }
     });
-    body.append(createSection);
+    createBody.append(createSection);
 
     // 2. 批量创建 & 批量删除
     const batchSection = $(`
@@ -33228,7 +33283,7 @@ jQuery(async () => {
       resConfigDeleteRangeMode = false;
       renderResourceConfigBody(body.empty(), type);
     });
-    body.append(batchSection);
+    createBody.append(batchSection);
 
     // 删除模式下显示操作栏
     if (resConfigDeleteMode) {
@@ -33320,7 +33375,7 @@ jQuery(async () => {
         resConfigDeleteRangeMode = false;
         renderResourceConfigBody(body.empty(), type);
       });
-      body.append(deleteBar);
+      createBody.append(deleteBar);
     }
 
     // 3. 当前文件夹树形结构
@@ -33334,7 +33389,7 @@ jQuery(async () => {
         <div class="cfm-tree" id="cfm-res-folder-tree"></div>
       </div>
     `);
-    body.append(treeSection);
+    createBody.append(treeSection);
 
     treeSection.find("#cfm-res-config-expand-all").on("click touchend", (e) => {
       e.preventDefault();
@@ -33586,6 +33641,12 @@ jQuery(async () => {
       return r;
     }
 
+    const tabShell = createConfigTabShell("settings");
+    const settingsBody = tabShell.settingsPanel;
+    const layoutBody = tabShell.layoutPanel;
+    const createBody = tabShell.createPanel;
+    body.append(tabShell.shell);
+
     // 0. 共享设置
     const currentMode = getButtonMode();
     const modeSection = $(
@@ -33606,14 +33667,14 @@ jQuery(async () => {
       modeSection.find(".cfm-mode-btn").removeClass("cfm-mode-active");
       $(this).addClass("cfm-mode-active");
     });
-    body.append(modeSection);
-    renderTopbarIconConfigSection(body);
-    renderDefaultPageConfigSection(body);
-    renderDefaultSearchScopeSection(body);
-    renderEntryTransferPostActionSection(body);
-    renderMobileTopbarAvoidSection(body);
-    renderLanguageSwitchSection(body);
-    renderCustomLayoutSection(body);
+    settingsBody.append(modeSection);
+    renderTopbarIconConfigSection(settingsBody);
+    renderDefaultPageConfigSection(settingsBody);
+    renderDefaultSearchScopeSection(settingsBody);
+    renderEntryTransferPostActionSection(settingsBody);
+    renderMobileTopbarAvoidSection(settingsBody);
+    renderLanguageSwitchSection(settingsBody);
+    renderCustomLayoutSection(layoutBody);
 
     // 1. 创建新文件夹
     const resSelectedHintText =
@@ -33663,7 +33724,7 @@ jQuery(async () => {
         createSection.find("#cfm-res-create-btn").trigger("click");
       }
     });
-    body.append(createSection);
+    createBody.append(createSection);
 
     // 2. 批量创建 & 删除
     const batchSection = $(
@@ -33686,7 +33747,7 @@ jQuery(async () => {
         resConfigDeleteRangeMode = false;
         renderRegexConfigBody(body.empty());
       });
-    body.append(batchSection);
+    createBody.append(batchSection);
 
     // 删除模式操作栏
     if (resConfigDeleteMode) {
@@ -33748,14 +33809,14 @@ jQuery(async () => {
         cfmToastr.success(`已删除 ${toDelete.length} 个正则文件夹`);
         renderRegexConfigBody(body.empty());
       });
-      body.append(deleteBar);
+      createBody.append(deleteBar);
     }
 
     // 3. 当前文件夹树形结构
     const treeSection = $(
       `<div class="cfm-config-section"><label>当前文件夹结构 <span style="font-size:11px;opacity:0.5;">(${allFolderIds.length} 个)</span> <span style="font-size:11px;opacity:0.5;color:#57f287;">点击选中为目标父级</span></label><div class="cfm-config-tree-actions"><button id="cfm-regex-config-expand-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-down"></i> 展开</button><button id="cfm-regex-config-collapse-all" class="cfm-btn cfm-btn-sm"><i class="fa-solid fa-angles-up"></i> 收起</button></div><div class="cfm-tree" id="cfm-regex-folder-tree"></div></div>`,
     );
-    body.append(treeSection);
+    createBody.append(treeSection);
     treeSection
       .find("#cfm-regex-config-expand-all")
       .on("click touchend", (e) => {
