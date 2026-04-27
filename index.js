@@ -2191,6 +2191,91 @@ jQuery(async () => {
     const tree = getResFolderTree(type);
     return Object.keys(tree).filter((id) => tree[id].parentId === parentId);
   }
+  function getRegexFolderTree() {
+    ensureResourceSettings();
+    return extension_settings[extensionName].regexFolderTree;
+  }
+  function sortRegexFolderIds(folderIds) {
+    const tree = getRegexFolderTree();
+    return [...folderIds].sort((a, b) => {
+      const oa = tree[a]?.sortOrder ?? 0;
+      const ob = tree[b]?.sortOrder ?? 0;
+      if (oa !== ob) return oa - ob;
+      return (tree[a]?.displayName || a).localeCompare(
+        tree[b]?.displayName || b,
+        "zh-CN",
+      );
+    });
+  }
+  function wouldCreateRegexCycle(folderId, parentId) {
+    const tree = getRegexFolderTree();
+    let current = parentId;
+    const visited = new Set();
+    while (current) {
+      if (current === folderId) return true;
+      if (visited.has(current)) return false;
+      visited.add(current);
+      current = tree[current]?.parentId || null;
+    }
+    return false;
+  }
+  function reorderRegexFolder(folderId, newParentId, insertBeforeId) {
+    const tree = getRegexFolderTree();
+    if (!tree[folderId]) return false;
+    const targetParentId = newParentId || null;
+    tree[folderId].parentId = targetParentId;
+    const siblings = sortRegexFolderIds(
+      Object.keys(tree).filter(
+        (id) =>
+          id !== folderId && (tree[id].parentId || null) === targetParentId,
+      ),
+    );
+    let insertIdx = siblings.length;
+    if (insertBeforeId) {
+      const idx = siblings.indexOf(insertBeforeId);
+      if (idx >= 0) insertIdx = idx;
+    }
+    siblings.splice(insertIdx, 0, folderId);
+    siblings.forEach((id, i) => {
+      tree[id].sortOrder = i + 1;
+    });
+    saveResTree("regex");
+    return true;
+  }
+  function moveRegexFolder(data, target) {
+    const folderId = data?.id;
+    if (!folderId) return [];
+    const tree = getRegexFolderTree();
+    if (!tree[folderId]) return [];
+    if (target?.targetKind === "ungrouped") {
+      reorderRegexFolder(folderId, null, null);
+      return [folderId];
+    }
+    if (folderId === target?.folderId) return [];
+    if (target?.zone === "into") {
+      if (wouldCreateRegexCycle(folderId, target.folderId)) return [];
+      reorderRegexFolder(folderId, target.folderId, null);
+      return [folderId];
+    }
+    const targetParentId = tree[target?.folderId]?.parentId || null;
+    if (wouldCreateRegexCycle(folderId, targetParentId)) return [];
+    if (target?.zone === "before") {
+      reorderRegexFolder(folderId, targetParentId, target.folderId);
+    } else {
+      const siblings = sortRegexFolderIds(
+        Object.keys(tree).filter(
+          (id) => (tree[id].parentId || null) === targetParentId,
+        ),
+      ).filter((id) => id !== folderId);
+      const curIdx = siblings.indexOf(target.folderId);
+      const nextSiblingId =
+        curIdx >= 0 && curIdx < siblings.length - 1
+          ? siblings[curIdx + 1]
+          : null;
+      reorderRegexFolder(folderId, targetParentId, nextSiblingId);
+    }
+    return [folderId];
+  }
   function sortResFolders(type, folderIds) {
     const tree = getResFolderTree(type);
     return [...folderIds].sort((a, b) => {
@@ -25389,7 +25474,7 @@ jQuery(async () => {
         groupType: "regex",
         label: "文件夹",
         render: () => renderRegexView(),
-        moveItems: () => [],
+        moveItems: (data, target) => moveRegexFolder(data, target),
         firstName: (data) => data.name,
       },
       "res-folder": {
@@ -25535,7 +25620,9 @@ jQuery(async () => {
                       fallbackTarget.folderId,
                     );
           const isFolderReorder =
-            (dragData?.type === "folder" || dragData?.type === "res-folder") &&
+            (dragData?.type === "folder" ||
+              dragData?.type === "res-folder" ||
+              dragData?.type === "regex-folder") &&
             fallbackTarget?.zone !== "into";
           successMessage = isFolderReorder
             ? itemIds.length > 1
@@ -48006,13 +48093,20 @@ jQuery(async () => {
         selectedRegexNode = folderId;
         renderRegexView();
       });
-      // 树节点作为拖放目标（接收脚本）
+      // 树节点作为拖放目标（接收脚本/文件夹）
       node.on("dragover", (e) => {
         e.preventDefault();
         node.addClass("cfm-drop-target");
         e.originalEvent.dataTransfer.dropEffect = "move";
         const data = _pcDragData || {};
         if (data.type === "regex-script") {
+          _pcLastResourceFolderHoverTarget = {
+            groupType: "regex",
+            targetKind: "folder",
+            folderId,
+            zone: "into",
+          };
+        } else if (data.type === "regex-folder" && data.id !== folderId) {
           _pcLastResourceFolderHoverTarget = {
             groupType: "regex",
             targetKind: "folder",
@@ -48030,6 +48124,7 @@ jQuery(async () => {
         node.removeClass("cfm-drop-target");
         const data = pcGetDropData(e);
         if (!data) return;
+        const fname = folderTree[folderId]?.displayName || folderId;
         if (data.type === "regex-script") {
           const scriptIds =
             data.multiSelect && data.selectedIds
@@ -48040,12 +48135,21 @@ jQuery(async () => {
           });
           if (data.multiSelect) clearMultiSelect();
           getContext().saveSettingsDebounced();
-          const fname = folderTree[folderId]?.displayName || folderId;
           cfmToastr.success(
             scriptIds.length > 1
               ? `已将 ${scriptIds.length} 个脚本移入「${fname}」`
               : `已将「${data.scriptName}」移入「${fname}」`,
           );
+          renderRegexView();
+        } else if (data.type === "regex-folder") {
+          const moved = moveRegexFolder(data, {
+            groupType: "regex",
+            targetKind: "folder",
+            folderId,
+            zone: "into",
+          });
+          if (!moved.length) return;
+          cfmToastr.success(`已将「${data.name || data.id}」移入「${fname}」`);
           renderRegexView();
         }
       });
@@ -48294,6 +48398,18 @@ jQuery(async () => {
               scriptIds.length > 1
                 ? `已将 ${scriptIds.length} 个脚本移入「${childDisplayName}」`
                 : `已将「${data.scriptName}」移入「${childDisplayName}」`,
+            );
+            renderRegexView();
+          } else if (data.type === "regex-folder") {
+            const moved = moveRegexFolder(data, {
+              groupType: "regex",
+              targetKind: "folder",
+              folderId: childId,
+              zone: "into",
+            });
+            if (!moved.length) return;
+            cfmToastr.success(
+              `已将「${data.name || data.id}」移入「${childDisplayName}」`,
             );
             renderRegexView();
           }
