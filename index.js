@@ -32866,7 +32866,7 @@ jQuery(async () => {
         <div class="cfm-layout-tabs-title">标签页</div>
         <div class="cfm-layout-menu-switch">
           <label class="cfm-layout-menu-switch-label">
-            <input type="checkbox" id="cfm-layout-tab-menu-enabled">
+            <input type="checkbox" id="cfm-layout-tab-menu-enabled" ${tabMenuCfg.enabled ? "checked" : ""}>
             <span>标签页收纳</span>
           </label>
           <span class="cfm-layout-menu-switch-hint">开启后，勾选前方方块的标签页会进入顶部标签菜单。</span>
