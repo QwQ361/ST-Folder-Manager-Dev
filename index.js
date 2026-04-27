@@ -32183,16 +32183,17 @@ jQuery(async () => {
     if ($("#cfm-overlay").length > 0) {
       // --- 刷新标签栏（自定义布局生效） ---
       const visibleTabs = getVisibleTabs();
-      // 如果当前标签被隐藏，切换到第一个可见标签
+      const menuTabs = getMenuTabs();
+      const allReachableTabs = [...visibleTabs, ...menuTabs];
       if (
-        visibleTabs.length > 0 &&
-        !visibleTabs.includes(currentResourceType)
+        allReachableTabs.length > 0 &&
+        !allReachableTabs.includes(currentResourceType)
       ) {
-        currentResourceType = visibleTabs[0];
+        currentResourceType = allReachableTabs[0];
       }
       const tabsContainer = $("#cfm-overlay .cfm-resource-tabs");
       if (tabsContainer.length > 0) {
-        const newTabsHtml = visibleTabs
+        const newTabsHtml = `${visibleTabs
           .map((tabId) => {
             const meta = CFM_TAB_META.find((m) => m.id === tabId);
             if (!meta) return "";
@@ -32200,19 +32201,46 @@ jQuery(async () => {
               tabId === currentResourceType ? "cfm-tab-active" : "";
             return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
           })
-          .join("");
+          .join("")}${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${menuTabs.includes(currentResourceType) ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
+          .map((tabId) => {
+            const meta = CFM_TAB_META.find((m) => m.id === tabId);
+            if (!meta) return "";
+            const isActive =
+              tabId === currentResourceType ? "cfm-tab-menu-item-active" : "";
+            return `<button type="button" class="cfm-tab-menu-item ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i><span>${meta.label}</span></button>`;
+          })
+          .join("")}</div></div>` : ""}`;
         tabsContainer.html(newTabsHtml);
-        // 重新绑定标签点击事件
-        tabsContainer.find(".cfm-tab").on("click touchend", function (e) {
-          e.preventDefault();
-          const tab = $(this).data("tab");
+        const syncTabSwitch = (tab, triggerEl = null) => {
           if (tab === currentResourceType) {
             handleCurrentTabRelocate(tab);
             return;
           }
           currentResourceType = tab;
           $("#cfm-overlay .cfm-tab").removeClass("cfm-tab-active");
-          $(this).addClass("cfm-tab-active");
+          $("#cfm-overlay .cfm-tab-menu-item").removeClass(
+            "cfm-tab-menu-item-active",
+          );
+          $("#cfm-overlay .cfm-tab-menu-btn").removeClass("cfm-tab-active");
+          if (triggerEl?.hasClass("cfm-tab-menu-item")) {
+            $("#cfm-overlay .cfm-tab-menu-btn").addClass("cfm-tab-active");
+            triggerEl.addClass("cfm-tab-menu-item-active");
+          } else if (triggerEl) {
+            triggerEl.addClass("cfm-tab-active");
+          } else {
+            $("#cfm-overlay .cfm-tab[data-tab='" + tab + "']").addClass(
+              "cfm-tab-active",
+            );
+            if (
+              $("#cfm-overlay .cfm-tab-menu-item[data-tab='" + tab + "']")
+                .length
+            ) {
+              $("#cfm-overlay .cfm-tab-menu-btn").addClass("cfm-tab-active");
+              $(
+                "#cfm-overlay .cfm-tab-menu-item[data-tab='" + tab + "']",
+              ).addClass("cfm-tab-menu-item-active");
+            }
+          }
           cfmMultiSelectMode = false;
           clearMultiSelect();
           cfmMultiSelectRangeMode = false;
@@ -32229,9 +32257,7 @@ jQuery(async () => {
           if (cfmPresetRenameMode) exitPresetRenameMode();
           if (cfmWorldInfoRenameMode) exitWorldInfoRenameMode();
           if (cfmQrRenameMode) exitQrRenameMode();
-          $("#cfm-overlay")
-            .find("#cfm-chars-view")
-            .toggle(tab === "chars");
+          $("#cfm-overlay").find("#cfm-chars-view").toggle(tab === "chars");
           $("#cfm-overlay")
             .find("#cfm-presets-view")
             .toggle(tab === "presets");
@@ -32247,9 +32273,7 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-personas-view")
             .toggle(tab === "personas");
-          $("#cfm-overlay")
-            .find("#cfm-regex-view")
-            .toggle(tab === "regex");
+          $("#cfm-overlay").find("#cfm-regex-view").toggle(tab === "regex");
           $("#cfm-overlay")
             .find("#cfm-qr-view")
             .toggle(tab === "quickreply");
@@ -32287,6 +32311,8 @@ jQuery(async () => {
           $("#cfm-overlay")
             .find("#cfm-qr-search-bar")
             .toggle(tab === "quickreply");
+          $("#cfm-overlay .cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
+          $("#cfm-overlay .cfm-tab-menu-btn").attr("aria-expanded", "false");
           if (tab === "presets") renderPresetsView();
           else if (tab === "worldinfo") renderWorldInfoView();
           else if (tab === "themes") renderThemesView();
@@ -32294,6 +32320,27 @@ jQuery(async () => {
           else if (tab === "personas") renderPersonasView();
           else if (tab === "regex") renderRegexView();
           else if (tab === "quickreply") renderQRView();
+        };
+        tabsContainer.find(".cfm-tab[data-tab]").on("click touchend", function (e) {
+          e.preventDefault();
+          syncTabSwitch($(this).data("tab"), $(this));
+        });
+        tabsContainer.find(".cfm-tab-menu-btn").on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const wrap = $(this).closest(".cfm-tab-menu-wrap");
+          const willOpen = !wrap.hasClass("cfm-tab-menu-open");
+          $("#cfm-overlay .cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
+          $("#cfm-overlay .cfm-tab-menu-btn").attr("aria-expanded", "false");
+          if (willOpen) {
+            wrap.addClass("cfm-tab-menu-open");
+            $(this).attr("aria-expanded", "true");
+          }
+        });
+        tabsContainer.find(".cfm-tab-menu-item").on("click touchend", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          syncTabSwitch($(this).data("tab"), $(this));
         });
       }
       // --- 刷新视图和工具栏 ---
@@ -32853,6 +32900,8 @@ jQuery(async () => {
         .addClass("cfm-layout-arrow-disabled");
     }
 
+    let cfmLayoutMenuTouchStamp = 0;
+
     // 保存标签页顺序
     function saveTabOrder() {
       const newOrder = [];
@@ -32887,7 +32936,14 @@ jQuery(async () => {
         saveTabOrder();
       })
       .on("click touchend", ".cfm-layout-menu-check", function (e) {
-        e.preventDefault();
+        if (e.type === "touchend") {
+          cfmLayoutMenuTouchStamp = Date.now();
+          e.preventDefault();
+        } else if (Date.now() - cfmLayoutMenuTouchStamp < 450) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         e.stopPropagation();
         if ($(this).hasClass("cfm-layout-menu-check-hidden")) return;
         $(this).toggleClass("cfm-layout-menu-check-checked");
@@ -32897,11 +32953,12 @@ jQuery(async () => {
         );
         saveTabOrder();
       });
-    section.find("#cfm-layout-tab-menu-enabled").on("change", function () {
+    section.find("#cfm-layout-tab-menu-enabled").on("change", function (e) {
+      e.stopPropagation();
       layout.tabMenu = layout.tabMenu || { enabled: false };
       layout.tabMenu.enabled = !!$(this).prop("checked");
       getContext().saveSettingsDebounced();
-      renderConfigBody();
+      renderConfigBody("layout");
       cfmToastr.success(
         $(this).prop("checked") ? "已开启标签页收纳" : "已关闭标签页收纳",
       );
@@ -33019,7 +33076,14 @@ jQuery(async () => {
       applyAllToolbarVisibility();
     });
     section.find(".cfm-layout-actions-list").on("click touchend", ".cfm-layout-menu-check", function (e) {
-      e.preventDefault();
+      if (e.type === "touchend") {
+        cfmLayoutMenuTouchStamp = Date.now();
+        e.preventDefault();
+      } else if (Date.now() - cfmLayoutMenuTouchStamp < 450) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       e.stopPropagation();
       if ($(this).hasClass("cfm-layout-menu-check-hidden")) return;
       $(this).toggleClass("cfm-layout-menu-check-checked");
@@ -33238,7 +33302,7 @@ jQuery(async () => {
     };
   }
 
-  function renderConfigBody() {
+  function renderConfigBody(defaultTab = null) {
     const body = $("#cfm-config-body");
     body.empty();
 
@@ -33260,7 +33324,11 @@ jQuery(async () => {
     }
 
     // ===== 以下为角色卡（chars）配置 =====
-    const tabShell = createConfigTabShell("settings");
+    const currentTabFromUi =
+      defaultTab ||
+      $("#cfm-config-body .cfm-config-top-tab-active").data("tab") ||
+      "settings";
+    const tabShell = createConfigTabShell(currentTabFromUi);
     const settingsBody = tabShell.settingsPanel;
     const layoutBody = tabShell.layoutPanel;
     const createBody = tabShell.createPanel;
