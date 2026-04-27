@@ -2049,6 +2049,13 @@
     cursor: default;
   }
 
+  .cfm-layout-menu-switch-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+  }
+
   /* 移动端提示：添加分隔线拖动手柄 */
   .cfm-left-pane::after {
     content: "";
@@ -3309,6 +3316,15 @@ input.cfm-rv-search {
   cursor: pointer;
   font-size: 12px;
   white-space: nowrap;
+}
+.cfm-layout-menu-switch-label input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  accent-color: #89b4fa;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
 }
 .cfm-layout-menu-switch-hint {
   font-size: 12px;
