@@ -22887,17 +22887,144 @@ jQuery(async () => {
   /**
    * 保存预设正则脚本
    * @param {Array} scripts - 正则脚本列表
+   * @param {string} [presetName=""] - 目标预设名称；为空时写入当前选中预设
    */
-  async function savePresetRegexScripts(scripts) {
+  async function savePresetRegexScripts(scripts, presetName = "") {
     const pm = getContext().getPresetManager();
+    const normalizedPresetName = String(presetName || "").trim();
+    const nextScripts = Array.isArray(scripts) ? scripts : [];
     if (pm) {
-      await pm.writePresetExtensionField({
-        path: "regex_scripts",
-        value: scripts,
-      });
+      const currentPresetName = String(getCurrentPresetName() || "").trim();
+      if (normalizedPresetName && normalizedPresetName !== currentPresetName) {
+        const presetData = getPresetDataForDetail(pm, normalizedPresetName);
+        if (!presetData) {
+          throw new Error(`找不到预设「${normalizedPresetName}」的数据`);
+        }
+        const nextPresetData = structuredClone(presetData);
+        if (
+          !nextPresetData.extensions ||
+          typeof nextPresetData.extensions !== "object"
+        ) {
+          nextPresetData.extensions = {};
+        }
+        nextPresetData.extensions.regex_scripts = nextScripts;
+        await saveNormalizedPresetData(
+          pm,
+          normalizedPresetName,
+          nextPresetData,
+        );
+      } else {
+        await pm.writePresetExtensionField({
+          path: "regex_scripts",
+          value: nextScripts,
+        });
+      }
     }
     // 清除原生正则引擎缓存 & 刷新原生正则UI
     await syncNativeRegexState();
+  }
+
+  async function openNativePresetRegexScriptEditor(presetName, scriptId) {
+    const normalizedPresetName = String(presetName || "").trim();
+    const normalizedScriptId = String(scriptId || "").trim();
+    if (!normalizedPresetName || !normalizedScriptId) return false;
+
+    const pm = getContext().getPresetManager();
+    if (!pm?.select) return false;
+
+    const originalValue = String(pm.select.val() || "");
+    let switchedPreset = false;
+
+    const clickNativeEditButton = () => {
+      const nativeEl = $(
+        `#saved_preset_scripts > #${$.escapeSelector(normalizedScriptId)}`,
+      );
+      if (!nativeEl.length) return false;
+      const editBtn = nativeEl.find(".edit_existing_regex").first();
+      const nativeBtn = editBtn.get(0);
+      if (!(nativeBtn instanceof HTMLElement)) return false;
+      nativeBtn.click();
+      return true;
+    };
+
+    const syncTargetPresetSelection = async () => {
+      const targetValue = findPresetSelectValueByName(pm, normalizedPresetName);
+      const currentValue = String(pm.select.val() || "");
+      if (!targetValue) return "";
+      if (currentValue === String(targetValue)) return String(targetValue);
+
+      switchedPreset = true;
+      const presetChangedPromise = new Promise((resolve) => {
+        const ctx = getContext();
+        const evtSource = ctx?.eventSource;
+        const evtTypes = ctx?.eventTypes;
+        const eventType = evtTypes?.OAI_PRESET_CHANGED_AFTER;
+        if (!eventType || !evtSource) {
+          window.setTimeout(resolve, 800);
+          return;
+        }
+        let resolved = false;
+        const handler = () => {
+          if (resolved) return;
+          resolved = true;
+          try {
+            evtSource.removeListener(eventType, handler);
+          } catch {}
+          window.setTimeout(resolve, 120);
+        };
+        evtSource.once(eventType, handler);
+        window.setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            try {
+              evtSource.removeListener(eventType, handler);
+            } catch {}
+            resolve();
+          }
+        }, 3000);
+      });
+
+      pm.select.val(targetValue);
+      pm.select.trigger("change");
+      await presetChangedPromise;
+      return String(targetValue);
+    };
+
+    beginSuppressPresetRegexToast();
+    try {
+      const targetValue = await syncTargetPresetSelection();
+      const start = Date.now();
+      while (Date.now() - start < 3200) {
+        if (
+          (!targetValue ||
+            String(pm.select.val() || "") === String(targetValue)) &&
+          clickNativeEditButton()
+        ) {
+          if (
+            switchedPreset &&
+            originalValue &&
+            String(targetValue || "") !== originalValue
+          ) {
+            _presetValueToRestore = originalValue;
+            bindNativePopupCleanup();
+          }
+          return true;
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 80));
+      }
+
+      if (
+        switchedPreset &&
+        originalValue &&
+        String(pm.select.val() || "") !== originalValue
+      ) {
+        pm.select.val(originalValue);
+        pm.select.trigger("change");
+      }
+      return false;
+    } finally {
+      endSuppressPresetRegexToast();
+    }
   }
 
   /**
@@ -22916,8 +23043,8 @@ jQuery(async () => {
     presetRow.next(".cfm-regex-sublist").remove();
     const subList = $('<div class="cfm-regex-sublist"></div>');
 
-    // === 工具栏（仅对目标预设显示） ===
-    if (isTarget) {
+    // === 工具栏（预设正则均可编辑；新建仍仅当前预设可用） ===
+    {
       const regexToolbar = $(`
         <div class="cfm-regex-toolbar">
           <button class="cfm-btn cfm-btn-sm cfm-regex-import-btn" title="导入正则脚本"><i class="fa-solid fa-file-import"></i> 导入</button>
@@ -22950,7 +23077,7 @@ jQuery(async () => {
               scripts.push(regexScript);
             }
           }
-          await savePresetRegexScripts(scripts);
+          await savePresetRegexScripts(scripts, presetName);
           cfmToastr.success("正则脚本导入成功");
           rerenderCurrentView();
         } catch (err) {
@@ -22962,6 +23089,12 @@ jQuery(async () => {
       regexToolbar.find(".cfm-regex-create-btn").on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!isTarget) {
+          cfmToastr.info(
+            "当前仅支持在已选中的预设中通过原生编辑器新建正则，请先切换预设，或使用导入/互通方式处理其它预设",
+          );
+          return;
+        }
         createPresetRegexFromManager(presetName);
       });
       // 批量操作切换
@@ -23024,7 +23157,7 @@ jQuery(async () => {
               scripts,
               selectedIds: Array.from(cfmRegexBatchSelected),
               activate: true,
-              save: () => savePresetRegexScripts(scripts),
+              save: () => savePresetRegexScripts(scripts, presetName),
             });
             if (changed) rerenderCurrentView();
           });
@@ -23036,7 +23169,7 @@ jQuery(async () => {
               scripts,
               selectedIds: Array.from(cfmRegexBatchSelected),
               activate: false,
-              save: () => savePresetRegexScripts(scripts),
+              save: () => savePresetRegexScripts(scripts, presetName),
             });
             if (changed) rerenderCurrentView();
           });
@@ -23106,7 +23239,7 @@ jQuery(async () => {
               const idx = scripts.findIndex((s) => s.id === id);
               if (idx !== -1) scripts.splice(idx, 1);
             }
-            await savePresetRegexScripts(scripts);
+            await savePresetRegexScripts(scripts, presetName);
             cfmRegexBatchSelected.clear();
             cfmToastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
             rerenderCurrentView();
@@ -23128,37 +23261,29 @@ jQuery(async () => {
         const script = scripts[i];
         const isDisabled = !!script.disabled;
         const isBatchSel =
-          isTarget && cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
-        const toggleHtml = isTarget
-          ? `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`
-          : `<div class="cfm-wi-toggle cfm-toggle-readonly ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用" : "已启用"}（非当前预设，不可切换）"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
+          cfmRegexBatchMode && cfmRegexBatchSelected.has(script.id);
+        const toggleHtml = `<div class="cfm-wi-toggle ${isDisabled ? "" : "cfm-wi-toggle-on"}" title="${isDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用"}"><i class="fa-solid fa-toggle-${isDisabled ? "off" : "on"}"></i></div>`;
         const row = $(`
           <div class="cfm-row cfm-row-char cfm-regex-script-row ${isDisabled ? "cfm-regex-disabled" : ""} ${isBatchSel ? "cfm-regex-batch-selected" : ""}"
                data-script-id="${escapeHtml(script.id || "")}"
                data-script-idx="${i}"
                data-script-type="2"
                data-owner="${escapeHtml(presetName || "")}">
-            ${isTarget && cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
+            ${cfmRegexBatchMode ? `<div class="cfm-regex-batch-check"><i class="fa-${isBatchSel ? "solid" : "regular"} fa-square${isBatchSel ? "-check" : ""}"></i></div>` : ""}
             ${toggleHtml}
             <div class="cfm-row-name">
               <span>${escapeHtml(script.scriptName || "(未命名)")}</span>
             </div>
             <div class="cfm-regex-row-actions">
               <div class="cfm-regex-action-btn cfm-regex-edit-btn" title="编辑"><i class="fa-solid fa-pen-to-square"></i></div>
-              ${
-                isTarget
-                  ? `
               <div class="cfm-regex-action-btn cfm-regex-move-up-btn${i === 0 ? " cfm-regex-move-disabled" : ""}" title="上移"><i class="fa-solid fa-arrow-up"></i></div>
               <div class="cfm-regex-action-btn cfm-regex-move-down-btn${i === scripts.length - 1 ? " cfm-regex-move-disabled" : ""}" title="下移"><i class="fa-solid fa-arrow-down"></i></div>
-              `
-                  : ""
-              }
             </div>
           </div>
         `);
 
-        // 批量模式：行点击切换选中（仅目标预设）
-        if (isTarget && cfmRegexBatchMode) {
+        // 批量模式：行点击切换选中
+        if (cfmRegexBatchMode) {
           row.on("click", (e) => {
             if (
               $(e.target).closest(
@@ -23176,34 +23301,32 @@ jQuery(async () => {
           });
         }
 
-        // toggle 点击（只有目标预设可操作，readonly的不绑定事件）
-        row
-          .find(".cfm-wi-toggle:not(.cfm-toggle-readonly)")
-          .on("click", async function (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        // toggle 点击
+        row.find(".cfm-wi-toggle").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          script.disabled = !script.disabled;
+          try {
+            await savePresetRegexScripts(scripts, presetName);
+          } catch (err) {
+            console.error("[CFM] 正则toggle保存失败:", err);
+            cfmToastr.error("保存失败: " + err.message);
             script.disabled = !script.disabled;
-            try {
-              await savePresetRegexScripts(scripts);
-            } catch (err) {
-              console.error("[CFM] 正则toggle保存失败:", err);
-              cfmToastr.error("保存失败: " + err.message);
-              script.disabled = !script.disabled;
-              return;
-            }
-            const isNowDisabled = !!script.disabled;
-            const el = $(this);
-            el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
-            el.find("i").attr(
-              "class",
-              `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
-            );
-            el.attr(
-              "title",
-              isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
-            );
-            row.toggleClass("cfm-regex-disabled", isNowDisabled);
-          });
+            return;
+          }
+          const isNowDisabled = !!script.disabled;
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+          );
+          el.attr(
+            "title",
+            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+          );
+          row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        });
         // 编辑按钮点击
         row.find(".cfm-regex-edit-btn").on("click", function (e) {
           e.preventDefault();
@@ -23213,9 +23336,19 @@ jQuery(async () => {
           const nativeEl = $("#" + $.escapeSelector(String(scriptId)));
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
-          } else {
-            cfmToastr.warning("非当前预设的正则脚本，无法编辑");
+            return;
           }
+          openNativePresetRegexScriptEditor(presetName, scriptId).then(
+            (opened) => {
+              if (!opened) {
+                cfmToastr.warning("未能打开该预设正则的原生编辑器，请稍后重试");
+              }
+            },
+            (err) => {
+              console.error("[CFM] 打开非当前预设正则编辑器失败:", err);
+              cfmToastr.error("打开编辑器失败: " + (err?.message || err));
+            },
+          );
         });
         // 上移按钮
         row.find(".cfm-regex-move-up-btn").on("click", async function (e) {
@@ -23225,7 +23358,7 @@ jQuery(async () => {
           const movedScriptId = String(script?.id || "").trim();
           [scripts[i - 1], scripts[i]] = [scripts[i], scripts[i - 1]];
           try {
-            await savePresetRegexScripts(scripts);
+            await savePresetRegexScripts(scripts, presetName);
             rerenderCurrentView();
             if (movedScriptId) {
               flashDraggedElement(
@@ -23246,7 +23379,7 @@ jQuery(async () => {
           const movedScriptId = String(script?.id || "").trim();
           [scripts[i], scripts[i + 1]] = [scripts[i + 1], scripts[i]];
           try {
-            await savePresetRegexScripts(scripts);
+            await savePresetRegexScripts(scripts, presetName);
             rerenderCurrentView();
             if (movedScriptId) {
               flashDraggedElement(
@@ -23262,12 +23395,8 @@ jQuery(async () => {
         subList.append(row);
       }
 
-      // 拖拽排序（仅目标预设）
-      if (
-        isTarget &&
-        typeof subList.sortable === "function" &&
-        !cfmIsTouchDevice()
-      ) {
+      // 拖拽排序
+      if (typeof subList.sortable === "function" && !cfmIsTouchDevice()) {
         subList.sortable({
           items: ".cfm-regex-script-row",
           axis: "y",
@@ -23310,7 +23439,7 @@ jQuery(async () => {
               .map((id) => scriptMap.get(id))
               .filter(Boolean);
             try {
-              await savePresetRegexScripts(reorderedScripts);
+              await savePresetRegexScripts(reorderedScripts, presetName);
               rerenderCurrentView();
               if (movedScriptId) {
                 flashDraggedElement(
@@ -25431,14 +25560,16 @@ jQuery(async () => {
               regexGlobalGroups[sid] = target.folderId;
             });
           }
-          extension_settings[extensionName].regexGlobalGroups = regexGlobalGroups;
+          extension_settings[extensionName].regexGlobalGroups =
+            regexGlobalGroups;
           if (data.multiSelect) clearMultiSelect();
           getContext().saveSettingsDebounced();
           return scriptIds;
         },
         firstName: (data) =>
           data.scriptName ||
-          globalScripts.find((sc) => sc.id === (data.scriptId || data.id))?.scriptName ||
+          globalScripts.find((sc) => sc.id === (data.scriptId || data.id))
+            ?.scriptName ||
           data.scriptId ||
           data.id,
       },
@@ -29653,7 +29784,9 @@ jQuery(async () => {
             e.preventDefault();
             e.stopPropagation();
             const name = p.name;
-            const detailSubList = row.nextAll(".cfm-preset-detail-sublist").first();
+            const detailSubList = row
+              .nextAll(".cfm-preset-detail-sublist")
+              .first();
             if (cfmPresetDetailExpandedNames.has(name)) {
               cfmPresetDetailExpandedNames.delete(name);
               detailSubList.slideUp(150, function () {
@@ -36879,7 +37012,10 @@ jQuery(async () => {
           (data.type === "res-folder" && data.resType === "backgrounds");
         const isBackgroundFolderDrag =
           data.type === "res-folder" && data.resType === "backgrounds";
-        if (isBackgroundItemDrag && (zone === "into" || isBackgroundFolderDrag)) {
+        if (
+          isBackgroundItemDrag &&
+          (zone === "into" || isBackgroundFolderDrag)
+        ) {
           _pcLastResourceFolderHoverTarget = {
             groupType: "backgrounds",
             targetKind: "folder",
@@ -39514,7 +39650,10 @@ jQuery(async () => {
           (data.type === "res-folder" && data.resType === "quickreply");
         const isQuickReplyFolderDrag =
           data.type === "res-folder" && data.resType === "quickreply";
-        if (isQuickReplyItemDrag && (zone === "into" || isQuickReplyFolderDrag)) {
+        if (
+          isQuickReplyItemDrag &&
+          (zone === "into" || isQuickReplyFolderDrag)
+        ) {
           _pcLastResourceFolderHoverTarget = {
             groupType: "quickreply",
             targetKind: "folder",
@@ -45288,7 +45427,7 @@ jQuery(async () => {
       return;
     }
     if (scope.type === "preset") {
-      await savePresetRegexScripts(scripts);
+      await savePresetRegexScripts(scripts, scope.name);
     }
   }
 
@@ -45305,10 +45444,17 @@ jQuery(async () => {
     return new Promise((resolve) => {
       const sourceType = sourceScope?.type || "";
       const hasCurrentChar = !!currentCharAvatar;
-      const hasCurrentPreset = !!currentPresetName;
+      const presetItems = getCurrentPresets()
+        .map((preset) => String(preset?.name || "").trim())
+        .filter(Boolean);
+      const availablePresetTargets = presetItems.filter(
+        (name) => !(sourceType === "preset" && name === sourceScope?.name),
+      );
+      const presetGroups = getResourceGroups("presets");
+      const presetTree = getResFolderTree("presets");
       const canUseGlobal = sourceType !== "global";
       const canUseChar = hasCurrentChar && sourceType !== "char";
-      const canUsePreset = hasCurrentPreset && sourceType !== "preset";
+      const canUsePreset = availablePresetTargets.length > 0;
       const enabledTargetTypes = [
         canUseGlobal ? "global" : "",
         canUseChar ? "char" : "",
@@ -45323,7 +45469,8 @@ jQuery(async () => {
         if (canUseGlobal) defaultTargetType = "global";
         else if (canUsePreset) defaultTargetType = "preset";
       } else if (sourceType === "preset") {
-        if (canUseGlobal) defaultTargetType = "global";
+        if (canUsePreset) defaultTargetType = "preset";
+        else if (canUseGlobal) defaultTargetType = "global";
         else if (canUseChar) defaultTargetType = "char";
       }
       if (!enabledTargetTypes.includes(defaultTargetType)) {
@@ -45337,11 +45484,16 @@ jQuery(async () => {
         : sourceType === "char"
           ? "（来源位置，不可选）"
           : "";
-      const presetDisabledReason = !hasCurrentPreset
-        ? "（当前未选择预设）"
-        : sourceType === "preset"
-          ? "（来源位置，不可选）"
-          : "";
+      const presetDisabledReason = canUsePreset
+        ? ""
+        : presetItems.length === 0
+          ? "（暂无可用预设）"
+          : sourceType === "preset"
+            ? "（除来源外没有其它预设）"
+            : "（暂无可用预设）";
+      let selectedPresetTargetName = "";
+      let presetTransferExpandedFolders = new Set();
+      const PRESET_TRANSFER_TAP_MOVE_THRESHOLD = 10;
       const overlay = $(
         '<div class="cfm-edit-popup-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.12);z-index:100000;display:flex;align-items:center;justify-content:center;"></div>',
       );
@@ -45361,12 +45513,22 @@ jQuery(async () => {
               <div style="font-size:12px;opacity:0.85;">选择目标</div>
               <label style="display:flex;align-items:center;gap:8px;cursor:${canUseGlobal ? "pointer" : "not-allowed"};opacity:${canUseGlobal ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="global" ${defaultTargetType === "global" ? "checked" : ""} ${canUseGlobal ? "" : "disabled"}> <span>全局正则${globalDisabledReason}</span></label>
               <label style="display:flex;align-items:center;gap:8px;cursor:${canUseChar ? "pointer" : "not-allowed"};opacity:${canUseChar ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="char" ${defaultTargetType === "char" ? "checked" : ""} ${canUseChar ? "" : "disabled"}> <span>角色正则（当前角色：${escapeHtml(currentCharName || "未选择")}）${escapeHtml(charDisabledReason)}</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>预设正则（当前预设：${escapeHtml(currentPresetName || "未选择")}）${escapeHtml(presetDisabledReason)}</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:${canUsePreset ? "pointer" : "not-allowed"};opacity:${canUsePreset ? "1" : "0.55"};"><input type="radio" name="cfm-regex-transfer-target" value="preset" ${defaultTargetType === "preset" ? "checked" : ""} ${canUsePreset ? "" : "disabled"}> <span>其它预设正则${escapeHtml(presetDisabledReason)}</span></label>
             </div>
             ${enabledTargetTypes.length === 0 ? '<div style="font-size:12px;line-height:1.6;color:#f38ba8;opacity:0.92;">当前没有可用的互通目标，请先切换到角色或预设后再试。</div>' : ""}
             <div class="cfm-regex-transfer-global-folder" style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">全局分组</div>
               <select class="text_pole cfm-regex-transfer-folder-select"></select>
+            </div>
+            <div class="cfm-regex-transfer-preset-target" style="display:none;flex-direction:column;gap:8px;">
+              <div style="font-size:12px;opacity:0.85;">选择目标预设</div>
+              <div class="cfm-entry-transfer-search">
+                <input type="text" class="cfm-entry-transfer-search-input cfm-regex-transfer-preset-search-input" placeholder="搜索预设..." />
+                <button class="cfm-entry-transfer-expand-all cfm-regex-transfer-preset-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
+                <button class="cfm-entry-transfer-collapse-all cfm-regex-transfer-preset-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
+              </div>
+              <div class="cfm-entry-transfer-tree-container cfm-regex-transfer-preset-tree"></div>
+              <div class="cfm-entry-transfer-selected-hint cfm-regex-transfer-preset-hint"></div>
             </div>
           </div>
           <div class="cfm-edit-popup-footer">
@@ -45377,6 +45539,13 @@ jQuery(async () => {
       `);
 
       const folderSelect = dialog.find(".cfm-regex-transfer-folder-select");
+      const presetSearchInput = dialog.find(
+        ".cfm-regex-transfer-preset-search-input",
+      );
+      const presetTreeContainer = dialog.find(
+        ".cfm-regex-transfer-preset-tree",
+      );
+      const presetHintEl = dialog.find(".cfm-regex-transfer-preset-hint");
       folderOptions.forEach((item) => {
         folderSelect.append(
           $(
@@ -45386,7 +45555,195 @@ jQuery(async () => {
       });
       folderSelect.val(defaultGlobalFolderId || "__ungrouped__");
 
-      const updateFolderVisibility = () => {
+      function bindPresetTransferTreeTap(target, handler) {
+        target
+          .on("touchstart", function (e) {
+            const touch = e.originalEvent?.touches?.[0];
+            if (!touch) return;
+            $(this).data("cfmPresetTransferTouchStartX", touch.clientX);
+            $(this).data("cfmPresetTransferTouchStartY", touch.clientY);
+          })
+          .on("click touchend", function (e) {
+            const node = $(this);
+            const now = Date.now();
+            const lastTouchAt = Number(
+              node.data("cfmPresetTransferLastTouchAt") || 0,
+            );
+
+            if (e.type === "touchend") {
+              node.data("cfmPresetTransferLastTouchAt", now);
+              const touch = e.originalEvent?.changedTouches?.[0];
+              if (touch) {
+                const startX = Number(
+                  node.data("cfmPresetTransferTouchStartX"),
+                );
+                const startY = Number(
+                  node.data("cfmPresetTransferTouchStartY"),
+                );
+                if (Number.isFinite(startX) && Number.isFinite(startY)) {
+                  const deltaX = Math.abs(touch.clientX - startX);
+                  const deltaY = Math.abs(touch.clientY - startY);
+                  if (
+                    deltaX > PRESET_TRANSFER_TAP_MOVE_THRESHOLD ||
+                    deltaY > PRESET_TRANSFER_TAP_MOVE_THRESHOLD
+                  ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                }
+              }
+            } else if (lastTouchAt && now - lastTouchAt < 500) {
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+            handler.call(this, e);
+          });
+      }
+
+      function updatePresetTargetHint() {
+        if (selectedPresetTargetName) {
+          presetHintEl.html(
+            `已选目标预设：<strong>${escapeHtml(selectedPresetTargetName)}</strong>`,
+          );
+          return;
+        }
+        presetHintEl.text("请选择一个目标预设");
+      }
+
+      function renderPresetTargetTree() {
+        const query = String(presetSearchInput.val() || "")
+          .trim()
+          .toLowerCase();
+        presetTreeContainer.empty();
+
+        const folderItems = {};
+        const ungrouped = [];
+        for (const name of availablePresetTargets) {
+          if (query && !name.toLowerCase().includes(query)) continue;
+          const fid = presetGroups[name] || null;
+          if (fid && presetTree[fid]) {
+            if (!folderItems[fid]) folderItems[fid] = [];
+            folderItems[fid].push(name);
+          } else {
+            ungrouped.push(name);
+          }
+        }
+
+        function renderFolder(folderId, depth) {
+          const displayName = getResFolderDisplayName("presets", folderId);
+          const isExpanded = presetTransferExpandedFolders.has(folderId);
+          const childFolders = Object.keys(presetTree).filter(
+            (id) => (presetTree[id]?.parentId || null) === folderId,
+          );
+          const itemsInFolder = folderItems[folderId] || [];
+          const hasContent =
+            itemsInFolder.length > 0 || childFolders.length > 0;
+
+          if (
+            query &&
+            !hasContent &&
+            !displayName.toLowerCase().includes(query)
+          ) {
+            return;
+          }
+
+          const folderNode = $(`
+            <div class="cfm-transfer-folder" data-folder-id="${escapeHtml(folderId)}" style="padding-left:${depth * 16 + 8}px;">
+              <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></span>
+              <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-folder${isExpanded ? "-open" : ""}"></i></span>
+              <span class="cfm-transfer-folder-name">${escapeHtml(displayName)}</span>
+              <span class="cfm-transfer-folder-count">${itemsInFolder.length}</span>
+            </div>
+          `);
+          bindPresetTransferTreeTap(folderNode, () => {
+            if (presetTransferExpandedFolders.has(folderId)) {
+              presetTransferExpandedFolders.delete(folderId);
+            } else {
+              presetTransferExpandedFolders.add(folderId);
+            }
+            renderPresetTargetTree();
+          });
+          presetTreeContainer.append(folderNode);
+
+          if (isExpanded || query) {
+            for (const childId of childFolders)
+              renderFolder(childId, depth + 1);
+            for (const name of itemsInFolder) {
+              const isSelected = selectedPresetTargetName === name;
+              const itemNode = $(`
+                <div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-name="${escapeHtml(name)}" style="padding-left:${(depth + 1) * 16 + 8}px;">
+                  <span class="cfm-transfer-item-icon"><i class="fa-solid fa-sliders"></i></span>
+                  <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
+                </div>
+              `);
+              bindPresetTransferTreeTap(itemNode, () => {
+                selectedPresetTargetName = name;
+                renderPresetTargetTree();
+                updatePresetTargetHint();
+              });
+              presetTreeContainer.append(itemNode);
+            }
+          }
+        }
+
+        const rootFolders = Object.keys(presetTree).filter(
+          (id) => !presetTree[id]?.parentId,
+        );
+        for (const fid of rootFolders) renderFolder(fid, 0);
+
+        if (ungrouped.length > 0) {
+          const uncatId = "__ungrouped__";
+          const isUncatExpanded = presetTransferExpandedFolders.has(uncatId);
+          const uncatNode = $(`
+            <div class="cfm-transfer-folder cfm-transfer-folder-ungrouped" style="padding-left:8px;">
+              <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isUncatExpanded ? "down" : "right"}"></i></span>
+              <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-box-open"></i></span>
+              <span class="cfm-transfer-folder-name">未归类</span>
+              <span class="cfm-transfer-folder-count">${ungrouped.length}</span>
+            </div>
+          `);
+          bindPresetTransferTreeTap(uncatNode, () => {
+            if (presetTransferExpandedFolders.has(uncatId)) {
+              presetTransferExpandedFolders.delete(uncatId);
+            } else {
+              presetTransferExpandedFolders.add(uncatId);
+            }
+            renderPresetTargetTree();
+          });
+          presetTreeContainer.append(uncatNode);
+
+          if (isUncatExpanded || query) {
+            for (const name of ungrouped) {
+              const isSelected = selectedPresetTargetName === name;
+              const itemNode = $(`
+                <div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-name="${escapeHtml(name)}" style="padding-left:24px;">
+                  <span class="cfm-transfer-item-icon"><i class="fa-solid fa-sliders"></i></span>
+                  <span class="cfm-transfer-item-name">${escapeHtml(name)}</span>
+                </div>
+              `);
+              bindPresetTransferTreeTap(itemNode, () => {
+                selectedPresetTargetName = name;
+                renderPresetTargetTree();
+                updatePresetTargetHint();
+              });
+              presetTreeContainer.append(itemNode);
+            }
+          }
+        }
+
+        if (presetTreeContainer.children().length === 0) {
+          presetTreeContainer.html(
+            '<div style="padding:16px;opacity:0.5;text-align:center;">无可选预设</div>',
+          );
+        }
+      }
+
+      const updateTargetVisibility = () => {
         const targetType =
           dialog
             .find('input[name="cfm-regex-transfer-target"]:checked')
@@ -45394,6 +45751,13 @@ jQuery(async () => {
         dialog
           .find(".cfm-regex-transfer-global-folder")
           .toggle(targetType === "global");
+        dialog
+          .find(".cfm-regex-transfer-preset-target")
+          .css("display", targetType === "preset" ? "flex" : "none");
+        if (targetType === "preset") {
+          renderPresetTargetTree();
+          updatePresetTargetHint();
+        }
       };
 
       function closeDialog(result = null) {
@@ -45404,8 +45768,28 @@ jQuery(async () => {
 
       dialog
         .find('input[name="cfm-regex-transfer-target"]')
-        .on("change", updateFolderVisibility);
-      updateFolderVisibility();
+        .on("change", updateTargetVisibility);
+      dialog
+        .find(".cfm-regex-transfer-preset-expand-all")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          for (const id of Object.keys(presetTree)) {
+            presetTransferExpandedFolders.add(id);
+          }
+          presetTransferExpandedFolders.add("__ungrouped__");
+          renderPresetTargetTree();
+        });
+      dialog
+        .find(".cfm-regex-transfer-preset-collapse-all")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          presetTransferExpandedFolders.clear();
+          renderPresetTargetTree();
+        });
+      presetSearchInput.on("input", () => renderPresetTargetTree());
+      updateTargetVisibility();
 
       dialog.find(".cfm-regex-transfer-confirm").on("click", (e) => {
         e.preventDefault();
@@ -45418,12 +45802,17 @@ jQuery(async () => {
           cfmToastr.warning("当前没有可用的目标位置");
           return;
         }
+        if (targetType === "preset" && !selectedPresetTargetName) {
+          cfmToastr.warning("请选择目标预设");
+          return;
+        }
         closeDialog({
           mode:
             dialog
               .find('input[name="cfm-regex-transfer-mode"]:checked')
               .val() || "move",
           targetType,
+          selectedPresetName: selectedPresetTargetName,
           globalFolderId:
             folderSelect.val() || defaultGlobalFolderId || "__ungrouped__",
         });
@@ -45668,13 +46057,16 @@ jQuery(async () => {
         name: currentCharName,
       };
     } else if (transferConfig.targetType === "preset") {
-      if (!currentPresetName) {
+      const targetPresetName = String(
+        transferConfig.selectedPresetName || "",
+      ).trim();
+      if (!targetPresetName) {
         cfmToastr.warning("当前没有可用的目标预设");
         return;
       }
       targetScope = {
         type: "preset",
-        name: currentPresetName,
+        name: targetPresetName,
       };
     }
 
