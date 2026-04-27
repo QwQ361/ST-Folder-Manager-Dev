@@ -26862,6 +26862,14 @@ jQuery(async () => {
       popup.find("#cfm-qr-search-bar").toggle(tab === "quickreply");
       popup.find(".cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
       popup.find(".cfm-tab-menu-btn").attr("aria-expanded", "false");
+      if (tab === "chars") renderRightPane();
+      else if (tab === "presets") renderPresetsView();
+      else if (tab === "worldinfo") renderWorldInfoView();
+      else if (tab === "themes") renderThemesView();
+      else if (tab === "backgrounds") renderBackgroundsView();
+      else if (tab === "personas") renderPersonasView();
+      else if (tab === "regex") renderRegexView();
+      else if (tab === "quickreply") renderQRView();
     }
 
     // 资源类型标签切换
@@ -32322,7 +32330,8 @@ jQuery(async () => {
             .toggle(tab === "quickreply");
           $("#cfm-overlay .cfm-tab-menu-wrap").removeClass("cfm-tab-menu-open");
           $("#cfm-overlay .cfm-tab-menu-btn").attr("aria-expanded", "false");
-          if (tab === "presets") renderPresetsView();
+          if (tab === "chars") renderRightPane();
+          else if (tab === "presets") renderPresetsView();
           else if (tab === "worldinfo") renderWorldInfoView();
           else if (tab === "themes") renderThemesView();
           else if (tab === "backgrounds") renderBackgroundsView();
@@ -38834,6 +38843,7 @@ jQuery(async () => {
     // 如果搜索栏有内容，保持搜索模式（必须在 rightList.empty() 之前检查）
     const wiSearchQuery = $("#cfm-worldinfo-global-search").val();
     if (wiSearchQuery && wiSearchQuery.trim()) {
+      leftTree.empty().append(newLeftTree.children());
       executeWorldInfoSearch();
       return;
     }
@@ -44891,6 +44901,7 @@ jQuery(async () => {
     // 如果搜索栏有内容，保持搜索模式
     const personaSearchQuery = $("#cfm-persona-global-search").val();
     if (personaSearchQuery && personaSearchQuery.trim()) {
+      leftTree.empty().append(newLeftTree.children());
       executePersonaSearch();
       return;
     }
