@@ -26073,6 +26073,14 @@ jQuery(async () => {
                     </div>
                 </div>
                 <div class="cfm-resource-tabs">
+                    ${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${activeMenuTab ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
+                      .map((tabId) => {
+                        const meta = CFM_TAB_META.find((m) => m.id === tabId);
+                        if (!meta) return "";
+                        const isActive = tabId === initialTab ? "cfm-tab-menu-item-active" : "";
+                        return `<button type="button" class="cfm-tab-menu-item ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i><span>${meta.label}</span></button>`;
+                      })
+                      .join("")}</div></div>` : ""}
                     ${visibleTabs
                       .map((tabId) => {
                         const meta = CFM_TAB_META.find((m) => m.id === tabId);
@@ -26082,14 +26090,6 @@ jQuery(async () => {
                         return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
                       })
                       .join("")}
-                    ${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${activeMenuTab ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
-                      .map((tabId) => {
-                        const meta = CFM_TAB_META.find((m) => m.id === tabId);
-                        if (!meta) return "";
-                        const isActive = tabId === initialTab ? "cfm-tab-menu-item-active" : "";
-                        return `<button type="button" class="cfm-tab-menu-item ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i><span>${meta.label}</span></button>`;
-                      })
-                      .join("")}</div></div>` : ""}
                 </div>
                 <div class="cfm-global-search-bar" id="cfm-global-search-bar">
                     <div class="cfm-search-input-wrapper">
@@ -32193,15 +32193,7 @@ jQuery(async () => {
       }
       const tabsContainer = $("#cfm-overlay .cfm-resource-tabs");
       if (tabsContainer.length > 0) {
-        const newTabsHtml = `${visibleTabs
-          .map((tabId) => {
-            const meta = CFM_TAB_META.find((m) => m.id === tabId);
-            if (!meta) return "";
-            const isActive =
-              tabId === currentResourceType ? "cfm-tab-active" : "";
-            return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
-          })
-          .join("")}${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${menuTabs.includes(currentResourceType) ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
+        const newTabsHtml = `${menuTabs.length ? `<div class="cfm-tab-menu-wrap"><button type="button" class="cfm-tab cfm-tab-menu-btn ${menuTabs.includes(currentResourceType) ? "cfm-tab-active" : ""}" aria-expanded="false" title="更多标签页"><i class="fa-solid fa-ellipsis"></i></button><div class="cfm-tab-menu-dropdown">${menuTabs
           .map((tabId) => {
             const meta = CFM_TAB_META.find((m) => m.id === tabId);
             if (!meta) return "";
@@ -32209,7 +32201,15 @@ jQuery(async () => {
               tabId === currentResourceType ? "cfm-tab-menu-item-active" : "";
             return `<button type="button" class="cfm-tab-menu-item ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i><span>${meta.label}</span></button>`;
           })
-          .join("")}</div></div>` : ""}`;
+          .join("")}</div></div>` : ""}${visibleTabs
+          .map((tabId) => {
+            const meta = CFM_TAB_META.find((m) => m.id === tabId);
+            if (!meta) return "";
+            const isActive =
+              tabId === currentResourceType ? "cfm-tab-active" : "";
+            return `<div class="cfm-tab ${isActive}" data-tab="${tabId}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</div>`;
+          })
+          .join("")}`;
         tabsContainer.html(newTabsHtml);
         const syncTabSwitch = (tab, triggerEl = null) => {
           if (tab === currentResourceType) {
