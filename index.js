@@ -33286,8 +33286,17 @@ jQuery(async () => {
       shell.find(`.cfm-config-tab-panel[data-panel="${currentTab}"]`).show();
     };
 
+    let cfmConfigTopTabTouchStamp = 0;
     shell.find(".cfm-config-top-tab").on("click touchend", function (e) {
-      e.preventDefault();
+      if (e.type === "touchend") {
+        cfmConfigTopTabTouchStamp = Date.now();
+        e.preventDefault();
+      } else if (Date.now() - cfmConfigTopTabTouchStamp < 450) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      e.stopPropagation();
       switchTab($(this).data("tab"));
     });
 
@@ -33315,11 +33324,11 @@ jQuery(async () => {
       currentResourceType === "personas" ||
       currentResourceType === "quickreply"
     ) {
-      renderResourceConfigBody(body, currentResourceType);
+      renderResourceConfigBody(body, currentResourceType, defaultTab);
       return;
     }
     if (currentResourceType === "regex") {
-      renderRegexConfigBody(body);
+      renderRegexConfigBody(body, defaultTab);
       return;
     }
 
@@ -33669,7 +33678,7 @@ jQuery(async () => {
   }
 
   // ==================== 预设/世界书/主题配置面板渲染 ====================
-  function renderResourceConfigBody(body, type) {
+  function renderResourceConfigBody(body, type, defaultTab = "settings") {
     const typeLabel =
       type === "presets"
         ? "预设"
@@ -33697,7 +33706,7 @@ jQuery(async () => {
                 ? qrConfigExpandedNodes
                 : worldInfoConfigExpandedNodes;
 
-    const tabShell = createConfigTabShell("settings");
+    const tabShell = createConfigTabShell(defaultTab || "settings");
     const settingsBody = tabShell.settingsPanel;
     const layoutBody = tabShell.layoutPanel;
     const createBody = tabShell.createPanel;
@@ -34107,7 +34116,7 @@ jQuery(async () => {
   }
 
   // ==================== 正则配置面板渲染 ====================
-  function renderRegexConfigBody(body) {
+  function renderRegexConfigBody(body, defaultTab = "settings") {
     ensureResourceSettings();
     const folderTree = extension_settings[extensionName].regexFolderTree;
     const globalGroups = extension_settings[extensionName].regexGlobalGroups;
@@ -34187,7 +34196,7 @@ jQuery(async () => {
       return r;
     }
 
-    const tabShell = createConfigTabShell("settings");
+    const tabShell = createConfigTabShell(defaultTab || "settings");
     const settingsBody = tabShell.settingsPanel;
     const layoutBody = tabShell.layoutPanel;
     const createBody = tabShell.createPanel;
