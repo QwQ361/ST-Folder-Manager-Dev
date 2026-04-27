@@ -2235,6 +2235,9 @@ jQuery(async () => {
       const idx = siblings.indexOf(insertBeforeId);
       if (idx >= 0) insertIdx = idx;
     }
+    if (!targetParentId && !insertBeforeId) {
+      tree[folderId].sortOrder = 0;
+    }
     siblings.splice(insertIdx, 0, folderId);
     siblings.forEach((id, i) => {
       tree[id].sortOrder = i + 1;
@@ -2345,6 +2348,9 @@ jQuery(async () => {
     if (insertBeforeId) {
       const idx = others.indexOf(insertBeforeId);
       if (idx >= 0) insertIdx = idx;
+    }
+    if (!newParentId && !insertBeforeId) {
+      tree[folderId].sortOrder = 0;
     }
     others.splice(insertIdx, 0, folderId);
     others.forEach((id, i) => {
@@ -5484,6 +5490,9 @@ jQuery(async () => {
     if (insertBeforeId) {
       const idx = others.indexOf(insertBeforeId);
       if (idx >= 0) insertIdx = idx;
+    }
+    if (!newParentId && !insertBeforeId) {
+      config.folders[folderId].sortOrder = 0;
     }
     others.splice(insertIdx, 0, folderId);
     others.forEach((id, i) => {
@@ -35138,7 +35147,13 @@ jQuery(async () => {
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d) {
-        if (d.type === "preset") {
+        if (d.type === "res-folder" && d.id && d.resType === "presets") {
+          reorderResFolder("presets", d.id, null, null);
+          cfmToastr.success(
+            `「${getResFolderDisplayName("presets", d.id)}」已移出到根目录`,
+          );
+          renderPresetsView();
+        } else if (d.type === "preset") {
           const presetNames =
             d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
           const pCount = presetNames.length;
@@ -36067,7 +36082,13 @@ jQuery(async () => {
       );
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
-      if (d && d.type === "theme") {
+      if (d?.type === "res-folder" && d.id && d.resType === "themes") {
+        reorderResFolder("themes", d.id, null, null);
+        cfmToastr.success(
+          `「${getResFolderDisplayName("themes", d.id)}」已移出到根目录`,
+        );
+        renderThemesView();
+      } else if (d && d.type === "theme") {
         const names = d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
         names.forEach((n) => setItemGroup("themes", n, null));
         if (d.multiSelect) clearMultiSelect();
@@ -36858,7 +36879,13 @@ jQuery(async () => {
       );
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
-      if (d && d.type === "background") {
+      if (d?.type === "res-folder" && d.id && d.resType === "backgrounds") {
+        reorderResFolder("backgrounds", d.id, null, null);
+        cfmToastr.success(
+          `「${getResFolderDisplayName("backgrounds", d.id)}」已移出到根目录`,
+        );
+        renderBackgroundsView();
+      } else if (d && d.type === "background") {
         const names = d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
         names.forEach((n) => setItemGroup("backgrounds", n, null));
         if (d.multiSelect) clearMultiSelect();
@@ -38034,7 +38061,13 @@ jQuery(async () => {
       );
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
-      if (d && d.type === "worldinfo") {
+      if (d?.type === "res-folder" && d.id && d.resType === "worldinfo") {
+        reorderResFolder("worldinfo", d.id, null, null);
+        cfmToastr.success(
+          `「${getResFolderDisplayName("worldinfo", d.id)}」已移出到根目录`,
+        );
+        renderWorldInfoView();
+      } else if (d && d.type === "worldinfo") {
         const wiNames =
           d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
         const wCount = wiNames.length;
@@ -39464,7 +39497,13 @@ jQuery(async () => {
       );
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
-      if (d && d.type === "quickreply") {
+      if (d?.type === "res-folder" && d.id && d.resType === "quickreply") {
+        reorderResFolder("quickreply", d.id, null, null);
+        cfmToastr.success(
+          `「${getResFolderDisplayName("quickreply", d.id)}」已移出到根目录`,
+        );
+        renderQRView();
+      } else if (d && d.type === "quickreply") {
         const qrNames =
           d.multiSelect && d.selectedIds ? d.selectedIds : [d.name];
         const wCount = qrNames.length;
@@ -44022,7 +44061,13 @@ jQuery(async () => {
       uncatNode.removeClass("cfm-drop-target");
       const d = pcGetDropData(e);
       if (d) {
-        if (d.type === "persona") {
+        if (d.type === "res-folder" && d.id && d.resType === "personas") {
+          reorderResFolder("personas", d.id, null, null);
+          cfmToastr.success(
+            `「${getResFolderDisplayName("personas", d.id)}」已移出到根目录`,
+          );
+          renderPersonasView();
+        } else if (d.type === "persona") {
           const personaIds =
             d.multiSelect && d.selectedIds ? d.selectedIds : [d.avatarId];
           const pCount = personaIds.length;
@@ -48229,7 +48274,16 @@ jQuery(async () => {
       uncatNode.removeClass("cfm-drop-target");
       const data = pcGetDropData(e);
       if (!data) return;
-      if (data.type === "regex-script") {
+      if (data.type === "regex-folder" && data.id) {
+        const moved = moveRegexFolder(data, {
+          groupType: "regex",
+          targetKind: "ungrouped",
+          zone: "into",
+        });
+        if (!moved.length) return;
+        cfmToastr.success(`「${data.name || data.id}」已移出到根目录`);
+        renderRegexView();
+      } else if (data.type === "regex-script") {
         const scriptIds =
           data.multiSelect && data.selectedIds
             ? data.selectedIds
