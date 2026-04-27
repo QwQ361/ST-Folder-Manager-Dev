@@ -14242,6 +14242,7 @@ jQuery(async () => {
     // 组合过滤函数（文件夹 + 文本搜索）
     function getWiFolderFilterLabel(folderVal) {
       if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__current_selected__") return "当前分组";
       if (folderVal === "__ungrouped__") return "未归类世界书";
       return getResFolderDisplayName("worldinfo", folderVal) || folderVal;
     }
@@ -14262,7 +14263,8 @@ jQuery(async () => {
       if (
         folderVal &&
         folderVal !== "__all__" &&
-        folderVal !== "__ungrouped__"
+        folderVal !== "__ungrouped__" &&
+        folderVal !== "__current_selected__"
       ) {
         allowedFolders = new Set();
         function collectChildren(pid) {
@@ -14277,8 +14279,11 @@ jQuery(async () => {
       overlay.find(".cfm-wi-preset-edit-item").each(function () {
         const name = $(this).find("span").text().toLowerCase();
         const folder = $(this).attr("data-folder") || "";
+        const isChecked = $(this).find("input").prop("checked");
         let folderMatch = true;
-        if (folderVal === "__ungrouped__") {
+        if (folderVal === "__current_selected__") {
+          folderMatch = isChecked;
+        } else if (folderVal === "__ungrouped__") {
           folderMatch = !folder || !wiTree[folder];
         } else if (allowedFolders) {
           folderMatch = allowedFolders.has(folder);
@@ -14290,6 +14295,17 @@ jQuery(async () => {
     overlay.find("#cfm-wi-preset-edit-folder-btn").on("click", function (e) {
       e.preventDefault();
       e.stopPropagation();
+      const currentCheckedInput = overlay.find(
+        ".cfm-wi-preset-edit-item input:checked",
+      ).first();
+      const currentCheckedItem = currentCheckedInput.closest(
+        ".cfm-wi-preset-edit-item",
+      );
+      const currentCheckedFolderRaw = currentCheckedItem.attr("data-folder") || "";
+      const currentCheckedFolder =
+        currentCheckedFolderRaw && wiTree[currentCheckedFolderRaw]
+          ? currentCheckedFolderRaw
+          : "__ungrouped__";
       showPresetEditFolderFilterPanel($(this), {
         panelKey: "wi_preset_edit",
         folderTree: wiTree,
@@ -14316,6 +14332,11 @@ jQuery(async () => {
         ungroupedLabel: "未归类世界书",
         currentFilter:
           overlay.find("#cfm-wi-preset-edit-folder-filter").val() || "__all__",
+        currentSelectedFilter: "__current_selected__",
+        currentSelectedLabel: "当前分组",
+        currentSelectedCount: overlay.find(
+          ".cfm-wi-preset-edit-item input:checked",
+        ).length,
         onSelect: (folderId) => {
           overlay.find("#cfm-wi-preset-edit-folder-filter").val(folderId);
           applyEditFilters();
@@ -41974,6 +41995,7 @@ jQuery(async () => {
 
     function getQrFolderFilterLabel(folderVal) {
       if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__current_selected__") return "当前分组";
       if (folderVal === "__ungrouped__") return "未归类快速回复集";
       return getResFolderDisplayName("quickreply", folderVal) || folderVal;
     }
@@ -41993,7 +42015,8 @@ jQuery(async () => {
       if (
         folderVal &&
         folderVal !== "__all__" &&
-        folderVal !== "__ungrouped__"
+        folderVal !== "__ungrouped__" &&
+        folderVal !== "__current_selected__"
       ) {
         allowedFolders = new Set();
         function collectChildren(pid) {
@@ -42008,8 +42031,11 @@ jQuery(async () => {
       overlay.find(".cfm-wi-preset-edit-item").each(function () {
         const name = $(this).find("span").text().toLowerCase();
         const folder = $(this).attr("data-folder") || "";
+        const isChecked = $(this).find("input").prop("checked");
         let folderMatch = true;
-        if (folderVal === "__ungrouped__") {
+        if (folderVal === "__current_selected__") {
+          folderMatch = isChecked;
+        } else if (folderVal === "__ungrouped__") {
           folderMatch = !folder || !qrTree[folder];
         } else if (allowedFolders) {
           folderMatch = allowedFolders.has(folder);
@@ -42021,6 +42047,17 @@ jQuery(async () => {
     overlay.find("#cfm-qr-preset-edit-folder-btn").on("click", function (e) {
       e.preventDefault();
       e.stopPropagation();
+      const currentCheckedInput = overlay.find(
+        ".cfm-wi-preset-edit-item input:checked",
+      ).first();
+      const currentCheckedItem = currentCheckedInput.closest(
+        ".cfm-wi-preset-edit-item",
+      );
+      const currentCheckedFolderRaw = currentCheckedItem.attr("data-folder") || "";
+      const currentCheckedFolder =
+        currentCheckedFolderRaw && qrTree[currentCheckedFolderRaw]
+          ? currentCheckedFolderRaw
+          : "__ungrouped__";
       showPresetEditFolderFilterPanel($(this), {
         panelKey: "qr_preset_edit",
         folderTree: qrTree,
@@ -42047,6 +42084,11 @@ jQuery(async () => {
         ungroupedLabel: "未归类快速回复集",
         currentFilter:
           overlay.find("#cfm-qr-preset-edit-folder-filter").val() || "__all__",
+        currentSelectedFilter: "__current_selected__",
+        currentSelectedLabel: "当前分组",
+        currentSelectedCount: overlay.find(
+          ".cfm-wi-preset-edit-item input:checked",
+        ).length,
         onSelect: (folderId) => {
           overlay.find("#cfm-qr-preset-edit-folder-filter").val(folderId);
           applyEditFilters();
@@ -48376,6 +48418,7 @@ jQuery(async () => {
     // 组合过滤函数
     function getRegexFolderFilterLabel(folderVal) {
       if (!folderVal || folderVal === "__all__") return "显示全部";
+      if (folderVal === "__current_selected__") return "当前分组";
       if (folderVal === "__ungrouped__") return "未归类正则脚本";
       return folderTree[folderVal]?.displayName || folderVal;
     }
@@ -48395,7 +48438,8 @@ jQuery(async () => {
       if (
         folderVal &&
         folderVal !== "__all__" &&
-        folderVal !== "__ungrouped__"
+        folderVal !== "__ungrouped__" &&
+        folderVal !== "__current_selected__"
       ) {
         allowedFolders = new Set();
         function collectChildren(pid) {
@@ -48410,8 +48454,11 @@ jQuery(async () => {
       overlay.find(".cfm-wi-preset-edit-item").each(function () {
         const name = $(this).find("span").text().toLowerCase();
         const folder = $(this).attr("data-folder") || "";
+        const isChecked = $(this).find("input").prop("checked");
         let folderMatch = true;
-        if (folderVal === "__ungrouped__") {
+        if (folderVal === "__current_selected__") {
+          folderMatch = isChecked;
+        } else if (folderVal === "__ungrouped__") {
           folderMatch = !folder || !folderTree[folder];
         } else if (allowedFolders) {
           folderMatch = allowedFolders.has(folder);
@@ -48423,6 +48470,17 @@ jQuery(async () => {
     overlay.find("#cfm-regex-preset-edit-folder-btn").on("click", function (e) {
       e.preventDefault();
       e.stopPropagation();
+      const currentCheckedInput = overlay.find(
+        ".cfm-wi-preset-edit-item input:checked",
+      ).first();
+      const currentCheckedItem = currentCheckedInput.closest(
+        ".cfm-wi-preset-edit-item",
+      );
+      const currentCheckedFolderRaw = currentCheckedItem.attr("data-folder") || "";
+      const currentCheckedFolder =
+        currentCheckedFolderRaw && folderTree[currentCheckedFolderRaw]
+          ? currentCheckedFolderRaw
+          : "__ungrouped__";
       showPresetEditFolderFilterPanel($(this), {
         panelKey: "regex_preset_edit",
         folderTree,
@@ -48451,6 +48509,11 @@ jQuery(async () => {
         currentFilter:
           overlay.find("#cfm-regex-preset-edit-folder-filter").val() ||
           "__all__",
+        currentSelectedFilter: "__current_selected__",
+        currentSelectedLabel: "当前分组",
+        currentSelectedCount: overlay.find(
+          ".cfm-wi-preset-edit-item input:checked",
+        ).length,
         onSelect: (folderId) => {
           overlay.find("#cfm-regex-preset-edit-folder-filter").val(folderId);
           applyEditFilters();
@@ -50876,6 +50939,9 @@ jQuery(async () => {
       getItemCount,
       ungroupedLabel,
       currentFilter,
+      currentSelectedFilter = null,
+      currentSelectedLabel = "当前选中",
+      currentSelectedCount = null,
       onSelect,
     } = config;
 
@@ -50948,6 +51014,29 @@ jQuery(async () => {
       <i class="fa-solid fa-layer-group cfm-nf-icon"></i>
       <span class="cfm-nf-name">显示全部</span>
     </div>`);
+    const effectiveCurrentSelectedFilter =
+      currentSelectedFilter === "__ungrouped__"
+        ? "__ungrouped__"
+        : currentSelectedFilter && currentSelectedFilter !== "__all__"
+          ? currentSelectedFilter
+          : null;
+    const effectiveCurrentSelectedLabel =
+      effectiveCurrentSelectedFilter === "__ungrouped__"
+        ? ungroupedLabel
+        : currentSelectedLabel ||
+          (effectiveCurrentSelectedFilter
+            ? getDisplayName(effectiveCurrentSelectedFilter)
+            : "当前选中");
+    const effectiveCurrentSelectedCount = effectiveCurrentSelectedFilter
+      ? currentSelectedCount ?? getItemCount(effectiveCurrentSelectedFilter)
+      : null;
+    const currentSelectedBtn = effectiveCurrentSelectedFilter
+      ? $(`<div class="cfm-nf-item cfm-nf-current-selected${currentFilter === effectiveCurrentSelectedFilter ? " cfm-nf-active" : ""}" data-folder-id="${escapeHtml(effectiveCurrentSelectedFilter)}">
+      <i class="fa-solid fa-location-crosshairs cfm-nf-icon"></i>
+      <span class="cfm-nf-name">${escapeHtml(effectiveCurrentSelectedLabel)}</span>
+      <span class="cfm-nf-count">${effectiveCurrentSelectedCount}</span>
+    </div>`)
+      : null;
     const treeContainer = $('<div class="cfm-nf-tree"></div>');
 
     function renderTree(activeId) {
@@ -50955,7 +51044,11 @@ jQuery(async () => {
     }
 
     renderTree(currentFilter);
-    panel.append(toolbar, showAllBtn, treeContainer);
+    if (currentSelectedBtn) {
+      panel.append(toolbar, showAllBtn, currentSelectedBtn, treeContainer);
+    } else {
+      panel.append(toolbar, showAllBtn, treeContainer);
+    }
     panel.on("mousedown mouseup click touchstart touchend", (e) =>
       e.stopPropagation(),
     );
