@@ -3335,6 +3335,9 @@ jQuery(async () => {
     // 被用户主动删除（但保留标签）的文件夹ID列表，防止自动重新导入
     if (!Array.isArray(extension_settings[extensionName].excludedTagIds))
       extension_settings[extensionName].excludedTagIds = [];
+    // 是否自动录入新标签为文件夹（默认开启，兼容旧行为）
+    if (extension_settings[extensionName].autoImportTags === undefined)
+      extension_settings[extensionName].autoImportTags = true;
     // 批量创建文件夹结构模板（按类型分开存储）
     if (
       !extension_settings[extensionName].batchTemplates ||
@@ -3943,6 +3946,11 @@ jQuery(async () => {
   // 首次加载：自动导入所有现有标签为顶级文件夹
   function autoImportAllTags() {
     if (extension_settings[extensionName].firstInitDone) return;
+    extension_settings[extensionName].firstInitDone = true;
+    if (!extension_settings[extensionName].autoImportTags) {
+      getContext().saveSettingsDebounced();
+      return;
+    }
     const tags = getTagList();
     const existingIds = Object.keys(extension_settings[extensionName].folders);
     const excludedSet = new Set(
@@ -3957,7 +3965,6 @@ jQuery(async () => {
         imported++;
       }
     }
-    extension_settings[extensionName].firstInitDone = true;
     getContext().saveSettingsDebounced();
     if (imported > 0) {
       console.log(
@@ -3975,6 +3982,10 @@ jQuery(async () => {
 
   // 每次打开弹窗时：检测新标签并自动导入 + 高亮（仅本次打开弹窗高亮）
   function detectAndImportNewTags() {
+    if (!extension_settings[extensionName].autoImportTags) {
+      sessionNewlyImportedIds = [];
+      return;
+    }
     const tags = getTagList();
     const existingIds = Object.keys(config.folders);
     const excludedSet = new Set(
@@ -33050,7 +33061,11 @@ jQuery(async () => {
                 <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center;">
                     <button id="cfm-import-all-btn" class="cfm-btn" style="background:rgba(87,242,135,0.15);color:#57f287;border-color:rgba(87,242,135,0.4);"><i class="fa-solid fa-download"></i> 一键导入所有标签 <span style="opacity:0.6;font-size:11px;">(${availableTags.length} 个可导入)</span></button>
                 </div>
-                <div class="cfm-create-tag-hint">将酒馆中所有尚未注册为文件夹的标签一次性导入。新标签会在每次打开插件时自动检测并导入。</div>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-weight:normal;">
+                    <input type="checkbox" id="cfm-auto-import-tags" ${extension_settings[extensionName].autoImportTags ? "checked" : ""}>
+                    <span>自动录入新标签为文件夹</span>
+                </label>
+                <div class="cfm-create-tag-hint">将酒馆中所有尚未注册为文件夹的标签一次性导入。关闭上方开关后，新标签不会在打开插件时自动录入，但仍可手动一键导入或单独添加。</div>
                 <details style="margin-top:8px;">
                     <summary style="cursor:pointer;font-size:12px;opacity:0.6;">▸ 手动添加单个标签</summary>
                     <div class="cfm-add-folder-row" style="margin-top:8px;">
@@ -33069,6 +33084,15 @@ jQuery(async () => {
       e.preventDefault();
       const imported = oneClickImportAllTags();
       if (imported > 0) renderConfigBody();
+    });
+    addSection.find("#cfm-auto-import-tags").on("change", function () {
+      extension_settings[extensionName].autoImportTags = !!$(this).prop("checked");
+      getContext().saveSettingsDebounced();
+      cfmToastr.success(
+        extension_settings[extensionName].autoImportTags
+          ? "已开启自动录入新标签"
+          : "已关闭自动录入新标签",
+      );
     });
     addSection.find("#cfm-add-folder-btn").on("click touchend", (e) => {
       e.preventDefault();
