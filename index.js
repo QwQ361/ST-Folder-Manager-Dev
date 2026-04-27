@@ -45498,11 +45498,11 @@ jQuery(async () => {
         '<div class="cfm-edit-popup-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.12);z-index:100000;display:flex;align-items:center;justify-content:center;"></div>',
       );
       const dialog = $(`
-        <div class="cfm-edit-popup" style="width:min(560px,calc(100vw - 32px));max-width:560px;max-height:calc(100vh - 32px);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;z-index:100001;">
+        <div class="cfm-edit-popup" style="width:min(560px,calc(100vw - 32px));max-width:560px;max-height:calc(100vh - 32px);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;z-index:100001;display:flex;flex-direction:column;overflow:hidden;">
           <div class="cfm-edit-popup-header">
             <span><i class="fa-solid fa-right-left"></i> 正则互通</span>
           </div>
-          <div class="cfm-edit-popup-body" style="display:flex;flex-direction:column;gap:14px;">
+          <div class="cfm-edit-popup-body" style="display:flex;flex-direction:column;gap:14px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;">
             <div style="font-size:13px;line-height:1.6;opacity:0.92;">已选择 <b>${selectedCount}</b> 个正则脚本，来源：<b>${escapeHtml(getRegexTransferScopeLabel(sourceScope))}</b></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">选择模式</div>
@@ -45520,14 +45520,14 @@ jQuery(async () => {
               <div style="font-size:12px;opacity:0.85;">全局分组</div>
               <select class="text_pole cfm-regex-transfer-folder-select"></select>
             </div>
-            <div class="cfm-regex-transfer-preset-target" style="display:none;flex-direction:column;gap:8px;">
+            <div class="cfm-regex-transfer-preset-target" style="display:none;flex-direction:column;gap:8px;min-height:0;">
               <div style="font-size:12px;opacity:0.85;">选择目标预设</div>
               <div class="cfm-entry-transfer-search">
                 <input type="text" class="cfm-entry-transfer-search-input cfm-regex-transfer-preset-search-input" placeholder="搜索预设..." />
                 <button class="cfm-entry-transfer-expand-all cfm-regex-transfer-preset-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
                 <button class="cfm-entry-transfer-collapse-all cfm-regex-transfer-preset-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
               </div>
-              <div class="cfm-entry-transfer-tree-container cfm-regex-transfer-preset-tree"></div>
+              <div class="cfm-entry-transfer-tree-container cfm-regex-transfer-preset-tree" style="max-height:min(42vh,360px);overflow-y:auto;overflow-x:hidden;"></div>
               <div class="cfm-entry-transfer-selected-hint cfm-regex-transfer-preset-hint"></div>
             </div>
           </div>
