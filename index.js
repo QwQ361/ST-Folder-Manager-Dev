@@ -2149,6 +2149,8 @@ jQuery(async () => {
       extension_settings[extensionName].regexFolderTree = {};
     if (!extension_settings[extensionName].regexGlobalGroups)
       extension_settings[extensionName].regexGlobalGroups = {};
+    if (extension_settings[extensionName].defaultRegexTransferMode !== "copy")
+      extension_settings[extensionName].defaultRegexTransferMode = "move";
     // 快速回复标签页
     if (!extension_settings[extensionName].qrGroups)
       extension_settings[extensionName].qrGroups = {};
@@ -32422,6 +32424,60 @@ jQuery(async () => {
     body.append(section);
   }
 
+  function getDefaultRegexTransferMode() {
+    ensureResourceSettings();
+    return extension_settings[extensionName].defaultRegexTransferMode === "copy"
+      ? "copy"
+      : "move";
+  }
+
+  // ==================== 共享：正则互通默认选择模式 ====================
+  function renderDefaultRegexTransferModeSection(body) {
+    const current = getDefaultRegexTransferMode();
+    const section = $(`
+      <div class="cfm-config-section cfm-default-page-section">
+        <label>正则互通默认选择模式</label>
+        <div class="cfm-default-page-options">
+          <div class="cfm-default-page-option cfm-regex-transfer-mode-option ${current === "move" ? "cfm-default-page-active" : ""}" data-value="move" title="互通正则时默认选中移动">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i><span>移动</span>
+          </div>
+          <div class="cfm-default-page-option cfm-regex-transfer-mode-option ${current === "copy" ? "cfm-default-page-active" : ""}" data-value="copy" title="互通正则时默认选中复制">
+            <i class="fa-solid fa-copy"></i><span>复制</span>
+          </div>
+        </div>
+        <div class="cfm-icon-config-hint">${current === "copy" ? "打开互通正则弹窗时，默认选中复制。" : "打开互通正则弹窗时，默认选中移动。"}</div>
+      </div>
+    `);
+
+    section
+      .find(".cfm-regex-transfer-mode-option")
+      .on("click touchend", function (e) {
+        e.preventDefault();
+        const value = $(this).data("value") === "copy" ? "copy" : "move";
+        ensureResourceSettings();
+        extension_settings[extensionName].defaultRegexTransferMode = value;
+        getContext().saveSettingsDebounced();
+        section
+          .find(".cfm-regex-transfer-mode-option")
+          .removeClass("cfm-default-page-active");
+        $(this).addClass("cfm-default-page-active");
+        section
+          .find(".cfm-icon-config-hint")
+          .text(
+            value === "copy"
+              ? "打开互通正则弹窗时，默认选中复制。"
+              : "打开互通正则弹窗时，默认选中移动。",
+          );
+        cfmToastr.success(
+          value === "copy"
+            ? "正则互通默认模式已切换为复制"
+            : "正则互通默认模式已切换为移动",
+        );
+      });
+
+    body.append(section);
+  }
+
   // ==================== 共享：条目缝合完成后的跳转策略 ====================
   function renderEntryTransferPostActionSection(body) {
     const saved = getEntryTransferPostActionMode();
@@ -32972,6 +33028,8 @@ jQuery(async () => {
     renderDefaultPageConfigSection(settingsBody);
     // 0.62 默认搜索范围
     renderDefaultSearchScopeSection(settingsBody);
+    // 0.625 正则互通默认选择模式
+    renderDefaultRegexTransferModeSection(settingsBody);
     // 0.63 条目缝合完成后的跳转策略
     renderEntryTransferPostActionSection(settingsBody);
     // 0.65 移动端顶部栏避让开关
@@ -33326,6 +33384,8 @@ jQuery(async () => {
     renderDefaultPageConfigSection(settingsBody);
     // 0.62 默认搜索范围
     renderDefaultSearchScopeSection(settingsBody);
+    // 0.625 正则互通默认选择模式
+    renderDefaultRegexTransferModeSection(settingsBody);
     // 0.63 条目缝合完成后的跳转策略
     renderEntryTransferPostActionSection(settingsBody);
     // 0.65 移动端顶部栏避让开关
@@ -33804,6 +33864,7 @@ jQuery(async () => {
     renderTopbarIconConfigSection(settingsBody);
     renderDefaultPageConfigSection(settingsBody);
     renderDefaultSearchScopeSection(settingsBody);
+    renderDefaultRegexTransferModeSection(settingsBody);
     renderEntryTransferPostActionSection(settingsBody);
     renderMobileTopbarAvoidSection(settingsBody);
     renderLanguageSwitchSection(settingsBody);
@@ -45478,6 +45539,7 @@ jQuery(async () => {
       }
 
       const folderOptions = getRegexTransferGlobalFolderOptions();
+      const defaultTransferMode = getDefaultRegexTransferMode();
       const globalDisabledReason = canUseGlobal ? "" : "（来源位置，不可选）";
       const charDisabledReason = !hasCurrentChar
         ? "（当前未选择角色）"
@@ -45506,8 +45568,8 @@ jQuery(async () => {
             <div style="font-size:13px;line-height:1.6;opacity:0.92;">已选择 <b>${selectedCount}</b> 个正则脚本，来源：<b>${escapeHtml(getRegexTransferScopeLabel(sourceScope))}</b></div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">选择模式</div>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="move" checked> <span>移动</span></label>
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="copy"> <span>复制</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="move" ${defaultTransferMode === "move" ? "checked" : ""}> <span>移动</span></label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="radio" name="cfm-regex-transfer-mode" value="copy" ${defaultTransferMode === "copy" ? "checked" : ""}> <span>复制</span></label>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;">
               <div style="font-size:12px;opacity:0.85;">选择目标</div>
