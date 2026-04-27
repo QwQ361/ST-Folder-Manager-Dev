@@ -2104,6 +2104,8 @@ jQuery(async () => {
       extension_settings[extensionName].themeBackgroundBindings = {};
     if (!extension_settings[extensionName].worldInfoEntryDetailSortMode)
       extension_settings[extensionName].worldInfoEntryDetailSortMode = "custom";
+    if (extension_settings[extensionName].defaultSearchScope === undefined)
+      extension_settings[extensionName].defaultSearchScope = "current";
     // 默认背景图（切换到没有绑定背景的主题时使用，空字符串=不设置）
     if (extension_settings[extensionName].defaultBackground === undefined)
       extension_settings[extensionName].defaultBackground = "";
@@ -28999,6 +29001,13 @@ jQuery(async () => {
       $(this).closest(".cfm-search-input-wrapper").removeClass("cfm-has-text");
       renderRightPane();
     });
+    const defaultSearchScope = getDefaultSearchScope();
+    popup
+      .find(
+        "#cfm-search-scope, #cfm-preset-search-scope, #cfm-worldinfo-search-scope, #cfm-theme-search-scope, #cfm-bg-search-scope, #cfm-persona-search-scope, #cfm-regex-search-scope, #cfm-qr-search-scope",
+      )
+      .val(defaultSearchScope);
+
     popup.find("#cfm-search-scope").on("change", function () {
       executeGlobalSearch();
     });
@@ -32184,6 +32193,55 @@ jQuery(async () => {
     body.append(section);
   }
 
+  function getDefaultSearchScope() {
+    const scope = extension_settings[extensionName].defaultSearchScope;
+    return scope === "all" ? "all" : "current";
+  }
+
+  // ==================== 共享：默认搜索范围 ====================
+  function renderDefaultSearchScopeSection(body) {
+    const current = getDefaultSearchScope();
+    const section = $(`
+      <div class="cfm-config-section cfm-default-page-section">
+        <label>默认搜索范围</label>
+        <div class="cfm-default-page-options">
+          <div class="cfm-default-page-option cfm-search-scope-option ${current === "current" ? "cfm-default-page-active" : ""}" data-value="current" title="默认只搜索当前选中文件夹及其子文件夹">
+            <i class="fa-solid fa-folder-tree"></i><span>当前文件夹</span>
+          </div>
+          <div class="cfm-default-page-option cfm-search-scope-option ${current === "all" ? "cfm-default-page-active" : ""}" data-value="all" title="默认搜索全部文件夹和资源">
+            <i class="fa-solid fa-globe"></i><span>全部文件夹</span>
+          </div>
+        </div>
+        <div class="cfm-icon-config-hint">${current === "all" ? "打开搜索时，默认在全部文件夹中搜索。" : "打开搜索时，默认只在当前文件夹范围内搜索。"}</div>
+      </div>
+    `);
+
+    section.find(".cfm-search-scope-option").on("click touchend", function (e) {
+      e.preventDefault();
+      const value = $(this).data("value") === "all" ? "all" : "current";
+      extension_settings[extensionName].defaultSearchScope = value;
+      getContext().saveSettingsDebounced();
+      section
+        .find(".cfm-search-scope-option")
+        .removeClass("cfm-default-page-active");
+      $(this).addClass("cfm-default-page-active");
+      section
+        .find(".cfm-icon-config-hint")
+        .text(
+          value === "all"
+            ? "打开搜索时，默认在全部文件夹中搜索。"
+            : "打开搜索时，默认只在当前文件夹范围内搜索。",
+        );
+      cfmToastr.success(
+        value === "all"
+          ? "默认搜索范围已切换为全部文件夹"
+          : "默认搜索范围已切换为当前文件夹",
+      );
+    });
+
+    body.append(section);
+  }
+
   // ==================== 共享：条目缝合完成后的跳转策略 ====================
   function renderEntryTransferPostActionSection(body) {
     const saved = getEntryTransferPostActionMode();
@@ -32683,6 +32741,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.62 默认搜索范围
+    renderDefaultSearchScopeSection(body);
     // 0.63 条目缝合完成后的跳转策略
     renderEntryTransferPostActionSection(body);
     // 0.65 移动端顶部栏避让开关
@@ -33029,6 +33089,8 @@ jQuery(async () => {
     renderTopbarIconConfigSection(body);
     // 0.6 默认打开页面（共享函数）
     renderDefaultPageConfigSection(body);
+    // 0.62 默认搜索范围
+    renderDefaultSearchScopeSection(body);
     // 0.63 条目缝合完成后的跳转策略
     renderEntryTransferPostActionSection(body);
     // 0.65 移动端顶部栏避让开关
@@ -33500,6 +33562,7 @@ jQuery(async () => {
     body.append(modeSection);
     renderTopbarIconConfigSection(body);
     renderDefaultPageConfigSection(body);
+    renderDefaultSearchScopeSection(body);
     renderEntryTransferPostActionSection(body);
     renderMobileTopbarAvoidSection(body);
     renderLanguageSwitchSection(body);
