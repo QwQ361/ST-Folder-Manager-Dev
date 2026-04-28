@@ -12103,7 +12103,7 @@ jQuery(async () => {
         const d = n.lastIndexOf(".");
         return d > 0 ? n.substring(0, d) : n;
       });
-      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option></select></div><div class="cfm-edit-popup-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option><option value="same-name-suffix">重命名为同名并自动后缀</option></select></div><div class="cfm-edit-popup-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
       const overlay = $(popupHtml);
       $("body").append(overlay);
       function updateRenameUI() {
@@ -12119,6 +12119,10 @@ jQuery(async () => {
         } else if (action === "add-suffix") {
           textLabel.text("后缀内容(扩展名前)");
           textInput.attr("placeholder", "输入要添加的后缀");
+          autoDetect.hide();
+        } else if (action === "same-name-suffix") {
+          textLabel.text("后缀格式");
+          textInput.attr("placeholder", "例如 (1) 或 -1，第一项保持原名");
           autoDetect.hide();
         } else if (action === "del-prefix") {
           textLabel.text("要删除的前缀");
@@ -12234,14 +12238,21 @@ jQuery(async () => {
         skipped = 0,
         failed = 0;
       cfmToastr.info(`正在批量重命名 ${names.length} 个背景...`);
-      for (const oldName of names) {
+      for (let i = 0; i < names.length; i++) {
+        const oldName = names[i];
         const dotIdx = oldName.lastIndexOf(".");
         const baseName = dotIdx > 0 ? oldName.substring(0, dotIdx) : oldName;
         const ext = dotIdx > 0 ? oldName.substring(dotIdx) : "";
         let newBase;
         if (action === "add-prefix") newBase = text + baseName;
         else if (action === "add-suffix") newBase = baseName + text;
-        else if (action === "del-prefix") {
+        else if (action === "same-name-suffix") {
+          if (i === 0) {
+            skipped++;
+            continue;
+          }
+          newBase = baseName + buildAutoIncrementSuffix(text, i);
+        } else if (action === "del-prefix") {
           if (!baseName.startsWith(text)) {
             skipped++;
             continue;
@@ -15575,6 +15586,17 @@ jQuery(async () => {
       }
     }
     return suffix.split("").reverse().join("");
+  }
+
+  function buildAutoIncrementSuffix(pattern, index) {
+    if (index <= 0) return "";
+    const suffix = String(pattern || "");
+    if (index === 1) return suffix;
+    const hasNumber = /(\d+)(?!.*\d)/.test(suffix);
+    if (hasNumber) {
+      return suffix.replace(/(\d+)(?!.*\d)/, String(index));
+    }
+    return `${suffix}${index}`;
   }
 
   // 执行预设重命名
