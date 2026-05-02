@@ -41902,6 +41902,67 @@ jQuery(async () => {
     }
   }
 
+  /**
+   * 整体刷新世界书分组追踪状态和UI按钮（不依赖具体 bookName）。
+   * 当酒馆原生界面修改世界书激活状态时，用此函数同步分组面板。
+   */
+  function refreshAllWiPresetTrackingState() {
+    const presets = getWiActivePresets();
+    const activeSet = getActiveWorldInfoSet();
+    const applied =
+      extension_settings[extensionName]._wiAppliedPresetIndices || [];
+
+    // 保留仍然完全激活的分组
+    const nextApplied = applied.filter((idx) => {
+      const preset = presets[idx];
+      return preset && preset.books.every((b) => activeSet.has(b));
+    });
+
+    // 检查是否有非全局、有绑定的分组现在变为完全激活
+    presets.forEach((preset, idx) => {
+      if (!preset || nextApplied.includes(idx)) return;
+      const hasBindings =
+        (preset.bindChars && preset.bindChars.length > 0) ||
+        (preset.bindPresets && preset.bindPresets.length > 0) ||
+        (preset.bindChats && preset.bindChats.length > 0);
+      if (
+        preset.scope !== "global" &&
+        hasBindings &&
+        preset.books.every((b) => activeSet.has(b))
+      ) {
+        nextApplied.push(idx);
+      }
+    });
+
+    const changed =
+      nextApplied.length !== applied.length ||
+      nextApplied.some((idx, i) => idx !== applied[i]);
+
+    if (changed) {
+      extension_settings[extensionName]._wiAppliedPresetIndices = nextApplied;
+      getContext().saveSettingsDebounced();
+    }
+
+    const overlay = $("#cfm-wi-preset-panel-overlay");
+    if (overlay.length) {
+      overlay.find(".cfm-wi-preset-item").each(function () {
+        const idx = parseInt($(this).attr("data-preset-idx"), 10);
+        const preset = presets[idx];
+        if (!preset) return;
+        const fullyApplied = preset.books.every((b) => activeSet.has(b));
+        const btn = $(this).find(".cfm-wi-preset-apply");
+        btn.toggleClass("cfm-wi-preset-apply-active", fullyApplied);
+        btn.attr("title", fullyApplied ? "当前已激活" : "应用到全局");
+        btn.attr(
+          "style",
+          fullyApplied
+            ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);"
+            : "",
+        );
+      });
+    }
+  }
+
   function syncQrPresetTrackingForManualToggle(setName, isActive) {
     const presets = getQrActivePresets();
     const applied =
@@ -53453,6 +53514,16 @@ jQuery(async () => {
       });
     }
   }
+
+  // 监听酒馆原生 #world_info select 的 change 事件，同步世界书分组按钮状态
+  let _nativeWiChangeTimer = null;
+  $(document).on("change", "#world_info", () => {
+    if (_nativeWiChangeTimer) clearTimeout(_nativeWiChangeTimer);
+    _nativeWiChangeTimer = setTimeout(() => {
+      _nativeWiChangeTimer = null;
+      refreshAllWiPresetTrackingState();
+    }, 200);
+  });
 
   publishBackupBridgeSignal("ready", {
     displayName: "酒馆资源管理器",
