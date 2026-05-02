@@ -51858,15 +51858,21 @@ jQuery(async () => {
     $("body").append(panel);
 
     const anchorRect = anchorEl[0].getBoundingClientRect();
-    let top = anchorRect.bottom + 4;
     let left = anchorRect.left;
     const panelWidth = panel.outerWidth();
     const panelHeight = panel.outerHeight();
     if (left + panelWidth > window.innerWidth)
       left = window.innerWidth - panelWidth - 8;
     if (left < 4) left = 4;
-    if (top + panelHeight > window.innerHeight)
+    const spaceBelow = window.innerHeight - anchorRect.bottom - 4;
+    const spaceAbove = anchorRect.top - 4;
+    let top;
+    if (panelHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+      top = anchorRect.bottom + 4;
+    } else {
       top = anchorRect.top - panelHeight - 4;
+    }
+    if (top < 4) top = 4;
     panel.css({ top: `${top}px`, left: `${left}px` });
 
     panel.on("click", ".cfm-nf-arrow", function (e) {
@@ -51991,7 +51997,6 @@ jQuery(async () => {
     // 定位面板
     $("body").append(panel);
     const anchorRect = anchorEl[0].getBoundingClientRect();
-    let top = anchorRect.bottom + 4;
     let left = anchorRect.left;
     // 确保不超出视口
     const panelWidth = panel.outerWidth();
@@ -51999,8 +52004,15 @@ jQuery(async () => {
     if (left + panelWidth > window.innerWidth)
       left = window.innerWidth - panelWidth - 8;
     if (left < 4) left = 4;
-    if (top + panelHeight > window.innerHeight)
+    const spaceBelow = window.innerHeight - anchorRect.bottom - 4;
+    const spaceAbove = anchorRect.top - 4;
+    let top;
+    if (panelHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+      top = anchorRect.bottom + 4;
+    } else {
       top = anchorRect.top - panelHeight - 4;
+    }
+    if (top < 4) top = 4;
     panel.css({ top: top + "px", left: left + "px" });
 
     // 事件：展开/收起箭头
@@ -53130,15 +53142,21 @@ jQuery(async () => {
         $("body").append(panel);
       }
       const anchorRect = btn[0].getBoundingClientRect();
-      let top = anchorRect.bottom + 4;
       let left = anchorRect.left;
       const panelWidth = panel.outerWidth();
       const panelHeight = panel.outerHeight();
       if (left + panelWidth > window.innerWidth)
         left = window.innerWidth - panelWidth - 8;
       if (left < 4) left = 4;
-      if (top + panelHeight > window.innerHeight)
+      const spaceBelow = window.innerHeight - anchorRect.bottom - 4;
+      const spaceAbove = anchorRect.top - 4;
+      let top;
+      if (panelHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+        top = anchorRect.bottom + 4;
+      } else {
         top = anchorRect.top - panelHeight - 4;
+      }
+      if (top < 4) top = 4;
       panel.css({ top: top + "px", left: left + "px" });
 
       // 展开/收起箭头
