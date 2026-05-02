@@ -2115,6 +2115,21 @@
     background: var(--SmartThemeBlurTintColor, #1e1e2e);
     border-top: 1px solid var(--SmartThemeBorderColor, #45475a);
   }
+
+  /* 自定义外观弹窗移动端适配：防止底部按钮被浏览器导航栏遮挡 */
+  .cfm-theme-popup-overlay {
+    align-items: flex-end;
+  }
+  .cfm-theme-popup {
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-bottom, 0px), 56px) - 12px
+    );
+    margin-bottom: max(env(safe-area-inset-bottom, 0px), 56px);
+    border-radius: 10px 10px 0 0;
+  }
+  .cfm-theme-popup-footer {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
 }
 
 /* ========== 移动端下方内容区全屏模式 ========== */
