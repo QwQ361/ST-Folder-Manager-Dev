@@ -2119,6 +2119,34 @@
   }
 }
 
+/* ========== 移动端全屏模式变体 ========== */
+@media (max-width: 768px) {
+  /* 模式1: to-search（默认）—— 隐藏文件夹面板，保留标题栏+标签页+搜索栏 */
+  /* 这是现有的默认行为，无需额外隐藏 */
+
+  /* 模式2: to-tabs —— 隐藏标题栏和搜索栏，仅保留标签页 */
+  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-to-tabs > .cfm-header {
+    display: none !important;
+  }
+  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-to-tabs
+    > .cfm-global-search-bar {
+    display: none !important;
+  }
+
+  /* 模式3: true-full —— 隐藏标题栏+标签页+搜索栏，完全全屏 */
+  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-true-full > .cfm-header {
+    display: none !important;
+  }
+  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-true-full
+    > .cfm-resource-tabs {
+    display: none !important;
+  }
+  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-true-full
+    > .cfm-global-search-bar {
+    display: none !important;
+  }
+}
+
 /* 退出全屏按钮 */
 .cfm-exit-fullscreen-btn {
   display: none;
