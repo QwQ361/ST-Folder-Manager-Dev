@@ -6847,6 +6847,34 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   max-width: 100%;
 }
 
+/* 原生弹窗中的置顶按钮 */
+.cfm-native-chat-pin-btn {
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    transform 0.15s;
+}
+.cfm-native-chat-pin-btn:hover {
+  color: #f9e2af !important;
+  opacity: 1 !important;
+}
+/* 已置顶状态 */
+.cfm-native-chat-pin-btn.cfm-native-chat-pinned {
+  color: #f9e2af !important;
+  opacity: 1 !important;
+}
+.cfm-native-chat-pin-btn.cfm-native-chat-pinned::before {
+  /* 图钉旋转表示已固定 */
+  display: inline-block;
+  transform: rotate(-45deg);
+}
+
+/* 原生弹窗中已置顶的聊天记录行高亮 */
+.cfm-native-chat-pinned .select_chat_block {
+  border-left: 2px solid rgba(249, 226, 175, 0.6);
+}
+
 /* 原生弹窗中的备注编辑按钮 */
 .cfm-native-chat-note-edit-btn {
   font-size: 14px;

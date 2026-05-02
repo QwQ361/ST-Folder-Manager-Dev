@@ -24464,6 +24464,8 @@ jQuery(async () => {
       initChatNotes();
     }
 
+    const avatar = getCurrentCharAvatar();
+
     const wrappers = document.querySelectorAll(
       "#select_chat_div .select_chat_block_wrapper",
     );
@@ -24480,6 +24482,12 @@ jQuery(async () => {
       const fileNameFull = block.getAttribute("file_name") || "";
       const chatName = fileNameFull.replace(".jsonl", "");
       const note = cfmChatNotes[chatName];
+      const pinned = avatar ? isChatPinned(avatar, chatName) : false;
+
+      // 如果已置顶，添加置顶标记样式
+      if (pinned) {
+        wrapper.classList.add("cfm-native-chat-pinned");
+      }
 
       if (note) {
         // 在预览消息上方添加备注内容
@@ -24498,21 +24506,54 @@ jQuery(async () => {
         }
       }
 
-      // 添加备注编辑按钮（在操作按钮区域）
+      // 添加置顶按钮和备注编辑按钮（在操作按钮区域）
       const actionsContainer = wrapper.querySelector(
         ".flex-container.gap10px:last-child",
       );
       if (
         actionsContainer &&
-        !actionsContainer.querySelector(".cfm-native-chat-note-edit-btn")
+        !actionsContainer.querySelector(".cfm-native-chat-pin-btn")
       ) {
+        // 添加置顶按钮
+        if (avatar) {
+          const pinBtn = document.createElement("div");
+          pinBtn.className =
+            "cfm-native-chat-pin-btn opacity50p hoverglow fa-solid fa-thumbtack" +
+            (pinned ? " cfm-native-chat-pinned" : "");
+          pinBtn.title = pinned ? "取消置顶" : "置顶到最近聊天";
+          pinBtn.style.cursor = "pointer";
+          actionsContainer.insertBefore(pinBtn, actionsContainer.firstChild);
+
+          pinBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const nowPinned = togglePinChat(avatar, chatName);
+            // 刷新弹窗内容：移除所有增强标记，然后重新处理
+            document
+              .querySelectorAll("#select_chat_div .cfm-native-chat-enhanced")
+              .forEach((w) => {
+                w.classList.remove("cfm-native-chat-enhanced");
+                w.classList.remove("cfm-native-chat-pinned");
+                w.querySelectorAll(
+                  ".cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn, .cfm-native-chat-pin-btn",
+                ).forEach((el) => el.remove());
+              });
+            enhanceNativeChatPopup();
+          });
+        }
+
+        // 添加备注编辑按钮
         const noteEditBtn = document.createElement("div");
         noteEditBtn.className =
           "cfm-native-chat-note-edit-btn opacity50p hoverglow fa-solid fa-pen-to-square";
         noteEditBtn.title = note ? "编辑备注" : "添加备注";
         noteEditBtn.style.cursor = "pointer";
-        // 插入到第一个按钮之前
-        actionsContainer.insertBefore(noteEditBtn, actionsContainer.firstChild);
+        // 插入到置顶按钮之后（或第一个按钮之前）
+        const pinBtnExisting = actionsContainer.querySelector(".cfm-native-chat-pin-btn");
+        if (pinBtnExisting) {
+          pinBtnExisting.insertAdjacentElement("afterend", noteEditBtn);
+        } else {
+          actionsContainer.insertBefore(noteEditBtn, actionsContainer.firstChild);
+        }
 
         noteEditBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
@@ -24525,14 +24566,14 @@ jQuery(async () => {
             cfmChatNotes[chatName] = newNote;
           }
           saveChatNotes();
-          // 刷新弹窗内容：移除所有增强标记和已注入的备注元素，然后重新处理
+          // 刷新弹窗内容：移除所有增强标记和已注入的元素，然后重新处理
           document
             .querySelectorAll("#select_chat_div .cfm-native-chat-enhanced")
             .forEach((w) => {
               w.classList.remove("cfm-native-chat-enhanced");
-              // 移除旧的备注元素
+              w.classList.remove("cfm-native-chat-pinned");
               w.querySelectorAll(
-                ".cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn",
+                ".cfm-native-chat-note-line, .cfm-native-chat-note-edit-btn, .cfm-native-chat-pin-btn",
               ).forEach((el) => el.remove());
             });
           enhanceNativeChatPopup();
