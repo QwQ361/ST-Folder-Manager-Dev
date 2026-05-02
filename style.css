@@ -533,14 +533,15 @@
   appearance: auto !important;
   -webkit-appearance: auto !important;
   -moz-appearance: auto !important;
-  width: auto !important;
-  height: auto !important;
+  width: 16px !important;
+  height: 16px !important;
   opacity: 1 !important;
   position: static !important;
   pointer-events: auto !important;
   margin: 0;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   accent-color: #89b4fa;
+  cursor: pointer;
 }
 .cfm-config-tab-shell {
   display: flex;
@@ -2138,10 +2139,7 @@
   /* 模式1: to-search（默认）—— 隐藏文件夹面板，保留标题栏+标签页+搜索栏 */
   /* 这是现有的默认行为，无需额外隐藏 */
 
-  /* 模式2: to-tabs —— 隐藏标题栏和搜索栏，仅保留标签页 */
-  #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-to-tabs > .cfm-header {
-    display: none !important;
-  }
+  /* 模式2: to-tabs —— 隐藏搜索栏，保留标题栏和标签页 */
   #cfm-popup.cfm-bottom-fullscreen-active.cfm-fs-to-tabs
     > .cfm-global-search-bar {
     display: none !important;

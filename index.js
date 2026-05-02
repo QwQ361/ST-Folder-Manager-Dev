@@ -33580,7 +33580,7 @@ jQuery(async () => {
             <input type="radio" name="cfm-mobile-fs-mode" value="to-tabs" ${currentMode === "to-tabs" ? "checked" : ""}>
             <span>全屏至标签页</span>
           </label>
-          <div class="cfm-icon-config-hint" style="margin-left:24px;margin-top:-2px;">隐藏文件夹面板、标题栏和搜索栏，仅保留标签页</div>
+          <div class="cfm-icon-config-hint" style="margin-left:24px;margin-top:-2px;">隐藏文件夹面板和搜索栏，保留标题栏和标签页</div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="radio" name="cfm-mobile-fs-mode" value="true-full" ${currentMode === "true-full" ? "checked" : ""}>
             <span>真全屏</span>
