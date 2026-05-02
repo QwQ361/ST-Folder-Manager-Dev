@@ -3470,9 +3470,6 @@ jQuery(async () => {
     // 移动端下栏全屏模式："to-search"(至搜索栏，默认) | "to-tabs"(至标签页) | "true-full"(真全屏)
     if (!extension_settings[extensionName].mobileFullscreenMode)
       extension_settings[extensionName].mobileFullscreenMode = "to-search";
-    // 移动端全屏状态是否在关闭/重开插件时保持（默认否）
-    if (extension_settings[extensionName].mobileFullscreenPersist === undefined)
-      extension_settings[extensionName].mobileFullscreenPersist = false;
     // 界面语言："zh-CN"(简体中文，默认) | "zh-TW"(繁体中文)
     if (!extension_settings[extensionName].language)
       extension_settings[extensionName].language = "zh-CN";
@@ -27108,14 +27105,20 @@ jQuery(async () => {
         let _fullscreenConfirmPending = false;
 
         const enterBottomFullscreen = () => {
-          const mode = extension_settings[extensionName].mobileFullscreenMode || "to-search";
+          const mode =
+            extension_settings[extensionName].mobileFullscreenMode ||
+            "to-search";
           $dualPane.addClass("cfm-bottom-fullscreen");
           // 清除旧模式class，应用当前模式
-          $dualPane.removeClass("cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
+          $dualPane.removeClass(
+            "cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full",
+          );
           $dualPane.addClass("cfm-fs-" + mode);
           // 在 popup 层面也添加模式class，用于控制 header/tabs/search 的显隐
           const $popup = $("#cfm-popup");
-          $popup.removeClass("cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full cfm-bottom-fullscreen-active");
+          $popup.removeClass(
+            "cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full cfm-bottom-fullscreen-active",
+          );
           $popup.addClass("cfm-bottom-fullscreen-active cfm-fs-" + mode);
           // 确保退出按钮存在
           const $rightHeader = $(rightPane).find(".cfm-right-header");
@@ -27130,26 +27133,20 @@ jQuery(async () => {
             });
             $rightHeader.prepend(exitBtn);
           }
-          // 如果开启了全屏状态持久化，保存当前状态
-          if (extension_settings[extensionName].mobileFullscreenPersist) {
-            extension_settings[extensionName]._mobileFullscreenActive = true;
-            getContext().saveSettingsDebounced();
-          }
         };
 
         const exitBottomFullscreen = () => {
-          $dualPane.removeClass("cfm-bottom-fullscreen cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
+          $dualPane.removeClass(
+            "cfm-bottom-fullscreen cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full",
+          );
           // 清除 popup 层面的全屏class
-          $("#cfm-popup").removeClass("cfm-bottom-fullscreen-active cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
+          $("#cfm-popup").removeClass(
+            "cfm-bottom-fullscreen-active cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full",
+          );
           // 恢复左侧面板默认高度
           leftPane.style.height = "";
           leftPane.style.maxHeight = "";
           leftPane.style.minHeight = "";
-          // 如果开启了全屏状态持久化，保存退出状态
-          if (extension_settings[extensionName].mobileFullscreenPersist) {
-            extension_settings[extensionName]._mobileFullscreenActive = false;
-            getContext().saveSettingsDebounced();
-          }
         };
 
         const showFullscreenConfirm = () => {
@@ -27247,44 +27244,6 @@ jQuery(async () => {
     };
 
     bindMobilePanePathDrag();
-
-    // 全屏状态恢复：如果开启了持久化且上次为全屏，则自动恢复
-    if (
-      window.innerWidth <= 768 &&
-      extension_settings[extensionName].mobileFullscreenPersist &&
-      extension_settings[extensionName]._mobileFullscreenActive
-    ) {
-      setTimeout(() => {
-        const mode = extension_settings[extensionName].mobileFullscreenMode || "to-search";
-        // 在 popup 层面添加全屏class
-        popup.removeClass("cfm-bottom-fullscreen-active cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
-        popup.addClass("cfm-bottom-fullscreen-active cfm-fs-" + mode);
-        popup.find(".cfm-dual-pane").each(function () {
-          const $dp = $(this);
-          $dp.addClass("cfm-bottom-fullscreen cfm-fs-" + mode);
-          // 确保退出按钮存在
-          const $rh = $dp.find(".cfm-right-header");
-          if (!$rh.find(".cfm-exit-fullscreen-btn").length) {
-            const exitBtn = $(
-              '<button class="cfm-exit-fullscreen-btn" title="退出全屏"><i class="fa-solid fa-compress"></i></button>',
-            );
-            exitBtn.on("click touchend", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              $dp.removeClass("cfm-bottom-fullscreen cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
-              $("#cfm-popup").removeClass("cfm-bottom-fullscreen-active cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
-              const lp = $dp.find(".cfm-left-pane")[0];
-              if (lp) { lp.style.height = ""; lp.style.maxHeight = ""; lp.style.minHeight = ""; }
-              if (extension_settings[extensionName].mobileFullscreenPersist) {
-                extension_settings[extensionName]._mobileFullscreenActive = false;
-                getContext().saveSettingsDebounced();
-              }
-            });
-            $rh.prepend(exitBtn);
-          }
-        });
-      }, 100);
-    }
 
     const bindMobileTapGuard = () => {
       if (window.innerWidth > 768) return;
@@ -33605,8 +33564,8 @@ jQuery(async () => {
 
   // ==================== 共享：移动端全屏模式设置 ====================
   function renderMobileFullscreenSection(body) {
-    const currentMode = extension_settings[extensionName].mobileFullscreenMode || "to-search";
-    const currentPersist = extension_settings[extensionName].mobileFullscreenPersist === true;
+    const currentMode =
+      extension_settings[extensionName].mobileFullscreenMode || "to-search";
     const section = $(`
       <div class="cfm-config-section">
         <div style="font-weight:600;margin-bottom:6px;">移动端下栏全屏模式</div>
@@ -33628,43 +33587,22 @@ jQuery(async () => {
           </label>
           <div class="cfm-icon-config-hint" style="margin-left:24px;margin-top:-2px;">下栏完全覆盖整个弹窗，包括标签页和标题栏</div>
         </div>
-        <hr style="border:none;border-top:1px solid var(--SmartThemeBorderColor,#45475a);margin:10px 0;">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="cfm-mobile-fs-persist" ${currentPersist ? "checked" : ""}>
-          <span>记住全屏状态</span>
-        </label>
-        <div class="cfm-icon-config-hint">开启后，关闭插件再重新打开时自动恢复上次的全屏/非全屏状态；关闭则每次打开默认非全屏。</div>
       </div>
     `);
     section.find("input[name='cfm-mobile-fs-mode']").on("change", function () {
       const val = $(this).val();
       extension_settings[extensionName].mobileFullscreenMode = val;
       getContext().saveSettingsDebounced();
-      // 如果当前正处于全屏状态，实时切换模式
-      if (window.innerWidth <= 768) {
-        const $popup = $("#cfm-popup");
-        const $dp = $popup.find(".cfm-dual-pane.cfm-bottom-fullscreen");
-        if ($dp.length) {
-          $dp.removeClass("cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
-          $dp.addClass("cfm-fs-" + val);
-          $popup.removeClass("cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
-          $popup.addClass("cfm-fs-" + val);
-        }
-      }
-      const labels = { "to-search": "全屏至搜索栏", "to-tabs": "全屏至标签页", "true-full": "真全屏" };
-      cfmToastr.success("已切换为：" + (labels[val] || val));
+      const labels = {
+        "to-search": "全屏至搜索栏",
+        "to-tabs": "全屏至标签页",
+        "true-full": "真全屏",
+      };
+      cfmToastr.success(
+        "已切换为：" + (labels[val] || val) + "（下次进入全屏时生效）",
+      );
     });
-    section.find("#cfm-mobile-fs-persist").on("change", function () {
-      const checked = $(this).prop("checked");
-      extension_settings[extensionName].mobileFullscreenPersist = checked;
-      getContext().saveSettingsDebounced();
-      if (!checked) {
-        // 关闭持久化时，清除已保存的状态
-        delete extension_settings[extensionName]._mobileFullscreenActive;
-        getContext().saveSettingsDebounced();
-      }
-      cfmToastr.success(checked ? "已开启全屏状态记忆" : "已关闭全屏状态记忆");
-    });
+
     body.append(section);
   }
 
