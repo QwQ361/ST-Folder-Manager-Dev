@@ -6452,6 +6452,59 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   color: #89b4fa;
   flex: 0 0 auto;
 }
+/* ==================== 批量操作进度覆盖层 ==================== */
+.cfm-batch-progress-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 17, 27, 0.52);
+  backdrop-filter: blur(1.5px);
+  z-index: 10020;
+  pointer-events: auto;
+}
+.cfm-batch-progress-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  min-width: 220px;
+  padding: 14px 22px;
+  max-width: min(calc(100vw - 32px), 480px);
+  border-radius: 999px;
+  background: rgba(24, 24, 37, 0.98);
+  border: 1px solid rgba(137, 180, 250, 0.28);
+  color: #eef4ff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+}
+.cfm-batch-progress-box i.fa-spinner {
+  color: #89b4fa;
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+.cfm-batch-progress-box .cfm-batch-progress-text {
+  color: inherit;
+  opacity: 1;
+}
+.cfm-batch-progress-box .cfm-batch-progress-counter {
+  color: #89b4fa;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-left: 2px;
+}
 .cfm-persona-detail-section {
   display: flex;
   flex-direction: column;

@@ -8904,6 +8904,48 @@ jQuery(async () => {
     return normalized;
   }
 
+  // ==================== 批量操作进度覆盖层 ====================
+  /**
+   * 显示批量操作进度覆盖层（带旋转加载图标和实时进度计数）
+   * @param {string} actionLabel - 操作描述文本，如 "正在批量重命名主题"
+   * @param {number} total - 总数
+   * @returns {{ update: (current: number, customText?: string) => void, done: (resultText?: string) => void, remove: () => void }}
+   */
+  function showBatchProgressOverlay(actionLabel, total) {
+    // 移除可能残留的上一个
+    $(".cfm-batch-progress-overlay").remove();
+    const overlay = $(
+      `<div class="cfm-batch-progress-overlay" aria-live="polite" aria-busy="true">
+        <div class="cfm-batch-progress-box">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span class="cfm-batch-progress-text">${escapeHtml(actionLabel)}</span>
+          <span class="cfm-batch-progress-counter">0/${total}</span>
+        </div>
+      </div>`,
+    );
+    $("body").append(overlay);
+    const textEl = overlay.find(".cfm-batch-progress-text");
+    const counterEl = overlay.find(".cfm-batch-progress-counter");
+    return {
+      /** 更新进度计数 */
+      update(current, customText) {
+        counterEl.text(`${current}/${total}`);
+        if (customText) textEl.text(customText);
+      },
+      /** 操作完成，短暂显示结果后自动移除 */
+      done(resultText) {
+        overlay.find("i.fa-spinner").removeClass("fa-spin").removeClass("fa-spinner").addClass("fa-check");
+        counterEl.text(`${total}/${total}`);
+        if (resultText) textEl.text(resultText);
+        setTimeout(() => overlay.remove(), 600);
+      },
+      /** 立即移除覆盖层 */
+      remove() {
+        overlay.remove();
+      },
+    };
+  }
+
   function showEntryTransferProgressLoading(
     sourceEntries,
     targetType,
@@ -11886,7 +11928,8 @@ jQuery(async () => {
       let success = 0,
         skipped = 0,
         failed = 0;
-      cfmToastr.info(`正在批量重命名 ${names.length} 个主题...`);
+      const batchProgress = showBatchProgressOverlay("正在批量重命名主题", names.length);
+      let processed = 0;
       for (const oldName of names) {
         let newName;
         if (action === "add-prefix") newName = text + oldName;
@@ -11894,28 +11937,38 @@ jQuery(async () => {
         else if (action === "del-prefix") {
           if (!oldName.startsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(text.length);
         } else if (action === "del-suffix") {
           if (!oldName.endsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(0, oldName.length - text.length);
         }
         if (!newName || newName === oldName) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         if (existingThemes.has(newName)) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         try {
           const themeData = getThemeData(oldName);
           if (!themeData) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           themeData.name = newName;
@@ -11950,10 +12003,13 @@ jQuery(async () => {
           console.warn(`[CFM] 重命名主题 ${oldName} 失败`, e);
           failed++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
       let msg = `已重命名 ${success} 个主题`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
     }
@@ -12263,7 +12319,8 @@ jQuery(async () => {
       let success = 0,
         skipped = 0,
         failed = 0;
-      cfmToastr.info(`正在批量重命名 ${names.length} 个背景...`);
+      const batchProgress = showBatchProgressOverlay("正在批量重命名背景", names.length);
+      let processed = 0;
       for (let i = 0; i < names.length; i++) {
         const oldName = names[i];
         const dotIdx = oldName.lastIndexOf(".");
@@ -12277,12 +12334,16 @@ jQuery(async () => {
         } else if (action === "del-prefix") {
           if (!baseName.startsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newBase = baseName.substring(text.length);
         } else if (action === "del-suffix") {
           if (!baseName.endsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newBase = baseName.substring(0, baseName.length - text.length);
@@ -12290,6 +12351,8 @@ jQuery(async () => {
         const newName = newBase + ext;
         if (!newBase || newName === oldName) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         try {
@@ -12300,6 +12363,8 @@ jQuery(async () => {
           });
           if (!resp.ok) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           $("#bg_menu_content .bg_example")
@@ -12314,10 +12379,13 @@ jQuery(async () => {
           console.warn(`[CFM] 重命名背景 ${oldName} 失败`, e);
           failed++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
       let msg = `已重命名 ${success} 个背景`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
     }
@@ -15189,7 +15257,8 @@ jQuery(async () => {
       let skipped = 0;
       let failed = 0;
 
-      cfmToastr.info(`正在批量重命名 ${names.length} 个快速回复集...`);
+      const batchProgress = showBatchProgressOverlay("正在批量重命名快速回复集", names.length);
+      let processed = 0;
 
       for (const oldName of names) {
         let newName;
@@ -15200,18 +15269,24 @@ jQuery(async () => {
         } else if (action === "del-prefix") {
           if (!oldName.startsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(text.length);
         } else if (action === "del-suffix") {
           if (!oldName.endsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(0, oldName.length - text.length);
         }
         if (!newName || newName === oldName) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         try {
@@ -15224,6 +15299,8 @@ jQuery(async () => {
           }
           if (!set) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           const setData = set.toJSON
@@ -15237,6 +15314,8 @@ jQuery(async () => {
           });
           if (!saveResp.ok) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           await fetch("/api/quick-replies/delete", {
@@ -15257,10 +15336,13 @@ jQuery(async () => {
           console.warn(`[CFM] 重命名快速回复集 ${oldName} 失败`, e);
           failed++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
       let msg = `已重命名 ${success} 个快速回复集`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
     }
@@ -15696,7 +15778,8 @@ jQuery(async () => {
       let skipped = 0;
       let failed = 0;
 
-      cfmToastr.info(`正在批量重命名 ${names.length} 个预设...`);
+      const batchProgress = showBatchProgressOverlay("正在批量重命名预设", names.length);
+      let processed = 0;
 
       for (const oldName of names) {
         let newName;
@@ -15707,29 +15790,39 @@ jQuery(async () => {
         } else if (action === "del-prefix") {
           if (!oldName.startsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(text.length);
         } else if (action === "del-suffix") {
           if (!oldName.endsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(0, oldName.length - text.length);
         }
         if (!newName || newName === oldName) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         // 检查新名称是否冲突
         if (existingPresets.has(newName)) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         try {
           const presetData = getPresetDataForRename(pm, oldName);
           if (!presetData) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           await fetch("/api/presets/save", {
@@ -15757,10 +15850,13 @@ jQuery(async () => {
           console.warn(`[CFM] 重命名预设 ${oldName} 失败`, e);
           failed++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
       let msg = `已重命名 ${success} 个预设`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
     }
@@ -16897,31 +16993,42 @@ jQuery(async () => {
       return 0;
     }
 
+    const batchProgress = showBatchProgressOverlay("正在批量复制世界书条目", targetUids.length);
     const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
     const existingUids = Object.keys(worldInfoData.entries)
       .map(Number)
       .filter((n) => !isNaN(n));
     let nextUid = existingUids.length > 0 ? Math.max(...existingUids) + 1 : 0;
     let duplicatedCount = 0;
+    let processed = 0;
 
     for (const uid of targetUids) {
       const entry = worldInfoData?.entries?.[uid];
-      if (!entry) continue;
+      if (!entry) {
+        processed++;
+        batchProgress.update(processed);
+        continue;
+      }
       const cloned = structuredClone(entry);
       delete cloned.uid;
       cloned.uid = nextUid;
       worldInfoData.entries[nextUid] = cloned;
       nextUid++;
       duplicatedCount++;
+      processed++;
+      batchProgress.update(processed);
     }
 
     if (!duplicatedCount) {
+      batchProgress.remove();
       cfmToastr.warning("所选条目不支持复制操作");
       return 0;
     }
 
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
-    cfmToastr.success(`已复制 ${duplicatedCount} 个世界书条目`);
+    const copyMsg = `已复制 ${duplicatedCount} 个世界书条目`;
+    batchProgress.done(copyMsg);
+    cfmToastr.success(copyMsg);
     refreshWorldInfoPanelView();
     return duplicatedCount;
   }
@@ -16954,11 +17061,17 @@ jQuery(async () => {
     );
     if (!confirmed) return 0;
 
+    const batchProgress = showBatchProgressOverlay("正在批量删除世界书条目", targetUids.length);
     const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
     let deletedCount = 0;
+    let processed = 0;
 
     for (const uid of targetUids) {
-      if (!worldInfoData?.entries?.[uid]) continue;
+      if (!worldInfoData?.entries?.[uid]) {
+        processed++;
+        batchProgress.update(processed);
+        continue;
+      }
       delete worldInfoData.entries[uid];
       // 清理 originalData
       if (
@@ -16973,15 +17086,20 @@ jQuery(async () => {
         }
       }
       deletedCount++;
+      processed++;
+      batchProgress.update(processed);
     }
 
     if (!deletedCount) {
+      batchProgress.remove();
       cfmToastr.warning("所选条目不支持删除操作");
       return 0;
     }
 
     await saveWorldInfoDetailData(normalizedName, worldInfoData);
-    cfmToastr.success(`已删除 ${deletedCount} 个世界书条目`);
+    const delMsg = `已删除 ${deletedCount} 个世界书条目`;
+    batchProgress.done(delMsg);
+    cfmToastr.success(delMsg);
     refreshWorldInfoPanelView();
     return deletedCount;
   }
@@ -21608,7 +21726,8 @@ jQuery(async () => {
       let skipped = 0;
       let failed = 0;
 
-      cfmToastr.info(`正在批量重命名 ${names.length} 个世界书...`);
+      const batchProgress = showBatchProgressOverlay("正在批量重命名世界书", names.length);
+      let processed = 0;
 
       for (const oldName of names) {
         let newName;
@@ -21619,18 +21738,24 @@ jQuery(async () => {
         } else if (action === "del-prefix") {
           if (!oldName.startsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(text.length);
         } else if (action === "del-suffix") {
           if (!oldName.endsWith(text)) {
             skipped++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           newName = oldName.substring(0, oldName.length - text.length);
         }
         if (!newName || newName === oldName) {
           skipped++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
         try {
@@ -21641,6 +21766,8 @@ jQuery(async () => {
           });
           if (!resp.ok) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           const wiData = await resp.json();
@@ -21651,6 +21778,8 @@ jQuery(async () => {
           });
           if (!saveResp.ok) {
             failed++;
+            processed++;
+            batchProgress.update(processed);
             continue;
           }
           await fetch("/api/worldinfo/delete", {
@@ -21668,10 +21797,13 @@ jQuery(async () => {
           console.warn(`[CFM] 重命名世界书 ${oldName} 失败`, e);
           failed++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
       let msg = `已重命名 ${success} 个世界书`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
     }
@@ -22628,16 +22760,23 @@ jQuery(async () => {
             )
           )
             return;
+          const batchProgress = showBatchProgressOverlay("正在批量删除正则脚本", toDeleteIds.length);
           try {
+            let processed = 0;
             for (const id of toDeleteIds) {
               const idx = scripts.findIndex((s) => s.id === id);
               if (idx !== -1) scripts.splice(idx, 1);
+              processed++;
+              batchProgress.update(processed);
             }
             await saveCharRegexScripts(avatar, scripts);
             cfmRegexBatchSelected.clear();
-            cfmToastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            const delMsg = `已删除 ${toDeleteIds.length} 个正则脚本`;
+            batchProgress.done(delMsg);
+            cfmToastr.success(delMsg);
             rerenderCurrentView();
           } catch (err) {
+            batchProgress.remove();
             console.error("[CFM] 批量删除正则失败:", err);
             cfmToastr.error("删除失败: " + err.message);
           }
@@ -23433,16 +23572,23 @@ jQuery(async () => {
             )
           )
             return;
+          const batchProgress = showBatchProgressOverlay("正在批量删除正则脚本", toDeleteIds.length);
           try {
+            let processed = 0;
             for (const id of toDeleteIds) {
               const idx = scripts.findIndex((s) => s.id === id);
               if (idx !== -1) scripts.splice(idx, 1);
+              processed++;
+              batchProgress.update(processed);
             }
             await savePresetRegexScripts(scripts, presetName);
             cfmRegexBatchSelected.clear();
-            cfmToastr.success(`已删除 ${toDeleteIds.length} 个正则脚本`);
+            const delMsg = `已删除 ${toDeleteIds.length} 个正则脚本`;
+            batchProgress.done(delMsg);
+            cfmToastr.success(delMsg);
             rerenderCurrentView();
           } catch (err) {
+            batchProgress.remove();
             console.error("[CFM] 批量删除正则失败:", err);
             cfmToastr.error("删除失败: " + err.message);
           }
@@ -24675,7 +24821,8 @@ jQuery(async () => {
     const ctx = getContext();
     let successCount = 0;
     let failCount = 0;
-    cfmToastr.info(`正在导入 ${files.length} 个聊天记录...`);
+    let processed = 0;
+    const batchProgress = showBatchProgressOverlay("正在导入聊天记录", files.length);
     for (const file of files) {
       try {
         const formData = new FormData();
@@ -24718,13 +24865,16 @@ jQuery(async () => {
         console.error("[CFM] 导入聊天记录失败:", e);
         failCount++;
       }
+      processed++;
+      batchProgress.update(processed);
     }
     await invalidateChatCache(avatar);
+    const importMsg = `成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`;
     if (successCount > 0) {
-      cfmToastr.success(
-        `成功导入 ${successCount} 个聊天记录${failCount > 0 ? `，${failCount} 个失败` : ""}`,
-      );
+      batchProgress.done(importMsg);
+      cfmToastr.success(importMsg);
     } else {
+      batchProgress.remove();
       cfmToastr.error(`导入失败`);
     }
     rerenderCurrentView();
@@ -25098,7 +25248,9 @@ jQuery(async () => {
             }
             const zip = new JSZip();
             let success = 0;
+            let processed = 0;
             const ctx = getContext();
+            const batchProgress = showBatchProgressOverlay("正在批量导出聊天记录", toExport.length);
             for (const key of toExport) {
               const fn = key.split("::")[1];
               try {
@@ -25122,11 +25274,15 @@ jQuery(async () => {
               } catch (err) {
                 console.warn("[CFM] 导出聊天记录失败:", fn, err);
               }
+              processed++;
+              batchProgress.update(processed);
             }
             if (success === 0) {
+              batchProgress.remove();
               cfmToastr.error("没有成功导出任何聊天记录");
               return;
             }
+            batchProgress.update(processed, "正在打包ZIP...");
             const content = await zip.generateAsync({ type: "blob" });
             const a = document.createElement("a");
             a.href = URL.createObjectURL(content);
@@ -25135,7 +25291,9 @@ jQuery(async () => {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(a.href);
-            cfmToastr.success(`已导出 ${success} 条聊天记录到 聊天记录.zip`);
+            const exportMsg = `已导出 ${success} 条聊天记录到 聊天记录.zip`;
+            batchProgress.done(exportMsg);
+            cfmToastr.success(exportMsg);
           } catch (err) {
             console.error("[CFM] 批量导出聊天记录失败:", err);
             cfmToastr.error(`批量导出失败: ${err.message}`);
@@ -25158,11 +25316,17 @@ jQuery(async () => {
         )
           return;
         let successCount = 0;
+        let processed = 0;
+        const batchProgress = showBatchProgressOverlay("正在批量删除聊天记录", toDelete.length);
         for (const key of toDelete) {
           const fn = key.split("::")[1];
           if (await deleteChatFile(avatar, fn)) successCount++;
+          processed++;
+          batchProgress.update(processed);
         }
-        cfmToastr.success(`已删除 ${successCount} 条聊天记录`);
+        const delMsg = `已删除 ${successCount} 条聊天记录`;
+        batchProgress.done(delMsg);
+        cfmToastr.success(delMsg);
         rerenderCurrentView();
       });
       subList.append(batchToolbar);
@@ -25404,12 +25568,15 @@ jQuery(async () => {
     const headers = getContext().getRequestHeaders();
     let success = 0;
     let fail = 0;
-    cfmToastr.info(`正在更新 ${avatars.length} 个角色卡...`);
+    const batchProgress = showBatchProgressOverlay("正在更新角色卡", avatars.length);
+    let processed = 0;
 
     for (const avatar of avatars) {
       const char = characters.find((c) => c.avatar === avatar);
       if (!char) {
         fail++;
+        processed++;
+        batchProgress.update(processed);
         continue;
       }
       const data = {
@@ -25448,11 +25615,13 @@ jQuery(async () => {
         console.warn(`[CFM] 编辑角色卡 ${avatar} 失败`, e);
         fail++;
       }
+      processed++;
+      batchProgress.update(processed);
     }
+    const resultMsg = `已更新 ${success} 个角色卡${fail > 0 ? `，${fail} 个失败` : ""}`;
+    batchProgress.done(resultMsg);
     if (success > 0) {
-      cfmToastr.success(
-        `已更新 ${success} 个角色卡${fail > 0 ? `，${fail} 个失败` : ""}`,
-      );
+      cfmToastr.success(resultMsg);
     } else {
       cfmToastr.error("更新失败");
     }
