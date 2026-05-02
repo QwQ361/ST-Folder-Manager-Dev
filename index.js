@@ -9734,7 +9734,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${avatars.length} 个角色卡...`);
+      const batchProgress = showBatchProgressOverlay("正在导出角色卡", avatars.length);
+      let processed = 0;
       for (const avatar of avatars) {
         try {
           const resp = await fetch("/api/characters/export", {
@@ -9750,8 +9751,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出角色卡 ${avatar} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何角色卡");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何角色卡");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -9760,7 +9766,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个角色卡`);
+      const exportCharMsg = `已导出 ${success} 个角色卡`;
+      batchProgress.done(exportCharMsg);
+      cfmToastr.success(exportCharMsg);
     }
   }
 
@@ -9819,7 +9827,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${presetNames.length} 个预设...`);
+      const batchProgress = showBatchProgressOverlay("正在导出预设", presetNames.length);
+      let processed = 0;
       for (const name of presetNames) {
         try {
           const preset = getPresetData(name);
@@ -9831,8 +9840,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出预设 ${name} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何预设");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何预设");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -9841,7 +9855,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个预设`);
+      const exportPresetMsg = `已导出 ${success} 个预设`;
+      batchProgress.done(exportPresetMsg);
+      cfmToastr.success(exportPresetMsg);
     }
   }
 
@@ -9883,7 +9899,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${setNames.length} 个快速回复集...`);
+      const batchProgress = showBatchProgressOverlay("正在导出快速回复集", setNames.length);
+      let processed = 0;
       for (const name of setNames) {
         try {
           const data = getSetData(name);
@@ -9895,8 +9912,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出快速回复集 ${name} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何快速回复集");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何快速回复集");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -9905,7 +9927,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个快速回复集`);
+      const exportQrMsg = `已导出 ${success} 个快速回复集`;
+      batchProgress.done(exportQrMsg);
+      cfmToastr.success(exportQrMsg);
     }
   }
 
@@ -9936,7 +9960,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${wiNames.length} 个世界书...`);
+      const batchProgress = showBatchProgressOverlay("正在导出世界书", wiNames.length);
+      let processed = 0;
       for (const name of wiNames) {
         try {
           const resp = await fetch("/api/worldinfo/get", {
@@ -9954,8 +9979,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出世界书 ${name} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何世界书");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何世界书");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -9964,7 +9994,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个世界书`);
+      const exportWiMsg = `已导出 ${success} 个世界书`;
+      batchProgress.done(exportWiMsg);
+      cfmToastr.success(exportWiMsg);
     }
   }
 
@@ -10011,7 +10043,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${themeNameList.length} 个主题...`);
+      const batchProgress = showBatchProgressOverlay("正在导出主题", themeNameList.length);
+      let processed = 0;
       for (const name of themeNameList) {
         try {
           const td = getThemeData(name);
@@ -10022,8 +10055,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出主题 ${name} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何主题");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何主题");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -10032,7 +10070,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个主题`);
+      const exportThemeMsg = `已导出 ${success} 个主题`;
+      batchProgress.done(exportThemeMsg);
+      cfmToastr.success(exportThemeMsg);
     }
   }
 
@@ -10061,7 +10101,8 @@ jQuery(async () => {
       }
       const zip = new JSZip();
       let success = 0;
-      cfmToastr.info(`正在导出 ${bgNames.length} 个背景...`);
+      const batchProgress = showBatchProgressOverlay("正在导出背景", bgNames.length);
+      let processed = 0;
       for (const name of bgNames) {
         try {
           const resp = await fetch(`/backgrounds/${encodeURIComponent(name)}`);
@@ -10073,8 +10114,13 @@ jQuery(async () => {
         } catch (e) {
           console.warn(`[CFM] 导出背景 ${name} 失败`, e);
         }
+        processed++;
+        batchProgress.update(processed);
       }
-      if (success === 0) throw new Error("没有成功导出任何背景");
+      if (success === 0) {
+        batchProgress.remove();
+        throw new Error("没有成功导出任何背景");
+      }
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
@@ -10083,7 +10129,9 @@ jQuery(async () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      cfmToastr.success(`已导出 ${success} 个背景`);
+      const exportBgMsg = `已导出 ${success} 个背景`;
+      batchProgress.done(exportBgMsg);
+      cfmToastr.success(exportBgMsg);
     }
   }
 
@@ -10177,8 +10225,12 @@ jQuery(async () => {
     if (!pu.personas) pu.personas = {};
     if (!pu.persona_descriptions) pu.persona_descriptions = {};
 
+    const personaEntries = Object.entries(data.personas);
+    const batchProgress = showBatchProgressOverlay("正在导入User", personaEntries.length);
+    let processed = 0;
+
     // 合并 personas
-    for (const [key, value] of Object.entries(data.personas)) {
+    for (const [key, value] of personaEntries) {
       const existsInSettings = key in pu.personas;
       const existsOnServer = avatarsList.includes(key);
 
@@ -10234,6 +10286,8 @@ jQuery(async () => {
           console.error(`[CFM] 上传默认头像失败 (${key}):`, uploadErr);
         }
       }
+      processed++;
+      batchProgress.update(processed);
     }
 
     // 合并 persona_descriptions
@@ -10274,15 +10328,18 @@ jQuery(async () => {
     getContext().saveSettingsDebounced();
 
     if (warnings.length) {
-      cfmToastr.success(
-        `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`,
-      );
+      const importPersonaMsg = `已导入 ${importedCount} 个 Persona（有 ${warnings.length} 条警告）`;
+      batchProgress.done(importPersonaMsg);
+      cfmToastr.success(importPersonaMsg);
       console.warn(
         `[CFM] PERSONA 导入报告\n====================\n${warnings.join("\n")}`,
       );
     } else if (importedCount > 0) {
-      cfmToastr.success(`已成功导入 ${importedCount} 个 Persona`);
+      const importPersonaMsg = `已成功导入 ${importedCount} 个 Persona`;
+      batchProgress.done(importPersonaMsg);
+      cfmToastr.success(importPersonaMsg);
     } else {
+      batchProgress.done("没有新的 Persona 需要导入");
       cfmToastr.info("没有新的 Persona 需要导入（全部已存在）");
     }
 
@@ -10443,9 +10500,9 @@ jQuery(async () => {
     let success = 0;
     let fail = 0;
 
+    const batchProgress = showBatchProgressOverlay(`正在删除${typeLabel}`, count);
+    let processed = 0;
     try {
-      cfmToastr.info(`正在删除 ${count} 个${typeLabel}...`);
-
       if (currentResourceType === "chars") {
         const ctx = getContext();
         const evtSource = ctx.eventSource;
@@ -10492,6 +10549,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除角色卡 ${avatar} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
         // 刷新角色列表
         await getContext().getCharacters();
@@ -10526,6 +10585,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除预设 ${name} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
       } else if (currentResourceType === "themes") {
         for (const name of selected) {
@@ -10577,6 +10638,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除主题 ${name} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
       } else if (currentResourceType === "backgrounds") {
         for (const name of selected) {
@@ -10623,6 +10686,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除背景 ${name} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
       } else if (currentResourceType === "personas") {
         for (const avatarId of selected) {
@@ -10677,6 +10742,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除User ${avatarId} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
       } else if (currentResourceType === "regex") {
         // 删除全局正则脚本（直接从 extension_settings.regex 数组中移除）
@@ -10701,6 +10768,8 @@ jQuery(async () => {
             } else {
               fail++;
             }
+            processed++;
+            batchProgress.update(processed);
           }
           // 保存正则设置
           getContext().saveSettingsDebounced();
@@ -10777,6 +10846,8 @@ jQuery(async () => {
             console.warn(`[CFM] 删除快速回复集 ${name} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
       } else {
         for (const name of selected) {
@@ -10831,15 +10902,19 @@ jQuery(async () => {
             console.warn(`[CFM] 删除世界书 ${name} 失败`, e);
             fail++;
           }
+          processed++;
+          batchProgress.update(processed);
         }
         // 强制通过API刷新世界书缓存
         _worldInfoNamesCache = null;
         await getWorldInfoNames(true);
       }
 
+      const delResultMsg = `已删除 ${success} 个${typeLabel}${fail > 0 ? `，${fail} 个失败` : ""}`;
       if (success > 0) {
+        batchProgress.done(delResultMsg);
         cfmToastr.success(
-          `已删除 ${success} 个${typeLabel}${fail > 0 ? `，${fail} 个失败` : ""}`,
+          delResultMsg,
           "",
           {
             timeOut: 2500,
@@ -10849,9 +10924,11 @@ jQuery(async () => {
         // 保存文件夹分配变更
         getContext().saveSettingsDebounced();
       } else {
+        batchProgress.remove();
         cfmToastr.error(`删除失败`);
       }
     } catch (err) {
+      batchProgress.remove();
       console.error("[CFM] 删除失败", err);
       cfmToastr.error("删除失败: " + err.message);
     }
@@ -28356,7 +28433,8 @@ jQuery(async () => {
       let failCount = 0;
       const importedAvatars = [];
 
-      cfmToastr.info(`正在导入 ${totalFiles} 个角色卡...`);
+      const batchProgress = showBatchProgressOverlay("正在导入角色卡", totalFiles);
+      let processed = 0;
 
       for (const file of files) {
         const ext = file.name.match(/\.(\w+)$/);
@@ -28368,6 +28446,8 @@ jQuery(async () => {
         ) {
           cfmToastr.warning(`跳过不支持的文件: ${file.name}`);
           failCount++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
 
@@ -28403,6 +28483,8 @@ jQuery(async () => {
           console.error(`导入角色失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       // 刷新角色列表
@@ -28461,12 +28543,15 @@ jQuery(async () => {
       const folderHint = targetFolder
         ? `到「${getTagName(targetFolder)}」`
         : "（未归类）";
+      const importMsg = `成功导入 ${successCount} 个角色卡${folderHint}${failCount > 0 ? `，${failCount} 个失败` : ""}`;
       if (successCount > 0) {
-        cfmToastr.success(
-          `成功导入 ${successCount} 个角色卡${folderHint}${failCount > 0 ? `，${failCount} 个失败` : ""}`,
-        );
+        batchProgress.done(importMsg);
+        cfmToastr.success(importMsg);
       } else if (failCount > 0) {
+        batchProgress.remove();
         cfmToastr.error(`导入失败，${failCount} 个文件无法导入`);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -28546,6 +28631,9 @@ jQuery(async () => {
       let failCount = 0;
       let skipCount = 0;
 
+      const batchProgress = showBatchProgressOverlay("正在导入预设", parsedFiles.length);
+      let processed = 0;
+
       for (const { file, data, name } of parsedFiles) {
         try {
           const isDuplicate = existingPresets.has(name);
@@ -28554,6 +28642,8 @@ jQuery(async () => {
           if (isDuplicate) {
             if (dupAction === "skip") {
               skipCount++;
+              processed++;
+              batchProgress.update(processed);
               continue;
             } else if (dupAction === "rename") {
               finalName = getUniqueImportName(name, existingPresets);
@@ -28573,6 +28663,8 @@ jQuery(async () => {
           console.error(`导入预设失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       // 刷新视图
@@ -28584,12 +28676,18 @@ jQuery(async () => {
         parts.push(`成功导入 ${successCount} 个预设${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
+      const importPresetMsg = parts.join("，");
       if (successCount > 0) {
-        cfmToastr.success(parts.join("，"));
+        batchProgress.done(importPresetMsg);
+        cfmToastr.success(importPresetMsg);
       } else if (skipCount > 0 && failCount === 0) {
-        cfmToastr.info(parts.join("，"));
+        batchProgress.done(importPresetMsg);
+        cfmToastr.info(importPresetMsg);
       } else if (failCount > 0) {
-        cfmToastr.error(parts.join("，"));
+        batchProgress.done(importPresetMsg);
+        cfmToastr.error(importPresetMsg);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -28758,11 +28856,16 @@ jQuery(async () => {
       let failCount = 0;
       let skipCount = 0;
 
+      const batchProgress = showBatchProgressOverlay("正在导入快速回复集", validFiles.length);
+      let processed = 0;
+
       for (const { file, json, setName } of validFiles) {
         const isDuplicate = existingNames.has(setName);
 
         if (isDuplicate && dupAction === "skip") {
           skipCount++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
 
@@ -28879,6 +28982,8 @@ jQuery(async () => {
           console.error(`导入快速回复集失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       // 刷新视图
@@ -28890,12 +28995,18 @@ jQuery(async () => {
         parts.push(`成功导入 ${successCount} 个快速回复集${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
+      const importQrMsg = parts.join("，");
       if (successCount > 0) {
-        cfmToastr.success(parts.join("，"));
+        batchProgress.done(importQrMsg);
+        cfmToastr.success(importQrMsg);
       } else if (skipCount > 0 && failCount === 0) {
-        cfmToastr.info(parts.join("，"));
+        batchProgress.done(importQrMsg);
+        cfmToastr.info(importQrMsg);
       } else if (failCount > 0) {
-        cfmToastr.error(parts.join("，"));
+        batchProgress.done(importQrMsg);
+        cfmToastr.error(importQrMsg);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -29152,6 +29263,9 @@ jQuery(async () => {
       let failCount = 0;
       let skipCount = 0;
 
+      const batchProgress = showBatchProgressOverlay("正在导入主题", parsedFiles.length);
+      let processed = 0;
+
       for (const { file, data, name } of parsedFiles) {
         try {
           const isDuplicate = existingThemes.has(name);
@@ -29160,6 +29274,8 @@ jQuery(async () => {
           if (isDuplicate) {
             if (dupAction === "skip") {
               skipCount++;
+              processed++;
+              batchProgress.update(processed);
               continue;
             } else if (dupAction === "rename") {
               finalName = getUniqueImportName(name, existingThemes);
@@ -29198,6 +29314,8 @@ jQuery(async () => {
           console.error(`导入主题失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       if (successCount > 0) {
@@ -29213,12 +29331,18 @@ jQuery(async () => {
         parts.push(`成功导入 ${successCount} 个主题${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
+      const importThemeMsg = parts.join("，");
       if (successCount > 0) {
-        cfmToastr.success(parts.join("，"));
+        batchProgress.done(importThemeMsg);
+        cfmToastr.success(importThemeMsg);
       } else if (skipCount > 0 && failCount === 0) {
-        cfmToastr.info(parts.join("，"));
+        batchProgress.done(importThemeMsg);
+        cfmToastr.info(importThemeMsg);
       } else if (failCount > 0) {
-        cfmToastr.error(parts.join("，"));
+        batchProgress.done(importThemeMsg);
+        cfmToastr.error(importThemeMsg);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -29285,6 +29409,9 @@ jQuery(async () => {
       let failCount = 0;
       let skipCount = 0;
 
+      const batchProgress = showBatchProgressOverlay("正在导入背景", imageFiles.length);
+      let processed = 0;
+
       for (const file of imageFiles) {
         try {
           const isDuplicate = existingBgs.has(file.name);
@@ -29293,6 +29420,8 @@ jQuery(async () => {
           if (isDuplicate) {
             if (dupAction === "skip") {
               skipCount++;
+              processed++;
+              batchProgress.update(processed);
               continue;
             } else if (dupAction === "rename") {
               const ext =
@@ -29332,6 +29461,8 @@ jQuery(async () => {
           console.error(`导入背景失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       // 刷新酒馆原生背景列表（等待 DOM 完全更新后再渲染分类视图）
@@ -29377,12 +29508,18 @@ jQuery(async () => {
         parts.push(`成功导入 ${successCount} 个背景${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
+      const importBgMsg = parts.join("，");
       if (successCount > 0) {
-        cfmToastr.success(parts.join("，"));
+        batchProgress.done(importBgMsg);
+        cfmToastr.success(importBgMsg);
       } else if (skipCount > 0 && failCount === 0) {
-        cfmToastr.info(parts.join("，"));
+        batchProgress.done(importBgMsg);
+        cfmToastr.info(importBgMsg);
       } else if (failCount > 0) {
-        cfmToastr.error(parts.join("，"));
+        batchProgress.done(importBgMsg);
+        cfmToastr.error(importBgMsg);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -29461,11 +29598,16 @@ jQuery(async () => {
       let failCount = 0;
       let skipCount = 0;
 
+      const batchProgress = showBatchProgressOverlay("正在导入世界书", validFiles.length);
+      let processed = 0;
+
       for (const { file, worldName } of validFiles) {
         const isDuplicate = existingWI.has(worldName);
 
         if (isDuplicate && dupAction === "skip") {
           skipCount++;
+          processed++;
+          batchProgress.update(processed);
           continue;
         }
 
@@ -29534,6 +29676,8 @@ jQuery(async () => {
           console.error(`导入世界书失败: ${file.name}`, error);
           failCount++;
         }
+        processed++;
+        batchProgress.update(processed);
       }
 
       if (targetFolder && successCount > 0) {
@@ -29570,12 +29714,18 @@ jQuery(async () => {
         parts.push(`成功导入 ${successCount} 个世界书${folderHint}`);
       if (skipCount > 0) parts.push(`${skipCount} 个因名称重复已跳过`);
       if (failCount > 0) parts.push(`${failCount} 个失败`);
+      const importWiMsg = parts.join("，");
       if (successCount > 0) {
-        cfmToastr.success(parts.join("，"));
+        batchProgress.done(importWiMsg);
+        cfmToastr.success(importWiMsg);
       } else if (skipCount > 0 && failCount === 0) {
-        cfmToastr.info(parts.join("，"));
+        batchProgress.done(importWiMsg);
+        cfmToastr.info(importWiMsg);
       } else if (failCount > 0) {
-        cfmToastr.error(parts.join("，"));
+        batchProgress.done(importWiMsg);
+        cfmToastr.error(importWiMsg);
+      } else {
+        batchProgress.remove();
       }
 
       e.target.value = null;
@@ -45968,6 +46118,10 @@ jQuery(async () => {
     }
     let importedCount = 0;
     const warnings = [];
+
+    const batchProgress = showBatchProgressOverlay("正在导入正则脚本", files.length);
+    let processed = 0;
+
     for (const file of files) {
       let parsed;
       try {
@@ -45977,6 +46131,8 @@ jQuery(async () => {
         cfmToastr.warning(
           `无法解析文件 "${file.name}"，请选择有效的 JSON 文件`,
         );
+        processed++;
+        batchProgress.update(processed);
         continue;
       }
       const toImport = Array.isArray(parsed) ? parsed : [parsed];
@@ -45996,18 +46152,22 @@ jQuery(async () => {
         }
         importedCount++;
       }
+      processed++;
+      batchProgress.update(processed);
     }
     if (importedCount > 0) {
       getContext().saveSettingsDebounced();
+      let importRegexMsg;
       if (warnings.length > 0) {
-        cfmToastr.success(
-          `已导入 ${importedCount} 个正则脚本（有 ${warnings.length} 条警告）`,
-        );
+        importRegexMsg = `已导入 ${importedCount} 个正则脚本（有 ${warnings.length} 条警告）`;
         console.warn(`[CFM] 正则导入报告\n${warnings.join("\n")}`);
       } else {
-        cfmToastr.success(`已导入 ${importedCount} 个正则脚本`);
+        importRegexMsg = `已导入 ${importedCount} 个正则脚本`;
       }
+      batchProgress.done(importRegexMsg);
+      cfmToastr.success(importRegexMsg);
     } else {
+      batchProgress.done("没有成功导入任何正则脚本");
       cfmToastr.warning("没有成功导入任何正则脚本");
     }
     renderRegexView();
