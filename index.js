@@ -19943,10 +19943,7 @@ jQuery(async () => {
           })
           .first();
         if (targetRow.length) {
-          targetRow[0].scrollIntoView({
-            block: "center",
-            behavior: "smooth",
-          });
+          scrollElementIntoViewCentered(targetRow[0]);
         }
       }, 0);
     };
@@ -22331,14 +22328,9 @@ jQuery(async () => {
     renderLeftTree();
     renderRightPane();
     // 自动滚动到目标角色卡行
-    requestAnimationFrame(() => {
-      const targetRow = document.querySelector(
-        "#cfm-right-list .cfm-regex-target-row",
-      );
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
+    scrollElementIntoViewCentered(() =>
+      document.querySelector("#cfm-right-list .cfm-regex-target-row"),
+    );
   }
 
   function exitCharRegexMode() {
@@ -22392,14 +22384,9 @@ jQuery(async () => {
     }
     renderPresetsView();
     // 自动滚动到目标预设行
-    requestAnimationFrame(() => {
-      const targetRow = document.querySelector(
-        "#cfm-preset-right-list .cfm-regex-target-row",
-      );
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
+    scrollElementIntoViewCentered(() =>
+      document.querySelector("#cfm-preset-right-list .cfm-regex-target-row"),
+    );
   }
 
   function exitPresetRegexMode() {
@@ -22449,33 +22436,24 @@ jQuery(async () => {
     renderLeftTree();
     renderRightPane();
 
-    requestAnimationFrame(() => {
-      const targetRow = Array.from(
+    scrollElementIntoViewCentered(() =>
+      Array.from(
         document.querySelectorAll("#cfm-right-list .cfm-row[data-avatar]"),
-      ).find((el) => el.getAttribute("data-avatar") === targetAvatar);
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
+      ).find((el) => el.getAttribute("data-avatar") === targetAvatar),
+    );
 
     if (targetAvatar) {
       getCharChats(targetAvatar)
         .then(() => {
           if (cfmChatMode && getCurrentCharAvatar() === targetAvatar) {
             renderRightPane();
-            requestAnimationFrame(() => {
-              const targetRow = Array.from(
+            scrollElementIntoViewCentered(() =>
+              Array.from(
                 document.querySelectorAll(
                   "#cfm-right-list .cfm-row[data-avatar]",
                 ),
-              ).find((el) => el.getAttribute("data-avatar") === targetAvatar);
-              if (targetRow) {
-                targetRow.scrollIntoView({
-                  behavior: "smooth",
-                  block: "center",
-                });
-              }
-            });
+              ).find((el) => el.getAttribute("data-avatar") === targetAvatar),
+            );
           }
         })
         .catch((e) => console.warn("[CFM] 刷新聊天模式目标失败:", e));
@@ -22515,14 +22493,9 @@ jQuery(async () => {
 
     renderLeftTree();
     renderRightPane();
-    requestAnimationFrame(() => {
-      const targetRow = document.querySelector(
-        "#cfm-right-list .cfm-regex-target-row",
-      );
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
+    scrollElementIntoViewCentered(() =>
+      document.querySelector("#cfm-right-list .cfm-regex-target-row"),
+    );
   }
 
   function refreshPresetRegexModeTargetFromCurrent() {
@@ -22549,14 +22522,9 @@ jQuery(async () => {
     }
 
     renderPresetsView();
-    requestAnimationFrame(() => {
-      const targetRow = document.querySelector(
-        "#cfm-preset-right-list .cfm-regex-target-row",
-      );
-      if (targetRow) {
-        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    });
+    scrollElementIntoViewCentered(() =>
+      document.querySelector("#cfm-preset-right-list .cfm-regex-target-row"),
+    );
   }
 
   function refreshActiveViewerStateAfterSelectionChange({
