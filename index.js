@@ -1847,6 +1847,88 @@ jQuery(async () => {
     };
   }
 
+  // ==================== 备份同步进度遮罩（BroadcastChannel 广播） ====================
+  const CFM_SYNC_CHANNEL_NAME = "cfm-backup-sync";
+  let _cfmSyncChannel = null;
+  let _cfmSyncOverlayEl = null;
+
+  function getCfmSyncChannel() {
+    if (!_cfmSyncChannel) {
+      try {
+        _cfmSyncChannel = new BroadcastChannel(CFM_SYNC_CHANNEL_NAME);
+        _cfmSyncChannel.onmessage = (event) => {
+          const data = event?.data;
+          if (!data || typeof data !== "object") return;
+          if (data.state === "syncing") {
+            showCfmSyncOverlay(data.message || "正在同步...", data.current, data.total);
+          } else if (data.state === "idle") {
+            removeCfmSyncOverlay();
+          }
+        };
+      } catch (e) {
+        console.warn("[CFM] BroadcastChannel 创建失败:", e);
+      }
+    }
+    return _cfmSyncChannel;
+  }
+
+  function showCfmSyncOverlay(message, current, total) {
+    if (!_cfmSyncOverlayEl) {
+      _cfmSyncOverlayEl = document.createElement("div");
+      _cfmSyncOverlayEl.className = "cfm-sync-progress-overlay";
+      _cfmSyncOverlayEl.innerHTML = `
+        <div class="cfm-sync-progress-box">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span class="cfm-sync-progress-text"></span>
+          <span class="cfm-sync-progress-counter"></span>
+        </div>
+      `;
+      document.body.appendChild(_cfmSyncOverlayEl);
+    }
+    const textEl = _cfmSyncOverlayEl.querySelector(".cfm-sync-progress-text");
+    const counterEl = _cfmSyncOverlayEl.querySelector(".cfm-sync-progress-counter");
+    if (textEl) textEl.textContent = message || "正在同步...";
+    if (counterEl) {
+      counterEl.textContent =
+        typeof current === "number" && typeof total === "number"
+          ? `${current} / ${total}`
+          : "";
+    }
+    _cfmSyncOverlayEl.style.display = "flex";
+  }
+
+  function removeCfmSyncOverlay() {
+    if (_cfmSyncOverlayEl) {
+      _cfmSyncOverlayEl.style.display = "none";
+    }
+  }
+
+  function setSyncState(payload) {
+    const data =
+      payload && typeof payload === "object"
+        ? payload
+        : { state: "idle" };
+    // 本窗口直接处理
+    if (data.state === "syncing") {
+      showCfmSyncOverlay(data.message, data.current, data.total);
+    } else {
+      removeCfmSyncOverlay();
+    }
+    // 广播给同源其他窗口/标签页
+    try {
+      const channel = getCfmSyncChannel();
+      if (channel) {
+        channel.postMessage(data);
+      }
+    } catch (e) {
+      console.warn("[CFM] BroadcastChannel 广播失败:", e);
+    }
+    return { ok: true, state: data.state };
+  }
+
+  // 初始化 BroadcastChannel 监听
+  getCfmSyncChannel();
+
   function publishBackupBridgeSignal(status = "ready", extra = {}) {
     try {
       const signal = {
@@ -1865,6 +1947,7 @@ jQuery(async () => {
       window.__CFM_BACKUP_BRIDGE_LIST_RESOURCES__ = listBackupBridgeResources;
       window.__CFM_BACKUP_BRIDGE_READ_RESOURCE__ = readBackupBridgeResource;
       window.__CFM_BACKUP_BRIDGE_WRITE_RESOURCE__ = writeBackupBridgeResource;
+      window.__CFM_BACKUP_BRIDGE_SET_SYNC_STATE__ = setSyncState;
       document.documentElement?.setAttribute?.(
         "data-cfm-backup-bridge",
         status,

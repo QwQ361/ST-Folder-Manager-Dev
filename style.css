@@ -6635,6 +6635,59 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   white-space: nowrap;
   margin-left: 2px;
 }
+/* ==================== 备份同步进度遮罩 ==================== */
+.cfm-sync-progress-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 17, 27, 0.58);
+  backdrop-filter: blur(2px);
+  z-index: 10025;
+  pointer-events: auto;
+}
+.cfm-sync-progress-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  min-width: 240px;
+  padding: 14px 24px;
+  max-width: min(calc(100vw - 32px), 520px);
+  border-radius: 999px;
+  background: rgba(24, 24, 37, 0.98);
+  border: 1px solid rgba(250, 204, 21, 0.32);
+  color: #fef9c3;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.36);
+}
+.cfm-sync-progress-box i.fa-spinner {
+  color: #facc15;
+  flex: 0 0 auto;
+  font-size: 15px;
+}
+.cfm-sync-progress-text {
+  color: inherit;
+  opacity: 1;
+}
+.cfm-sync-progress-counter {
+  color: #facc15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-left: 3px;
+}
 .cfm-persona-detail-section {
   display: flex;
   flex-direction: column;
