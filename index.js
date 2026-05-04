@@ -45089,6 +45089,71 @@ jQuery(async () => {
       </div>
     `);
 
+    // 关联世界书折叠区域
+    {
+      const linkedWorldBooks = [];
+      // 主绑定世界书
+      const primaryWorld = char?.data?.extensions?.world;
+      if (primaryWorld) {
+        linkedWorldBooks.push({ name: primaryWorld, type: "主绑定" });
+      }
+      // 内嵌世界书 (character_book)
+      if (char?.data?.character_book) {
+        const embBookName = char.data.character_book.name || `${char.name || "角色"}'s Lorebook`;
+        const embEntries = char.data.character_book.entries;
+        const embEntryCount = Array.isArray(embEntries) ? embEntries.length : (embEntries ? Object.keys(embEntries).length : 0);
+        linkedWorldBooks.push({ name: embBookName, type: "内嵌", entryCount: embEntryCount });
+      }
+      // 辅助世界书 (charLore)
+      try {
+        const wiMod = getWiModuleSync();
+        const worldInfoObj = wiMod ? wiMod.world_info : null;
+        if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
+          const fileName = char?.avatar?.replace(/\.[^/.]+$/, "") ?? null;
+          if (fileName) {
+            const extraCharLore = worldInfoObj.charLore.find((e) => e.name === fileName);
+            if (extraCharLore?.extraBooks && Array.isArray(extraCharLore.extraBooks)) {
+              extraCharLore.extraBooks.forEach((b) => {
+                linkedWorldBooks.push({ name: b, type: "辅助" });
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[CFM] 获取角色关联辅助世界书失败", e);
+      }
+
+      detailCard.append(`
+        <div class="cfm-char-detail-worldbooks">
+          <div class="cfm-char-detail-worldbooks-header">
+            <i class="fa-solid fa-caret-right cfm-char-detail-worldbooks-arrow"></i>
+            <i class="fa-solid fa-book" style="color:#a6e3a1;margin-right:4px;font-size:12px;"></i>
+            <span>关联世界书</span>
+            <span class="cfm-char-detail-worldbooks-count">${linkedWorldBooks.length}</span>
+          </div>
+          <div class="cfm-char-detail-worldbooks-body" style="display:none;">
+            ${linkedWorldBooks.length > 0
+              ? linkedWorldBooks.map(wb => `
+                <div class="cfm-char-detail-worldbook-item">
+                  <span class="cfm-char-detail-worldbook-type">${escapeHtml(wb.type)}</span>
+                  <span class="cfm-char-detail-worldbook-name">${escapeHtml(wb.name)}</span>
+                  ${wb.entryCount !== undefined ? `<span class="cfm-char-detail-worldbook-entries">${wb.entryCount} 条</span>` : ""}
+                </div>
+              `).join("")
+              : '<div class="cfm-persona-detail-empty" style="padding:4px 8px;">无关联世界书</div>'
+            }
+          </div>
+        </div>
+      `);
+
+      detailCard.find(".cfm-char-detail-worldbooks-header").on("click", function () {
+        const body = $(this).next(".cfm-char-detail-worldbooks-body");
+        const arrow = $(this).find(".cfm-char-detail-worldbooks-arrow");
+        body.slideToggle(150);
+        arrow.toggleClass("fa-caret-right fa-caret-down");
+      });
+    }
+
     detailCard.append(sectionHtml("描述", description, "", "description"));
 
     // 第一条消息（主开场白）：只有编辑按钮，不能切换
