@@ -32730,14 +32730,12 @@ jQuery(async () => {
     const chatToggleHtml = showChatToggle
       ? `<div class="cfm-chat-toggle" title="展开/折叠聊天记录"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div>`
       : "";
-    // 正则模式下的小三角按钮（有正则脚本的角色，或当前目标空角色，也显示）
+    // 正则模式下的小三角按钮（所有角色均可展开编辑正则）
     const isRegexTarget =
       cfmCharRegexMode && cfmCharRegexTargetAvatar === char.avatar;
     let showRegexToggle = false;
     if (cfmCharRegexMode) {
-      const scripts = char?.data?.extensions?.regex_scripts;
-      showRegexToggle =
-        (Array.isArray(scripts) && scripts.length > 0) || isRegexTarget;
+      showRegexToggle = true;
     }
     const isRegexExpanded =
       showRegexToggle && cfmCharRegexExpandedAvatars.has(char.avatar);
