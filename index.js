@@ -1454,6 +1454,19 @@ jQuery(async () => {
   }
 
   async function writeBackupBridgeResource(request = {}) {
+    const result = await _writeBackupBridgeResourceCore(request);
+    if (result?.success) {
+      try {
+        const resource = normalizeBackupBridgeWriteResource(request);
+        assignFolderAfterWrite(resource, result);
+      } catch (e) {
+        console.warn("[CFM] 写回后文件夹分配失败:", e);
+      }
+    }
+    return result;
+  }
+
+  async function _writeBackupBridgeResourceCore(request = {}) {
     try {
       const resource = normalizeBackupBridgeWriteResource(request);
       const resourceType = resource.resourceType;
@@ -1731,6 +1744,55 @@ jQuery(async () => {
       throw new Error(`暂不支持写入资源类型: ${resourceType}`);
     } catch (error) {
       return buildBackupBridgeWriteError(request, error);
+    }
+  }
+
+  function assignFolderAfterWrite(resource, writeResult) {
+    try {
+      if (!writeResult?.success) return;
+      const resourceType = resource?.resourceType;
+      const folderPath = Array.isArray(resource?.folderPath)
+        ? resource.folderPath
+        : [];
+      if (!resourceType || folderPath.length < 2) return;
+
+      const folderName = folderPath[1];
+      if (!folderName) return;
+
+      const displayName =
+        writeResult?.resource?.displayName ||
+        resource?.displayName ||
+        null;
+      if (!displayName) return;
+
+      const typeMapping = {
+        presets: "presets",
+        worldinfo: "worldinfo",
+        themes: "themes",
+        backgrounds: "backgrounds",
+        personas: "personas",
+        qr: "quickreply",
+      };
+      const groupType = typeMapping[resourceType];
+      if (!groupType) return;
+
+      const folderTree = getResFolderTree(groupType);
+      if (!folderTree) return;
+
+      if (!folderTree[folderName]) {
+        folderTree[folderName] = {
+          parentId: null,
+          sortOrder: Object.keys(folderTree).length + 1,
+        };
+        if (folderPath.length > 2) {
+          folderTree[folderName].displayName = folderName;
+        }
+        saveResTree(groupType);
+      }
+
+      setItemGroup(groupType, displayName, folderName);
+    } catch (e) {
+      console.warn("[CFM] 写回后文件夹分配失败:", e);
     }
   }
 
