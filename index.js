@@ -47033,6 +47033,8 @@ jQuery(async () => {
               <div style="font-size:12px;opacity:0.85;">选择目标角色</div>
               <div class="cfm-entry-transfer-search">
                 <input type="text" class="cfm-entry-transfer-search-input cfm-regex-transfer-char-search-input" placeholder="搜索角色..." />
+                <button class="cfm-entry-transfer-expand-all cfm-regex-transfer-char-expand-all" title="展开全部"><i class="fa-solid fa-angles-down"></i></button>
+                <button class="cfm-entry-transfer-collapse-all cfm-regex-transfer-char-collapse-all" title="收起全部"><i class="fa-solid fa-angles-up"></i></button>
               </div>
               <div class="cfm-entry-transfer-tree-container cfm-regex-transfer-char-tree" style="max-height:min(42vh,360px);overflow-y:auto;overflow-x:hidden;"></div>
               <div class="cfm-entry-transfer-selected-hint cfm-regex-transfer-char-hint"></div>
@@ -47105,11 +47107,35 @@ jQuery(async () => {
           return;
         }
 
+        // 按文件夹组织角色
+        const tagMap = getTagMap();
+        const folderTagIdSet = new Set(getFolderTagIds());
+        const folderChars = {};
+        const ungroupedChars = [];
+
         for (const ch of filtered) {
+          const charTags = tagMap[ch.avatar] || [];
+          const charFolderTags = charTags.filter((t) => folderTagIdSet.has(t));
+          if (charFolderTags.length > 0) {
+            // 找最深的文件夹
+            let deepest = charFolderTags[0];
+            let maxD = getFolderPath(deepest).length;
+            for (let i = 1; i < charFolderTags.length; i++) {
+              const d = getFolderPath(charFolderTags[i]).length;
+              if (d > maxD) { deepest = charFolderTags[i]; maxD = d; }
+            }
+            if (!folderChars[deepest]) folderChars[deepest] = [];
+            folderChars[deepest].push(ch);
+          } else {
+            ungroupedChars.push(ch);
+          }
+        }
+
+        function renderCharItem(ch, depth) {
           const isSelected = selectedCharTargetAvatar === ch.avatar;
           const displayName = ch.name || ch.avatar || "(未命名)";
           const itemNode = $(
-            `<div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-avatar="${escapeHtml(ch.avatar)}" style="padding-left:12px;display:flex;align-items:center;gap:8px;">
+            `<div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-avatar="${escapeHtml(ch.avatar)}" style="padding-left:${(depth) * 16 + 12}px;display:flex;align-items:center;gap:8px;">
               <span class="cfm-transfer-item-icon"><i class="fa-solid fa-user"></i></span>
               <span class="cfm-transfer-item-name">${escapeHtml(displayName)}</span>
             </div>`,
@@ -47122,9 +47148,98 @@ jQuery(async () => {
           });
           charTreeContainer.append(itemNode);
         }
+
+        function renderCharFolder(folderId, depth) {
+          const displayName = getTagName(folderId);
+          const isExpanded = charTransferExpandedFolders.has(folderId);
+          const childFolderIds = getChildFolders(folderId);
+          const charsInFolder = folderChars[folderId] || [];
+          const hasContent = charsInFolder.length > 0 || childFolderIds.some((cid) => folderChars[cid]?.length > 0);
+
+          if (query && !hasContent && !displayName.toLowerCase().includes(query)) {
+            return;
+          }
+
+          const folderNode = $(`
+            <div class="cfm-transfer-folder" data-folder-id="${escapeHtml(folderId)}" style="padding-left:${depth * 16 + 8}px;">
+              <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></span>
+              <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-folder${isExpanded ? "-open" : ""}"></i></span>
+              <span class="cfm-transfer-folder-name">${escapeHtml(displayName)}</span>
+              <span class="cfm-transfer-folder-count">${charsInFolder.length}</span>
+            </div>
+          `);
+          bindPresetTransferTreeTap(folderNode, () => {
+            if (charTransferExpandedFolders.has(folderId)) {
+              charTransferExpandedFolders.delete(folderId);
+            } else {
+              charTransferExpandedFolders.add(folderId);
+            }
+            renderCharTargetTree();
+          });
+          charTreeContainer.append(folderNode);
+
+          if (isExpanded || query) {
+            for (const childId of childFolderIds) renderCharFolder(childId, depth + 1);
+            for (const ch of charsInFolder) renderCharItem(ch, depth + 1);
+          }
+        }
+
+        const rootFolders = getTopLevelFolders();
+        for (const fid of rootFolders) renderCharFolder(fid, 0);
+
+        if (ungroupedChars.length > 0) {
+          const uncatId = "__char_ungrouped__";
+          const isUncatExpanded = charTransferExpandedFolders.has(uncatId);
+          const uncatNode = $(`
+            <div class="cfm-transfer-folder cfm-transfer-folder-ungrouped" style="padding-left:8px;">
+              <span class="cfm-transfer-folder-arrow"><i class="fa-solid fa-caret-${isUncatExpanded ? "down" : "right"}"></i></span>
+              <span class="cfm-transfer-folder-icon"><i class="fa-solid fa-box-open"></i></span>
+              <span class="cfm-transfer-folder-name">未归类</span>
+              <span class="cfm-transfer-folder-count">${ungroupedChars.length}</span>
+            </div>
+          `);
+          bindPresetTransferTreeTap(uncatNode, () => {
+            if (charTransferExpandedFolders.has(uncatId)) {
+              charTransferExpandedFolders.delete(uncatId);
+            } else {
+              charTransferExpandedFolders.add(uncatId);
+            }
+            renderCharTargetTree();
+          });
+          charTreeContainer.append(uncatNode);
+
+          if (isUncatExpanded || query) {
+            for (const ch of ungroupedChars) renderCharItem(ch, 1);
+          }
+        }
+
+        if (charTreeContainer.children().length === 0) {
+          charTreeContainer.html(
+            '<div style="padding:16px;opacity:0.5;text-align:center;">无可选角色</div>',
+          );
+        }
       }
 
       charSearchInput.on("input", () => renderCharTargetTree());
+      dialog
+        .find(".cfm-regex-transfer-char-expand-all")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          for (const id of getFolderTagIds()) {
+            charTransferExpandedFolders.add(id);
+          }
+          charTransferExpandedFolders.add("__char_ungrouped__");
+          renderCharTargetTree();
+        });
+      dialog
+        .find(".cfm-regex-transfer-char-collapse-all")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          charTransferExpandedFolders.clear();
+          renderCharTargetTree();
+        });
 
       function bindPresetTransferTreeTap(target, handler) {
         target
