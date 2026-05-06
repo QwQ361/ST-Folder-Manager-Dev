@@ -1947,6 +1947,62 @@ jQuery(async () => {
     }
   }
 
+  function applyFolderAssignments(assignments) {
+    if (!Array.isArray(assignments) || assignments.length === 0) return;
+
+    const typeMapping = {
+      presets: "presets",
+      worldinfo: "worldinfo",
+      themes: "themes",
+      backgrounds: "backgrounds",
+      personas: "personas",
+      qr: "quickreply",
+      chars: null,
+    };
+
+    let applied = 0;
+    for (const assignment of assignments) {
+      try {
+        const resourceType = String(assignment.resourceType || "").trim();
+        const displayName = String(assignment.displayName || "").trim();
+        const folderName = String(assignment.folderName || "").trim();
+        if (!resourceType || !displayName || !folderName) continue;
+
+        const groupType = typeMapping[resourceType];
+        if (!groupType) continue;
+
+        const folderTree = getResFolderTree(groupType);
+        if (!folderTree) continue;
+
+        if (!folderTree[folderName]) {
+          folderTree[folderName] = {
+            parentId: null,
+            sortOrder: Object.keys(folderTree).length + 1,
+          };
+          saveResTree(groupType);
+        }
+
+        setItemGroup(groupType, displayName, folderName);
+        applied++;
+      } catch (e) {
+        console.warn("[CFM] 文件夹分配失败:", e);
+      }
+    }
+
+    if (applied > 0) {
+      try {
+        fetch(CFM_SYNC_STATE_URL + "/folder-assignments", {
+          method: "POST",
+          cache: "no-store",
+          signal: AbortSignal.timeout(2000),
+        }).catch(() => {});
+      } catch {
+        // 确认消费失败不影响
+      }
+      console.log(`[CFM] 已应用 ${applied} 条文件夹分配`);
+    }
+  }
+
   async function pollSyncState() {
     try {
       const response = await fetch(CFM_SYNC_STATE_URL, {
@@ -1964,6 +2020,10 @@ jQuery(async () => {
       } else if (_cfmSyncLastState === "syncing" && data.state === "idle") {
         _cfmSyncLastState = "idle";
         removeCfmSyncOverlay();
+      }
+
+      if (Array.isArray(data.folderAssignments) && data.folderAssignments.length > 0) {
+        applyFolderAssignments(data.folderAssignments);
       }
     } catch {
       // 轮询失败静默忽略（Electron 未启动时不影响）
