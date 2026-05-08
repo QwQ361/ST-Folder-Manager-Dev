@@ -2020,6 +2020,19 @@ jQuery(async () => {
       } catch (e) {
         console.warn(`[CFM] 文件夹分配持久化失败:`, e);
       }
+
+      // 刷新 UI —— 让文件夹分配结果立即可见（无需手动刷新页面）
+      try {
+        if (typeof renderPresetsView === "function") renderPresetsView();
+        if (typeof renderWorldInfoView === "function") renderWorldInfoView();
+        if (typeof renderThemesView === "function") renderThemesView();
+        if (typeof renderBackgroundsView === "function") renderBackgroundsView();
+        if (typeof renderPersonasView === "function") renderPersonasView();
+        console.log(`[CFM] 文件夹分配后已刷新所有资源视图`);
+      } catch (e) {
+        console.warn(`[CFM] 文件夹分配后刷新视图失败:`, e);
+      }
+
       try {
         fetch(CFM_SYNC_STATE_URL + "/folder-assignments", {
           method: "POST",
