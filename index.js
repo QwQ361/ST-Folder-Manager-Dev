@@ -2021,17 +2021,10 @@ jQuery(async () => {
         console.warn(`[CFM] 文件夹分配持久化失败:`, e);
       }
 
-      // 刷新 UI —— 让文件夹分配结果立即可见（无需手动刷新页面）
-      try {
-        if (typeof renderPresetsView === "function") renderPresetsView();
-        if (typeof renderWorldInfoView === "function") renderWorldInfoView();
-        if (typeof renderThemesView === "function") renderThemesView();
-        if (typeof renderBackgroundsView === "function") renderBackgroundsView();
-        if (typeof renderPersonasView === "function") renderPersonasView();
-        console.log(`[CFM] 文件夹分配后已刷新所有资源视图`);
-      } catch (e) {
-        console.warn(`[CFM] 文件夹分配后刷新视图失败:`, e);
-      }
+      // 注意：不在这里刷新 UI！
+      // 因为 renderXxxView() 会清理 groups 中不存在于当前资源列表的映射，
+      // 而此时资源可能还没被酒馆加载，会导致刚分配的映射被清除。
+      // UI 刷新改在 pollSyncState 检测到同步结束后延迟执行。
 
       try {
         fetch(CFM_SYNC_STATE_URL + "/folder-assignments", {
@@ -2048,6 +2041,9 @@ jQuery(async () => {
     }
   }
 
+  // 同步进行中标志 —— 为 true 时 renderXxxView 不清理分组映射
+  let _cfmSyncInProgress = false;
+
   async function pollSyncState() {
     try {
       const response = await fetch(CFM_SYNC_STATE_URL, {
@@ -2061,10 +2057,27 @@ jQuery(async () => {
 
       if (data.state === "syncing") {
         _cfmSyncLastState = "syncing";
+        _cfmSyncInProgress = true;
         showCfmSyncOverlay(data.message, data.current, data.total);
       } else if (_cfmSyncLastState === "syncing" && data.state === "idle") {
         _cfmSyncLastState = "idle";
+        _cfmSyncInProgress = false;
         removeCfmSyncOverlay();
+
+        // 同步结束后延迟刷新所有资源视图
+        // 延迟 2 秒确保酒馆已加载新写入的资源
+        setTimeout(() => {
+          console.log(`[CFM] 同步结束，延迟刷新所有资源视图`);
+          try {
+            if (typeof renderPresetsView === "function") renderPresetsView();
+            if (typeof renderWorldInfoView === "function") renderWorldInfoView();
+            if (typeof renderThemesView === "function") renderThemesView();
+            if (typeof renderBackgroundsView === "function") renderBackgroundsView();
+            if (typeof renderPersonasView === "function") renderPersonasView();
+          } catch (e) {
+            console.warn(`[CFM] 同步后刷新视图失败:`, e);
+          }
+        }, 2000);
       }
 
       if (Array.isArray(data.folderAssignments) && data.folderAssignments.length > 0) {
@@ -36730,17 +36743,20 @@ jQuery(async () => {
     const groups = getResourceGroups("presets");
 
     // 清理 groups 中已不存在的预设映射（同步外部删除）
-    const existingPresetNames = new Set(presets.map((p) => p.name));
-    let presetGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingPresetNames.has(key)) {
-        delete groups[key];
-        presetGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingPresetNames = new Set(presets.map((p) => p.name));
+      let presetGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingPresetNames.has(key)) {
+          delete groups[key];
+          presetGroupsCleaned = true;
+        }
       }
-    }
-    if (presetGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的预设分组映射");
-      getContext().saveSettingsDebounced();
+      if (presetGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的预设分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
 
     // 分类：直接属于某文件夹的预设
@@ -37736,17 +37752,20 @@ jQuery(async () => {
     renderThemesView._retryCount = 0;
 
     const groups = getResourceGroups("themes");
-    const existingThemeNames = new Set(themeNames);
-    let themeGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingThemeNames.has(key)) {
-        delete groups[key];
-        themeGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingThemeNames = new Set(themeNames);
+      let themeGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingThemeNames.has(key)) {
+          delete groups[key];
+          themeGroupsCleaned = true;
+        }
       }
-    }
-    if (themeGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的主题分组映射");
-      getContext().saveSettingsDebounced();
+      if (themeGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的主题分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
 
     const folderItems = {};
@@ -38553,17 +38572,20 @@ jQuery(async () => {
       });
     }
     const groups = getResourceGroups("backgrounds");
-    const existingBgNames = new Set(bgNames);
-    let bgGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingBgNames.has(key)) {
-        delete groups[key];
-        bgGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingBgNames = new Set(bgNames);
+      let bgGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingBgNames.has(key)) {
+          delete groups[key];
+          bgGroupsCleaned = true;
+        }
       }
-    }
-    if (bgGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的背景分组映射");
-      getContext().saveSettingsDebounced();
+      if (bgGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的背景分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
     const folderItems = {};
     const ungrouped = [];
@@ -39679,17 +39701,20 @@ jQuery(async () => {
     const groups = getResourceGroups("worldinfo");
 
     // 清理 groups 中已不存在的世界书映射（同步外部删除）
-    const existingWiNames = new Set(names);
-    let wiGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingWiNames.has(key)) {
-        delete groups[key];
-        wiGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingWiNames = new Set(names);
+      let wiGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingWiNames.has(key)) {
+          delete groups[key];
+          wiGroupsCleaned = true;
+        }
       }
-    }
-    if (wiGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的世界书分组映射");
-      getContext().saveSettingsDebounced();
+      if (wiGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的世界书分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
 
     // 分类
@@ -41181,17 +41206,20 @@ jQuery(async () => {
     const groups = getResourceGroups("quickreply");
 
     // 清理 groups 中已不存在的快速回复集映射
-    const existingQrNames = new Set(names);
-    let qrGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingQrNames.has(key)) {
-        delete groups[key];
-        qrGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingQrNames = new Set(names);
+      let qrGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingQrNames.has(key)) {
+          delete groups[key];
+          qrGroupsCleaned = true;
+        }
       }
-    }
-    if (qrGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的快速回复集分组映射");
-      getContext().saveSettingsDebounced();
+      if (qrGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的快速回复集分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
 
     // 分类
@@ -45879,17 +45907,20 @@ jQuery(async () => {
     const groups = getResourceGroups("personas");
 
     // 清理 groups 中已不存在的 persona 映射
-    const existingPersonaIds = new Set(personas.map((p) => p.avatarId));
-    let personaGroupsCleaned = false;
-    for (const key of Object.keys(groups)) {
-      if (!existingPersonaIds.has(key)) {
-        delete groups[key];
-        personaGroupsCleaned = true;
+    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    if (!_cfmSyncInProgress) {
+      const existingPersonaIds = new Set(personas.map((p) => p.avatarId));
+      let personaGroupsCleaned = false;
+      for (const key of Object.keys(groups)) {
+        if (!existingPersonaIds.has(key)) {
+          delete groups[key];
+          personaGroupsCleaned = true;
+        }
       }
-    }
-    if (personaGroupsCleaned) {
-      console.log("[CFM] 已清理不存在的User分组映射");
-      getContext().saveSettingsDebounced();
+      if (personaGroupsCleaned) {
+        console.log("[CFM] 已清理不存在的User分组映射");
+        getContext().saveSettingsDebounced();
+      }
     }
 
     // 分类：直接属于某文件夹的 persona
