@@ -2060,10 +2060,13 @@ jQuery(async () => {
       if (!data || typeof data !== "object") return;
 
       if (data.state === "syncing") {
+        // 只在首次进入 syncing 状态时清空上一轮的保护 key
+        // 避免在同步过程中每次轮询都清空已分配的 key
+        if (_cfmSyncLastState !== "syncing") {
+          _cfmSyncAssignedKeys.clear();
+        }
         _cfmSyncLastState = "syncing";
         _cfmSyncInProgress = true;
-        // 新一轮同步开始，清空上一轮的保护 key
-        _cfmSyncAssignedKeys.clear();
         showCfmSyncOverlay(data.message, data.current, data.total);
       } else if (_cfmSyncLastState === "syncing" && data.state === "idle") {
         _cfmSyncLastState = "idle";
