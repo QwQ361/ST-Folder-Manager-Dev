@@ -2005,6 +2005,7 @@ jQuery(async () => {
         }
 
         setItemGroup(groupType, displayName, folderName);
+        _cfmSyncAssignedKeys.add(`${groupType}/${displayName}`);
         console.log(`[CFM] 分配成功: ${resourceType}/${displayName} → ${folderName} (groupType=${groupType})`);
         applied++;
       } catch (e) {
@@ -2043,6 +2044,9 @@ jQuery(async () => {
 
   // 同步进行中标志 —— 为 true 时 renderXxxView 不清理分组映射
   let _cfmSyncInProgress = false;
+  // 记录通过 applyFolderAssignments 分配过的 key，清理逻辑中跳过这些 key
+  // 格式："groupType/itemName"，例如 "presets/Default"
+  const _cfmSyncAssignedKeys = new Set();
 
   async function pollSyncState() {
     try {
@@ -2058,6 +2062,8 @@ jQuery(async () => {
       if (data.state === "syncing") {
         _cfmSyncLastState = "syncing";
         _cfmSyncInProgress = true;
+        // 新一轮同步开始，清空上一轮的保护 key
+        _cfmSyncAssignedKeys.clear();
         showCfmSyncOverlay(data.message, data.current, data.total);
       } else if (_cfmSyncLastState === "syncing" && data.state === "idle") {
         _cfmSyncLastState = "idle";
@@ -2065,9 +2071,12 @@ jQuery(async () => {
         removeCfmSyncOverlay();
 
         // 同步结束后延迟刷新所有资源视图
-        // 延迟 2 秒确保酒馆已加载新写入的资源
+        // 注意：不清空 _cfmSyncAssignedKeys！
+        // 通过桥接写入的资源不会自动出现在用户浏览器的资源列表中，
+        // 如果在刷新时清空保护，清理逻辑会把映射删掉。
+        // _cfmSyncAssignedKeys 保留到下一次同步开始时才清空。
         setTimeout(() => {
-          console.log(`[CFM] 同步结束，延迟刷新所有资源视图`);
+          console.log(`[CFM] 同步结束，延迟刷新所有资源视图（保护的 key: ${_cfmSyncAssignedKeys.size} 个，将保留到下次同步）`);
           try {
             if (typeof renderPresetsView === "function") renderPresetsView();
             if (typeof renderWorldInfoView === "function") renderWorldInfoView();
@@ -2077,7 +2086,7 @@ jQuery(async () => {
           } catch (e) {
             console.warn(`[CFM] 同步后刷新视图失败:`, e);
           }
-        }, 2000);
+        }, 3000);
       }
 
       if (Array.isArray(data.folderAssignments) && data.folderAssignments.length > 0) {
@@ -36743,12 +36752,12 @@ jQuery(async () => {
     const groups = getResourceGroups("presets");
 
     // 清理 groups 中已不存在的预设映射（同步外部删除）
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
     if (!_cfmSyncInProgress) {
       const existingPresetNames = new Set(presets.map((p) => p.name));
       let presetGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingPresetNames.has(key)) {
+        if (!existingPresetNames.has(key) && !_cfmSyncAssignedKeys.has(`presets/${key}`)) {
           delete groups[key];
           presetGroupsCleaned = true;
         }
@@ -37752,12 +37761,12 @@ jQuery(async () => {
     renderThemesView._retryCount = 0;
 
     const groups = getResourceGroups("themes");
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
     if (!_cfmSyncInProgress) {
       const existingThemeNames = new Set(themeNames);
       let themeGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingThemeNames.has(key)) {
+        if (!existingThemeNames.has(key) && !_cfmSyncAssignedKeys.has(`themes/${key}`)) {
           delete groups[key];
           themeGroupsCleaned = true;
         }
@@ -38572,12 +38581,12 @@ jQuery(async () => {
       });
     }
     const groups = getResourceGroups("backgrounds");
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
     if (!_cfmSyncInProgress) {
       const existingBgNames = new Set(bgNames);
       let bgGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingBgNames.has(key)) {
+        if (!existingBgNames.has(key) && !_cfmSyncAssignedKeys.has(`backgrounds/${key}`)) {
           delete groups[key];
           bgGroupsCleaned = true;
         }
@@ -39701,12 +39710,12 @@ jQuery(async () => {
     const groups = getResourceGroups("worldinfo");
 
     // 清理 groups 中已不存在的世界书映射（同步外部删除）
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
+    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
     if (!_cfmSyncInProgress) {
       const existingWiNames = new Set(names);
       let wiGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingWiNames.has(key)) {
+        if (!existingWiNames.has(key) && !_cfmSyncAssignedKeys.has(`worldinfo/${key}`)) {
           delete groups[key];
           wiGroupsCleaned = true;
         }
@@ -41211,7 +41220,7 @@ jQuery(async () => {
       const existingQrNames = new Set(names);
       let qrGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingQrNames.has(key)) {
+        if (!existingQrNames.has(key) && !_cfmSyncAssignedKeys.has(`quickreply/${key}`)) {
           delete groups[key];
           qrGroupsCleaned = true;
         }
@@ -45912,7 +45921,7 @@ jQuery(async () => {
       const existingPersonaIds = new Set(personas.map((p) => p.avatarId));
       let personaGroupsCleaned = false;
       for (const key of Object.keys(groups)) {
-        if (!existingPersonaIds.has(key)) {
+        if (!existingPersonaIds.has(key) && !_cfmSyncAssignedKeys.has(`personas/${key}`)) {
           delete groups[key];
           personaGroupsCleaned = true;
         }
