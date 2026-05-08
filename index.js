@@ -36754,22 +36754,10 @@ jQuery(async () => {
 
     const groups = getResourceGroups("presets");
 
-    // 清理 groups 中已不存在的预设映射（同步外部删除）
-    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
-    if (!_cfmSyncInProgress) {
-      const existingPresetNames = new Set(presets.map((p) => p.name));
-      let presetGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingPresetNames.has(key) && !_cfmSyncAssignedKeys.has(`presets/${key}`)) {
-          delete groups[key];
-          presetGroupsCleaned = true;
-        }
-      }
-      if (presetGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的预设分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射。
+    // 原来的清理逻辑会在资源列表还没加载完、或页面刷新后将有效映射误删。
+    // groups 中残留的无效映射不影响功能（因为对应资源不存在时不会显示），
+    // 保留它们可以避免备份同步写入的文件夹分配被意外清除。
 
     // 分类：直接属于某文件夹的预设
     const folderItems = {};
@@ -37764,21 +37752,7 @@ jQuery(async () => {
     renderThemesView._retryCount = 0;
 
     const groups = getResourceGroups("themes");
-    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
-    if (!_cfmSyncInProgress) {
-      const existingThemeNames = new Set(themeNames);
-      let themeGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingThemeNames.has(key) && !_cfmSyncAssignedKeys.has(`themes/${key}`)) {
-          delete groups[key];
-          themeGroupsCleaned = true;
-        }
-      }
-      if (themeGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的主题分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射（同预设清理说明）。
 
     const folderItems = {};
     const ungrouped = [];
@@ -38584,21 +38558,7 @@ jQuery(async () => {
       });
     }
     const groups = getResourceGroups("backgrounds");
-    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
-    if (!_cfmSyncInProgress) {
-      const existingBgNames = new Set(bgNames);
-      let bgGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingBgNames.has(key) && !_cfmSyncAssignedKeys.has(`backgrounds/${key}`)) {
-          delete groups[key];
-          bgGroupsCleaned = true;
-        }
-      }
-      if (bgGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的背景分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射（同预设清理说明）。
     const folderItems = {};
     const ungrouped = [];
     for (const name of bgNames) {
@@ -39712,22 +39672,7 @@ jQuery(async () => {
     const allFolderIds = getResFolderIds("worldinfo");
     const groups = getResourceGroups("worldinfo");
 
-    // 清理 groups 中已不存在的世界书映射（同步外部删除）
-    // 同步进行中时不清理；已通过备份同步分配的 key 也跳过
-    if (!_cfmSyncInProgress) {
-      const existingWiNames = new Set(names);
-      let wiGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingWiNames.has(key) && !_cfmSyncAssignedKeys.has(`worldinfo/${key}`)) {
-          delete groups[key];
-          wiGroupsCleaned = true;
-        }
-      }
-      if (wiGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的世界书分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射（同预设清理说明）。
 
     // 分类
     const folderItems = {};
@@ -41217,22 +41162,7 @@ jQuery(async () => {
     const allFolderIds = getResFolderIds("quickreply");
     const groups = getResourceGroups("quickreply");
 
-    // 清理 groups 中已不存在的快速回复集映射
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
-    if (!_cfmSyncInProgress) {
-      const existingQrNames = new Set(names);
-      let qrGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingQrNames.has(key) && !_cfmSyncAssignedKeys.has(`quickreply/${key}`)) {
-          delete groups[key];
-          qrGroupsCleaned = true;
-        }
-      }
-      if (qrGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的快速回复集分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射（同预设清理说明）。
 
     // 分类
     const folderItems = {};
@@ -45918,22 +45848,7 @@ jQuery(async () => {
 
     const groups = getResourceGroups("personas");
 
-    // 清理 groups 中已不存在的 persona 映射
-    // 同步进行中时不清理，因为资源可能还没被酒馆加载
-    if (!_cfmSyncInProgress) {
-      const existingPersonaIds = new Set(personas.map((p) => p.avatarId));
-      let personaGroupsCleaned = false;
-      for (const key of Object.keys(groups)) {
-        if (!existingPersonaIds.has(key) && !_cfmSyncAssignedKeys.has(`personas/${key}`)) {
-          delete groups[key];
-          personaGroupsCleaned = true;
-        }
-      }
-      if (personaGroupsCleaned) {
-        console.log("[CFM] 已清理不存在的User分组映射");
-        getContext().saveSettingsDebounced();
-      }
-    }
+    // 注意：不再自动清理 groups 中的映射（同预设清理说明）。
 
     // 分类：直接属于某文件夹的 persona
     const folderItems = {};
