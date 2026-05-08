@@ -1947,7 +1947,7 @@ jQuery(async () => {
     }
   }
 
-  function applyFolderAssignments(assignments) {
+  async function applyFolderAssignments(assignments) {
     if (!Array.isArray(assignments) || assignments.length === 0) return;
 
     const typeMapping = {
@@ -1961,18 +1961,39 @@ jQuery(async () => {
     };
 
     let applied = 0;
+    let skipped = 0;
+    console.log(`[CFM] applyFolderAssignments: 收到 ${assignments.length} 条分配请求`);
     for (const assignment of assignments) {
       try {
         const resourceType = String(assignment.resourceType || "").trim();
         const displayName = String(assignment.displayName || "").trim();
         const folderName = String(assignment.folderName || "").trim();
-        if (!resourceType || !displayName || !folderName) continue;
+        if (!resourceType || !displayName || !folderName) {
+          console.warn(`[CFM] 跳过无效分配: resourceType=${resourceType}, displayName=${displayName}, folderName=${folderName}`);
+          skipped++;
+          continue;
+        }
+
+        // 如果 folderName 是 "未归类"，则不需要分配（它本来就是无文件夹状态）
+        if (folderName === "未归类") {
+          console.log(`[CFM] 跳过 "未归类" 分配: ${resourceType}/${displayName}`);
+          skipped++;
+          continue;
+        }
 
         const groupType = typeMapping[resourceType];
-        if (!groupType) continue;
+        if (!groupType) {
+          console.warn(`[CFM] 未知资源类型 "${resourceType}"，无法映射到 groupType`);
+          skipped++;
+          continue;
+        }
 
         const folderTree = getResFolderTree(groupType);
-        if (!folderTree) continue;
+        if (!folderTree) {
+          console.warn(`[CFM] getResFolderTree("${groupType}") 返回空`);
+          skipped++;
+          continue;
+        }
 
         if (!folderTree[folderName]) {
           folderTree[folderName] = {
@@ -1980,9 +2001,11 @@ jQuery(async () => {
             sortOrder: Object.keys(folderTree).length + 1,
           };
           saveResTree(groupType);
+          console.log(`[CFM] 创建新文件夹: groupType=${groupType}, folderName=${folderName}`);
         }
 
         setItemGroup(groupType, displayName, folderName);
+        console.log(`[CFM] 分配成功: ${resourceType}/${displayName} → ${folderName} (groupType=${groupType})`);
         applied++;
       } catch (e) {
         console.warn("[CFM] 文件夹分配失败:", e);
@@ -1990,6 +2013,13 @@ jQuery(async () => {
     }
 
     if (applied > 0) {
+      // 立即持久化，而不是依赖 debounce
+      try {
+        await flushFolderAssignmentSettings();
+        console.log(`[CFM] 文件夹分配已持久化`);
+      } catch (e) {
+        console.warn(`[CFM] 文件夹分配持久化失败:`, e);
+      }
       try {
         fetch(CFM_SYNC_STATE_URL + "/folder-assignments", {
           method: "POST",
@@ -1999,7 +2029,9 @@ jQuery(async () => {
       } catch {
         // 确认消费失败不影响
       }
-      console.log(`[CFM] 已应用 ${applied} 条文件夹分配`);
+      console.log(`[CFM] 已应用 ${applied} 条文件夹分配，跳过 ${skipped} 条`);
+    } else {
+      console.log(`[CFM] 没有成功分配任何文件夹，跳过 ${skipped} 条`);
     }
   }
 
@@ -2023,7 +2055,7 @@ jQuery(async () => {
       }
 
       if (Array.isArray(data.folderAssignments) && data.folderAssignments.length > 0) {
-        applyFolderAssignments(data.folderAssignments);
+        await applyFolderAssignments(data.folderAssignments);
       }
     } catch {
       // 轮询失败静默忽略（Electron 未启动时不影响）
