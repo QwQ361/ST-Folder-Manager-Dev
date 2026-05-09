@@ -1964,7 +1964,6 @@ jQuery(async () => {
       backgrounds: "backgrounds",
       personas: "personas",
       qr: "quickreply",
-      chars: null,
     };
 
     let applied = 0;
@@ -1985,6 +1984,47 @@ jQuery(async () => {
         if (folderName === "未归类") {
           console.log(`[CFM] 跳过 "未归类" 分配: ${resourceType}/${displayName}`);
           skipped++;
+          continue;
+        }
+
+        // 角色卡使用独立的 tag 文件夹系统
+        if (resourceType === "chars") {
+          // displayName 是角色的 avatar（如 "xxx.png"）
+          // folderName 是文件夹名称
+          const avatar = displayName;
+          const characters = getCharacters();
+          const charExists = characters.some((c) => c.avatar === avatar);
+          if (!charExists) {
+            console.warn(`[CFM] 角色卡不存在（avatar=${avatar}），跳过文件夹分配`);
+            skipped++;
+            continue;
+          }
+          // 查找或创建文件夹 tag
+          const { tag } = findOrCreateTag(folderName, null);
+          if (!tag || !tag.id) {
+            console.warn(`[CFM] 无法创建角色卡文件夹 tag: ${folderName}`);
+            skipped++;
+            continue;
+          }
+          // 确保 tag 在 config.folders 中注册为文件夹
+          if (!config.folders[tag.id]) {
+            config.folders[tag.id] = {
+              parentId: null,
+              sortOrder: Object.keys(config.folders).length + 1,
+            };
+            // 从排除列表中移除
+            const _ex = extension_settings[extensionName].excludedTagIds;
+            if (Array.isArray(_ex)) {
+              const _exi = _ex.indexOf(tag.id);
+              if (_exi >= 0) _ex.splice(_exi, 1);
+            }
+            saveConfig(config);
+            console.log(`[CFM] 创建角色卡文件夹: tagId=${tag.id}, name=${folderName}`);
+          }
+          moveCharToFolder(avatar, tag.id);
+          _cfmSyncAssignedKeys.add(`chars/${avatar}`);
+          console.log(`[CFM] 角色卡分配成功: avatar=${avatar} → ${folderName} (tagId=${tag.id})`);
+          applied++;
           continue;
         }
 
