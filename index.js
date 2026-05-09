@@ -11914,8 +11914,9 @@ jQuery(async () => {
 
   async function showThemeNotePopup(themeNames) {
     if (!themeNames || themeNames.length === 0) return;
+    const isBatch = themeNames.length > 1;
     let defaultNote = "";
-    if (themeNames.length === 1) {
+    if (!isBatch) {
       defaultNote = getThemeNote(themeNames[0]);
     }
     const nameListHtml =
@@ -11933,18 +11934,46 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${themeNames.length} 个主题</div>`;
 
+    const individualListHtml = isBatch
+      ? themeNames
+          .map((n) => {
+            const currentNote = getThemeNote(n);
+            return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+          })
+          .join("")
+      : "";
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑主题备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
-          <div class="cfm-edit-popup-field">
+          ${
+            isBatch
+              ? `<div class="cfm-edit-popup-field">
+            <label>操作类型</label>
+            <select class="cfm-edit-input" id="cfm-theme-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>`
+              : ""
+          }
+          <div class="cfm-edit-popup-field" id="cfm-theme-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-theme-note-input" value="${escapeHtml(defaultNote)}" placeholder="${themeNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-theme-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${
+            isBatch
+              ? `<div class="cfm-rename-individual-field" id="cfm-theme-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>`
+              : ""
+          }
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${themeNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -11952,7 +11981,35 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
-    overlay.find("#cfm-theme-note-input").focus();
+
+    if (isBatch) {
+      function updateNoteUI() {
+        const action = overlay.find("#cfm-theme-note-action").val();
+        const uniformField = overlay.find("#cfm-theme-note-uniform-field");
+        const individualField = overlay.find(
+          "#cfm-theme-note-individual-field",
+        );
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-theme-note-input").focus();
+        }
+      }
+      updateNoteUI();
+      overlay.find("#cfm-theme-note-action").on("change", updateNoteUI);
+    } else {
+      overlay.find("#cfm-theme-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -11971,11 +12028,25 @@ jQuery(async () => {
         resolve({ note: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-theme-note-input").val().trim();
-        overlay.remove();
-        resolve({ note, clear: false });
+        if (
+          isBatch &&
+          overlay.find("#cfm-theme-note-action").val() === "individual"
+        ) {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const name = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[name] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap });
+        } else {
+          const note = overlay.find("#cfm-theme-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-theme-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -11990,6 +12061,28 @@ jQuery(async () => {
   async function executeThemeNoteEdit(names) {
     const result = await showThemeNotePopup(names);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const name of names) {
+        const note = noteMap[name];
+        if (note !== undefined && note !== "") {
+          setThemeNote(name, note);
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个主题的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (updated > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderThemesView();
+      return;
+    }
+
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
@@ -12199,9 +12292,10 @@ jQuery(async () => {
 
   async function showBgNotePopup(bgNames) {
     if (!bgNames || bgNames.length === 0) return;
+    const isBatch = bgNames.length > 1;
     let defaultNote = "";
     let defaultOrient = "";
-    if (bgNames.length === 1) {
+    if (!isBatch) {
       defaultNote = getBgNote(bgNames[0]);
       defaultOrient = getBgOrientation(bgNames[0]) || "";
     }
@@ -12221,6 +12315,16 @@ jQuery(async () => {
             )
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${bgNames.length} 个背景</div>`;
+
+    const individualListHtml = isBatch
+      ? bgNames
+          .map((n) => {
+            const displayName = getBackgroundDisplayName(n);
+            const currentNote = getBgNote(n);
+            return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+          })
+          .join("")
+      : "";
 
     const orientOptions = [
       { value: "", label: "不修改", icon: "fa-minus" },
@@ -12256,13 +12360,32 @@ jQuery(async () => {
             <label>屏幕方向</label>
             <div class="cfm-orient-group">${orientHtml}</div>
           </div>
-          <div class="cfm-edit-popup-field">
+          ${
+            isBatch
+              ? `<div class="cfm-edit-popup-field">
+            <label>备注操作类型</label>
+            <select class="cfm-edit-input" id="cfm-bg-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>`
+              : ""
+          }
+          <div class="cfm-edit-popup-field" id="cfm-bg-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-bg-note-input" value="${escapeHtml(defaultNote)}" placeholder="${bgNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-bg-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${
+            isBatch
+              ? `<div class="cfm-rename-individual-field" id="cfm-bg-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>`
+              : ""
+          }
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${bgNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -12277,7 +12400,32 @@ jQuery(async () => {
       $(this).addClass("cfm-orient-active");
     });
 
-    overlay.find("#cfm-bg-note-input").focus();
+    if (isBatch) {
+      function updateBgNoteUI() {
+        const action = overlay.find("#cfm-bg-note-action").val();
+        const uniformField = overlay.find("#cfm-bg-note-uniform-field");
+        const individualField = overlay.find("#cfm-bg-note-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-bg-note-input").focus();
+        }
+      }
+      updateBgNoteUI();
+      overlay.find("#cfm-bg-note-action").on("change", updateBgNoteUI);
+    } else {
+      overlay.find("#cfm-bg-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -12296,13 +12444,27 @@ jQuery(async () => {
         resolve({ note: "", orient: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-bg-note-input").val().trim();
         const orient =
           overlay.find('input[name="cfm-bg-orient"]:checked').val() || "";
-        overlay.remove();
-        resolve({ note, orient, clear: false });
+        if (
+          isBatch &&
+          overlay.find("#cfm-bg-note-action").val() === "individual"
+        ) {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const name = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[name] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap, orient });
+        } else {
+          const note = overlay.find("#cfm-bg-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, orient, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-bg-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -12317,6 +12479,38 @@ jQuery(async () => {
   async function executeBgNoteEdit(names) {
     const result = await showBgNotePopup(names);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap, orient } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const name of names) {
+        let changed = false;
+        // 处理方向（统一设置）
+        if (orient) {
+          setBgOrientation(name, orient);
+          changed = true;
+        }
+        // 处理备注（逐个设置）
+        const note = noteMap[name];
+        if (note !== undefined && note !== "") {
+          setBgNote(name, note);
+          changed = true;
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个背景的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (orient)
+        msg += `，方向已统一设置为「${BG_ORIENT_LABELS[orient] || orient}」`;
+      if (updated > 0 || orient) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderBackgroundsView();
+      return;
+    }
+
     const { note, orient, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !orient && !clear) {
@@ -12485,7 +12679,12 @@ jQuery(async () => {
         });
       });
     } else {
-      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
+      const individualListHtml = names
+        .map(
+          (n) =>
+            `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`,
+        )
+        .join("");
       const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名主题</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀</option><option value="individual">逐个重命名</option></select></div><div class="cfm-edit-popup-field" id="cfm-rename-text-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-rename-individual-field" id="cfm-rename-individual-field"><label>逐个指定新名称（留空则不修改）</label><div class="cfm-rename-individual-list">${individualListHtml}</div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
       const overlay = $(popupHtml);
       $("body").append(overlay);
@@ -12567,8 +12766,13 @@ jQuery(async () => {
           if (action === "individual") {
             const renameMap = {};
             overlay.find(".cfm-rename-individual-row").each(function () {
-              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
-              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              const oldName = $(this)
+                .find(".cfm-rename-new-input")
+                .data("old-name");
+              const newName = $(this)
+                .find(".cfm-rename-new-input")
+                .val()
+                .trim();
               if (newName) renameMap[oldName] = newName;
             });
             overlay.remove();
@@ -12773,23 +12977,61 @@ jQuery(async () => {
         return;
       }
       const existingThemes = new Set(getThemeNames());
-      let success = 0, skipped = 0, failed = 0;
+      let success = 0,
+        skipped = 0,
+        failed = 0;
       const skippedNames = [];
-      const batchProgress = showBatchProgressOverlay("正在逐个重命名主题", entries.length);
+      const batchProgress = showBatchProgressOverlay(
+        "正在逐个重命名主题",
+        entries.length,
+      );
       let processed = 0;
       for (const [oldName, newName] of entries) {
-        if (newName === oldName) { skipped++; skippedNames.push(oldName); processed++; batchProgress.update(processed); continue; }
-        if (existingThemes.has(newName)) { skipped++; skippedNames.push(`${oldName}(名称冲突)`); processed++; batchProgress.update(processed); continue; }
+        if (newName === oldName) {
+          skipped++;
+          skippedNames.push(oldName);
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
+        if (existingThemes.has(newName)) {
+          skipped++;
+          skippedNames.push(`${oldName}(名称冲突)`);
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
         try {
           const themeData = getThemeData(oldName);
-          if (!themeData) { failed++; processed++; batchProgress.update(processed); continue; }
+          if (!themeData) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
           themeData.name = newName;
-          await fetch("/api/themes/save", { method: "POST", headers, body: JSON.stringify(themeData) });
-          await fetch("/api/themes/delete", { method: "POST", headers, body: JSON.stringify({ name: oldName }) });
-          $("#themes option").filter(function () { return $(this).val() === oldName; }).val(newName).text(newName);
+          await fetch("/api/themes/save", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(themeData),
+          });
+          await fetch("/api/themes/delete", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          $("#themes option")
+            .filter(function () {
+              return $(this).val() === oldName;
+            })
+            .val(newName)
+            .text(newName);
           if (typeof themes !== "undefined" && Array.isArray(themes)) {
-            const idx = themes.findIndex((t) => (typeof t === "object" ? t.name : t) === oldName);
-            if (idx !== -1 && typeof themes[idx] === "object") themes[idx].name = newName;
+            const idx = themes.findIndex(
+              (t) => (typeof t === "object" ? t.name : t) === oldName,
+            );
+            if (idx !== -1 && typeof themes[idx] === "object")
+              themes[idx].name = newName;
           }
           updateSettingsAfterRename("themes", oldName, newName);
           existingThemes.delete(oldName);
@@ -12956,7 +13198,14 @@ jQuery(async () => {
         const d = n.lastIndexOf(".");
         return d > 0 ? n.substring(0, d) : n;
       });
-      const individualListHtml = names.map(n => { const d = n.lastIndexOf("."); const base = d > 0 ? n.substring(0, d) : n; const ext = d > 0 ? n.substring(d) : ""; return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(base)}<span style="color:#585b70">${escapeHtml(ext)}</span></span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" data-ext="${escapeHtml(ext)}"></div>`; }).join("");
+      const individualListHtml = names
+        .map((n) => {
+          const d = n.lastIndexOf(".");
+          const base = d > 0 ? n.substring(0, d) : n;
+          const ext = d > 0 ? n.substring(d) : "";
+          return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(base)}<span style="color:#585b70">${escapeHtml(ext)}</span></span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" data-ext="${escapeHtml(ext)}"></div>`;
+        })
+        .join("");
       const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option><option value="same-name-suffix">重命名为同名并自动后缀</option><option value="individual">逐个重命名</option></select></div><div class="cfm-edit-popup-field" id="cfm-rename-base-field"><label id="cfm-rename-base-label">新名称</label><input type="text" class="cfm-edit-input" id="cfm-rename-base" placeholder="输入新名称"></div><div class="cfm-edit-popup-field" id="cfm-rename-text-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-rename-individual-field" id="cfm-rename-individual-field"><label>逐个指定新名称（留空则不修改，扩展名自动保留）</label><div class="cfm-rename-individual-list">${individualListHtml}</div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
       const overlay = $(popupHtml);
       $("body").append(overlay);
@@ -13232,15 +13481,39 @@ jQuery(async () => {
         renderBackgroundsView();
         return;
       }
-      let success = 0, skipped = 0, failed = 0;
-      const batchProgress = showBatchProgressOverlay("正在逐个重命名背景", entries.length);
+      let success = 0,
+        skipped = 0,
+        failed = 0;
+      const batchProgress = showBatchProgressOverlay(
+        "正在逐个重命名背景",
+        entries.length,
+      );
       let processed = 0;
       for (const [oldName, newName] of entries) {
-        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
+        if (newName === oldName) {
+          skipped++;
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
         try {
-          const resp = await fetch("/api/backgrounds/rename", { method: "POST", headers, body: JSON.stringify({ old_bg: oldName, new_bg: newName }) });
-          if (!resp.ok) { failed++; processed++; batchProgress.update(processed); continue; }
-          $("#bg_menu_content .bg_example").filter(function () { return $(this).attr("bgfile") === oldName; }).attr("bgfile", newName).attr("title", newName);
+          const resp = await fetch("/api/backgrounds/rename", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ old_bg: oldName, new_bg: newName }),
+          });
+          if (!resp.ok) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          $("#bg_menu_content .bg_example")
+            .filter(function () {
+              return $(this).attr("bgfile") === oldName;
+            })
+            .attr("bgfile", newName)
+            .attr("title", newName);
           updateSettingsAfterRename("backgrounds", oldName, newName);
           success++;
         } catch (e) {
@@ -13400,8 +13673,9 @@ jQuery(async () => {
 
   async function showPersonaNotePopup(personaIds) {
     if (!personaIds || personaIds.length === 0) return;
+    const isBatch = personaIds.length > 1;
     let defaultNote = "";
-    if (personaIds.length === 1) {
+    if (!isBatch) {
       defaultNote = getPersonaNote(personaIds[0]);
     }
     // 将 avatarId 转换为显示名称
@@ -13423,18 +13697,35 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${displayNames.length} 个User</div>`;
 
+    const individualListHtml = isBatch ? personaIds.map((id, i) => {
+      const displayName = displayNames[i];
+      const currentNote = getPersonaNote(id);
+      return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(id)}" value="${escapeHtml(currentNote)}"></div>`;
+    }).join("") : "";
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑User备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
-          <div class="cfm-edit-popup-field">
+          ${isBatch ? `<div class="cfm-edit-popup-field">
+            <label>操作类型</label>
+            <select class="cfm-edit-input" id="cfm-persona-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>` : ""}
+          <div class="cfm-edit-popup-field" id="cfm-persona-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-persona-note-input" value="${escapeHtml(defaultNote)}" placeholder="${personaIds.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-persona-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${isBatch ? `<div class="cfm-rename-individual-field" id="cfm-persona-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>` : ""}
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${personaIds.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -13442,7 +13733,33 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
-    overlay.find("#cfm-persona-note-input").focus();
+
+    if (isBatch) {
+      function updatePersonaNoteUI() {
+        const action = overlay.find("#cfm-persona-note-action").val();
+        const uniformField = overlay.find("#cfm-persona-note-uniform-field");
+        const individualField = overlay.find("#cfm-persona-note-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-persona-note-input").focus();
+        }
+      }
+      updatePersonaNoteUI();
+      overlay.find("#cfm-persona-note-action").on("change", updatePersonaNoteUI);
+    } else {
+      overlay.find("#cfm-persona-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -13461,11 +13778,22 @@ jQuery(async () => {
         resolve({ note: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-persona-note-input").val().trim();
-        overlay.remove();
-        resolve({ note, clear: false });
+        if (isBatch && overlay.find("#cfm-persona-note-action").val() === "individual") {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const id = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[id] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap });
+        } else {
+          const note = overlay.find("#cfm-persona-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-persona-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -13480,6 +13808,28 @@ jQuery(async () => {
   async function executePersonaNoteEdit(ids) {
     const result = await showPersonaNotePopup(ids);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const id of ids) {
+        const note = noteMap[id];
+        if (note !== undefined && note !== "") {
+          setPersonaNote(id, note);
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个User的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (updated > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderPersonasView();
+      return;
+    }
+
     const { note, clear } = result;
     const isBatch = ids.length > 1;
     if (isBatch && !note && !clear) {
@@ -13596,8 +13946,9 @@ jQuery(async () => {
 
   async function showPresetNotePopup(presetNames) {
     if (!presetNames || presetNames.length === 0) return;
+    const isBatch = presetNames.length > 1;
     let defaultNote = "";
-    if (presetNames.length === 1) {
+    if (!isBatch) {
       defaultNote = getPresetNote(presetNames[0]);
     }
     const nameListHtml =
@@ -13615,18 +13966,34 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${presetNames.length} 个预设</div>`;
 
+    const individualListHtml = isBatch ? presetNames.map(n => {
+      const currentNote = getPresetNote(n);
+      return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+    }).join("") : "";
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑预设备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
-          <div class="cfm-edit-popup-field">
+          ${isBatch ? `<div class="cfm-edit-popup-field">
+            <label>操作类型</label>
+            <select class="cfm-edit-input" id="cfm-preset-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>` : ""}
+          <div class="cfm-edit-popup-field" id="cfm-preset-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-preset-note-input" value="${escapeHtml(defaultNote)}" placeholder="${presetNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-preset-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${isBatch ? `<div class="cfm-rename-individual-field" id="cfm-preset-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>` : ""}
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${presetNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -13634,7 +14001,33 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
-    overlay.find("#cfm-preset-note-input").focus();
+
+    if (isBatch) {
+      function updatePresetNoteUI() {
+        const action = overlay.find("#cfm-preset-note-action").val();
+        const uniformField = overlay.find("#cfm-preset-note-uniform-field");
+        const individualField = overlay.find("#cfm-preset-note-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-preset-note-input").focus();
+        }
+      }
+      updatePresetNoteUI();
+      overlay.find("#cfm-preset-note-action").on("change", updatePresetNoteUI);
+    } else {
+      overlay.find("#cfm-preset-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -13653,11 +14046,22 @@ jQuery(async () => {
         resolve({ note: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-preset-note-input").val().trim();
-        overlay.remove();
-        resolve({ note, clear: false });
+        if (isBatch && overlay.find("#cfm-preset-note-action").val() === "individual") {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const name = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[name] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap });
+        } else {
+          const note = overlay.find("#cfm-preset-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-preset-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -13672,6 +14076,28 @@ jQuery(async () => {
   async function executePresetNoteEdit(names) {
     const result = await showPresetNotePopup(names);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const name of names) {
+        const note = noteMap[name];
+        if (note !== undefined && note !== "") {
+          setPresetNote(name, note);
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个预设的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (updated > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderPresetsView();
+      return;
+    }
+
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
@@ -15469,8 +15895,9 @@ jQuery(async () => {
 
   async function showWorldInfoNotePopup(wiNames) {
     if (!wiNames || wiNames.length === 0) return;
+    const isBatch = wiNames.length > 1;
     let defaultNote = "";
-    if (wiNames.length === 1) {
+    if (!isBatch) {
       defaultNote = getWorldInfoNote(wiNames[0]);
     }
     const nameListHtml =
@@ -15488,18 +15915,34 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${wiNames.length} 个世界书</div>`;
 
+    const individualListHtml = isBatch ? wiNames.map(n => {
+      const currentNote = getWorldInfoNote(n);
+      return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+    }).join("") : "";
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑世界书备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
-          <div class="cfm-edit-popup-field">
+          ${isBatch ? `<div class="cfm-edit-popup-field">
+            <label>操作类型</label>
+            <select class="cfm-edit-input" id="cfm-wi-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>` : ""}
+          <div class="cfm-edit-popup-field" id="cfm-wi-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-worldinfo-note-input" value="${escapeHtml(defaultNote)}" placeholder="${wiNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-worldinfo-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${isBatch ? `<div class="cfm-rename-individual-field" id="cfm-wi-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>` : ""}
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${wiNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -15507,7 +15950,33 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
-    overlay.find("#cfm-worldinfo-note-input").focus();
+
+    if (isBatch) {
+      function updateWiNoteUI() {
+        const action = overlay.find("#cfm-wi-note-action").val();
+        const uniformField = overlay.find("#cfm-wi-note-uniform-field");
+        const individualField = overlay.find("#cfm-wi-note-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-worldinfo-note-input").focus();
+        }
+      }
+      updateWiNoteUI();
+      overlay.find("#cfm-wi-note-action").on("change", updateWiNoteUI);
+    } else {
+      overlay.find("#cfm-worldinfo-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -15526,11 +15995,22 @@ jQuery(async () => {
         resolve({ note: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-worldinfo-note-input").val().trim();
-        overlay.remove();
-        resolve({ note, clear: false });
+        if (isBatch && overlay.find("#cfm-wi-note-action").val() === "individual") {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const name = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[name] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap });
+        } else {
+          const note = overlay.find("#cfm-worldinfo-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-worldinfo-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -15545,6 +16025,28 @@ jQuery(async () => {
   async function executeWorldInfoNoteEdit(names) {
     const result = await showWorldInfoNotePopup(names);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const name of names) {
+        const note = noteMap[name];
+        if (note !== undefined && note !== "") {
+          setWorldInfoNote(name, note);
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个世界书的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (updated > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderWorldInfoView();
+      return;
+    }
+
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
@@ -15665,8 +16167,9 @@ jQuery(async () => {
 
   async function showQrNotePopup(qrNames) {
     if (!qrNames || qrNames.length === 0) return;
+    const isBatch = qrNames.length > 1;
     let defaultNote = "";
-    if (qrNames.length === 1) {
+    if (!isBatch) {
       defaultNote = getQrNote(qrNames[0]);
     }
     const nameListHtml =
@@ -15684,18 +16187,34 @@ jQuery(async () => {
             .join("") +
           `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${qrNames.length} 个快速回复集</div>`;
 
+    const individualListHtml = isBatch ? qrNames.map(n => {
+      const currentNote = getQrNote(n);
+      return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+    }).join("") : "";
+
     const popupHtml = `
       <div class="cfm-edit-popup-overlay">
         <div class="cfm-edit-popup">
           <div class="cfm-edit-popup-title">编辑快速回复集备注</div>
           <div class="cfm-edit-popup-names">${nameListHtml}</div>
-          <div class="cfm-edit-popup-field">
+          ${isBatch ? `<div class="cfm-edit-popup-field">
+            <label>操作类型</label>
+            <select class="cfm-edit-input" id="cfm-qr-note-action">
+              <option value="uniform">统一备注</option>
+              <option value="individual">逐个备注</option>
+            </select>
+          </div>` : ""}
+          <div class="cfm-edit-popup-field" id="cfm-qr-note-uniform-field">
             <label>备注</label>
-            <input type="text" class="cfm-edit-input" id="cfm-qr-note-input" value="${escapeHtml(defaultNote)}" placeholder="${qrNames.length > 1 ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
+            <input type="text" class="cfm-edit-input" id="cfm-qr-note-input" value="${escapeHtml(defaultNote)}" placeholder="${isBatch ? "留空则不修改，点击清除可批量清空" : "输入备注内容"}">
           </div>
+          ${isBatch ? `<div class="cfm-rename-individual-field" id="cfm-qr-note-individual-field">
+            <label>逐个指定备注（留空则不修改）</label>
+            <div class="cfm-rename-individual-list">${individualListHtml}</div>
+          </div>` : ""}
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
-            ${qrNames.length === 1 ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
+            ${!isBatch ? (defaultNote ? '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>' : "") : '<button class="cfm-btn cfm-edit-popup-clear">清除备注</button>'}
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -15703,7 +16222,33 @@ jQuery(async () => {
     `;
     const overlay = $(popupHtml);
     $("body").append(overlay);
-    overlay.find("#cfm-qr-note-input").focus();
+
+    if (isBatch) {
+      function updateQrNoteUI() {
+        const action = overlay.find("#cfm-qr-note-action").val();
+        const uniformField = overlay.find("#cfm-qr-note-uniform-field");
+        const individualField = overlay.find("#cfm-qr-note-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        const clearBtn = overlay.find(".cfm-edit-popup-clear");
+        if (action === "individual") {
+          uniformField.hide();
+          namesBlock.hide();
+          individualField.show();
+          clearBtn.hide();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          uniformField.show();
+          namesBlock.show();
+          clearBtn.show();
+          overlay.find("#cfm-qr-note-input").focus();
+        }
+      }
+      updateQrNoteUI();
+      overlay.find("#cfm-qr-note-action").on("change", updateQrNoteUI);
+    } else {
+      overlay.find("#cfm-qr-note-input").focus();
+    }
 
     return new Promise((resolve) => {
       overlay.find(".cfm-edit-popup-cancel").on("click", () => {
@@ -15722,11 +16267,22 @@ jQuery(async () => {
         resolve({ note: "", clear: true });
       });
       overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-        const note = overlay.find("#cfm-qr-note-input").val().trim();
-        overlay.remove();
-        resolve({ note, clear: false });
+        if (isBatch && overlay.find("#cfm-qr-note-action").val() === "individual") {
+          const noteMap = {};
+          overlay.find(".cfm-rename-individual-row").each(function () {
+            const name = $(this).find(".cfm-rename-new-input").data("old-name");
+            const note = $(this).find(".cfm-rename-new-input").val().trim();
+            noteMap[name] = note;
+          });
+          overlay.remove();
+          resolve({ mode: "individual", noteMap });
+        } else {
+          const note = overlay.find("#cfm-qr-note-input").val().trim();
+          overlay.remove();
+          resolve({ note, clear: false });
+        }
       });
-      overlay.find(".cfm-edit-input").on("keydown", (e) => {
+      overlay.find("#cfm-qr-note-input").on("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           overlay.find(".cfm-edit-popup-confirm").trigger("click");
@@ -15741,6 +16297,28 @@ jQuery(async () => {
   async function executeQrNoteEdit(names) {
     const result = await showQrNotePopup(names);
     if (!result) return;
+
+    if (result.mode === "individual") {
+      const { noteMap } = result;
+      let updated = 0;
+      let skipped = 0;
+      for (const name of names) {
+        const note = noteMap[name];
+        if (note !== undefined && note !== "") {
+          setQrNote(name, note);
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+      let msg = `已更新 ${updated} 个快速回复集的备注`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (updated > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
+      renderQRView();
+      return;
+    }
+
     const { note, clear } = result;
     const isBatch = names.length > 1;
     if (isBatch && !note && !clear) {
@@ -15925,7 +16503,12 @@ jQuery(async () => {
         });
       });
     } else {
-      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
+      const individualListHtml = names
+        .map(
+          (n) =>
+            `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`,
+        )
+        .join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -16052,8 +16635,13 @@ jQuery(async () => {
           if (action === "individual") {
             const renameMap = {};
             overlay.find(".cfm-rename-individual-row").each(function () {
-              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
-              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              const oldName = $(this)
+                .find(".cfm-rename-new-input")
+                .data("old-name");
+              const newName = $(this)
+                .find(".cfm-rename-new-input")
+                .val()
+                .trim();
               if (newName) renameMap[oldName] = newName;
             });
             overlay.remove();
@@ -16257,22 +16845,56 @@ jQuery(async () => {
         renderQRView();
         return;
       }
-      let success = 0, skipped = 0, failed = 0;
-      const batchProgress = showBatchProgressOverlay("正在逐个重命名快速回复集", entries.length);
+      let success = 0,
+        skipped = 0,
+        failed = 0;
+      const batchProgress = showBatchProgressOverlay(
+        "正在逐个重命名快速回复集",
+        entries.length,
+      );
       let processed = 0;
       for (const [oldName, newName] of entries) {
-        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
+        if (newName === oldName) {
+          skipped++;
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
         try {
           let set = null;
           if (api && api.getSetByName) set = api.getSetByName(oldName);
-          if (!set && QRS && QRS.list) set = QRS.list.find((s) => s.name === oldName);
-          if (!set) { failed++; processed++; batchProgress.update(processed); continue; }
-          const setData = set.toJSON ? set.toJSON() : { name: oldName, qrList: set.qrList || [] };
+          if (!set && QRS && QRS.list)
+            set = QRS.list.find((s) => s.name === oldName);
+          if (!set) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          const setData = set.toJSON
+            ? set.toJSON()
+            : { name: oldName, qrList: set.qrList || [] };
           setData.name = newName;
-          const saveResp = await fetch("/api/quick-replies/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(setData) });
-          if (!saveResp.ok) { failed++; processed++; batchProgress.update(processed); continue; }
-          await fetch("/api/quick-replies/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: oldName }) });
-          if (QRS && QRS.list) { const idx = QRS.list.findIndex((s) => s.name === oldName); if (idx !== -1) QRS.list[idx].name = newName; }
+          const saveResp = await fetch("/api/quick-replies/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(setData),
+          });
+          if (!saveResp.ok) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          await fetch("/api/quick-replies/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: oldName }),
+          });
+          if (QRS && QRS.list) {
+            const idx = QRS.list.findIndex((s) => s.name === oldName);
+            if (idx !== -1) QRS.list[idx].name = newName;
+          }
           updateSettingsAfterRename("quickreply", oldName, newName);
           await updateQrGlobalChatRefs(oldName, newName);
           success++;
@@ -16484,7 +17106,12 @@ jQuery(async () => {
       });
     } else {
       // 多选模式：增加/删除前缀或后缀
-      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
+      const individualListHtml = names
+        .map(
+          (n) =>
+            `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`,
+        )
+        .join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -16530,7 +17157,9 @@ jQuery(async () => {
         const autoDetect = overlay.find(".cfm-rename-auto-detect");
         const detected = overlay.find("#cfm-rename-detected");
         const textField = overlay.find("#cfm-preset-rename-text-field");
-        const individualField = overlay.find("#cfm-preset-rename-individual-field");
+        const individualField = overlay.find(
+          "#cfm-preset-rename-individual-field",
+        );
         const namesBlock = overlay.find(".cfm-edit-popup-names");
         if (action === "individual") {
           textField.hide();
@@ -16615,8 +17244,13 @@ jQuery(async () => {
           if (action === "individual") {
             const renameMap = {};
             overlay.find(".cfm-rename-individual-row").each(function () {
-              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
-              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              const oldName = $(this)
+                .find(".cfm-rename-new-input")
+                .data("old-name");
+              const newName = $(this)
+                .find(".cfm-rename-new-input")
+                .val()
+                .trim();
               if (newName) renameMap[oldName] = newName;
             });
             overlay.remove();
@@ -16847,17 +17481,49 @@ jQuery(async () => {
         return;
       }
       const existingPresets = new Set(getCurrentPresets().map((p) => p.name));
-      let success = 0, skipped = 0, failed = 0;
-      const batchProgress = showBatchProgressOverlay("正在逐个重命名预设", entries.length);
+      let success = 0,
+        skipped = 0,
+        failed = 0;
+      const batchProgress = showBatchProgressOverlay(
+        "正在逐个重命名预设",
+        entries.length,
+      );
       let processed = 0;
       for (const [oldName, newName] of entries) {
-        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
-        if (existingPresets.has(newName)) { skipped++; processed++; batchProgress.update(processed); continue; }
+        if (newName === oldName) {
+          skipped++;
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
+        if (existingPresets.has(newName)) {
+          skipped++;
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
         try {
           const presetData = getPresetDataForRename(pm, oldName);
-          if (!presetData) { failed++; processed++; batchProgress.update(processed); continue; }
-          await fetch("/api/presets/save", { method: "POST", headers: headers, body: JSON.stringify({ preset: presetData, name: newName, apiId: pm.apiId }) });
-          await fetch("/api/presets/delete", { method: "POST", headers: headers, body: JSON.stringify({ name: oldName, apiId: pm.apiId }) });
+          if (!presetData) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          await fetch("/api/presets/save", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              preset: presetData,
+              name: newName,
+              apiId: pm.apiId,
+            }),
+          });
+          await fetch("/api/presets/delete", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName, apiId: pm.apiId }),
+          });
           syncPresetOptionInDOM(pm, oldName, newName);
           updateSettingsAfterRename("presets", oldName, newName);
           existingPresets.delete(oldName);
@@ -22571,7 +23237,12 @@ jQuery(async () => {
         });
       });
     } else {
-      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
+      const individualListHtml = names
+        .map(
+          (n) =>
+            `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`,
+        )
+        .join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -22698,8 +23369,13 @@ jQuery(async () => {
           if (action === "individual") {
             const renameMap = {};
             overlay.find(".cfm-rename-individual-row").each(function () {
-              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
-              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              const oldName = $(this)
+                .find(".cfm-rename-new-input")
+                .data("old-name");
+              const newName = $(this)
+                .find(".cfm-rename-new-input")
+                .val()
+                .trim();
               if (newName) renameMap[oldName] = newName;
             });
             overlay.remove();
