@@ -2197,14 +2197,81 @@ jQuery(async () => {
         // 通过桥接写入的资源不会自动出现在用户浏览器的资源列表中，
         // 如果在刷新时清空保护，清理逻辑会把映射删掉。
         // _cfmSyncAssignedKeys 保留到下一次同步开始时才清空。
-        setTimeout(() => {
-          console.log(`[CFM] 同步结束，延迟刷新所有资源视图（保护的 key: ${_cfmSyncAssignedKeys.size} 个，将保留到下次同步）`);
+        setTimeout(async () => {
+          console.log(`[CFM] 同步结束，延迟刷新所有资源缓存及视图（保护的 key: ${_cfmSyncAssignedKeys.size} 个，将保留到下次同步）`);
           try {
+            // ── 第一步：刷新底层资源缓存（从服务端重新获取数据） ──
+            // 因为写入操作发生在 Electron 的 probeWindow 中，
+            // 用户浏览器的内存缓存/DOM 不会自动更新，需要主动拉取。
+
+            // 背景：从服务端 fetch 背景列表并重建 #bg_menu_content DOM
+            try {
+              const bgModule = await import("../../../backgrounds.js");
+              if (typeof bgModule.getBackgrounds === "function") {
+                await bgModule.getBackgrounds();
+                console.log("[CFM] 同步后刷新背景缓存完成");
+              }
+            } catch (bgErr) {
+              console.warn("[CFM] 同步后刷新背景缓存失败:", bgErr);
+            }
+
+            // 主题：从服务端 fetch settings 并重建 #themes select DOM
+            try {
+              if (typeof refreshThemeRuntimeAfterImport === "function") {
+                await refreshThemeRuntimeAfterImport(true);
+                console.log("[CFM] 同步后刷新主题缓存完成");
+              }
+            } catch (themeErr) {
+              console.warn("[CFM] 同步后刷新主题缓存失败:", themeErr);
+            }
+
+            // 预设：通过 refreshPresetManagerList 从服务端重新加载预设列表
+            try {
+              const pm = getContext().getPresetManager();
+              if (pm) {
+                await refreshPresetManagerList(pm);
+                console.log("[CFM] 同步后刷新预设缓存完成");
+              }
+            } catch (presetErr) {
+              console.warn("[CFM] 同步后刷新预设缓存失败:", presetErr);
+            }
+
+            // 角色卡：从服务端 fetch 角色列表
+            try {
+              await getContext().getCharacters();
+              console.log("[CFM] 同步后刷新角色卡缓存完成");
+            } catch (charErr) {
+              console.warn("[CFM] 同步后刷新角色卡缓存失败:", charErr);
+            }
+
+            // 世界书：从服务端 fetch 世界书列表
+            try {
+              if (typeof getContext().updateWorldInfoList === "function") {
+                await getContext().updateWorldInfoList();
+                console.log("[CFM] 同步后刷新世界书缓存完成");
+              }
+            } catch (wiErr) {
+              console.warn("[CFM] 同步后刷新世界书缓存失败:", wiErr);
+            }
+
+            // Personas：从服务端 fetch persona avatars
+            try {
+              if (typeof getUserAvatarsFunc === "function") {
+                await getUserAvatarsFunc(true);
+                console.log("[CFM] 同步后刷新 Personas 缓存完成");
+              }
+            } catch (personaErr) {
+              console.warn("[CFM] 同步后刷新 Personas 缓存失败:", personaErr);
+            }
+
+            // ── 第二步：刷新插件侧的文件夹管理视图 ──
             if (typeof renderPresetsView === "function") renderPresetsView();
             if (typeof renderWorldInfoView === "function") renderWorldInfoView();
             if (typeof renderThemesView === "function") renderThemesView();
             if (typeof renderBackgroundsView === "function") renderBackgroundsView();
             if (typeof renderPersonasView === "function") renderPersonasView();
+
+            console.log("[CFM] 同步后资源缓存及视图刷新全部完成");
           } catch (e) {
             console.warn(`[CFM] 同步后刷新视图失败:`, e);
           }
@@ -21854,23 +21921,84 @@ jQuery(async () => {
   }
 
   // 刷新预设管理器的下拉列表
+  // 增强版：从服务端获取 settings 后，用 loadPowerUserSettings 重载预设相关数据，
+  // 并额外从 pm.getPresetList() 补充 select 中缺失的 option。
   async function refreshPresetManagerList(pm, preservedValue = null) {
     try {
-      // 触发设置重新加载以同步预设列表
-      if (pm && pm.select) {
-        const currentVal = $(pm.select).val();
-        const restoreVal =
-          preservedValue !== undefined && preservedValue !== null
-            ? preservedValue
-            : currentVal;
+      if (!pm || !pm.select) return;
+      const currentVal = $(pm.select).val();
+      const restoreVal =
+        preservedValue !== undefined && preservedValue !== null
+          ? preservedValue
+          : currentVal;
+
+      // 方案 1：尝试用 loadOpenAISettings 重载预设（最可靠）
+      let reloaded = false;
+      try {
         const resp = await fetch("/api/settings/get", {
           method: "POST",
           headers: getContext().getRequestHeaders(),
           body: JSON.stringify({}),
+          cache: "no-cache",
         });
-        if (resp.ok && restoreVal !== undefined && restoreVal !== null) {
-          $(pm.select).val(restoreVal);
+        if (resp.ok) {
+          const data = await resp.json();
+          const settings = data && data.settings ? JSON.parse(data.settings) : null;
+          if (settings) {
+            // 尝试动态导入 openai.js 来重载预设列表
+            try {
+              const oaiModule = await import("/scripts/openai.js");
+              if (typeof oaiModule.loadOpenAISettings === "function") {
+                await oaiModule.loadOpenAISettings(data, settings);
+                reloaded = true;
+                console.log("[CFM] 通过 loadOpenAISettings 重载预设列表成功");
+              }
+            } catch (oaiErr) {
+              // openai.js 可能不导出 loadOpenAISettings，回退到方案 2
+              console.debug("[CFM] loadOpenAISettings 不可用，回退到 option 补充方案", oaiErr);
+            }
+          }
         }
+      } catch (fetchErr) {
+        console.debug("[CFM] fetch settings 失败", fetchErr);
+      }
+
+      // 方案 2：从 pm.getPresetList() 获取内存中的 preset_names，补充缺失的 option
+      if (!reloaded && typeof pm.getPresetList === "function") {
+        try {
+          const { preset_names } = pm.getPresetList();
+          if (preset_names) {
+            // 获取当前 select 中已有的 option text 集合
+            const existingTexts = new Set();
+            $(pm.select).find("option").each(function () {
+              existingTexts.add($(this).text());
+            });
+
+            // preset_names 可以是数组或对象
+            const names = Array.isArray(preset_names)
+              ? preset_names
+              : Object.keys(preset_names);
+
+            let addedCount = 0;
+            for (const name of names) {
+              if (name && !existingTexts.has(name)) {
+                const opt = $('<option></option>').val(name).text(name);
+                $(pm.select).append(opt);
+                addedCount++;
+              }
+            }
+            if (addedCount > 0) {
+              console.log(`[CFM] 补充了 ${addedCount} 个缺失的预设 option`);
+            }
+          }
+        } catch (plErr) {
+          console.debug("[CFM] 从 getPresetList 补充 option 失败", plErr);
+        }
+      }
+
+      // 恢复原来的选中值
+      if (restoreVal !== undefined && restoreVal !== null) {
+        $(pm.select).val(restoreVal);
       }
     } catch (e) {
       console.warn("[CFM] 刷新预设列表失败", e);
