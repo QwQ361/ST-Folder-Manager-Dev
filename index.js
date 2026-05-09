@@ -1991,14 +1991,57 @@ jQuery(async () => {
         if (resourceType === "chars") {
           // displayName 是角色的 avatar（如 "xxx.png"）
           // folderName 是文件夹名称
-          const avatar = displayName;
+          const requestedAvatar = displayName;
           const characters = getCharacters();
-          const charExists = characters.some((c) => c.avatar === avatar);
-          if (!charExists) {
-            console.warn(`[CFM] 角色卡不存在（avatar=${avatar}），跳过文件夹分配`);
+
+          // 先精确匹配 avatar
+          let matchedAvatar = null;
+          if (characters.some((c) => c.avatar === requestedAvatar)) {
+            matchedAvatar = requestedAvatar;
+          }
+
+          // 精确匹配失败时，尝试模糊匹配：
+          // 酒馆在导入角色卡时，若已有同名文件会自动加数字后缀（如 "name.png" → "name1.png"）。
+          // 因此备份中的旧 avatar 与酒馆中的新 avatar 可能只差一个数字后缀。
+          // 匹配策略：提取不含数字后缀的 baseName，在角色列表中查找同 baseName 的角色。
+          if (!matchedAvatar) {
+            // 从 "xxx123.png" 提取 baseName="xxx" 和 ext=".png"
+            const stripTrailingDigits = (avatarStr) => {
+              const dotIdx = avatarStr.lastIndexOf(".");
+              if (dotIdx <= 0) return { base: avatarStr, ext: "" };
+              const namePart = avatarStr.slice(0, dotIdx);
+              const extPart = avatarStr.slice(dotIdx);
+              // 去掉 namePart 末尾的连续数字
+              const base = namePart.replace(/\d+$/, "");
+              return { base: base || namePart, ext: extPart };
+            };
+
+            const requested = stripTrailingDigits(requestedAvatar);
+            // 在角色列表中查找 baseName 相同的角色（可能有多个，取第一个）
+            const fuzzyMatch = characters.find((c) => {
+              if (!c.avatar) return false;
+              const candidate = stripTrailingDigits(c.avatar);
+              return (
+                candidate.base === requested.base &&
+                candidate.ext.toLowerCase() === requested.ext.toLowerCase()
+              );
+            });
+            if (fuzzyMatch) {
+              matchedAvatar = fuzzyMatch.avatar;
+              console.log(
+                `[CFM] 角色卡 avatar 模糊匹配: 请求="${requestedAvatar}" → 实际="${matchedAvatar}"`,
+              );
+            }
+          }
+
+          if (!matchedAvatar) {
+            console.warn(
+              `[CFM] 角色卡不存在（avatar=${requestedAvatar}，模糊匹配也失败），跳过文件夹分配`,
+            );
             skipped++;
             continue;
           }
+
           // 查找或创建文件夹 tag
           const { tag } = findOrCreateTag(folderName, null);
           if (!tag || !tag.id) {
@@ -2021,9 +2064,11 @@ jQuery(async () => {
             saveConfig(config);
             console.log(`[CFM] 创建角色卡文件夹: tagId=${tag.id}, name=${folderName}`);
           }
-          moveCharToFolder(avatar, tag.id);
-          _cfmSyncAssignedKeys.add(`chars/${avatar}`);
-          console.log(`[CFM] 角色卡分配成功: avatar=${avatar} → ${folderName} (tagId=${tag.id})`);
+          moveCharToFolder(matchedAvatar, tag.id);
+          _cfmSyncAssignedKeys.add(`chars/${matchedAvatar}`);
+          console.log(
+            `[CFM] 角色卡分配成功: avatar=${matchedAvatar} → ${folderName} (tagId=${tag.id})`,
+          );
           applied++;
           continue;
         }
