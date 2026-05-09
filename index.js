@@ -1969,6 +1969,24 @@ jQuery(async () => {
     let applied = 0;
     let skipped = 0;
     console.log(`[CFM] applyFolderAssignments: 收到 ${assignments.length} 条分配请求`);
+
+    // 如果本批 assignments 中包含角色卡分配，先从服务器刷新角色列表缓存。
+    // 角色卡是通过 Electron 的 probeWindow 在后台导入的，用户浏览器的
+    // getCharacters() 缓存不会自动更新，必须主动调用 getContext().getCharacters() 刷新。
+    const hasCharsAssignment = assignments.some(
+      (a) => String(a.resourceType || "").trim() === "chars",
+    );
+    if (hasCharsAssignment) {
+      try {
+        if (typeof getContext().getCharacters === "function") {
+          await getContext().getCharacters();
+          console.log(`[CFM] 已刷新角色列表缓存（为角色卡文件夹分配准备）`);
+        }
+      } catch (e) {
+        console.warn(`[CFM] 刷新角色列表失败:`, e);
+      }
+    }
+
     for (const assignment of assignments) {
       try {
         const resourceType = String(assignment.resourceType || "").trim();
@@ -1993,6 +2011,15 @@ jQuery(async () => {
           // folderName 是文件夹名称
           const requestedAvatar = displayName;
           const characters = getCharacters();
+
+          // 调试：输出当前角色列表的 avatar 信息
+          if (characters.length === 0) {
+            console.warn(`[CFM] getCharacters() 返回空列表！角色卡可能尚未完成导入或缓存未刷新`);
+          } else {
+            console.log(
+              `[CFM] 当前角色列表(${characters.length}个): 前5个avatar=[${characters.slice(0, 5).map((c) => c.avatar).join(", ")}]`,
+            );
+          }
 
           // 先精确匹配 avatar
           let matchedAvatar = null;
