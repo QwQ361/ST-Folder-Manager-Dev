@@ -1767,9 +1767,7 @@ jQuery(async () => {
       if (!folderName) return;
 
       const displayName =
-        writeResult?.resource?.displayName ||
-        resource?.displayName ||
-        null;
+        writeResult?.resource?.displayName || resource?.displayName || null;
       if (!displayName) return;
 
       const typeMapping = {
@@ -1937,7 +1935,9 @@ jQuery(async () => {
       document.body.appendChild(_cfmSyncOverlayEl);
     }
     const textEl = _cfmSyncOverlayEl.querySelector(".cfm-sync-progress-text");
-    const counterEl = _cfmSyncOverlayEl.querySelector(".cfm-sync-progress-counter");
+    const counterEl = _cfmSyncOverlayEl.querySelector(
+      ".cfm-sync-progress-counter",
+    );
     if (textEl) textEl.textContent = message || "正在同步...";
     if (counterEl) {
       counterEl.textContent =
@@ -1968,7 +1968,9 @@ jQuery(async () => {
 
     let applied = 0;
     let skipped = 0;
-    console.log(`[CFM] applyFolderAssignments: 收到 ${assignments.length} 条分配请求`);
+    console.log(
+      `[CFM] applyFolderAssignments: 收到 ${assignments.length} 条分配请求`,
+    );
 
     // 如果本批 assignments 中包含角色卡分配，先从服务器刷新角色列表缓存。
     // 角色卡是通过 Electron 的 probeWindow 在后台导入的，用户浏览器的
@@ -1993,14 +1995,18 @@ jQuery(async () => {
         const displayName = String(assignment.displayName || "").trim();
         const folderName = String(assignment.folderName || "").trim();
         if (!resourceType || !displayName || !folderName) {
-          console.warn(`[CFM] 跳过无效分配: resourceType=${resourceType}, displayName=${displayName}, folderName=${folderName}`);
+          console.warn(
+            `[CFM] 跳过无效分配: resourceType=${resourceType}, displayName=${displayName}, folderName=${folderName}`,
+          );
           skipped++;
           continue;
         }
 
         // 如果 folderName 是 "未归类"，则不需要分配（它本来就是无文件夹状态）
         if (folderName === "未归类") {
-          console.log(`[CFM] 跳过 "未归类" 分配: ${resourceType}/${displayName}`);
+          console.log(
+            `[CFM] 跳过 "未归类" 分配: ${resourceType}/${displayName}`,
+          );
           skipped++;
           continue;
         }
@@ -2014,10 +2020,15 @@ jQuery(async () => {
 
           // 调试：输出当前角色列表的 avatar 信息
           if (characters.length === 0) {
-            console.warn(`[CFM] getCharacters() 返回空列表！角色卡可能尚未完成导入或缓存未刷新`);
+            console.warn(
+              `[CFM] getCharacters() 返回空列表！角色卡可能尚未完成导入或缓存未刷新`,
+            );
           } else {
             console.log(
-              `[CFM] 当前角色列表(${characters.length}个): 前5个avatar=[${characters.slice(0, 5).map((c) => c.avatar).join(", ")}]`,
+              `[CFM] 当前角色列表(${characters.length}个): 前5个avatar=[${characters
+                .slice(0, 5)
+                .map((c) => c.avatar)
+                .join(", ")}]`,
             );
           }
 
@@ -2089,7 +2100,9 @@ jQuery(async () => {
               if (_exi >= 0) _ex.splice(_exi, 1);
             }
             saveConfig(config);
-            console.log(`[CFM] 创建角色卡文件夹: tagId=${tag.id}, name=${folderName}`);
+            console.log(
+              `[CFM] 创建角色卡文件夹: tagId=${tag.id}, name=${folderName}`,
+            );
           }
           moveCharToFolder(matchedAvatar, tag.id);
           _cfmSyncAssignedKeys.add(`chars/${matchedAvatar}`);
@@ -2102,7 +2115,9 @@ jQuery(async () => {
 
         const groupType = typeMapping[resourceType];
         if (!groupType) {
-          console.warn(`[CFM] 未知资源类型 "${resourceType}"，无法映射到 groupType`);
+          console.warn(
+            `[CFM] 未知资源类型 "${resourceType}"，无法映射到 groupType`,
+          );
           skipped++;
           continue;
         }
@@ -2120,12 +2135,16 @@ jQuery(async () => {
             sortOrder: Object.keys(folderTree).length + 1,
           };
           saveResTree(groupType);
-          console.log(`[CFM] 创建新文件夹: groupType=${groupType}, folderName=${folderName}`);
+          console.log(
+            `[CFM] 创建新文件夹: groupType=${groupType}, folderName=${folderName}`,
+          );
         }
 
         setItemGroup(groupType, displayName, folderName);
         _cfmSyncAssignedKeys.add(`${groupType}/${displayName}`);
-        console.log(`[CFM] 分配成功: ${resourceType}/${displayName} → ${folderName} (groupType=${groupType})`);
+        console.log(
+          `[CFM] 分配成功: ${resourceType}/${displayName} → ${folderName} (groupType=${groupType})`,
+        );
         applied++;
       } catch (e) {
         console.warn("[CFM] 文件夹分配失败:", e);
@@ -2198,7 +2217,9 @@ jQuery(async () => {
         // 如果在刷新时清空保护，清理逻辑会把映射删掉。
         // _cfmSyncAssignedKeys 保留到下一次同步开始时才清空。
         setTimeout(async () => {
-          console.log(`[CFM] 同步结束，延迟刷新所有资源缓存及视图（保护的 key: ${_cfmSyncAssignedKeys.size} 个，将保留到下次同步）`);
+          console.log(
+            `[CFM] 同步结束，延迟刷新所有资源缓存及视图（保护的 key: ${_cfmSyncAssignedKeys.size} 个，将保留到下次同步）`,
+          );
           try {
             // ── 第一步：刷新底层资源缓存（从服务端重新获取数据） ──
             // 因为写入操作发生在 Electron 的 probeWindow 中，
@@ -2266,9 +2287,11 @@ jQuery(async () => {
 
             // ── 第二步：刷新插件侧的文件夹管理视图 ──
             if (typeof renderPresetsView === "function") renderPresetsView();
-            if (typeof renderWorldInfoView === "function") renderWorldInfoView();
+            if (typeof renderWorldInfoView === "function")
+              renderWorldInfoView();
             if (typeof renderThemesView === "function") renderThemesView();
-            if (typeof renderBackgroundsView === "function") renderBackgroundsView();
+            if (typeof renderBackgroundsView === "function")
+              renderBackgroundsView();
             if (typeof renderPersonasView === "function") renderPersonasView();
 
             console.log("[CFM] 同步后资源缓存及视图刷新全部完成");
@@ -2278,7 +2301,10 @@ jQuery(async () => {
         }, 3000);
       }
 
-      if (Array.isArray(data.folderAssignments) && data.folderAssignments.length > 0) {
+      if (
+        Array.isArray(data.folderAssignments) &&
+        data.folderAssignments.length > 0
+      ) {
         await applyFolderAssignments(data.folderAssignments);
       }
     } catch {
@@ -2300,9 +2326,7 @@ jQuery(async () => {
 
   function setSyncState(payload) {
     const data =
-      payload && typeof payload === "object"
-        ? payload
-        : { state: "idle" };
+      payload && typeof payload === "object" ? payload : { state: "idle" };
     if (data.state === "syncing") {
       _cfmSyncLastState = "syncing";
       showCfmSyncOverlay(data.message, data.current, data.total);
@@ -21943,7 +21967,8 @@ jQuery(async () => {
         });
         if (resp.ok) {
           const data = await resp.json();
-          const settings = data && data.settings ? JSON.parse(data.settings) : null;
+          const settings =
+            data && data.settings ? JSON.parse(data.settings) : null;
           if (settings) {
             // 尝试动态导入 openai.js 来重载预设列表
             try {
@@ -21955,7 +21980,10 @@ jQuery(async () => {
               }
             } catch (oaiErr) {
               // openai.js 可能不导出 loadOpenAISettings，回退到方案 2
-              console.debug("[CFM] loadOpenAISettings 不可用，回退到 option 补充方案", oaiErr);
+              console.debug(
+                "[CFM] loadOpenAISettings 不可用，回退到 option 补充方案",
+                oaiErr,
+              );
             }
           }
         }
@@ -21970,9 +21998,11 @@ jQuery(async () => {
           if (preset_names) {
             // 获取当前 select 中已有的 option text 集合
             const existingTexts = new Set();
-            $(pm.select).find("option").each(function () {
-              existingTexts.add($(this).text());
-            });
+            $(pm.select)
+              .find("option")
+              .each(function () {
+                existingTexts.add($(this).text());
+              });
 
             // preset_names 可以是数组或对象
             const names = Array.isArray(preset_names)
@@ -21982,7 +22012,7 @@ jQuery(async () => {
             let addedCount = 0;
             for (const name of names) {
               if (name && !existingTexts.has(name)) {
-                const opt = $('<option></option>').val(name).text(name);
+                const opt = $("<option></option>").val(name).text(name);
                 $(pm.select).append(opt);
                 addedCount++;
               }
@@ -23597,33 +23627,31 @@ jQuery(async () => {
         }
 
         // toggle 点击
-        row
-          .find(".cfm-wi-toggle")
-          .on("click", async function (e) {
-            e.preventDefault();
-            e.stopPropagation();
+        row.find(".cfm-wi-toggle").on("click", async function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          script.disabled = !script.disabled;
+          try {
+            await saveCharRegexScripts(avatar, scripts);
+          } catch (err) {
+            console.error("[CFM] 正则toggle保存失败:", err);
+            cfmToastr.error("保存失败: " + err.message);
             script.disabled = !script.disabled;
-            try {
-              await saveCharRegexScripts(avatar, scripts);
-            } catch (err) {
-              console.error("[CFM] 正则toggle保存失败:", err);
-              cfmToastr.error("保存失败: " + err.message);
-              script.disabled = !script.disabled;
-              return;
-            }
-            const isNowDisabled = !!script.disabled;
-            const el = $(this);
-            el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
-            el.find("i").attr(
-              "class",
-              `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
-            );
-            el.attr(
-              "title",
-              isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
-            );
-            row.toggleClass("cfm-regex-disabled", isNowDisabled);
-          });
+            return;
+          }
+          const isNowDisabled = !!script.disabled;
+          const el = $(this);
+          el.toggleClass("cfm-wi-toggle-on", !isNowDisabled);
+          el.find("i").attr(
+            "class",
+            `fa-solid fa-toggle-${isNowDisabled ? "off" : "on"}`,
+          );
+          el.attr(
+            "title",
+            isNowDisabled ? "已禁用 - 点击启用" : "已启用 - 点击禁用",
+          );
+          row.toggleClass("cfm-regex-disabled", isNowDisabled);
+        });
         // 编辑按钮点击
         row.find(".cfm-regex-edit-btn").on("click", function (e) {
           e.preventDefault();
@@ -23634,7 +23662,12 @@ jQuery(async () => {
           if (nativeEl.length) {
             nativeEl.find(".edit_existing_regex").trigger("click");
           } else {
-            openNativeCharRegexScriptEditor(avatar, scriptId, scripts, charName).then(
+            openNativeCharRegexScriptEditor(
+              avatar,
+              scriptId,
+              scripts,
+              charName,
+            ).then(
               (opened) => {
                 if (!opened) {
                   cfmToastr.warning("未能打开该角色正则的编辑器，请稍后重试");
@@ -23693,10 +23726,7 @@ jQuery(async () => {
       }
 
       // 拖拽排序
-      if (
-        typeof subList.sortable === "function" &&
-        !cfmIsTouchDevice()
-      ) {
+      if (typeof subList.sortable === "function" && !cfmIsTouchDevice()) {
         subList.sortable({
           items: ".cfm-regex-script-row",
           axis: "y",
@@ -24137,12 +24167,19 @@ jQuery(async () => {
    * @param {string} [charName] - 角色名称
    * @returns {Promise<boolean>} 是否成功打开编辑器
    */
-  async function openNativeCharRegexScriptEditor(avatar, scriptId, scripts, charName) {
+  async function openNativeCharRegexScriptEditor(
+    avatar,
+    scriptId,
+    scripts,
+    charName,
+  ) {
     const normalizedScriptId = String(scriptId || "").trim();
     if (!avatar || !normalizedScriptId) return false;
 
     // 当前角色 → 直接使用原生 DOM 上的编辑按钮
-    const nativeEl = $(`#saved_scoped_scripts > #${$.escapeSelector(normalizedScriptId)}`);
+    const nativeEl = $(
+      `#saved_scoped_scripts > #${$.escapeSelector(normalizedScriptId)}`,
+    );
     if (nativeEl.length) {
       const editBtn = nativeEl.find(".edit_existing_regex").first();
       const nativeBtn = editBtn.get(0);
@@ -24155,17 +24192,23 @@ jQuery(async () => {
     // 非当前角色 → 加载原生编辑器模板，自行弹出
     try {
       const engine = await import("../../regex/engine.js");
-      const { renderExtensionTemplateAsync } = await import("../../extensions.js");
-      const { callGenericPopup, POPUP_TYPE: PT } = await import("../../popup.js");
+      const { renderExtensionTemplateAsync } =
+        await import("../../extensions.js");
+      const { callGenericPopup, POPUP_TYPE: PT } =
+        await import("../../popup.js");
 
-      const scriptIdx = scripts.findIndex(s => String(s?.id || "") === normalizedScriptId);
+      const scriptIdx = scripts.findIndex(
+        (s) => String(s?.id || "") === normalizedScriptId,
+      );
       if (scriptIdx === -1) {
         cfmToastr.warning("未找到该正则脚本");
         return false;
       }
       const script = scripts[scriptIdx];
 
-      const editorHtml = $(await renderExtensionTemplateAsync("regex", "editor"));
+      const editorHtml = $(
+        await renderExtensionTemplateAsync("regex", "editor"),
+      );
 
       // 填入现有值
       if (script.scriptName) {
@@ -24173,12 +24216,24 @@ jQuery(async () => {
       }
       editorHtml.find(".find_regex").val(script.findRegex || "");
       editorHtml.find(".regex_replace_string").val(script.replaceString || "");
-      editorHtml.find(".regex_trim_strings").val(script.trimStrings?.join("\n") || "");
-      editorHtml.find('input[name="disabled"]').prop("checked", script.disabled ?? false);
-      editorHtml.find('input[name="only_format_display"]').prop("checked", script.markdownOnly ?? false);
-      editorHtml.find('input[name="only_format_prompt"]').prop("checked", script.promptOnly ?? false);
-      editorHtml.find('input[name="run_on_edit"]').prop("checked", script.runOnEdit ?? false);
-      editorHtml.find('select[name="substitute_regex"]').val(script.substituteRegex ?? 0);
+      editorHtml
+        .find(".regex_trim_strings")
+        .val(script.trimStrings?.join("\n") || "");
+      editorHtml
+        .find('input[name="disabled"]')
+        .prop("checked", script.disabled ?? false);
+      editorHtml
+        .find('input[name="only_format_display"]')
+        .prop("checked", script.markdownOnly ?? false);
+      editorHtml
+        .find('input[name="only_format_prompt"]')
+        .prop("checked", script.promptOnly ?? false);
+      editorHtml
+        .find('input[name="run_on_edit"]')
+        .prop("checked", script.runOnEdit ?? false);
+      editorHtml
+        .find('select[name="substitute_regex"]')
+        .val(script.substituteRegex ?? 0);
       editorHtml.find('input[name="min_depth"]').val(script.minDepth ?? "");
       editorHtml.find('input[name="max_depth"]').val(script.maxDepth ?? "");
 
@@ -24203,9 +24258,16 @@ jQuery(async () => {
             id: getContext().uuidv4(),
             scriptName: String(editorHtml.find(".regex_script_name").val()),
             findRegex: String(editorHtml.find(".find_regex").val()),
-            replaceString: String(editorHtml.find(".regex_replace_string").val()),
-            trimStrings: String(editorHtml.find(".regex_trim_strings").val()).split("\n").filter(e => e.length !== 0) || [],
-            substituteRegex: Number(editorHtml.find('select[name="substitute_regex"]').val()),
+            replaceString: String(
+              editorHtml.find(".regex_replace_string").val(),
+            ),
+            trimStrings:
+              String(editorHtml.find(".regex_trim_strings").val())
+                .split("\n")
+                .filter((e) => e.length !== 0) || [],
+            substituteRegex: Number(
+              editorHtml.find('select[name="substitute_regex"]').val(),
+            ),
             disabled: false,
             promptOnly: false,
             markdownOnly: false,
@@ -24214,7 +24276,9 @@ jQuery(async () => {
             maxDepth: null,
             placement: null,
           };
-          const rawTestString = String(editorHtml.find("#regex_test_input").val());
+          const rawTestString = String(
+            editorHtml.find("#regex_test_input").val(),
+          );
           const result = engine.runRegexScript(testScript, rawTestString);
           editorHtml.find("#regex_test_output").text(result);
         } catch (testErr) {
@@ -24233,23 +24297,43 @@ jQuery(async () => {
       if (popupResult) {
         script.scriptName = String(editorHtml.find(".regex_script_name").val());
         script.findRegex = String(editorHtml.find(".find_regex").val());
-        script.replaceString = String(editorHtml.find(".regex_replace_string").val());
-        script.trimStrings = String(editorHtml.find(".regex_trim_strings").val())
-          .split("\n")
-          .filter(e => e.length !== 0) || [];
-        script.placement = editorHtml
-          .find('input[name="replace_position"]')
-          .filter(":checked")
-          .map(function () { return parseInt($(this).val().toString()); })
-          .get()
-          .filter(e => !isNaN(e)) || [];
-        script.disabled = editorHtml.find('input[name="disabled"]').prop("checked");
-        script.markdownOnly = editorHtml.find('input[name="only_format_display"]').prop("checked");
-        script.promptOnly = editorHtml.find('input[name="only_format_prompt"]').prop("checked");
-        script.runOnEdit = editorHtml.find('input[name="run_on_edit"]').prop("checked");
-        script.substituteRegex = Number(editorHtml.find('select[name="substitute_regex"]').val());
-        script.minDepth = parseInt(String(editorHtml.find('input[name="min_depth"]').val()));
-        script.maxDepth = parseInt(String(editorHtml.find('input[name="max_depth"]').val()));
+        script.replaceString = String(
+          editorHtml.find(".regex_replace_string").val(),
+        );
+        script.trimStrings =
+          String(editorHtml.find(".regex_trim_strings").val())
+            .split("\n")
+            .filter((e) => e.length !== 0) || [];
+        script.placement =
+          editorHtml
+            .find('input[name="replace_position"]')
+            .filter(":checked")
+            .map(function () {
+              return parseInt($(this).val().toString());
+            })
+            .get()
+            .filter((e) => !isNaN(e)) || [];
+        script.disabled = editorHtml
+          .find('input[name="disabled"]')
+          .prop("checked");
+        script.markdownOnly = editorHtml
+          .find('input[name="only_format_display"]')
+          .prop("checked");
+        script.promptOnly = editorHtml
+          .find('input[name="only_format_prompt"]')
+          .prop("checked");
+        script.runOnEdit = editorHtml
+          .find('input[name="run_on_edit"]')
+          .prop("checked");
+        script.substituteRegex = Number(
+          editorHtml.find('select[name="substitute_regex"]').val(),
+        );
+        script.minDepth = parseInt(
+          String(editorHtml.find('input[name="min_depth"]').val()),
+        );
+        script.maxDepth = parseInt(
+          String(editorHtml.find('input[name="max_depth"]').val()),
+        );
 
         await saveCharRegexScripts(avatar, scripts);
         rerenderCurrentView();
@@ -27622,7 +27706,7 @@ jQuery(async () => {
                             <span class="cfm-rh-path" id="cfm-persona-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-persona-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-persona-btn" title="导入User"><i class="fa-solid fa-file-import"></i></button>
-                            <input type="file" id="cfm-import-persona-file" accept=".json" style="display:none;">
+                            <input type="file" id="cfm-import-persona-file" multiple accept=".json" style="display:none;">
                             <button class="cfm-edit-char-btn" id="cfm-persona-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-export-btn" id="cfm-export-persona-btn" title="导出User"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-persona-btn" title="删除User"><i class="fa-solid fa-trash-can"></i></button>
@@ -45575,10 +45659,19 @@ jQuery(async () => {
       }
       // 内嵌世界书 (character_book)
       if (char?.data?.character_book) {
-        const embBookName = char.data.character_book.name || `${char.name || "角色"}'s Lorebook`;
+        const embBookName =
+          char.data.character_book.name || `${char.name || "角色"}'s Lorebook`;
         const embEntries = char.data.character_book.entries;
-        const embEntryCount = Array.isArray(embEntries) ? embEntries.length : (embEntries ? Object.keys(embEntries).length : 0);
-        linkedWorldBooks.push({ name: embBookName, type: "内嵌", entryCount: embEntryCount });
+        const embEntryCount = Array.isArray(embEntries)
+          ? embEntries.length
+          : embEntries
+            ? Object.keys(embEntries).length
+            : 0;
+        linkedWorldBooks.push({
+          name: embBookName,
+          type: "内嵌",
+          entryCount: embEntryCount,
+        });
       }
       // 辅助世界书 (charLore)
       try {
@@ -45587,8 +45680,13 @@ jQuery(async () => {
         if (worldInfoObj?.charLore && Array.isArray(worldInfoObj.charLore)) {
           const fileName = char?.avatar?.replace(/\.[^/.]+$/, "") ?? null;
           if (fileName) {
-            const extraCharLore = worldInfoObj.charLore.find((e) => e.name === fileName);
-            if (extraCharLore?.extraBooks && Array.isArray(extraCharLore.extraBooks)) {
+            const extraCharLore = worldInfoObj.charLore.find(
+              (e) => e.name === fileName,
+            );
+            if (
+              extraCharLore?.extraBooks &&
+              Array.isArray(extraCharLore.extraBooks)
+            ) {
               extraCharLore.extraBooks.forEach((b) => {
                 linkedWorldBooks.push({ name: b, type: "辅助" });
               });
@@ -45608,26 +45706,33 @@ jQuery(async () => {
             <span class="cfm-char-detail-worldbooks-count">${linkedWorldBooks.length}</span>
           </div>
           <div class="cfm-char-detail-worldbooks-body" style="display:none;">
-            ${linkedWorldBooks.length > 0
-              ? linkedWorldBooks.map(wb => `
+            ${
+              linkedWorldBooks.length > 0
+                ? linkedWorldBooks
+                    .map(
+                      (wb) => `
                 <div class="cfm-char-detail-worldbook-item">
                   <span class="cfm-char-detail-worldbook-type">${escapeHtml(wb.type)}</span>
                   <span class="cfm-char-detail-worldbook-name">${escapeHtml(wb.name)}</span>
                   ${wb.entryCount !== undefined ? `<span class="cfm-char-detail-worldbook-entries">${wb.entryCount} 条</span>` : ""}
                 </div>
-              `).join("")
-              : '<div class="cfm-persona-detail-empty" style="padding:4px 8px;">无关联世界书</div>'
+              `,
+                    )
+                    .join("")
+                : '<div class="cfm-persona-detail-empty" style="padding:4px 8px;">无关联世界书</div>'
             }
           </div>
         </div>
       `);
 
-      detailCard.find(".cfm-char-detail-worldbooks-header").on("click", function () {
-        const body = $(this).next(".cfm-char-detail-worldbooks-body");
-        const arrow = $(this).find(".cfm-char-detail-worldbooks-arrow");
-        body.slideToggle(150);
-        arrow.toggleClass("fa-caret-right fa-caret-down");
-      });
+      detailCard
+        .find(".cfm-char-detail-worldbooks-header")
+        .on("click", function () {
+          const body = $(this).next(".cfm-char-detail-worldbooks-body");
+          const arrow = $(this).find(".cfm-char-detail-worldbooks-arrow");
+          body.slideToggle(150);
+          arrow.toggleClass("fa-caret-right fa-caret-down");
+        });
     }
 
     detailCard.append(sectionHtml("描述", description, "", "description"));
@@ -47481,7 +47586,8 @@ jQuery(async () => {
       const canUseGlobal = sourceType !== "global";
       // 获取所有可选角色（排除来源角色）
       const allChars = getCharacters();
-      const sourceCharAvatar = sourceType === "char" ? (sourceScope?.avatar || "") : "";
+      const sourceCharAvatar =
+        sourceType === "char" ? sourceScope?.avatar || "" : "";
       const availableCharTargets = allChars.filter(
         (c) => c.avatar && c.avatar !== sourceCharAvatar,
       );
@@ -47513,11 +47619,11 @@ jQuery(async () => {
       const defaultTransferMode = getDefaultRegexTransferMode();
       const globalDisabledReason = canUseGlobal ? "" : "（来源位置，不可选）";
       const charDisabledReason = !canUseChar
-        ? (sourceType === "char"
+        ? sourceType === "char"
           ? "（除来源外没有其它角色）"
           : availableCharTargets.length === 0
             ? "（暂无可用角色）"
-            : "")
+            : ""
         : "";
       const presetDisabledReason = canUsePreset
         ? ""
@@ -47604,7 +47710,9 @@ jQuery(async () => {
       folderSelect.val(defaultGlobalFolderId || "__ungrouped__");
 
       // === 角色选择树 ===
-      const charSearchInput = dialog.find(".cfm-regex-transfer-char-search-input");
+      const charSearchInput = dialog.find(
+        ".cfm-regex-transfer-char-search-input",
+      );
       const charTreeContainer = dialog.find(".cfm-regex-transfer-char-tree");
       const charHintEl = dialog.find(".cfm-regex-transfer-char-hint");
 
@@ -47619,7 +47727,9 @@ jQuery(async () => {
       }
 
       function renderCharTargetTree() {
-        const query = String(charSearchInput.val() || "").trim().toLowerCase();
+        const query = String(charSearchInput.val() || "")
+          .trim()
+          .toLowerCase();
         charTreeContainer.empty();
 
         const filtered = availableCharTargets.filter((c) => {
@@ -47651,7 +47761,10 @@ jQuery(async () => {
             let maxD = getFolderPath(deepest).length;
             for (let i = 1; i < charFolderTags.length; i++) {
               const d = getFolderPath(charFolderTags[i]).length;
-              if (d > maxD) { deepest = charFolderTags[i]; maxD = d; }
+              if (d > maxD) {
+                deepest = charFolderTags[i];
+                maxD = d;
+              }
             }
             if (!folderChars[deepest]) folderChars[deepest] = [];
             folderChars[deepest].push(ch);
@@ -47664,7 +47777,7 @@ jQuery(async () => {
           const isSelected = selectedCharTargetAvatar === ch.avatar;
           const displayName = ch.name || ch.avatar || "(未命名)";
           const itemNode = $(
-            `<div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-avatar="${escapeHtml(ch.avatar)}" style="padding-left:${(depth) * 16 + 12}px;display:flex;align-items:center;gap:8px;">
+            `<div class="cfm-transfer-item ${isSelected ? "cfm-transfer-item-selected" : ""}" data-avatar="${escapeHtml(ch.avatar)}" style="padding-left:${depth * 16 + 12}px;display:flex;align-items:center;gap:8px;">
               <span class="cfm-transfer-item-icon"><i class="fa-solid fa-user"></i></span>
               <span class="cfm-transfer-item-name">${escapeHtml(displayName)}</span>
             </div>`,
@@ -47683,9 +47796,15 @@ jQuery(async () => {
           const isExpanded = charTransferExpandedFolders.has(folderId);
           const childFolderIds = getChildFolders(folderId);
           const charsInFolder = folderChars[folderId] || [];
-          const hasContent = charsInFolder.length > 0 || childFolderIds.some((cid) => folderChars[cid]?.length > 0);
+          const hasContent =
+            charsInFolder.length > 0 ||
+            childFolderIds.some((cid) => folderChars[cid]?.length > 0);
 
-          if (query && !hasContent && !displayName.toLowerCase().includes(query)) {
+          if (
+            query &&
+            !hasContent &&
+            !displayName.toLowerCase().includes(query)
+          ) {
             return;
           }
 
@@ -47708,7 +47827,8 @@ jQuery(async () => {
           charTreeContainer.append(folderNode);
 
           if (isExpanded || query) {
-            for (const childId of childFolderIds) renderCharFolder(childId, depth + 1);
+            for (const childId of childFolderIds)
+              renderCharFolder(childId, depth + 1);
             for (const ch of charsInFolder) renderCharItem(ch, depth + 1);
           }
         }
@@ -48275,7 +48395,8 @@ jQuery(async () => {
         folderId: transferConfig.globalFolderId || "__ungrouped__",
       };
     } else if (transferConfig.targetType === "char") {
-      const targetCharAvatar = transferConfig.selectedCharAvatar || currentCharAvatar;
+      const targetCharAvatar =
+        transferConfig.selectedCharAvatar || currentCharAvatar;
       const targetCharName = transferConfig.selectedCharName || currentCharName;
       if (!targetCharAvatar) {
         cfmToastr.warning("当前没有可用的目标角色");
