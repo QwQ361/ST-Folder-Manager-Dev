@@ -4179,6 +4179,63 @@ textarea.cfm-edit-input {
   font-style: italic;
 }
 
+/* 逐个重命名表格 */
+.cfm-rename-individual-field {
+  display: none;
+  margin-bottom: 12px;
+}
+.cfm-rename-individual-list {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid rgba(137, 180, 250, 0.18);
+  border-radius: 6px;
+  padding: 6px 0;
+}
+.cfm-rename-individual-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  transition: background 0.12s;
+}
+.cfm-rename-individual-row:hover {
+  background: rgba(137, 180, 250, 0.06);
+}
+.cfm-rename-individual-row .cfm-rename-old-name {
+  flex: 0 0 40%;
+  min-width: 0;
+  font-size: 12.5px;
+  color: #a6adc8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 4px;
+}
+.cfm-rename-individual-row .cfm-rename-arrow {
+  flex: 0 0 auto;
+  color: #6c7086;
+  font-size: 12px;
+}
+.cfm-rename-individual-row .cfm-rename-new-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  border-radius: 4px;
+  color: #cdd6f4;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.cfm-rename-individual-row .cfm-rename-new-input:focus {
+  border-color: rgba(137, 180, 250, 0.5);
+}
+.cfm-rename-individual-row .cfm-rename-new-input::placeholder {
+  color: #585b70;
+  font-style: italic;
+}
+
 /* 多选切换按钮 */
 .cfm-multisel-toggle {
   background: none !important;

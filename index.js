@@ -12485,7 +12485,8 @@ jQuery(async () => {
         });
       });
     } else {
-      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名主题</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀</option></select></div><div class="cfm-edit-popup-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名主题</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀</option><option value="individual">逐个重命名</option></select></div><div class="cfm-edit-popup-field" id="cfm-rename-text-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-rename-individual-field" id="cfm-rename-individual-field"><label>逐个指定新名称（留空则不修改）</label><div class="cfm-rename-individual-list">${individualListHtml}</div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
       const overlay = $(popupHtml);
       $("body").append(overlay);
       function updateRenameUI() {
@@ -12494,40 +12495,54 @@ jQuery(async () => {
         const textInput = overlay.find("#cfm-rename-text");
         const autoDetect = overlay.find(".cfm-rename-auto-detect");
         const detected = overlay.find("#cfm-rename-detected");
-        if (action === "add-prefix") {
-          textLabel.text("前缀内容");
-          textInput.attr("placeholder", "输入要添加的前缀");
+        const textField = overlay.find("#cfm-rename-text-field");
+        const individualField = overlay.find("#cfm-rename-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        if (action === "individual") {
+          textField.hide();
           autoDetect.hide();
-        } else if (action === "add-suffix") {
-          textLabel.text("后缀内容");
-          textInput.attr("placeholder", "输入要添加的后缀");
-          autoDetect.hide();
-        } else if (action === "del-prefix") {
-          textLabel.text("要删除的前缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的前缀，或点击下方自动检测结果",
-          );
-          const cp = findCommonPrefix(names);
-          detected.html(
-            cp
-              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cp)}">${escapeHtml(cp)}</span>`
-              : '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
-          );
-          autoDetect.show();
-        } else if (action === "del-suffix") {
-          textLabel.text("要删除的后缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的后缀，或点击下方自动检测结果",
-          );
-          const cs = findCommonSuffix(names);
-          detected.html(
-            cs
-              ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cs)}">${escapeHtml(cs)}</span>`
-              : '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
-          );
-          autoDetect.show();
+          namesBlock.hide();
+          individualField.show();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          textField.show();
+          namesBlock.show();
+          if (action === "add-prefix") {
+            textLabel.text("前缀内容");
+            textInput.attr("placeholder", "输入要添加的前缀");
+            autoDetect.hide();
+          } else if (action === "add-suffix") {
+            textLabel.text("后缀内容");
+            textInput.attr("placeholder", "输入要添加的后缀");
+            autoDetect.hide();
+          } else if (action === "del-prefix") {
+            textLabel.text("要删除的前缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的前缀，或点击下方自动检测结果",
+            );
+            const cp = findCommonPrefix(names);
+            detected.html(
+              cp
+                ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cp)}">${escapeHtml(cp)}</span>`
+                : '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            );
+            autoDetect.show();
+          } else if (action === "del-suffix") {
+            textLabel.text("要删除的后缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的后缀，或点击下方自动检测结果",
+            );
+            const cs = findCommonSuffix(names);
+            detected.html(
+              cs
+                ? `<span class="cfm-rename-detect-item" data-value="${escapeHtml(cs)}">${escapeHtml(cs)}</span>`
+                : '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+            );
+            autoDetect.show();
+          }
         }
       }
       updateRenameUI();
@@ -12549,9 +12564,20 @@ jQuery(async () => {
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
           const action = overlay.find("#cfm-rename-action").val();
-          const text = overlay.find("#cfm-rename-text").val().trim();
-          overlay.remove();
-          resolve({ mode: "batch", action, text });
+          if (action === "individual") {
+            const renameMap = {};
+            overlay.find(".cfm-rename-individual-row").each(function () {
+              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
+              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              if (newName) renameMap[oldName] = newName;
+            });
+            overlay.remove();
+            resolve({ mode: "individual", renameMap });
+          } else {
+            const text = overlay.find("#cfm-rename-text").val().trim();
+            overlay.remove();
+            resolve({ mode: "batch", action, text });
+          }
         });
         overlay.find("#cfm-rename-text").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -12738,6 +12764,51 @@ jQuery(async () => {
       batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
+    } else if (result.mode === "individual") {
+      const { renameMap } = result;
+      const entries = Object.entries(renameMap);
+      if (entries.length === 0) {
+        cfmToastr.info("所有名称均留空，未执行任何重命名");
+        renderThemesView();
+        return;
+      }
+      const existingThemes = new Set(getThemeNames());
+      let success = 0, skipped = 0, failed = 0;
+      const skippedNames = [];
+      const batchProgress = showBatchProgressOverlay("正在逐个重命名主题", entries.length);
+      let processed = 0;
+      for (const [oldName, newName] of entries) {
+        if (newName === oldName) { skipped++; skippedNames.push(oldName); processed++; batchProgress.update(processed); continue; }
+        if (existingThemes.has(newName)) { skipped++; skippedNames.push(`${oldName}(名称冲突)`); processed++; batchProgress.update(processed); continue; }
+        try {
+          const themeData = getThemeData(oldName);
+          if (!themeData) { failed++; processed++; batchProgress.update(processed); continue; }
+          themeData.name = newName;
+          await fetch("/api/themes/save", { method: "POST", headers, body: JSON.stringify(themeData) });
+          await fetch("/api/themes/delete", { method: "POST", headers, body: JSON.stringify({ name: oldName }) });
+          $("#themes option").filter(function () { return $(this).val() === oldName; }).val(newName).text(newName);
+          if (typeof themes !== "undefined" && Array.isArray(themes)) {
+            const idx = themes.findIndex((t) => (typeof t === "object" ? t.name : t) === oldName);
+            if (idx !== -1 && typeof themes[idx] === "object") themes[idx].name = newName;
+          }
+          updateSettingsAfterRename("themes", oldName, newName);
+          existingThemes.delete(oldName);
+          existingThemes.add(newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名主题 ${oldName} 失败`, e);
+          failed++;
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      let msg = `已重命名 ${success} 个主题`;
+      const totalSkipped = names.length - entries.length + skipped;
+      if (totalSkipped > 0) msg += `，${totalSkipped} 个未修改（留空或跳过）`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
     }
     renderThemesView();
   }
@@ -12885,7 +12956,8 @@ jQuery(async () => {
         const d = n.lastIndexOf(".");
         return d > 0 ? n.substring(0, d) : n;
       });
-      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option><option value="same-name-suffix">重命名为同名并自动后缀</option></select></div><div class="cfm-edit-popup-field" id="cfm-rename-base-field"><label id="cfm-rename-base-label">新名称</label><input type="text" class="cfm-edit-input" id="cfm-rename-base" placeholder="输入新名称"></div><div class="cfm-edit-popup-field" id="cfm-rename-text-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
+      const individualListHtml = names.map(n => { const d = n.lastIndexOf("."); const base = d > 0 ? n.substring(0, d) : n; const ext = d > 0 ? n.substring(d) : ""; return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(base)}<span style="color:#585b70">${escapeHtml(ext)}</span></span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" data-ext="${escapeHtml(ext)}"></div>`; }).join("");
+      const popupHtml = `<div class="cfm-edit-popup-overlay"><div class="cfm-edit-popup"><div class="cfm-edit-popup-title">批量重命名背景</div><div class="cfm-edit-popup-names">${nameListHtml}</div><div class="cfm-edit-popup-field"><label>操作类型</label><select class="cfm-edit-input" id="cfm-rename-action"><option value="add-prefix">增加前缀</option><option value="add-suffix">增加后缀(扩展名前)</option><option value="del-prefix">删除前缀</option><option value="del-suffix">删除后缀(扩展名前)</option><option value="same-name-suffix">重命名为同名并自动后缀</option><option value="individual">逐个重命名</option></select></div><div class="cfm-edit-popup-field" id="cfm-rename-base-field"><label id="cfm-rename-base-label">新名称</label><input type="text" class="cfm-edit-input" id="cfm-rename-base" placeholder="输入新名称"></div><div class="cfm-edit-popup-field" id="cfm-rename-text-field"><label id="cfm-rename-text-label">前缀内容</label><input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容"></div><div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;"><label>自动检测到的公共前/后缀</label><div id="cfm-rename-detected" class="cfm-rename-detected"></div></div><div class="cfm-rename-individual-field" id="cfm-rename-individual-field"><label>逐个指定新名称（留空则不修改，扩展名自动保留）</label><div class="cfm-rename-individual-list">${individualListHtml}</div></div><div class="cfm-edit-popup-actions"><button class="cfm-btn cfm-edit-popup-cancel">取消</button><button class="cfm-btn cfm-edit-popup-confirm">确认</button></div></div></div>`;
       const overlay = $(popupHtml);
       $("body").append(overlay);
       function updateRenameUI() {
@@ -12897,7 +12969,18 @@ jQuery(async () => {
         const baseField = overlay.find("#cfm-rename-base-field");
         const textField = overlay.find("#cfm-rename-text-field");
         const baseInput = overlay.find("#cfm-rename-base");
-        if (action === "same-name-suffix") {
+        const individualField = overlay.find("#cfm-rename-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        if (action === "individual") {
+          baseField.hide();
+          textField.hide();
+          autoDetect.hide();
+          namesBlock.hide();
+          individualField.show();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else if (action === "same-name-suffix") {
+          individualField.hide();
+          namesBlock.show();
           baseField.show();
           textField.show();
           overlay.find("#cfm-rename-base-label").text("新名称");
@@ -12906,18 +12989,24 @@ jQuery(async () => {
           textInput.attr("placeholder", "例如 (1) 或 -1，第一项保持原名");
           autoDetect.hide();
         } else if (action === "add-prefix") {
+          individualField.hide();
+          namesBlock.show();
           baseField.hide();
           textField.show();
           textLabel.text("前缀内容");
           textInput.attr("placeholder", "输入要添加的前缀");
           autoDetect.hide();
         } else if (action === "add-suffix") {
+          individualField.hide();
+          namesBlock.show();
           baseField.hide();
           textField.show();
           textLabel.text("后缀内容(扩展名前)");
           textInput.attr("placeholder", "输入要添加的后缀");
           autoDetect.hide();
         } else if (action === "del-prefix") {
+          individualField.hide();
+          namesBlock.show();
           baseField.hide();
           textField.show();
           textLabel.text("要删除的前缀");
@@ -12933,6 +13022,8 @@ jQuery(async () => {
           );
           autoDetect.show();
         } else if (action === "del-suffix") {
+          individualField.hide();
+          namesBlock.show();
           baseField.hide();
           textField.show();
           textLabel.text("要删除的后缀(扩展名前)");
@@ -12968,10 +13059,23 @@ jQuery(async () => {
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
           const action = overlay.find("#cfm-rename-action").val();
-          const base = overlay.find("#cfm-rename-base").val().trim();
-          const text = overlay.find("#cfm-rename-text").val().trim();
-          overlay.remove();
-          resolve({ mode: "batch", action, base, text });
+          if (action === "individual") {
+            const renameMap = {};
+            overlay.find(".cfm-rename-individual-row").each(function () {
+              const inp = $(this).find(".cfm-rename-new-input");
+              const oldName = inp.data("old-name");
+              const ext = inp.data("ext") || "";
+              const newBase = inp.val().trim();
+              if (newBase) renameMap[oldName] = newBase + ext;
+            });
+            overlay.remove();
+            resolve({ mode: "individual", renameMap });
+          } else {
+            const base = overlay.find("#cfm-rename-base").val().trim();
+            const text = overlay.find("#cfm-rename-text").val().trim();
+            overlay.remove();
+            resolve({ mode: "batch", action, base, text });
+          }
         });
         overlay.find("#cfm-rename-base").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -13120,6 +13224,39 @@ jQuery(async () => {
       batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
+    } else if (result.mode === "individual") {
+      const { renameMap } = result;
+      const entries = Object.entries(renameMap);
+      if (entries.length === 0) {
+        cfmToastr.info("所有名称均留空，未执行任何重命名");
+        renderBackgroundsView();
+        return;
+      }
+      let success = 0, skipped = 0, failed = 0;
+      const batchProgress = showBatchProgressOverlay("正在逐个重命名背景", entries.length);
+      let processed = 0;
+      for (const [oldName, newName] of entries) {
+        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
+        try {
+          const resp = await fetch("/api/backgrounds/rename", { method: "POST", headers, body: JSON.stringify({ old_bg: oldName, new_bg: newName }) });
+          if (!resp.ok) { failed++; processed++; batchProgress.update(processed); continue; }
+          $("#bg_menu_content .bg_example").filter(function () { return $(this).attr("bgfile") === oldName; }).attr("bgfile", newName).attr("title", newName);
+          updateSettingsAfterRename("backgrounds", oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名背景 ${oldName} 失败`, e);
+          failed++;
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      let msg = `已重命名 ${success} 个背景`;
+      const totalSkipped = names.length - entries.length + skipped;
+      if (totalSkipped > 0) msg += `，${totalSkipped} 个未修改（留空或跳过）`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
     }
     // 刷新原生背景列表
     try {
@@ -15788,6 +15925,7 @@ jQuery(async () => {
         });
       });
     } else {
+      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -15800,15 +15938,20 @@ jQuery(async () => {
                 <option value="add-suffix">增加后缀</option>
                 <option value="del-prefix">删除前缀</option>
                 <option value="del-suffix">删除后缀</option>
+                <option value="individual">逐个重命名</option>
               </select>
             </div>
-            <div class="cfm-edit-popup-field">
+            <div class="cfm-edit-popup-field" id="cfm-qr-rename-text-field">
               <label id="cfm-qr-rename-text-label">前缀内容</label>
               <input type="text" class="cfm-edit-input" id="cfm-qr-rename-text" placeholder="输入前缀内容">
             </div>
             <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
               <label>自动检测到的公共前/后缀</label>
               <div id="cfm-qr-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-rename-individual-field" id="cfm-qr-rename-individual-field">
+              <label>逐个指定新名称（留空则不修改）</label>
+              <div class="cfm-rename-individual-list">${individualListHtml}</div>
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
@@ -15826,49 +15969,63 @@ jQuery(async () => {
         const textInput = overlay.find("#cfm-qr-rename-text");
         const autoDetect = overlay.find(".cfm-rename-auto-detect");
         const detected = overlay.find("#cfm-qr-rename-detected");
-        if (action === "add-prefix") {
-          textLabel.text("前缀内容");
-          textInput.attr("placeholder", "输入要添加的前缀");
+        const textField = overlay.find("#cfm-qr-rename-text-field");
+        const individualField = overlay.find("#cfm-qr-rename-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        if (action === "individual") {
+          textField.hide();
           autoDetect.hide();
-        } else if (action === "add-suffix") {
-          textLabel.text("后缀内容");
-          textInput.attr("placeholder", "输入要添加的后缀");
-          autoDetect.hide();
-        } else if (action === "del-prefix") {
-          textLabel.text("要删除的前缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的前缀，或点击下方自动检测结果",
-          );
-          const commonPrefix = findCommonPrefix(names);
-          if (commonPrefix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+          namesBlock.hide();
+          individualField.show();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          textField.show();
+          namesBlock.show();
+          if (action === "add-prefix") {
+            textLabel.text("前缀内容");
+            textInput.attr("placeholder", "输入要添加的前缀");
+            autoDetect.hide();
+          } else if (action === "add-suffix") {
+            textLabel.text("后缀内容");
+            textInput.attr("placeholder", "输入要添加的后缀");
+            autoDetect.hide();
+          } else if (action === "del-prefix") {
+            textLabel.text("要删除的前缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的前缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            const commonPrefix = findCommonPrefix(names);
+            if (commonPrefix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+              );
+              autoDetect.show();
+            }
+          } else if (action === "del-suffix") {
+            textLabel.text("要删除的后缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的后缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          }
-        } else if (action === "del-suffix") {
-          textLabel.text("要删除的后缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的后缀，或点击下方自动检测结果",
-          );
-          const commonSuffix = findCommonSuffix(names);
-          if (commonSuffix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
-            );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
-            );
-            autoDetect.show();
+            const commonSuffix = findCommonSuffix(names);
+            if (commonSuffix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+              );
+              autoDetect.show();
+            }
           }
         }
       }
@@ -15892,9 +16049,20 @@ jQuery(async () => {
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
           const action = overlay.find("#cfm-qr-rename-action").val();
-          const text = overlay.find("#cfm-qr-rename-text").val().trim();
-          overlay.remove();
-          resolve({ mode: "batch", action, text });
+          if (action === "individual") {
+            const renameMap = {};
+            overlay.find(".cfm-rename-individual-row").each(function () {
+              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
+              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              if (newName) renameMap[oldName] = newName;
+            });
+            overlay.remove();
+            resolve({ mode: "individual", renameMap });
+          } else {
+            const text = overlay.find("#cfm-qr-rename-text").val().trim();
+            overlay.remove();
+            resolve({ mode: "batch", action, text });
+          }
         });
         overlay.find("#cfm-qr-rename-text").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -16081,6 +16249,47 @@ jQuery(async () => {
       batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
+    } else if (result.mode === "individual") {
+      const { renameMap } = result;
+      const entries = Object.entries(renameMap);
+      if (entries.length === 0) {
+        cfmToastr.info("所有名称均留空，未执行任何重命名");
+        renderQRView();
+        return;
+      }
+      let success = 0, skipped = 0, failed = 0;
+      const batchProgress = showBatchProgressOverlay("正在逐个重命名快速回复集", entries.length);
+      let processed = 0;
+      for (const [oldName, newName] of entries) {
+        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
+        try {
+          let set = null;
+          if (api && api.getSetByName) set = api.getSetByName(oldName);
+          if (!set && QRS && QRS.list) set = QRS.list.find((s) => s.name === oldName);
+          if (!set) { failed++; processed++; batchProgress.update(processed); continue; }
+          const setData = set.toJSON ? set.toJSON() : { name: oldName, qrList: set.qrList || [] };
+          setData.name = newName;
+          const saveResp = await fetch("/api/quick-replies/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(setData) });
+          if (!saveResp.ok) { failed++; processed++; batchProgress.update(processed); continue; }
+          await fetch("/api/quick-replies/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: oldName }) });
+          if (QRS && QRS.list) { const idx = QRS.list.findIndex((s) => s.name === oldName); if (idx !== -1) QRS.list[idx].name = newName; }
+          updateSettingsAfterRename("quickreply", oldName, newName);
+          await updateQrGlobalChatRefs(oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名快速回复集 ${oldName} 失败`, e);
+          failed++;
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      let msg = `已重命名 ${success} 个快速回复集`;
+      const totalSkipped = names.length - entries.length + skipped;
+      if (totalSkipped > 0) msg += `，${totalSkipped} 个未修改（留空或跳过）`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
     }
 
     renderQRView();
@@ -16275,6 +16484,7 @@ jQuery(async () => {
       });
     } else {
       // 多选模式：增加/删除前缀或后缀
+      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -16287,15 +16497,20 @@ jQuery(async () => {
                 <option value="add-suffix">增加后缀</option>
                 <option value="del-prefix">删除前缀</option>
                 <option value="del-suffix">删除后缀</option>
+                <option value="individual">逐个重命名</option>
               </select>
             </div>
-            <div class="cfm-edit-popup-field">
+            <div class="cfm-edit-popup-field" id="cfm-preset-rename-text-field">
               <label id="cfm-rename-text-label">前缀内容</label>
               <input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容">
             </div>
             <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
               <label>自动检测到的公共前/后缀</label>
               <div id="cfm-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-rename-individual-field" id="cfm-preset-rename-individual-field">
+              <label>逐个指定新名称（留空则不修改）</label>
+              <div class="cfm-rename-individual-list">${individualListHtml}</div>
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
@@ -16314,51 +16529,65 @@ jQuery(async () => {
         const textInput = overlay.find("#cfm-rename-text");
         const autoDetect = overlay.find(".cfm-rename-auto-detect");
         const detected = overlay.find("#cfm-rename-detected");
-        if (action === "add-prefix") {
-          textLabel.text("前缀内容");
-          textInput.attr("placeholder", "输入要添加的前缀");
+        const textField = overlay.find("#cfm-preset-rename-text-field");
+        const individualField = overlay.find("#cfm-preset-rename-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        if (action === "individual") {
+          textField.hide();
           autoDetect.hide();
-        } else if (action === "add-suffix") {
-          textLabel.text("后缀内容");
-          textInput.attr("placeholder", "输入要添加的后缀");
-          autoDetect.hide();
-        } else if (action === "del-prefix") {
-          textLabel.text("要删除的前缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的前缀，或点击下方自动检测结果",
-          );
-          // 自动检测公共前缀
-          const commonPrefix = findCommonPrefix(names);
-          if (commonPrefix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+          namesBlock.hide();
+          individualField.show();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          textField.show();
+          namesBlock.show();
+          if (action === "add-prefix") {
+            textLabel.text("前缀内容");
+            textInput.attr("placeholder", "输入要添加的前缀");
+            autoDetect.hide();
+          } else if (action === "add-suffix") {
+            textLabel.text("后缀内容");
+            textInput.attr("placeholder", "输入要添加的后缀");
+            autoDetect.hide();
+          } else if (action === "del-prefix") {
+            textLabel.text("要删除的前缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的前缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            // 自动检测公共前缀
+            const commonPrefix = findCommonPrefix(names);
+            if (commonPrefix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+              );
+              autoDetect.show();
+            }
+          } else if (action === "del-suffix") {
+            textLabel.text("要删除的后缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的后缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          }
-        } else if (action === "del-suffix") {
-          textLabel.text("要删除的后缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的后缀，或点击下方自动检测结果",
-          );
-          // 自动检测公共后缀
-          const commonSuffix = findCommonSuffix(names);
-          if (commonSuffix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
-            );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
-            );
-            autoDetect.show();
+            // 自动检测公共后缀
+            const commonSuffix = findCommonSuffix(names);
+            if (commonSuffix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+              );
+              autoDetect.show();
+            }
           }
         }
       }
@@ -16383,9 +16612,20 @@ jQuery(async () => {
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
           const action = overlay.find("#cfm-rename-action").val();
-          const text = overlay.find("#cfm-rename-text").val().trim();
-          overlay.remove();
-          resolve({ mode: "batch", action, text });
+          if (action === "individual") {
+            const renameMap = {};
+            overlay.find(".cfm-rename-individual-row").each(function () {
+              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
+              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              if (newName) renameMap[oldName] = newName;
+            });
+            overlay.remove();
+            resolve({ mode: "individual", renameMap });
+          } else {
+            const text = overlay.find("#cfm-rename-text").val().trim();
+            overlay.remove();
+            resolve({ mode: "batch", action, text });
+          }
         });
         overlay.find("#cfm-rename-text").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -16598,6 +16838,45 @@ jQuery(async () => {
       batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
+    } else if (result.mode === "individual") {
+      const { renameMap } = result;
+      const entries = Object.entries(renameMap);
+      if (entries.length === 0) {
+        cfmToastr.info("所有名称均留空，未执行任何重命名");
+        renderPresetsView();
+        return;
+      }
+      const existingPresets = new Set(getCurrentPresets().map((p) => p.name));
+      let success = 0, skipped = 0, failed = 0;
+      const batchProgress = showBatchProgressOverlay("正在逐个重命名预设", entries.length);
+      let processed = 0;
+      for (const [oldName, newName] of entries) {
+        if (newName === oldName) { skipped++; processed++; batchProgress.update(processed); continue; }
+        if (existingPresets.has(newName)) { skipped++; processed++; batchProgress.update(processed); continue; }
+        try {
+          const presetData = getPresetDataForRename(pm, oldName);
+          if (!presetData) { failed++; processed++; batchProgress.update(processed); continue; }
+          await fetch("/api/presets/save", { method: "POST", headers: headers, body: JSON.stringify({ preset: presetData, name: newName, apiId: pm.apiId }) });
+          await fetch("/api/presets/delete", { method: "POST", headers: headers, body: JSON.stringify({ name: oldName, apiId: pm.apiId }) });
+          syncPresetOptionInDOM(pm, oldName, newName);
+          updateSettingsAfterRename("presets", oldName, newName);
+          existingPresets.delete(oldName);
+          existingPresets.add(newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 重命名预设 ${oldName} 失败`, e);
+          failed++;
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      let msg = `已重命名 ${success} 个预设`;
+      const totalSkipped = names.length - entries.length + skipped;
+      if (totalSkipped > 0) msg += `，${totalSkipped} 个未修改（留空或跳过）`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
     }
 
     // 刷新预设管理器的下拉列表
@@ -22292,6 +22571,7 @@ jQuery(async () => {
         });
       });
     } else {
+      const individualListHtml = names.map(n => `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`).join("");
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -22304,15 +22584,20 @@ jQuery(async () => {
                 <option value="add-suffix">增加后缀</option>
                 <option value="del-prefix">删除前缀</option>
                 <option value="del-suffix">删除后缀</option>
+                <option value="individual">逐个重命名</option>
               </select>
             </div>
-            <div class="cfm-edit-popup-field">
+            <div class="cfm-edit-popup-field" id="cfm-wi-rename-text-field">
               <label id="cfm-rename-text-label">前缀内容</label>
               <input type="text" class="cfm-edit-input" id="cfm-rename-text" placeholder="输入前缀内容">
             </div>
             <div class="cfm-edit-popup-field cfm-rename-auto-detect" style="display:none;">
               <label>自动检测到的公共前/后缀</label>
               <div id="cfm-rename-detected" class="cfm-rename-detected"></div>
+            </div>
+            <div class="cfm-rename-individual-field" id="cfm-wi-rename-individual-field">
+              <label>逐个指定新名称（留空则不修改）</label>
+              <div class="cfm-rename-individual-list">${individualListHtml}</div>
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
@@ -22330,49 +22615,63 @@ jQuery(async () => {
         const textInput = overlay.find("#cfm-rename-text");
         const autoDetect = overlay.find(".cfm-rename-auto-detect");
         const detected = overlay.find("#cfm-rename-detected");
-        if (action === "add-prefix") {
-          textLabel.text("前缀内容");
-          textInput.attr("placeholder", "输入要添加的前缀");
+        const textField = overlay.find("#cfm-wi-rename-text-field");
+        const individualField = overlay.find("#cfm-wi-rename-individual-field");
+        const namesBlock = overlay.find(".cfm-edit-popup-names");
+        if (action === "individual") {
+          textField.hide();
           autoDetect.hide();
-        } else if (action === "add-suffix") {
-          textLabel.text("后缀内容");
-          textInput.attr("placeholder", "输入要添加的后缀");
-          autoDetect.hide();
-        } else if (action === "del-prefix") {
-          textLabel.text("要删除的前缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的前缀，或点击下方自动检测结果",
-          );
-          const commonPrefix = findCommonPrefix(names);
-          if (commonPrefix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+          namesBlock.hide();
+          individualField.show();
+          individualField.find(".cfm-rename-new-input").first().focus();
+        } else {
+          individualField.hide();
+          textField.show();
+          namesBlock.show();
+          if (action === "add-prefix") {
+            textLabel.text("前缀内容");
+            textInput.attr("placeholder", "输入要添加的前缀");
+            autoDetect.hide();
+          } else if (action === "add-suffix") {
+            textLabel.text("后缀内容");
+            textInput.attr("placeholder", "输入要添加的后缀");
+            autoDetect.hide();
+          } else if (action === "del-prefix") {
+            textLabel.text("要删除的前缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的前缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+            const commonPrefix = findCommonPrefix(names);
+            if (commonPrefix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共前缀</span>',
+              );
+              autoDetect.show();
+            }
+          } else if (action === "del-suffix") {
+            textLabel.text("要删除的后缀");
+            textInput.attr(
+              "placeholder",
+              "输入要删除的后缀，或点击下方自动检测结果",
             );
-            autoDetect.show();
-          }
-        } else if (action === "del-suffix") {
-          textLabel.text("要删除的后缀");
-          textInput.attr(
-            "placeholder",
-            "输入要删除的后缀，或点击下方自动检测结果",
-          );
-          const commonSuffix = findCommonSuffix(names);
-          if (commonSuffix) {
-            detected.html(
-              `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
-            );
-            autoDetect.show();
-          } else {
-            detected.html(
-              '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
-            );
-            autoDetect.show();
+            const commonSuffix = findCommonSuffix(names);
+            if (commonSuffix) {
+              detected.html(
+                `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
+              );
+              autoDetect.show();
+            } else {
+              detected.html(
+                '<span class="cfm-rename-detect-none">未检测到公共后缀</span>',
+              );
+              autoDetect.show();
+            }
           }
         }
       }
@@ -22396,9 +22695,20 @@ jQuery(async () => {
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
           const action = overlay.find("#cfm-rename-action").val();
-          const text = overlay.find("#cfm-rename-text").val().trim();
-          overlay.remove();
-          resolve({ mode: "batch", action, text });
+          if (action === "individual") {
+            const renameMap = {};
+            overlay.find(".cfm-rename-individual-row").each(function () {
+              const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
+              const newName = $(this).find(".cfm-rename-new-input").val().trim();
+              if (newName) renameMap[oldName] = newName;
+            });
+            overlay.remove();
+            resolve({ mode: "individual", renameMap });
+          } else {
+            const text = overlay.find("#cfm-rename-text").val().trim();
+            overlay.remove();
+            resolve({ mode: "batch", action, text });
+          }
         });
         overlay.find("#cfm-rename-text").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -22618,6 +22928,76 @@ jQuery(async () => {
       batchProgress.done(msg);
       if (success > 0) cfmToastr.success(msg);
       else cfmToastr.warning(msg);
+    } else if (result.mode === "individual") {
+      const renameMap = result.renameMap;
+      const entries = Object.entries(renameMap);
+      if (entries.length === 0) {
+        cfmToastr.info("所有条目均留空，未执行任何重命名");
+        return;
+      }
+      let success = 0;
+      let skipped = names.length - entries.length;
+      let failed = 0;
+
+      const batchProgress = showBatchProgressOverlay(
+        "正在逐个重命名世界书",
+        entries.length,
+      );
+      let processed = 0;
+
+      for (const [oldName, newName] of entries) {
+        if (!newName || newName === oldName) {
+          skipped++;
+          processed++;
+          batchProgress.update(processed);
+          continue;
+        }
+        try {
+          const resp = await fetch("/api/worldinfo/get", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          if (!resp.ok) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          const wiData = await resp.json();
+          const saveResp = await fetch("/api/worldinfo/edit", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: newName, data: wiData }),
+          });
+          if (!saveResp.ok) {
+            failed++;
+            processed++;
+            batchProgress.update(processed);
+            continue;
+          }
+          await fetch("/api/worldinfo/delete", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ name: oldName }),
+          });
+          await syncWorldInfoOptionInDOM(oldName, newName);
+          updateSettingsAfterRename("worldinfo", oldName, newName);
+          await updateCharWorldBindings(oldName, newName);
+          success++;
+        } catch (e) {
+          console.warn(`[CFM] 逐个重命名世界书 ${oldName} 失败`, e);
+          failed++;
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      let msg = `已重命名 ${success} 个世界书`;
+      if (skipped > 0) msg += `，${skipped} 个留空未修改`;
+      if (failed > 0) msg += `，${failed} 个失败`;
+      batchProgress.done(msg);
+      if (success > 0) cfmToastr.success(msg);
+      else cfmToastr.info(msg);
     }
 
     renderWorldInfoView();
