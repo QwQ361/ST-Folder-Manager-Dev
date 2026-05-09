@@ -572,7 +572,14 @@ jQuery(async () => {
       resource?.mimeType ||
       getBackupBridgeMimeType(extensionHint) ||
       "application/octet-stream";
-    return new File([bytes], `${baseName}${extensionHint}`, {
+    // 如果 baseName 已经以 extensionHint 结尾，不再重复追加扩展名
+    // 例如 baseName="image.jpg", extensionHint=".jpg" → "image.jpg" 而非 "image.jpg.jpg"
+    const finalFileName =
+      extensionHint &&
+      baseName.toLowerCase().endsWith(extensionHint.toLowerCase())
+        ? baseName
+        : `${baseName}${extensionHint}`;
+    return new File([bytes], finalFileName, {
       type: mimeType,
     });
   }
