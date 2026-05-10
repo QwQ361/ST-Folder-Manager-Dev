@@ -8705,6 +8705,18 @@ jQuery(async () => {
     }
   }
 
+  function syncChatlogPopupModeClasses() {
+    const popup = $(".cfm-popup");
+    popup.removeClass(
+      "cfm-chatlog-note-mode cfm-chatlog-rename-mode cfm-res-delete-mode cfm-export-mode cfm-multisel-on",
+    );
+    if (cfmChatlogNoteMode) popup.addClass("cfm-chatlog-note-mode");
+    else if (cfmChatlogRenameMode) popup.addClass("cfm-chatlog-rename-mode");
+    else if (cfmResDeleteMode) popup.addClass("cfm-res-delete-mode");
+    else if (cfmExportMode) popup.addClass("cfm-export-mode");
+    else if (cfmMultiSelectMode) popup.addClass("cfm-multisel-on");
+  }
+
   function enterChatlogNoteMode() {
     const prev = collectCurrentSelection();
     clearAllExclusiveModes();
@@ -8718,7 +8730,7 @@ jQuery(async () => {
       .removeClass("fa-pen-to-square")
       .addClass("fa-check");
     $("#cfm-chatlog-note-btn").attr("title", "确认编辑备注");
-    $(".cfm-popup").addClass("cfm-chatlog-note-mode");
+    syncChatlogPopupModeClasses();
     renderChatlogsView();
   }
 
@@ -8733,7 +8745,7 @@ jQuery(async () => {
       .removeClass("fa-check")
       .addClass("fa-pen-to-square");
     $("#cfm-chatlog-note-btn").attr("title", "编辑备注");
-    $(".cfm-popup").removeClass("cfm-chatlog-note-mode");
+    syncChatlogPopupModeClasses();
     renderChatlogsView();
   }
 
@@ -8999,7 +9011,7 @@ jQuery(async () => {
       .removeClass("fa-i-cursor")
       .addClass("fa-check");
     $("#cfm-chatlog-rename-btn").attr("title", "确认重命名");
-    $(".cfm-popup").addClass("cfm-chatlog-rename-mode");
+    syncChatlogPopupModeClasses();
     renderChatlogsView();
   }
 
@@ -9014,7 +9026,7 @@ jQuery(async () => {
       .removeClass("fa-check")
       .addClass("fa-i-cursor");
     $("#cfm-chatlog-rename-btn").attr("title", "重命名聊天记录");
-    $(".cfm-popup").removeClass("cfm-chatlog-rename-mode");
+    syncChatlogPopupModeClasses();
     renderChatlogsView();
   }
 
@@ -43582,6 +43594,7 @@ jQuery(async () => {
     const rhPath = $("#cfm-chatlogs-rh-path");
     const rhCount = $("#cfm-chatlogs-rh-count");
     if (!treeEl.length) return;
+    syncChatlogPopupModeClasses();
     const avatar = getChatlogTargetAvatar();
     if (!avatar) {
       treeEl.empty();
