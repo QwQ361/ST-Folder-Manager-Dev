@@ -8772,7 +8772,7 @@ jQuery(async () => {
     const isBatch = chatNames.length > 1;
     let defaultNote = "";
     if (!isBatch) {
-      defaultNote = cfmChatNotes[chatNames[0]] || "";
+      defaultNote = cfmChatNotes[chatNames[0].replace(/\.jsonl$/i, "")] || "";
     }
     const nameListHtml =
       chatNames.length <= 5
@@ -8792,7 +8792,7 @@ jQuery(async () => {
     const individualListHtml = isBatch
       ? chatNames
           .map((n) => {
-            const currentNote = cfmChatNotes[n] || "";
+            const currentNote = cfmChatNotes[n.replace(/\.jsonl$/i, "")] || "";
             return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
           })
           .join("")
@@ -8925,8 +8925,9 @@ jQuery(async () => {
       let skipped = 0;
       for (const name of names) {
         const note = noteMap[name];
+        const noteKey = name.replace(/\.jsonl$/i, "");
         if (note !== undefined && note !== "") {
-          cfmChatNotes[name] = note;
+          cfmChatNotes[noteKey] = note;
           updated++;
         } else {
           skipped++;
@@ -8949,14 +8950,15 @@ jQuery(async () => {
     }
     let count = 0;
     for (const name of names) {
+      const noteKey = name.replace(/\.jsonl$/i, "");
       if (clear) {
-        delete cfmChatNotes[name];
+        delete cfmChatNotes[noteKey];
         count++;
       } else if (note) {
-        cfmChatNotes[name] = note;
+        cfmChatNotes[noteKey] = note;
         count++;
       } else if (!isBatch) {
-        delete cfmChatNotes[name];
+        delete cfmChatNotes[noteKey];
         count++;
       }
     }
@@ -9233,7 +9235,8 @@ jQuery(async () => {
             "placeholder",
             "输入要删除的前缀，或点击下方自动检测结果",
           );
-          const commonPrefix = findCommonPrefix(names);
+          const baseNames = names.map((n) => splitChatlogFileName(n).baseName);
+          const commonPrefix = findCommonPrefix(baseNames);
           if (commonPrefix) {
             detected.html(
               `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonPrefix)}">${escapeHtml(commonPrefix)}</span>`,
@@ -9251,7 +9254,8 @@ jQuery(async () => {
             "placeholder",
             "输入要删除的后缀，或点击下方自动检测结果",
           );
-          const commonSuffix = findCommonSuffix(names);
+          const baseNames2 = names.map((n) => splitChatlogFileName(n).baseName);
+          const commonSuffix = findCommonSuffix(baseNames2);
           if (commonSuffix) {
             detected.html(
               `<span class="cfm-rename-detect-item" data-value="${escapeHtml(commonSuffix)}">${escapeHtml(commonSuffix)}</span>`,
@@ -9336,9 +9340,11 @@ jQuery(async () => {
         chatGroups[newName] = chatGroups[oldName];
         delete chatGroups[oldName];
       }
-      if (cfmChatNotes[oldName]) {
-        cfmChatNotes[newName] = cfmChatNotes[oldName];
-        delete cfmChatNotes[oldName];
+      const oldNoteKey = oldName.replace(/\.jsonl$/i, "");
+      const newNoteKey = newName.replace(/\.jsonl$/i, "");
+      if (cfmChatNotes[oldNoteKey]) {
+        cfmChatNotes[newNoteKey] = cfmChatNotes[oldNoteKey];
+        delete cfmChatNotes[oldNoteKey];
         notesChanged = true;
       }
       return { status: "success" };
@@ -9378,22 +9384,23 @@ jQuery(async () => {
       let failed = 0;
       for (const oldName of names) {
         let newName;
+        const { baseName, ext } = splitChatlogFileName(oldName);
         if (action === "add-prefix") {
-          newName = text + oldName;
+          newName = text + baseName + ext;
         } else if (action === "add-suffix") {
-          newName = oldName + text;
+          newName = baseName + text + ext;
         } else if (action === "del-prefix") {
-          if (!oldName.startsWith(text)) {
+          if (!baseName.startsWith(text)) {
             skipped++;
             continue;
           }
-          newName = oldName.substring(text.length);
+          newName = baseName.substring(text.length) + ext;
         } else if (action === "del-suffix") {
-          if (!oldName.endsWith(text)) {
+          if (!baseName.endsWith(text)) {
             skipped++;
             continue;
           }
-          newName = oldName.substring(0, oldName.length - text.length);
+          newName = baseName.substring(0, baseName.length - text.length) + ext;
         }
         const renamed = await renameOne(oldName, newName);
         if (renamed.status === "success") success++;
@@ -27042,30 +27049,33 @@ jQuery(async () => {
     if (charIdx < 0) return false;
     try {
       const ctx = getContext();
-      const requestBody = {
-        is_group: false,
-        avatar_url: avatar,
-        original_file: `${oldFileName}.jsonl`,
-        renamed_file: `${newName}.jsonl`,
-      };
+      // renameGroupOrCharacterChat 期望不带 .jsonl 扩展名的文件名
+      const oldNameNoExt = oldFileName.replace(/\.jsonl$/i, "");
+      const newNameNoExt = newName.replace(/\.jsonl$/i, "");
       if (renameGroupOrCharacterChatFunc) {
-        await renameGroupOrCharacterChatFunc(requestBody);
-      } else {
-        const response = await fetch("/api/chats/rename", {
-          method: "POST",
-          headers: ctx.getRequestHeaders(),
-          body: JSON.stringify(requestBody),
+        await renameGroupOrCharacterChatFunc({
+          characterId: String(charIdx),
+          groupId: null,
+          oldFileName: oldNameNoExt,
+          newFileName: newNameNoExt,
+          loader: false,
         });
-        if (!response.ok) return false;
-        const data = await response.json().catch(() => null);
-        if (data && typeof data === "object" && data.error === true) {
-          return false;
+      } else if (ctx.renameChat) {
+        const currentChatId = ctx.getCurrentChatId
+          ? ctx.getCurrentChatId()
+          : null;
+        const needSwitchContext = currentChatId !== oldNameNoExt;
+        if (needSwitchContext && openCharacterChatFunc) {
+          await openCharacterChatFunc(String(charIdx), oldNameNoExt);
         }
+        await ctx.renameChat(oldNameNoExt, newNameNoExt);
+      } else {
+        return false;
       }
-      // 迁移备注
-      if (cfmChatNotes[oldFileName]) {
-        cfmChatNotes[newName] = cfmChatNotes[oldFileName];
-        delete cfmChatNotes[oldFileName];
+      // 迁移备注（备注 key 统一使用不带 .jsonl 的文件名）
+      if (cfmChatNotes[oldNameNoExt]) {
+        cfmChatNotes[newNameNoExt] = cfmChatNotes[oldNameNoExt];
+        delete cfmChatNotes[oldNameNoExt];
         saveChatNotes();
       }
       await invalidateChatCache(avatar);
@@ -27084,30 +27094,53 @@ jQuery(async () => {
     const charIdx = characters.findIndex((c) => c.avatar === avatar);
     if (charIdx < 0) return false;
     try {
+      // deleteCharacterChatByName 期望不带 .jsonl 扩展名的文件名
+      const fileNameNoExt = chatFileName.replace(/\.jsonl$/i, "");
+      let deleted = false;
       if (deleteCharacterChatByNameFunc) {
-        await deleteCharacterChatByNameFunc(String(charIdx), chatFileName);
+        try {
+          await deleteCharacterChatByNameFunc(String(charIdx), fileNameNoExt);
+          deleted = true;
+        } catch (funcErr) {
+          console.warn("[CFM] deleteCharacterChatByName 抛出异常，回退到直接 API 调用:", funcErr);
+          // 回退到直接 API 调用
+          const ctx = getContext();
+          const response = await fetch("/api/chats/delete", {
+            method: "POST",
+            headers: ctx.getRequestHeaders(),
+            body: JSON.stringify({
+              chatfile: fileNameNoExt + ".jsonl",
+              avatar_url: avatar,
+            }),
+          });
+          if (!response.ok) return false;
+          deleted = true;
+        }
       } else {
-        // 回退：直接调用 API
+        // 回退：直接调用 API（API 期望带 .jsonl 的完整文件名）
         const ctx = getContext();
         const response = await fetch("/api/chats/delete", {
           method: "POST",
           headers: ctx.getRequestHeaders(),
           body: JSON.stringify({
-            chatfile: chatFileName + ".jsonl",
+            chatfile: fileNameNoExt + ".jsonl",
             avatar_url: avatar,
           }),
         });
         if (!response.ok) return false;
+        deleted = true;
       }
-      // 清理备注
-      if (cfmChatNotes[chatFileName]) {
-        delete cfmChatNotes[chatFileName];
-        saveChatNotes();
+      if (deleted) {
+        // 清理备注（备注 key 统一使用不带 .jsonl 的文件名）
+        if (cfmChatNotes[fileNameNoExt]) {
+          delete cfmChatNotes[fileNameNoExt];
+          saveChatNotes();
+        }
+        // 从批量选中中移除
+        cfmChatBatchSelected.delete(`${avatar}::${chatFileName}`);
+        await invalidateChatCache(avatar);
       }
-      // 从批量选中中移除
-      cfmChatBatchSelected.delete(`${avatar}::${chatFileName}`);
-      await invalidateChatCache(avatar);
-      return true;
+      return deleted;
     } catch (e) {
       console.error("[CFM] 删除聊天记录失败:", e);
       return false;
@@ -27159,6 +27192,8 @@ jQuery(async () => {
       const charIdx = characters.findIndex((c) => c.avatar === avatar);
       if (charIdx < 0) return;
       const ctx = getContext();
+      // openCharacterChat 期望不带 .jsonl 扩展名的文件名
+      const fileNameNoExt = chatFileName.replace(/\.jsonl$/i, "");
       // 先选中角色
       if (ctx.selectCharacterById) {
         await ctx.selectCharacterById(charIdx);
@@ -27168,9 +27203,9 @@ jQuery(async () => {
       }
       // 然后打开指定聊天
       if (openCharacterChatFunc) {
-        await openCharacterChatFunc(chatFileName);
+        await openCharacterChatFunc(fileNameNoExt);
       } else if (ctx.openCharacterChat) {
-        await ctx.openCharacterChat(chatFileName);
+        await ctx.openCharacterChat(fileNameNoExt);
       }
       closeMainPopup();
     } catch (e) {
@@ -43889,7 +43924,8 @@ jQuery(async () => {
     if (searchTerm) {
       displayChats = displayChats.filter((ch) => {
         const fn = (ch.file_name || "").toLowerCase();
-        const note = (cfmChatNotes[ch.file_name] || "").toLowerCase();
+        const noteKey = (ch.file_name || "").replace(/\.jsonl$/i, "");
+        const note = (cfmChatNotes[noteKey] || "").toLowerCase();
         return fn.includes(searchTerm) || note.includes(searchTerm);
       });
       displayTitle += ` (搜索: ${searchTerm})`;
@@ -43948,7 +43984,7 @@ jQuery(async () => {
               minute: "2-digit",
             })
           : "";
-        const note = cfmChatNotes[fn] || "";
+        const note = cfmChatNotes[fn.replace(/\.jsonl$/i, "")] || "";
         const isCur = curChatId && fn === curChatId;
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(fn);
         const isExpSel = cfmExportMode && cfmExportSelected.has(fn);
@@ -57156,4 +57192,3 @@ jQuery(async () => {
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
-
