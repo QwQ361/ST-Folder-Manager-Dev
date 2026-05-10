@@ -9107,7 +9107,7 @@ jQuery(async () => {
             <div class="cfm-edit-popup-names">${nameListHtml}</div>
             <div class="cfm-edit-popup-field">
               <label>新名称</label>
-              <input type="text" class="cfm-edit-input" id="cfm-chatlog-rename-input" value="${escapeHtml(nameMeta[0].baseName)}" placeholder="输入新名称">
+              <input type="text" class="cfm-edit-input" id="cfm-chatlog-rename-input" value="" placeholder="输入新名称">
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
@@ -9158,7 +9158,7 @@ jQuery(async () => {
     const individualListHtml = nameMeta
       .map(
         (item) =>
-          `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(item.fullName)}">${escapeHtml(item.displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(item.fullName)}" data-ext="${escapeHtml(item.ext)}" value="${escapeHtml(item.baseName)}"></div>`,
+          `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(item.fullName)}">${escapeHtml(item.displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(item.fullName)}" data-ext="${escapeHtml(item.ext)}" value=""></div>`,
       )
       .join("");
     const popupHtml = `
@@ -9292,8 +9292,10 @@ jQuery(async () => {
             const oldName = $(this)
               .find(".cfm-rename-new-input")
               .data("old-name");
-            const newName = $(this).find(".cfm-rename-new-input").val().trim();
-            if (newName) renameMap[oldName] = newName;
+            const input = $(this).find(".cfm-rename-new-input");
+            const newBaseName = input.val().trim();
+            const ext = String(input.data("ext") || "");
+            if (newBaseName) renameMap[oldName] = `${newBaseName}${ext}`;
           });
           overlay.remove();
           resolve({ mode: "individual", renameMap });
@@ -27039,18 +27041,25 @@ jQuery(async () => {
     const charIdx = characters.findIndex((c) => c.avatar === avatar);
     if (charIdx < 0) return false;
     try {
+      const ctx = getContext();
+      const requestBody = {
+        is_group: false,
+        avatar_url: avatar,
+        original_file: `${oldFileName}.jsonl`,
+        renamed_file: `${newName}.jsonl`,
+      };
       if (renameGroupOrCharacterChatFunc) {
-        await renameGroupOrCharacterChatFunc({
-          characterId: String(charIdx),
-          oldFileName: oldFileName,
-          newFileName: newName,
-          loader: false,
-        });
+        await renameGroupOrCharacterChatFunc(requestBody);
       } else {
-        // 回退：通过 getContext
-        const ctx = getContext();
-        if (ctx.renameChat) {
-          await ctx.renameChat(oldFileName, newName);
+        const response = await fetch("/api/chats/rename", {
+          method: "POST",
+          headers: ctx.getRequestHeaders(),
+          body: JSON.stringify(requestBody),
+        });
+        if (!response.ok) return false;
+        const data = await response.json().catch(() => null);
+        if (data && typeof data === "object" && data.error === true) {
+          return false;
         }
       }
       // 迁移备注
@@ -43948,7 +43957,7 @@ jQuery(async () => {
         const isRenameSel =
           cfmChatlogRenameMode && cfmChatlogRenameSelected.has(fn);
         const row = $(
-          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name" title="${escapeHtml(fn)}">${escapeHtml(chatFileMeta.displayName)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
+          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name" title="${escapeHtml(fn)}">${escapeHtml(chatFileMeta.displayName)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-i-cursor"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
         );
         if (isDelSel) row.addClass("cfm-res-delete-row-selected");
         if (isExpSel) row.addClass("cfm-export-row-selected");
@@ -57147,3 +57156,4 @@ jQuery(async () => {
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
+
