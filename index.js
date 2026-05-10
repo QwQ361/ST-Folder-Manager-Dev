@@ -29338,6 +29338,8 @@ jQuery(async () => {
     currentResourceType = initialTab;
     selectedTreeNode = null;
     expandedNodes.clear();
+    // 每次打开弹窗时重置聊天记录页目标角色为当前角色，确保始终跟随当前角色
+    cfmChatlogTargetAvatar = null;
     selectedChatlogFolder = null;
     selectedPresetFolder = null;
     selectedWorldInfoFolder = null;
@@ -43998,6 +44000,9 @@ jQuery(async () => {
 
       const ctx = getContext();
       const curChatId = ctx.getCurrentChatId ? ctx.getCurrentChatId() : null;
+      const currentCharAvatar = getCurrentCharAvatar();
+      // 只有当查看的是当前角色的聊天记录时，才进行当前聊天高亮
+      const isCurrentChar = avatar === currentCharAvatar;
       displayChats.forEach((chat) => {
         const fn = chat.file_name,
           msgCount = chat.chat_items,
@@ -44013,7 +44018,9 @@ jQuery(async () => {
             })
           : "";
         const note = cfmChatNotes[fn.replace(/\.jsonl$/i, "")] || "";
-        const isCur = curChatId && fn === curChatId;
+        // 匹配当前聊天：统一去掉 .jsonl 后缀再比较，且只在当前角色卡下高亮
+        const fnNoExt = fn.replace(/\.jsonl$/i, "");
+        const isCur = isCurrentChar && curChatId && (fn === curChatId || fnNoExt === curChatId);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(fn);
         const isExpSel = cfmExportMode && cfmExportSelected.has(fn);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(fn);
@@ -57175,6 +57182,19 @@ jQuery(async () => {
         // 延迟执行，确保角色信息已更新
         scheduleAutoApplyBoundGroups();
         scheduleWelcomeRecentChatRefresh();
+        // 角色/聊天切换时，同步聊天记录页到当前角色
+        setTimeout(() => {
+          const newAvatar = getCurrentCharAvatar();
+          if (newAvatar && newAvatar !== cfmChatlogTargetAvatar) {
+            cfmChatlogTargetAvatar = newAvatar;
+            selectedChatlogFolder = null;
+            chatlogExpandedNodes.clear();
+            // 如果弹窗已打开且当前在聊天记录页，则刷新视图
+            if ($("#cfm-popup").length && currentResourceType === "chatlogs") {
+              renderChatlogsView();
+            }
+          }
+        }, 300);
       });
     }
     // 预设切换时自动应用/关闭世界书分组和快速回复分组
