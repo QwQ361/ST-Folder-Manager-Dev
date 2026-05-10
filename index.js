@@ -42983,7 +42983,7 @@ jQuery(async () => {
     treeEl.append(uncatNode);
     if (topFolders.length === 0) {
       uncatNode.before(
-        '<div class="cfm-right-empty" style="padding:12px;font-size:12px;">还没有配置文件夹<br>点击右上角 + 创建文件夹</div>',
+        '<div class="cfm-right-empty" style="padding:12px;font-size:12px;">还没有配置文件夹<br>点击右上角 ⚙ 创建文件夹</div>',
       );
     }
 
