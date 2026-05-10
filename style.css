@@ -6938,6 +6938,110 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   margin-left: auto;
 }
 
+/* 聊天记录页 */
+.cfm-chatlog-char-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cfm-chatlog-char-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cdd6f4;
+}
+.cfm-chatlog-chat-total {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.cfm-chatlog-row {
+  align-items: flex-start;
+}
+.cfm-chatlog-row .cfm-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cfm-chatlog-row .cfm-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cfm-chatlog-row .cfm-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 0;
+}
+.cfm-chatlog-current {
+  background: rgba(137, 180, 250, 0.08);
+  border-left: 2px solid rgba(137, 180, 250, 0.6);
+}
+.cfm-chatlog-current-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #89b4fa;
+  background: rgba(137, 180, 250, 0.14);
+  border: 1px solid rgba(137, 180, 250, 0.25);
+}
+.cfm-chatlog-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cfm-chatlog-note i {
+  margin-right: 4px;
+  color: #f9e2af;
+}
+.cfm-chatlog-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+.cfm-chatlog-action-btn,
+.cfm-chat-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.cfm-chatlog-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+.cfm-chatlog-action-btn:hover {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+}
+.cfm-chat-manage-btn {
+  color: #a6e3a1 !important;
+}
+
 /* 批量操作工具栏 */
 .cfm-chat-batch-toolbar {
   display: flex;
