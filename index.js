@@ -27205,11 +27205,12 @@ jQuery(async () => {
   async function exportChatFile(avatar, chatFileName, format = "jsonl") {
     try {
       const ctx = getContext();
+      const baseName = chatFileName.replace(/\.jsonl$/i, "");
       const body = {
         is_group: false,
         avatar_url: avatar,
-        file: `${chatFileName}.jsonl`,
-        exportfilename: `${chatFileName}.${format}`,
+        file: `${baseName}.jsonl`,
+        exportfilename: `${baseName}.${format}`,
         format: format,
       };
       const response = await fetch("/api/chats/export", {
@@ -27226,7 +27227,7 @@ jQuery(async () => {
         format === "txt" ? "text/plain" : "application/octet-stream";
       const download = (await import("../../../utils.js")).download;
       download(data.result, body.exportfilename, mimeType);
-      cfmToastr.success(`已导出: ${chatFileName}.${format}`);
+      cfmToastr.success(`已导出: ${baseName}.${format}`);
       return true;
     } catch (e) {
       console.error("[CFM] 导出聊天记录失败:", e);
@@ -27263,11 +27264,12 @@ jQuery(async () => {
         );
         for (const fn of chatFileNames) {
           try {
+            const baseName = fn.replace(/\.jsonl$/i, "");
             const body = {
               is_group: false,
               avatar_url: avatar,
-              file: `${fn}.jsonl`,
-              exportfilename: `${fn}.jsonl`,
+              file: `${baseName}.jsonl`,
+              exportfilename: `${baseName}.jsonl`,
               format: "jsonl",
             };
             const response = await fetch("/api/chats/export", {
@@ -27277,7 +27279,7 @@ jQuery(async () => {
             });
             if (response.ok) {
               const data = await response.json();
-              zip.file(`${fn}.jsonl`, data.result);
+              zip.file(`${baseName}.jsonl`, data.result);
               success++;
             }
           } catch (e) {
