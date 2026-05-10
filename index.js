@@ -9051,23 +9051,48 @@ jQuery(async () => {
     cfmChatlogRenameLastClicked = id;
   }
 
+  function splitChatlogFileName(fileName) {
+    const safeName = String(fileName || "");
+    const lastDot = safeName.lastIndexOf(".");
+    if (lastDot <= 0 || lastDot === safeName.length - 1) {
+      return {
+        fullName: safeName,
+        baseName: safeName,
+        ext: "",
+        displayName: safeName,
+      };
+    }
+    return {
+      fullName: safeName,
+      baseName: safeName.slice(0, lastDot),
+      ext: safeName.slice(lastDot),
+      displayName: safeName.slice(0, lastDot),
+    };
+  }
+
   async function showChatlogRenamePopup(names) {
     if (!names || names.length === 0) return;
     const isSingle = names.length === 1;
+    const nameMeta = names.map((n) => ({
+      fullName: n,
+      ...splitChatlogFileName(n),
+    }));
     const nameListHtml =
-      names.length <= 5
-        ? names
+      nameMeta.length <= 5
+        ? nameMeta
             .map(
-              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+              (item) =>
+                `<div class="cfm-edit-name-item" title="${escapeHtml(item.fullName)}">${escapeHtml(item.displayName)}</div>`,
             )
             .join("")
-        : names
+        : nameMeta
             .slice(0, 5)
             .map(
-              (n) => `<div class="cfm-edit-name-item">${escapeHtml(n)}</div>`,
+              (item) =>
+                `<div class="cfm-edit-name-item" title="${escapeHtml(item.fullName)}">${escapeHtml(item.displayName)}</div>`,
             )
             .join("") +
-          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${names.length} 个聊天记录</div>`;
+          `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${nameMeta.length} 个聊天记录</div>`;
 
     if (isSingle) {
       const popupHtml = `
@@ -9077,7 +9102,7 @@ jQuery(async () => {
             <div class="cfm-edit-popup-names">${nameListHtml}</div>
             <div class="cfm-edit-popup-field">
               <label>新名称</label>
-              <input type="text" class="cfm-edit-input" id="cfm-chatlog-rename-input" value="${escapeHtml(names[0])}" placeholder="输入新名称">
+              <input type="text" class="cfm-edit-input" id="cfm-chatlog-rename-input" value="${escapeHtml(nameMeta[0].baseName)}" placeholder="输入新名称">
             </div>
             <div class="cfm-edit-popup-actions">
               <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
@@ -9101,12 +9126,17 @@ jQuery(async () => {
           }
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-          const newName = overlay
+          const newBaseName = overlay
             .find("#cfm-chatlog-rename-input")
             .val()
             .trim();
           overlay.remove();
-          resolve({ mode: "single", newName });
+          resolve({
+            mode: "single",
+            newName: newBaseName
+              ? `${newBaseName}${nameMeta[0].ext}`
+              : newBaseName,
+          });
         });
         overlay.find(".cfm-edit-input").on("keydown", (e) => {
           if (e.key === "Enter") {
@@ -9120,10 +9150,10 @@ jQuery(async () => {
       });
     }
 
-    const individualListHtml = names
+    const individualListHtml = nameMeta
       .map(
-        (n) =>
-          `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(n)}">${escapeHtml(n)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}"></div>`,
+        (item) =>
+          `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(item.fullName)}">${escapeHtml(item.displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(item.fullName)}" data-ext="${escapeHtml(item.ext)}" value="${escapeHtml(item.baseName)}"></div>`,
       )
       .join("");
     const popupHtml = `
@@ -11107,6 +11137,7 @@ jQuery(async () => {
 
   function rerenderCurrentView() {
     if (currentResourceType === "chars") renderRightPane();
+    else if (currentResourceType === "chatlogs") renderChatlogsView();
     else if (currentResourceType === "presets") renderPresetsView();
     else if (currentResourceType === "themes") renderThemesView();
     else if (currentResourceType === "backgrounds") renderBackgroundsView();
@@ -11981,19 +12012,21 @@ jQuery(async () => {
     const typeLabel =
       currentResourceType === "chars"
         ? "角色卡"
-        : currentResourceType === "presets"
-          ? "预设"
-          : currentResourceType === "themes"
-            ? "主题"
-            : currentResourceType === "backgrounds"
-              ? "背景"
-              : currentResourceType === "personas"
-                ? "User"
-                : currentResourceType === "regex"
-                  ? "正则脚本"
-                  : currentResourceType === "quickreply"
-                    ? "快速回复集"
-                    : "世界书";
+        : currentResourceType === "chatlogs"
+          ? "聊天记录"
+          : currentResourceType === "presets"
+            ? "预设"
+            : currentResourceType === "themes"
+              ? "主题"
+              : currentResourceType === "backgrounds"
+                ? "背景"
+                : currentResourceType === "personas"
+                  ? "User"
+                  : currentResourceType === "regex"
+                    ? "正则脚本"
+                    : currentResourceType === "quickreply"
+                      ? "快速回复集"
+                      : "世界书";
 
     // 确认弹窗
     const confirmed = cfmConfirm(
@@ -43889,6 +43922,7 @@ jQuery(async () => {
         const fn = chat.file_name,
           msgCount = chat.chat_items,
           lastMes = chat.mes;
+        const chatFileMeta = splitChatlogFileName(fn);
         const lastDate = chat.last_mes ? new Date(chat.last_mes) : null;
         const dateStr = lastDate
           ? lastDate.toLocaleString("zh-CN", {
@@ -43907,7 +43941,7 @@ jQuery(async () => {
         const isRenameSel =
           cfmChatlogRenameMode && cfmChatlogRenameSelected.has(fn);
         const row = $(
-          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name">${escapeHtml(fn)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
+          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name" title="${escapeHtml(fn)}">${escapeHtml(chatFileMeta.displayName)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
         );
         if (isDelSel) row.addClass("cfm-res-delete-row-selected");
         if (isExpSel) row.addClass("cfm-export-row-selected");
@@ -43989,11 +44023,15 @@ jQuery(async () => {
         rightList.append(row);
       });
 
-      prependResDeleteToolbar(rightList, renderChatlogsView);
-      prependExportToolbar(rightList, renderChatlogsView);
-      prependChatlogNoteToolbar(rightList, renderChatlogsView);
-      prependChatlogRenameToolbar(rightList, renderChatlogsView);
-      if (cfmMultiSelectMode) {
+      if (cfmChatlogNoteMode) {
+        prependChatlogNoteToolbar(rightList, renderChatlogsView);
+      } else if (cfmChatlogRenameMode) {
+        prependChatlogRenameToolbar(rightList, renderChatlogsView);
+      } else if (cfmResDeleteMode) {
+        prependResDeleteToolbar(rightList, renderChatlogsView);
+      } else if (cfmExportMode) {
+        prependExportToolbar(rightList, renderChatlogsView);
+      } else if (cfmMultiSelectMode) {
         const visible = getVisibleResourceIds();
         const allSel =
           visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
