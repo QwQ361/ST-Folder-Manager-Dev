@@ -9070,6 +9070,11 @@ jQuery(async () => {
     };
   }
 
+  function getWorldInfoDisplayName(name) {
+    const safeName = String(name || "");
+    return safeName.replace(/\.(json|jsonl)$/i, "");
+  }
+
   async function showChatlogRenamePopup(names) {
     if (!names || names.length === 0) return;
     const isSingle = names.length === 1;
@@ -42694,6 +42699,7 @@ jQuery(async () => {
       }
       // 世界书行（带星标 + 多选支持 + 备注 + 激活开关）
       for (const n of displayItems) {
+        const wiDisplayName = getWorldInfoDisplayName(n);
         const fav = isResFavorite("worldinfo", n);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(n);
         const isExpSel = cfmExportMode && cfmExportSelected.has(n);
@@ -42747,7 +42753,7 @@ jQuery(async () => {
             ${msCheckHtml}
             ${toggleHtml}
             <div class="cfm-row-icon"><i class="fa-solid fa-book" style="font-size:20px;color:#a6e3a1;"></i></div>
-            <div class="cfm-row-name"><span class="cfm-char-name-inline">${expandHtml}<span class="cfm-worldinfo-name-text">${escapeHtml(n)}</span></span>${noteHtml}</div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline">${expandHtml}<span class="cfm-worldinfo-name-text" title="${escapeHtml(n)}">${escapeHtml(wiDisplayName)}</span></span>${noteHtml}</div>
             ${singleRenameBtn}
             ${singleNoteBtn}
             <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
