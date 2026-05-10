@@ -4342,7 +4342,6 @@ jQuery(async () => {
       import: "#cfm-import-chatlog-btn",
       note: "#cfm-chatlog-note-btn",
       rename: "#cfm-chatlog-rename-btn",
-      export: "#cfm-export-chatlog-btn",
       delete: "#cfm-res-delete-chatlog-btn",
     },
     worldinfo: {
@@ -8113,6 +8112,7 @@ jQuery(async () => {
   let selectedChatlogFolder = null; // 聊天记录页当前选中的文件夹
   let chatlogExpandedNodes = new Set(); // 聊天记录页左侧文件夹树展开节点
   let cfmChatlogTargetAvatar = null; // 聊天记录页当前目标角色avatar（null时跟随当前角色）
+  let _switchResourceTabFn = null; // 模块级引用，供 renderChatSubList 等外部函数调用 switchResourceTab
   let chatlogConfigExpandedNodes = new Set();
   let presetConfigExpandedNodes = new Set();
   let worldInfoConfigExpandedNodes = new Set();
@@ -27384,7 +27384,7 @@ jQuery(async () => {
       e.stopPropagation();
       cfmChatlogTargetAvatar = avatar;
       selectedChatlogFolder = null;
-      switchResourceTab("chatlogs");
+      if (_switchResourceTabFn) _switchResourceTabFn("chatlogs");
     });
     subList.append(chatToolbar);
 
@@ -28777,7 +28777,6 @@ jQuery(async () => {
                             <input type="file" id="cfm-import-chatlog-file" multiple accept=".json,.jsonl" style="display:none;">
                             <button class="cfm-edit-char-btn" id="cfm-chatlog-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-chatlog-rename-btn" title="重命名聊天记录"><i class="fa-solid fa-i-cursor"></i></button>
-                            <button class="cfm-export-btn" id="cfm-export-chatlog-btn" title="导出聊天记录"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-chatlog-btn" title="删除聊天记录"><i class="fa-solid fa-trash-can"></i></button>
                             <button class="cfm-multisel-toggle cfm-multisel-toggle-chatlogs" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
                         </div>
@@ -29432,6 +29431,7 @@ jQuery(async () => {
       else if (tab === "regex") renderRegexView();
       else if (tab === "quickreply") renderQRView();
     }
+    _switchResourceTabFn = switchResourceTab;
 
     // 资源类型标签切换
     popup.find(".cfm-tab[data-tab]").on("click touchend", function (e) {
@@ -30537,6 +30537,7 @@ jQuery(async () => {
       $("#cfm-popup").toggleClass("cfm-multisel-on", cfmMultiSelectMode);
       // 重新渲染当前视图
       if (currentResourceType === "chars") renderRightPane();
+      else if (currentResourceType === "chatlogs") renderChatlogsView();
       else if (currentResourceType === "presets") renderPresetsView();
       else if (currentResourceType === "themes") renderThemesView();
       else if (currentResourceType === "backgrounds") renderBackgroundsView();
@@ -42936,17 +42937,6 @@ jQuery(async () => {
     const topFolders = sortCLFolders(getCLTopFolders());
     for (const fid of topFolders) renderCLTreeNode(treeEl, fid, 0);
 
-    // 全部入口
-    const allNode = $(
-      `<div class="cfm-tnode cfm-tnode-uncategorized ${selectedChatlogFolder === "__all__" ? "cfm-tnode-selected" : ""}" data-id="__all__" style="padding-left:10px;"><span class="cfm-tnode-arrow cfm-arrow-hidden"><i class="fa-solid fa-caret-right"></i></span><span class="cfm-tnode-icon"><i class="fa-solid fa-list"></i></span><span class="cfm-tnode-label">全部</span><span class="cfm-tnode-count">${allChats.length}</span></div>`,
-    );
-    allNode.on("click", (e) => {
-      e.preventDefault();
-      selectedChatlogFolder = "__all__";
-      renderChatlogsView();
-    });
-    treeEl.append(allNode);
-
     // 未归类入口
     const ungroupedChats = allChats.filter(
       (ch) =>
@@ -42992,7 +42982,7 @@ jQuery(async () => {
     });
     treeEl.append(uncatNode);
     if (topFolders.length === 0) {
-      allNode.before(
+      uncatNode.before(
         '<div class="cfm-right-empty" style="padding:12px;font-size:12px;">还没有配置文件夹<br>点击右上角 + 创建文件夹</div>',
       );
     }
@@ -43008,9 +42998,6 @@ jQuery(async () => {
       displayTitle = "未归类";
       treeEl.find(".cfm-tnode").removeClass("cfm-tnode-selected");
       uncatNode.addClass("cfm-tnode-selected");
-    } else if (selectedChatlogFolder === "__all__") {
-      displayChats = allChats;
-      displayTitle = "全部";
     } else if (selectedChatlogFolder === "__ungrouped__") {
       displayChats = ungroupedChats;
       displayTitle = "未归类";
@@ -43099,7 +43086,7 @@ jQuery(async () => {
         const isExpSel = cfmExportMode && cfmExportSelected.has(fn);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(fn);
         const row = $(
-          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true"><div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name">${escapeHtml(fn)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-sticky-note"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-export" title="导出"><i class="fa-solid fa-download"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
+          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name">${escapeHtml(fn)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
         );
         if (isDelSel) row.addClass("cfm-res-delete-row-selected");
         if (isExpSel) row.addClass("cfm-export-row-selected");
@@ -43148,10 +43135,6 @@ jQuery(async () => {
             renderChatlogsView();
           } else cfmToastr.error("重命名失败");
         });
-        row.find(".cfm-chatlog-btn-export").on("click", (e) => {
-          e.stopPropagation();
-          exportChatFile(avatar, fn, "jsonl");
-        });
         row.find(".cfm-chatlog-btn-delete").on("click", async (e) => {
           e.stopPropagation();
           if (!confirm(`确定要删除聊天记录「${fn}」吗？此操作不可恢复。`))
@@ -43190,18 +43173,24 @@ jQuery(async () => {
 
       prependResDeleteToolbar(rightList, renderChatlogsView);
       prependExportToolbar(rightList, renderChatlogsView);
-      if (cfmMultiSelectMode && selectedChatlogFolder) {
+      if (cfmMultiSelectMode) {
         const visible = displayChats.map((ch) => ch.file_name);
         const allSel =
           visible.length > 0 && visible.every((id) => cfmMultiSelected.has(id));
         const toolbar = $(
-          `<div class="cfm-multisel-toolbar"><button class="cfm-btn cfm-btn-sm cfm-multisel-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span></div>`,
+          `<div class="cfm-multisel-toolbar"><button class="cfm-btn cfm-btn-sm cfm-multisel-selectall" title="全选/全不选"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-multisel-range ${cfmMultiSelectRangeMode ? "cfm-range-active" : ""}" title="框选模式"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmMultiSelectRangeMode ? "(开)" : ""}</button><span class="cfm-multisel-count">${cfmMultiSelected.size > 0 ? `已选 ${cfmMultiSelected.size} 项` : ""}</span></div>`,
         );
         toolbar.find(".cfm-multisel-selectall").on("click touchend", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (allSel) visible.forEach((id) => cfmMultiSelected.delete(id));
-          else visible.forEach((id) => cfmMultiSelected.add(id));
+          selectAllVisible();
+          renderChatlogsView();
+        });
+        toolbar.find(".cfm-multisel-range").on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          cfmMultiSelectRangeMode = !cfmMultiSelectRangeMode;
+          if (cfmMultiSelectRangeMode) cfmMultiSelectLastClicked = null;
           renderChatlogsView();
         });
         rightList.prepend(toolbar);
