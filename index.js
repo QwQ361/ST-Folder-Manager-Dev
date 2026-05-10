@@ -8745,7 +8745,8 @@ jQuery(async () => {
       if (lastIdx !== -1 && curIdx !== -1) {
         const start = Math.min(lastIdx, curIdx);
         const end = Math.max(lastIdx, curIdx);
-        for (let i = start; i <= end; i++) cfmChatlogNoteSelected.add(visible[i]);
+        for (let i = start; i <= end; i++)
+          cfmChatlogNoteSelected.add(visible[i]);
       }
     } else {
       if (cfmChatlogNoteSelected.has(id)) cfmChatlogNoteSelected.delete(id);
@@ -8828,7 +8829,9 @@ jQuery(async () => {
       function updateChatlogNoteUI() {
         const action = overlay.find("#cfm-chatlog-note-action").val();
         const uniformField = overlay.find("#cfm-chatlog-note-uniform-field");
-        const individualField = overlay.find("#cfm-chatlog-note-individual-field");
+        const individualField = overlay.find(
+          "#cfm-chatlog-note-individual-field",
+        );
         const namesBlock = overlay.find(".cfm-edit-popup-names");
         const clearBtn = overlay.find(".cfm-edit-popup-clear");
         if (action === "individual") {
@@ -8846,7 +8849,9 @@ jQuery(async () => {
         }
       }
       updateChatlogNoteUI();
-      overlay.find("#cfm-chatlog-note-action").on("change", updateChatlogNoteUI);
+      overlay
+        .find("#cfm-chatlog-note-action")
+        .on("change", updateChatlogNoteUI);
     } else {
       overlay.find("#cfm-chatlog-note-input").focus();
     }
@@ -8954,7 +8959,8 @@ jQuery(async () => {
     if (!cfmChatlogNoteMode) return;
     const visible = getVisibleResourceIds();
     const allSel =
-      visible.length > 0 && visible.every((id) => cfmChatlogNoteSelected.has(id));
+      visible.length > 0 &&
+      visible.every((id) => cfmChatlogNoteSelected.has(id));
     const toolbar = $(
       `<div class="cfm-edit-toolbar"><button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmChatlogNoteRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmChatlogNoteRangeMode ? "(开)" : ""}</button><span class="cfm-edit-count">${cfmChatlogNoteSelected.size > 0 ? `已选 ${cfmChatlogNoteSelected.size} 项` : ""}</span><button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button></div>`,
     );
@@ -9013,7 +9019,10 @@ jQuery(async () => {
   }
 
   function toggleChatlogRenameItem(id, shiftKey) {
-    if ((shiftKey || cfmChatlogRenameRangeMode) && cfmChatlogRenameLastClicked) {
+    if (
+      (shiftKey || cfmChatlogRenameRangeMode) &&
+      cfmChatlogRenameLastClicked
+    ) {
       const visible = getVisibleResourceIds();
       const lastIdx = visible.indexOf(cfmChatlogRenameLastClicked);
       const curIdx = visible.indexOf(id);
@@ -9080,7 +9089,10 @@ jQuery(async () => {
           }
         });
         overlay.find(".cfm-edit-popup-confirm").on("click", () => {
-          const newName = overlay.find("#cfm-chatlog-rename-input").val().trim();
+          const newName = overlay
+            .find("#cfm-chatlog-rename-input")
+            .val()
+            .trim();
           overlay.remove();
           resolve({ mode: "single", newName });
         });
@@ -9146,7 +9158,9 @@ jQuery(async () => {
       const autoDetect = overlay.find(".cfm-rename-auto-detect");
       const detected = overlay.find("#cfm-chatlog-rename-detected");
       const textField = overlay.find("#cfm-chatlog-rename-text-field");
-      const individualField = overlay.find("#cfm-chatlog-rename-individual-field");
+      const individualField = overlay.find(
+        "#cfm-chatlog-rename-individual-field",
+      );
       const namesBlock = overlay.find(".cfm-edit-popup-names");
       if (action === "individual") {
         textField.hide();
@@ -9168,7 +9182,10 @@ jQuery(async () => {
           autoDetect.hide();
         } else if (action === "del-prefix") {
           textLabel.text("要删除的前缀");
-          textInput.attr("placeholder", "输入要删除的前缀，或点击下方自动检测结果");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的前缀，或点击下方自动检测结果",
+          );
           const commonPrefix = findCommonPrefix(names);
           if (commonPrefix) {
             detected.html(
@@ -9183,7 +9200,10 @@ jQuery(async () => {
           }
         } else if (action === "del-suffix") {
           textLabel.text("要删除的后缀");
-          textInput.attr("placeholder", "输入要删除的后缀，或点击下方自动检测结果");
+          textInput.attr(
+            "placeholder",
+            "输入要删除的后缀，或点击下方自动检测结果",
+          );
           const commonSuffix = findCommonSuffix(names);
           if (commonSuffix) {
             detected.html(
@@ -9222,7 +9242,9 @@ jQuery(async () => {
         if (action === "individual") {
           const renameMap = {};
           overlay.find(".cfm-rename-individual-row").each(function () {
-            const oldName = $(this).find(".cfm-rename-new-input").data("old-name");
+            const oldName = $(this)
+              .find(".cfm-rename-new-input")
+              .data("old-name");
             const newName = $(this).find(".cfm-rename-new-input").val().trim();
             if (newName) renameMap[oldName] = newName;
           });
@@ -9326,7 +9348,10 @@ jQuery(async () => {
         }
         const renamed = await renameOne(oldName, newName);
         if (renamed.status === "success") success++;
-        else if (renamed.status === "skip-empty" || renamed.status === "skip-same")
+        else if (
+          renamed.status === "skip-empty" ||
+          renamed.status === "skip-same"
+        )
           skipped++;
         else failed++;
       }
@@ -9355,7 +9380,10 @@ jQuery(async () => {
         }
         const renamed = await renameOne(oldName, newName);
         if (renamed.status === "success") success++;
-        else if (renamed.status === "skip-empty" || renamed.status === "skip-same")
+        else if (
+          renamed.status === "skip-empty" ||
+          renamed.status === "skip-same"
+        )
           skipped++;
         else failed++;
       }
@@ -9375,7 +9403,8 @@ jQuery(async () => {
     if (!cfmChatlogRenameMode) return;
     const visible = getVisibleResourceIds();
     const allSel =
-      visible.length > 0 && visible.every((id) => cfmChatlogRenameSelected.has(id));
+      visible.length > 0 &&
+      visible.every((id) => cfmChatlogRenameSelected.has(id));
     const toolbar = $(
       `<div class="cfm-edit-toolbar"><button class="cfm-btn cfm-btn-sm cfm-edit-selectall"><i class="fa-solid fa-${allSel ? "square-minus" : "square-check"}"></i> ${allSel ? "全不选" : "全选"}</button><button class="cfm-btn cfm-btn-sm cfm-edit-range ${cfmChatlogRenameRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${cfmChatlogRenameRangeMode ? "(开)" : ""}</button><span class="cfm-edit-count">${cfmChatlogRenameSelected.size > 0 ? `已选 ${cfmChatlogRenameSelected.size} 项` : ""}</span><button class="cfm-btn cfm-btn-sm cfm-edit-cancel"><i class="fa-solid fa-xmark"></i> 取消</button></div>`,
     );
@@ -43611,11 +43640,13 @@ jQuery(async () => {
     );
 
     function moveCLToFolder(targetFolderId) {
-      if (!cfmMultiSelectMode || cfmMultiSelected.size === 0) {
-        cfmToastr.warning("请先进入多选模式并选择聊天记录");
+      const activeSelected = collectCurrentSelection();
+      if (!activeSelected || activeSelected.size === 0) {
+        cfmToastr.warning("请先选择聊天记录");
         return;
       }
-      Array.from(cfmMultiSelected).forEach((fn) => {
+      const selectedItems = Array.from(activeSelected);
+      selectedItems.forEach((fn) => {
         if (targetFolderId) chatGroups[fn] = targetFolderId;
         else delete chatGroups[fn];
       });
@@ -43624,10 +43655,11 @@ jQuery(async () => {
         ? folderTree[targetFolderId]?.displayName || targetFolderId
         : "未归类";
       cfmToastr.success(
-        cfmMultiSelected.size > 1
-          ? `已将 ${cfmMultiSelected.size} 个聊天移入「${fname}」`
+        selectedItems.length > 1
+          ? `已将 ${selectedItems.length} 个聊天移入「${fname}」`
           : `已将聊天移入「${fname}」`,
       );
+      clearAllExclusiveModes();
       clearMultiSelect();
       renderChatlogsView();
     }
@@ -43859,7 +43891,8 @@ jQuery(async () => {
         const isExpSel = cfmExportMode && cfmExportSelected.has(fn);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(fn);
         const isNoteSel = cfmChatlogNoteMode && cfmChatlogNoteSelected.has(fn);
-        const isRenameSel = cfmChatlogRenameMode && cfmChatlogRenameSelected.has(fn);
+        const isRenameSel =
+          cfmChatlogRenameMode && cfmChatlogRenameSelected.has(fn);
         const row = $(
           `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name">${escapeHtml(fn)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-pen"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
         );
@@ -43896,30 +43929,15 @@ jQuery(async () => {
           }
           openChatFile(avatar, fn);
         });
-        row.find(".cfm-chatlog-btn-note").on("click", (e) => {
+        row.find(".cfm-chatlog-btn-note").on("click", async (e) => {
           e.stopPropagation();
-          const cn = cfmChatNotes[fn] || "";
-          const nn = prompt("聊天备注", cn);
-          if (nn === null) return;
-          if (nn.trim()) cfmChatNotes[fn] = nn.trim();
-          else delete cfmChatNotes[fn];
-          saveChatNotes();
+          await executeChatlogNoteEdit([fn]);
           renderChatlogsView();
         });
         row.find(".cfm-chatlog-btn-rename").on("click", async (e) => {
           e.stopPropagation();
-          const nn = prompt("重命名聊天记录", fn);
-          if (!nn || !nn.trim() || nn.trim() === fn) return;
-          const ok = await renameChatFile(avatar, fn, nn.trim());
-          if (ok) {
-            if (chatGroups[fn]) {
-              chatGroups[nn.trim()] = chatGroups[fn];
-              delete chatGroups[fn];
-              getContext().saveSettingsDebounced();
-            }
-            cfmToastr.success(`已重命名为「${nn.trim()}」`);
-            renderChatlogsView();
-          } else cfmToastr.error("重命名失败");
+          await executeChatlogRename([fn]);
+          renderChatlogsView();
         });
         row.find(".cfm-chatlog-btn-delete").on("click", async (e) => {
           e.stopPropagation();
@@ -43935,16 +43953,17 @@ jQuery(async () => {
         });
         row.on("dragstart", (e) => {
           const sd = { type: "chatlog-item", chatFileName: fn };
+          const activeSelected = collectCurrentSelection();
+          const canDragMulti =
+            activeSelected && activeSelected.has(fn) && activeSelected.size > 1;
           pcDragStart(
             e,
-            cfmMultiSelectMode &&
-              cfmMultiSelected.has(fn) &&
-              cfmMultiSelected.size > 1
+            canDragMulti
               ? {
                   ...sd,
                   multiSelect: true,
-                  selectedIds: Array.from(cfmMultiSelected),
-                  count: cfmMultiSelected.size,
+                  selectedIds: Array.from(activeSelected),
+                  count: activeSelected.size,
                 }
               : sd,
           );
