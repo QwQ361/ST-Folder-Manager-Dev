@@ -12404,6 +12404,34 @@ jQuery(async () => {
           processed++;
           batchProgress.update(processed);
         }
+      } else if (currentResourceType === "chatlogs") {
+        // 删除聊天记录
+        const avatar = getChatlogTargetAvatar();
+        if (!avatar) {
+          throw new Error("未找到目标角色，无法删除聊天记录");
+        }
+        const chatGroups = getChatlogGroups(avatar);
+        for (const fn of selected) {
+          try {
+            // deleteChatFile 内部会处理 .jsonl 后缀
+            const ok = await deleteChatFile(avatar, fn);
+            if (ok) {
+              // 清理聊天记录分组
+              if (chatGroups && chatGroups[fn]) {
+                delete chatGroups[fn];
+              }
+              success++;
+            } else {
+              fail++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 删除聊天记录 ${fn} 失败`, e);
+            fail++;
+          }
+          processed++;
+          batchProgress.update(processed);
+        }
+        getContext().saveSettingsDebounced();
       } else {
         for (const name of selected) {
           try {
