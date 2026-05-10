@@ -4344,6 +4344,7 @@ jQuery(async () => {
       import: "#cfm-import-chatlog-btn",
       note: "#cfm-chatlog-note-btn",
       rename: "#cfm-chatlog-rename-btn",
+      export: "#cfm-export-chatlog-btn",
       delete: "#cfm-res-delete-chatlog-btn",
     },
     worldinfo: {
@@ -8522,6 +8523,7 @@ jQuery(async () => {
         .addClass("fa-file-export");
       $(".cfm-export-btn").attr("title", function () {
         if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
+        if ($(this).attr("id") === "cfm-export-chatlog-btn") return "导出聊天记录";
         if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
         if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
         if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
@@ -9519,6 +9521,7 @@ jQuery(async () => {
       .addClass("fa-file-export");
     $(".cfm-export-btn").attr("title", function () {
       if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
+      if ($(this).attr("id") === "cfm-export-chatlog-btn") return "导出聊天记录";
       if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
       if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
       if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
@@ -11229,6 +11232,8 @@ jQuery(async () => {
         await exportRegexScripts(selected);
       } else if (currentResourceType === "quickreply") {
         await exportQuickReplySets(selected);
+      } else if (currentResourceType === "chatlogs") {
+        await exportChatlogFiles(selected);
       } else {
         await exportWorldInfos(selected, headers);
       }
@@ -27231,6 +27236,80 @@ jQuery(async () => {
   }
 
   /**
+   * 批量导出聊天记录（导出模式使用）
+   * @param {string[]} chatFileNames - 聊天记录文件名列表
+   */
+  async function exportChatlogFiles(chatFileNames) {
+    const avatar = getChatlogTargetAvatar();
+    if (!avatar) {
+      cfmToastr.warning("请先选择一个角色");
+      return;
+    }
+    if (chatFileNames.length === 1) {
+      await exportChatFile(avatar, chatFileNames[0], "jsonl");
+    } else {
+      // 多个打包为 zip
+      try {
+        if (!window.JSZip) {
+          await import("../../../../lib/jszip.min.js");
+        }
+        const zip = new JSZip();
+        let success = 0;
+        let processed = 0;
+        const ctx = getContext();
+        const batchProgress = showBatchProgressOverlay(
+          "正在批量导出聊天记录",
+          chatFileNames.length,
+        );
+        for (const fn of chatFileNames) {
+          try {
+            const body = {
+              is_group: false,
+              avatar_url: avatar,
+              file: `${fn}.jsonl`,
+              exportfilename: `${fn}.jsonl`,
+              format: "jsonl",
+            };
+            const response = await fetch("/api/chats/export", {
+              method: "POST",
+              body: JSON.stringify(body),
+              headers: ctx.getRequestHeaders(),
+            });
+            if (response.ok) {
+              const data = await response.json();
+              zip.file(`${fn}.jsonl`, data.result);
+              success++;
+            }
+          } catch (e) {
+            console.warn(`[CFM] 导出聊天记录 ${fn} 失败`, e);
+          }
+          processed++;
+          batchProgress.update(processed);
+        }
+        if (success === 0) {
+          batchProgress.remove();
+          throw new Error("没有成功导出任何聊天记录");
+        }
+        const content = await zip.generateAsync({ type: "blob" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(content);
+        const charName = getCharNameByAvatar(avatar) || avatar;
+        a.download = `${charName}_聊天记录.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        const exportMsg = `已导出 ${success} 个聊天记录`;
+        batchProgress.done(exportMsg);
+        cfmToastr.success(exportMsg);
+      } catch (e) {
+        console.error("[CFM] 批量导出聊天记录失败:", e);
+        cfmToastr.error(`导出失败: ${e.message}`);
+      }
+    }
+  }
+
+  /**
    * 打开聊天记录（选中角色并切换到对应聊天）
    */
   async function openChatFile(avatar, chatFileName) {
@@ -29692,6 +29771,7 @@ jQuery(async () => {
                             <input type="file" id="cfm-import-chatlog-file" multiple accept=".json,.jsonl" style="display:none;">
                             <button class="cfm-edit-char-btn" id="cfm-chatlog-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-chatlog-rename-btn" title="重命名聊天记录"><i class="fa-solid fa-i-cursor"></i></button>
+                            <button class="cfm-export-btn" id="cfm-export-chatlog-btn" title="导出聊天记录"><i class="fa-solid fa-file-export"></i></button>
                             <button class="cfm-res-delete-btn" id="cfm-res-delete-chatlog-btn" title="删除聊天记录"><i class="fa-solid fa-trash-can"></i></button>
                             <button class="cfm-multisel-toggle cfm-multisel-toggle-chatlogs" title="多选模式"><i class="fa-solid fa-list-check"></i></button>
                         </div>
@@ -31905,6 +31985,29 @@ jQuery(async () => {
       } else {
         enterQrNoteMode();
       }
+    });
+
+    // 聊天记录导入按钮
+    popup.find("#cfm-import-chatlog-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const input = popup.find("#cfm-import-chatlog-file");
+      input.val("");
+      input[0]?.click();
+    });
+
+    popup.find("#cfm-import-chatlog-file").on("change", async function (e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      const avatar = getChatlogTargetAvatar();
+      if (!avatar) {
+        cfmToastr.warning("请先选择一个角色");
+        return;
+      }
+      await importChatFiles(avatar, files);
+      $(this).val("");
+      await invalidateChatCache(avatar);
+      renderChatlogsView();
     });
 
     popup.find("#cfm-chatlog-note-btn").on("click touchend", function (e) {
@@ -44047,7 +44150,7 @@ jQuery(async () => {
         const isRenameSel =
           cfmChatlogRenameMode && cfmChatlogRenameSelected.has(fn);
         const row = $(
-          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name" title="${escapeHtml(fn)}">${escapeHtml(chatFileMeta.displayName)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-i-cursor"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
+          `<div class="cfm-row cfm-chatlog-row ${isCur ? "cfm-chatlog-current" : ""}" data-chat-file="${escapeHtml(fn)}" data-avatar="${escapeHtml(avatar)}" draggable="true">${cfmChatlogNoteMode || cfmChatlogRenameMode ? `<div class="cfm-edit-checkbox ${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "cfm-edit-checked" : ""}"><i class="fa-${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "solid" : "regular"} fa-square${(cfmChatlogNoteMode && isNoteSel) || (cfmChatlogRenameMode && isRenameSel) ? "-check" : ""}"></i></div>` : cfmMultiSelectMode ? `<div class="cfm-multisel-checkbox ${isMSel ? "cfm-multisel-checked" : ""}"><i class="fa-${isMSel ? "solid" : "regular"} fa-square${isMSel ? "-check" : ""}"></i></div>` : ""}<div class="cfm-row-icon"><i class="fa-solid fa-comment${isCur ? "" : "-dots"}"></i></div><div class="cfm-row-main"><div class="cfm-row-name" title="${escapeHtml(fn)}">${escapeHtml(chatFileMeta.displayName)}${isCur ? ' <span class="cfm-chatlog-current-badge">当前</span>' : ""}</div>${note ? `<div class="cfm-chatlog-note" title="${escapeHtml(note)}"><i class="fa-solid fa-sticky-note"></i> ${escapeHtml(note)}</div>` : ""}<div class="cfm-row-meta">${msgCount != null ? `<span>${msgCount} 条消息</span>` : ""}${dateStr ? `<span>${dateStr}</span>` : ""}${chat.file_size ? `<span>${formatFileSize(chat.file_size)}</span>` : ""}</div></div><div class="cfm-chatlog-actions"><span class="cfm-chatlog-action-btn cfm-chatlog-btn-note" title="备注"><i class="fa-solid fa-pen-to-square"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-rename" title="重命名"><i class="fa-solid fa-i-cursor"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-export" title="导出"><i class="fa-solid fa-file-export"></i></span><span class="cfm-chatlog-action-btn cfm-chatlog-btn-delete" title="删除"><i class="fa-solid fa-trash"></i></span></div></div>`,
         );
         if (isDelSel) row.addClass("cfm-res-delete-row-selected");
         if (isExpSel) row.addClass("cfm-export-row-selected");
@@ -44091,6 +44194,10 @@ jQuery(async () => {
           e.stopPropagation();
           await executeChatlogRename([fn]);
           renderChatlogsView();
+        });
+        row.find(".cfm-chatlog-btn-export").on("click", async (e) => {
+          e.stopPropagation();
+          await exportChatFile(avatar, fn, "jsonl");
         });
         row.find(".cfm-chatlog-btn-delete").on("click", async (e) => {
           e.stopPropagation();
@@ -44187,18 +44294,6 @@ jQuery(async () => {
         }, 300),
       );
 
-    // 绑定导入按钮
-    $("#cfm-chatlogs-import-input")
-      .off("change.chatlogImport")
-      .on("change.chatlogImport", async function () {
-        const files = this.files;
-        if (!files || files.length === 0) return;
-        await importChatFiles(avatar, files);
-        $(this).val("");
-        await invalidateChatCache(avatar);
-        renderChatlogsView();
-        cfmToastr.success(`已导入 ${files.length} 个聊天记录`);
-      });
   }
 
   // ==================== 快速回复视图渲染（双栏 + 树形嵌套） ====================
