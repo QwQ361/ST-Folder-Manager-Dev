@@ -3820,6 +3820,7 @@ jQuery(async () => {
   let renameGroupOrCharacterChatFunc = null;
   let openCharacterChatFunc = null;
   let importCharacterChatFunc = null;
+  let doNewChatFunc = null;
   try {
     const scriptModule = await import("../../../../script.js");
     entitiesFilter = scriptModule.entitiesFilter;
@@ -3829,6 +3830,7 @@ jQuery(async () => {
     renameGroupOrCharacterChatFunc = scriptModule.renameGroupOrCharacterChat;
     openCharacterChatFunc = scriptModule.openCharacterChat;
     importCharacterChatFunc = scriptModule.importCharacterChat;
+    doNewChatFunc = scriptModule.doNewChat;
     console.log(
       "[CFM] 成功获取 entitiesFilter, printCharactersDebounced 和聊天记录管理 API",
     );
@@ -12411,15 +12413,23 @@ jQuery(async () => {
           throw new Error("未找到目标角色，无法删除聊天记录");
         }
         const chatGroups = getChatlogGroups(avatar);
+        // 删除前记录当前聊天信息，用于判断是否删除了当前聊天
+        const ctxBeforeBatchDel = getContext();
+        const curChatIdBeforeBatchDel = ctxBeforeBatchDel.getCurrentChatId ? ctxBeforeBatchDel.getCurrentChatId() : null;
+        const currentCharAvatarBeforeBatchDel = getCurrentCharAvatar();
+        let deletedCurrentChat = false;
         for (const fn of selected) {
           try {
             // deleteChatFile 内部会处理 .jsonl 后缀
+            const fnBase = fn.replace(/\.jsonl$/i, "");
+            const isCurrentChatFile = avatar === currentCharAvatarBeforeBatchDel && fnBase === curChatIdBeforeBatchDel;
             const ok = await deleteChatFile(avatar, fn);
             if (ok) {
               // 清理聊天记录分组
               if (chatGroups && chatGroups[fn]) {
                 delete chatGroups[fn];
               }
+              if (isCurrentChatFile) deletedCurrentChat = true;
               success++;
             } else {
               fail++;
@@ -12432,6 +12442,15 @@ jQuery(async () => {
           batchProgress.update(processed);
         }
         getContext().saveSettingsDebounced();
+        // 如果删除了当前聊天，自动创建新聊天
+        if (deletedCurrentChat && doNewChatFunc) {
+          try {
+            await doNewChatFunc();
+            cfmToastr.info("已自动创建新聊天");
+          } catch (err) {
+            console.warn("[CFM] 批量删除后自动创建新聊天失败:", err);
+          }
+        }
       } else {
         for (const name of selected) {
           try {
@@ -44077,11 +44096,27 @@ jQuery(async () => {
           e.stopPropagation();
           if (!confirm(`确定要删除聊天记录「${fn}」吗？此操作不可恢复。`))
             return;
+          // 删除前先判断是否删除的是当前聊天
+          const ctxBeforeDel = getContext();
+          const curChatIdBeforeDel = ctxBeforeDel.getCurrentChatId ? ctxBeforeDel.getCurrentChatId() : null;
+          const currentCharAvatarBeforeDel = getCurrentCharAvatar();
+          const fnBase = fn.replace(/\.jsonl$/i, "");
+          const isDeletingCurrentChat = avatar === currentCharAvatarBeforeDel && fnBase === curChatIdBeforeDel;
+
           const ok = await deleteChatFile(avatar, fn);
           if (ok) {
             delete chatGroups[fn];
             getContext().saveSettingsDebounced();
             cfmToastr.success(`已删除「${fn}」`);
+            // 如果删除的是当前聊天，自动创建新聊天
+            if (isDeletingCurrentChat && doNewChatFunc) {
+              try {
+                await doNewChatFunc();
+                cfmToastr.info("已自动创建新聊天");
+              } catch (err) {
+                console.warn("[CFM] 自动创建新聊天失败:", err);
+              }
+            }
             renderChatlogsView();
           } else cfmToastr.error("删除失败");
         });
