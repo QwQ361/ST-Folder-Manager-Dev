@@ -43581,12 +43581,13 @@ jQuery(async () => {
   // ==================== 聊天记录视图渲染（双栏 + 树形嵌套） ====================
 
   function getChatlogTargetAvatar() {
+    if (cfmChatlogTargetAvatar) return cfmChatlogTargetAvatar;
     const currentAvatar = getCurrentCharAvatar();
     if (currentAvatar) {
       cfmChatlogTargetAvatar = currentAvatar;
       return currentAvatar;
     }
-    return cfmChatlogTargetAvatar || null;
+    return null;
   }
   function getChatlogFolderTree(avatar) {
     if (!avatar) return {};
