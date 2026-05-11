@@ -7146,7 +7146,11 @@ jQuery(async () => {
         ".cfm-qr-editor-popup",
         ".cfm-entry-transfer-dialog",
         ".cfm-regex-transfer-dialog-popup",
-      ].join(", ");
+        ".cfm-sort-dialog",
+        ".cfm-dup-dialog",
+        ".cfm-fullscreen-confirm-dialog",
+        ".cfm-batch-progress-box",
+      ].map(s => `body ${s}`).join(", ");
       blurCSS = `\n${blurSelector} {\n  backdrop-filter: ${blurVal} !important;\n  -webkit-backdrop-filter: ${blurVal} !important;\n}`;
     }
 
