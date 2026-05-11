@@ -528,7 +528,7 @@
   margin-bottom: 6px;
   font-weight: 600;
 }
-.cfm-config-section input[type="checkbox"],
+.cfm-config-section input[type="checkbox"]:not(.cfm-layout-toggle input),
 .cfm-config-section input[type="radio"] {
   appearance: auto !important;
   -webkit-appearance: auto !important;
@@ -541,6 +541,20 @@
   margin: 0;
   flex: 0 0 auto;
   accent-color: #89b4fa;
+  cursor: pointer;
+}
+/* 布局开关内的 checkbox 需要隐藏，只显示滑块样式 */
+.cfm-config-section .cfm-layout-toggle input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  opacity: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  margin: 0;
   cursor: pointer;
 }
 .cfm-config-tab-shell {

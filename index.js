@@ -36688,9 +36688,6 @@ jQuery(async () => {
         const menuChecked =
           t.menu === true ? "cfm-layout-menu-check-checked" : "";
         return `<div class="cfm-layout-item" data-id="${t.id}">
-          <button type="button" class="cfm-layout-menu-check ${menuChecked} ${tabMenuCfg.enabled ? "" : "cfm-layout-menu-check-hidden"}" data-tab-menu-toggle="${t.id}" title="收纳到标签页菜单" aria-pressed="${t.menu === true ? "true" : "false"}">
-            <i class="fa-solid fa-check"></i>
-          </button>
           <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
           <span class="cfm-layout-label">${meta.label}</span>
@@ -36707,24 +36704,10 @@ jQuery(async () => {
         <div class="cfm-layout-header-row"><label>自定义布局</label><button class="cfm-layout-reset-btn" title="恢复默认布局"><i class="fa-solid fa-rotate-left"></i> 恢复默认</button></div>
         <div class="cfm-layout-hint">拖拽或使用箭头调整标签页顺序，开关控制显示/隐藏</div>
         <div class="cfm-layout-tabs-title">标签页</div>
-        <div class="cfm-layout-menu-switch">
-          <label class="cfm-layout-menu-switch-label">
-            <input type="checkbox" id="cfm-layout-tab-menu-enabled" ${tabMenuCfg.enabled ? "checked" : ""}>
-            <span>标签页收纳</span>
-          </label>
-          <span class="cfm-layout-menu-switch-hint">开启后，勾选前方方块的标签页会进入顶部标签菜单。</span>
-        </div>
         <div class="cfm-layout-tabs-list">
           ${tabItemsHtml}
         </div>
         <div class="cfm-layout-actions-title">子功能 <span class="cfm-layout-actions-tab-hint">（点击上方标签页名称切换）</span></div>
-        <div class="cfm-layout-menu-switch">
-          <label class="cfm-layout-menu-switch-label">
-            <input type="checkbox" id="cfm-layout-menu-enabled">
-            <span>按钮收纳</span>
-          </label>
-          <span class="cfm-layout-menu-switch-hint">开启后，勾选“收纳”的按钮会进入菜单，菜单按钮默认固定在最左边。</span>
-        </div>
         <div class="cfm-layout-actions-list"></div>
       </div>
     `);
@@ -36882,9 +36865,6 @@ jQuery(async () => {
         const menuChecked =
           a.menu === true ? "cfm-layout-menu-check-checked" : "";
         actionsList.append(`<div class="cfm-layout-item cfm-layout-action-item" data-id="${a.id}">
-          <button type="button" class="cfm-layout-menu-check ${menuChecked} ${menuCfg.enabled ? "" : "cfm-layout-menu-check-hidden"}" data-action-menu-toggle="${a.id}" title="收纳到按钮菜单" aria-pressed="${a.menu === true ? "true" : "false"}">
-            <i class="fa-solid fa-check"></i>
-          </button>
           <span class="cfm-layout-drag"><i class="fa-solid fa-grip-vertical"></i></span>
           <span class="cfm-layout-icon"><i class="fa-solid ${meta.icon}"></i></span>
           <span class="cfm-layout-label">${meta.label}</span>
