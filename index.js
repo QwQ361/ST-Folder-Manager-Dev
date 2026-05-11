@@ -21373,7 +21373,31 @@ jQuery(async () => {
       const btn = document.getElementById(btnId);
       if (btn) {
         const isSaveButton = btnId === saveButtonId;
+        // 移动端修复：按下保存/关闭按钮的瞬间，原生弹窗即将隐藏。
+        // 此时 touchend 的 target 可能已经落到弹窗底下的 drawer-toggle 元素，
+        // 触发 cfmMobileAutoClose 的全局处理器将主面板关闭。
+        // 通过 pointerdown/touchstart 提前设置 _cfmSuppressAutoClose，
+        // 保证后续触摸 / 点击事件不会被错误地识别为“关闭主面板”。
+        const suppressAutoCloseHandler = () => {
+          try {
+            _cfmSuppressAutoClose = true;
+          } catch (_) { /* _cfmSuppressAutoClose 未声明时静默跳过 */ }
+          // 在保存完成 + 恢复预设选择之后再释放抑制标志，保留足够长的缓冲窗口。
+          const releaseDelay = isSaveButton ? 1500 : 800;
+          window.setTimeout(() => {
+            try {
+              _cfmSuppressAutoClose = false;
+            } catch (_) { /* 同上 */ }
+          }, releaseDelay);
+        };
+        btn.addEventListener("pointerdown", suppressAutoCloseHandler, { passive: true });
+        btn.addEventListener("touchstart", suppressAutoCloseHandler, { passive: true });
+
         btn.addEventListener("click", () => {
+          // click 时也再次确保抑制标志已设置（某些浏览器可能未触发 pointerdown）
+          try {
+            _cfmSuppressAutoClose = true;
+          } catch (_) { /* 同上 */ }
           // 对于保存按钮，需要等原生 handleSavePrompt 完成，
           // 再把当前运行时设置静默写回到当前选中的预设文件，
           // 最后才恢复原来的预设选择。
@@ -21391,6 +21415,10 @@ jQuery(async () => {
               }
             }
             restorePresetSelectionAfterEdit();
+            // 额外再清一次，确保没有泄漏抑制标志
+            try {
+              _cfmSuppressAutoClose = false;
+            } catch (_) { /* 同上 */ }
           }, delay);
         });
       }
