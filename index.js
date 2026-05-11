@@ -21411,8 +21411,28 @@ jQuery(async () => {
       if (currentValue !== valueToRestore) {
         beginSuppressPresetRegexToast();
         try {
+          // 移动端修复：不触发 change 事件以避免 onSettingsPresetChange() 导致面板关闭。
+          // 仅静默更新 select 值和内部状态。
           pm.select.val(valueToRestore);
-          pm.select.trigger("change");
+
+          // 手动同步 oai_settings.preset_settings_openai 内部状态
+          const selectedText = pm.select.find(':selected').text();
+          if (selectedText) {
+            try {
+              const { chatCompletionSettings } = getContext();
+              if (chatCompletionSettings) {
+                chatCompletionSettings.preset_settings_openai = selectedText;
+              }
+            } catch (_e) { /* 静默失败 */ }
+          }
+
+          // 静默保存设置，不触发 UI 级联更新
+          try {
+            const { saveSettingsDebounced } = getContext();
+            if (typeof saveSettingsDebounced === 'function') {
+              saveSettingsDebounced();
+            }
+          } catch (_) { /* 静默失败 */ }
         } finally {
           window.setTimeout(() => endSuppressPresetRegexToast(), 300);
         }
