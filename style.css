@@ -3719,11 +3719,30 @@ input.cfm-rv-search {
 .cfm-row.cfm-row-char-hidden .cfm-row-icon img {
   filter: grayscale(0.5);
 }
-/* 工具栏：显示隐藏角色卡总开关激活态 */
-#cfm-toggle-hidden-char-btn.cfm-show-hidden-active {
+/* 工具栏：显示隐藏角色卡总开关按钮（与导入按钮风格一致，透明底） */
+.cfm-show-hidden-btn {
+  background: none !important;
+  border: none !important;
+  color: var(--SmartThemeBodyColor, #cdd6f4) !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  padding: 2px 6px !important;
+  border-radius: 3px !important;
+  opacity: 0.6 !important;
+  transition:
+    opacity 0.15s,
+    background-color 0.15s !important;
+  flex-shrink: 0;
+}
+.cfm-show-hidden-btn:hover {
+  opacity: 1 !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f9e2af !important;
+}
+.cfm-show-hidden-btn.cfm-show-hidden-active {
+  opacity: 1 !important;
   color: #f9e2af !important;
   background-color: rgba(249, 226, 175, 0.15) !important;
-  border-color: rgba(249, 226, 175, 0.4) !important;
 }
 .cfm-row-rename-btn {
   display: flex;
