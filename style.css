@@ -5045,6 +5045,99 @@ option.cfm-nf-hidden {
   }
 }
 
+/* ========== 同名 User 合并叠堆样式 ========== */
+.cfm-persona-stack-row {
+  cursor: pointer;
+}
+.cfm-persona-stack-row .cfm-row-icon.cfm-persona-stack {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+.cfm-persona-stack-img {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1.6px solid var(--SmartThemeBlurTintColor, #1e1e2e);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  background: var(--SmartThemeBlurTintColor, #1e1e2e);
+}
+.cfm-persona-stack-img-0 {
+  top: 0;
+  left: 0;
+  z-index: 3;
+}
+.cfm-persona-stack-img-1 {
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  opacity: 0.85;
+}
+.cfm-persona-stack-img-2 {
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  opacity: 0.65;
+}
+.cfm-persona-stack-count {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  z-index: 4;
+  background: rgba(137, 180, 250, 0.95);
+  color: #1e1e2e;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.cfm-persona-stack-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  line-height: 1.4;
+  background: rgba(137, 180, 250, 0.18);
+  color: #89b4fa;
+}
+.cfm-persona-stack-sublist {
+  margin-left: 18px;
+  border-left: 2px solid rgba(137, 180, 250, 0.25);
+  padding-left: 4px;
+}
+.cfm-persona-stack-sublist .cfm-row {
+  background: rgba(137, 180, 250, 0.04);
+}
+@media (max-width: 768px) {
+  .cfm-persona-stack-row .cfm-row-icon.cfm-persona-stack {
+    width: 50px;
+    height: 50px;
+  }
+  .cfm-persona-stack-img {
+    width: 40px;
+    height: 40px;
+  }
+  .cfm-persona-stack-img-1 {
+    top: 5px;
+    left: 5px;
+  }
+  .cfm-persona-stack-img-2 {
+    top: 10px;
+    left: 10px;
+  }
+}
+
 /* ==================== 自定义布局设置 ==================== */
 .cfm-custom-layout-section {
   border: 1px solid var(--SmartThemeBorderColor, #45475a);

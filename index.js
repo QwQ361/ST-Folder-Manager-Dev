@@ -36735,6 +36735,36 @@ jQuery(async () => {
     body.append(section);
   }
 
+  // ==================== 共享：合并同名 User 开关 ====================
+  function renderMergeSameNameUserSection(body) {
+    const current = !!extension_settings[extensionName].mergeSameNameUser;
+    const section = $(`
+      <div class="cfm-config-section">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="cfm-merge-same-name-user" ${current ? "checked" : ""}>
+          <span>是否合并同名user</span>
+        </label>
+        <div class="cfm-icon-config-hint">开启后，User页中同名的User会被合并为一个“叠堆”条目（叠加显示头像），点击展开可查看并切换其中的具体User。</div>
+      </div>
+    `);
+    section.find("#cfm-merge-same-name-user").on("change", function () {
+      const checked = $(this).prop("checked");
+      extension_settings[extensionName].mergeSameNameUser = checked;
+      getContext().saveSettingsDebounced();
+      cfmToastr.success(checked ? "已开启合并同名User" : "已关闭合并同名User");
+      // 立即刷新 User 视图（如果当前已打开）
+      if (
+        typeof renderPersonasView === "function" &&
+        $("#cfm-overlay").length > 0
+      ) {
+        try {
+          renderPersonasView();
+        } catch (e) {}
+      }
+    });
+    body.append(section);
+  }
+
   // ==================== 共享：移动端全屏模式设置 ====================
   function renderMobileFullscreenSection(body) {
     const currentMode =
@@ -37401,6 +37431,8 @@ jQuery(async () => {
     renderMobileFullscreenSection(settingsBody);
     // 0.67 界面语言切换
     renderLanguageSwitchSection(settingsBody);
+    // 0.69 合并同名 User（布局页最上方）
+    renderMergeSameNameUserSection(layoutBody);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(layoutBody);
 
@@ -37775,6 +37807,8 @@ jQuery(async () => {
     renderMobileFullscreenSection(settingsBody);
     // 0.67 界面语言切换
     renderLanguageSwitchSection(settingsBody);
+    // 0.69 合并同名 User（布局页最上方）
+    renderMergeSameNameUserSection(layoutBody);
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(layoutBody);
 
@@ -38253,6 +38287,7 @@ jQuery(async () => {
     renderEntryTransferPostActionSection(settingsBody);
     renderMobileTopbarAvoidSection(settingsBody);
     renderLanguageSwitchSection(settingsBody);
+    renderMergeSameNameUserSection(layoutBody);
     renderCustomLayoutSection(layoutBody);
 
     // 1. 创建新文件夹
@@ -49804,8 +49839,106 @@ jQuery(async () => {
         }));
         newRightList.append(row);
       }
-      // User行（带头像 + 星标 + 多选支持 + 备注）
-      for (const p of displayItems) {
+
+      // ===== 合并同名 User：将同名的合并为“叠堆”分组 =====
+      const mergeEnabled =
+        !!extension_settings[extensionName].mergeSameNameUser &&
+        !cfmMultiSelectMode &&
+        !cfmExportMode &&
+        !cfmResDeleteMode &&
+        !cfmPersonaNoteMode;
+      if (!extension_settings[extensionName].personaStackExpanded) {
+        extension_settings[extensionName].personaStackExpanded = {};
+      }
+      const stackExpandedMap =
+        extension_settings[extensionName].personaStackExpanded;
+      const renderQueue = [];
+      if (mergeEnabled) {
+        const nameMap = new Map();
+        for (const p of displayItems) {
+          const key = String(p.name || "").trim().toLowerCase();
+          if (!key) {
+            renderQueue.push({ kind: "single", persona: p });
+            continue;
+          }
+          if (!nameMap.has(key)) nameMap.set(key, []);
+          nameMap.get(key).push(p);
+        }
+        // 保留 displayItems 原顺序：用首次出现的位置作为 anchor
+        const visited = new Set();
+        for (const p of displayItems) {
+          const key = String(p.name || "").trim().toLowerCase();
+          if (!key) continue;
+          if (visited.has(key)) continue;
+          visited.add(key);
+          const group = nameMap.get(key);
+          if (group.length === 1) {
+            renderQueue.push({ kind: "single", persona: group[0] });
+          } else {
+            renderQueue.push({ kind: "stack", name: p.name, group });
+          }
+        }
+      } else {
+        for (const p of displayItems) {
+          renderQueue.push({ kind: "single", persona: p });
+        }
+      }
+
+      // 渲染叠堆行的辅助函数
+      function renderPersonaStackRow(stackName, group) {
+        const stackKey = String(stackName || "").trim().toLowerCase();
+        const isExpanded = !!stackExpandedMap[stackKey];
+        const activeInGroup = group.some(
+          (g) => g.avatarId === currentUserAvatar,
+        );
+        const favInGroup = group.some((g) =>
+          isResFavorite("personas", g.avatarId),
+        );
+        const maxStack = Math.min(group.length, 3);
+        let stackImgsHtml = "";
+        for (let i = maxStack - 1; i >= 0; i--) {
+          const url = getThumbnailUrl("persona", group[i].avatarId);
+          stackImgsHtml += `<img class="cfm-persona-stack-img cfm-persona-stack-img-${i}" src="${url}" alt="avatar" onerror="this.src='/img/ai4.png'">`;
+        }
+        const stackRow = $(`
+          <div class="cfm-row cfm-row-char cfm-persona-stack-row ${activeInGroup ? "cfm-rv-item-active" : ""} ${isExpanded ? "cfm-persona-stack-expanded" : ""}" data-stack-name="${escapeHtml(stackName)}">
+            <div class="cfm-row-icon cfm-persona-stack">
+              ${stackImgsHtml}
+              <span class="cfm-persona-stack-count">${group.length}</span>
+            </div>
+            <div class="cfm-row-name"><span class="cfm-char-name-inline cfm-persona-name-inline"><div class="cfm-char-detail-toggle cfm-persona-stack-toggle" title="展开/折叠同名User"><i class="fa-solid fa-caret-${isExpanded ? "down" : "right"}"></i></div><span class="cfm-persona-name-text">${escapeHtml(stackName)}</span><span class="cfm-persona-stack-badge" title="共 ${group.length} 个同名User">×${group.length}</span></span></div>
+            <div class="cfm-row-star ${favInGroup ? "cfm-star-active" : ""}" title="组内含收藏"><i class="fa-${favInGroup ? "solid" : "regular"} fa-star"></i></div>
+          </div>
+        `);
+        stackRow.on("click", function (e) {
+          if ($(e.target).closest(".cfm-row-star").length) return;
+          stackExpandedMap[stackKey] = !stackExpandedMap[stackKey];
+          renderPersonasView();
+        });
+        newRightList.append(stackRow);
+        if (isExpanded) {
+          const sublist = $(
+            '<div class="cfm-persona-stack-sublist"></div>',
+          );
+          for (const sp of group) {
+            renderSinglePersonaRow(sp, sublist);
+          }
+          newRightList.append(sublist);
+        }
+      }
+
+      // 主循环：根据 renderQueue 渲染
+      for (const item of renderQueue) {
+        if (item.kind === "stack") {
+          renderPersonaStackRow(item.name, item.group);
+          continue;
+        }
+        renderSinglePersonaRow(item.persona, newRightList);
+      }
+
+      // 抽取的单条 User 行渲染函数（沿用原循环体逻辑）
+      function renderSinglePersonaRow(p, containerToUse) {
+        containerToUse = containerToUse || newRightList;
         const isActive = p.avatarId === currentUserAvatar;
         const bindStates = getPersonaBindStates(p);
         const isDefaultPersona = !!bindStates.default;
@@ -49958,7 +50091,7 @@ jQuery(async () => {
           };
           return getMultiDragData(singleData);
         });
-        newRightList.append(row);
+        containerToUse.append(row);
         if (personaItemExpandedIds.has(p.avatarId)) {
           renderPersonaDetailSubList(row, p);
         }
