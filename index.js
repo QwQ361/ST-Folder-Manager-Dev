@@ -7181,7 +7181,9 @@ jQuery(async () => {
         ".cfm-dup-dialog",
         ".cfm-fullscreen-confirm-dialog",
         ".cfm-batch-progress-box",
-      ].map(s => `body ${s}`).join(", ");
+      ]
+        .map((s) => `body ${s}`)
+        .join(", ");
       blurCSS = `\n${blurSelector} {\n  backdrop-filter: ${blurVal} !important;\n  -webkit-backdrop-filter: ${blurVal} !important;\n}`;
     }
 
@@ -8562,7 +8564,8 @@ jQuery(async () => {
         .addClass("fa-file-export");
       $(".cfm-export-btn").attr("title", function () {
         if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
-        if ($(this).attr("id") === "cfm-export-chatlog-btn") return "导出聊天记录";
+        if ($(this).attr("id") === "cfm-export-chatlog-btn")
+          return "导出聊天记录";
         if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
         if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
         if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
@@ -9560,7 +9563,8 @@ jQuery(async () => {
       .addClass("fa-file-export");
     $(".cfm-export-btn").attr("title", function () {
       if ($(this).attr("id") === "cfm-export-char-btn") return "导出角色卡";
-      if ($(this).attr("id") === "cfm-export-chatlog-btn") return "导出聊天记录";
+      if ($(this).attr("id") === "cfm-export-chatlog-btn")
+        return "导出聊天记录";
       if ($(this).attr("id") === "cfm-export-preset-btn") return "导出预设";
       if ($(this).attr("id") === "cfm-export-theme-btn") return "导出主题";
       if ($(this).attr("id") === "cfm-export-bg-btn") return "导出背景";
@@ -10686,7 +10690,9 @@ jQuery(async () => {
     overlay.find("#cfm-qr-view").hide();
 
     overlay.find("#cfm-global-search-bar").hide();
-    overlay.find("#cfm-chatlogs-search-bar").toggle(normalizedTab === "chatlogs");
+    overlay
+      .find("#cfm-chatlogs-search-bar")
+      .toggle(normalizedTab === "chatlogs");
     overlay.find("#cfm-preset-search-bar").toggle(normalizedTab === "presets");
     overlay
       .find("#cfm-worldinfo-search-bar")
@@ -12460,14 +12466,18 @@ jQuery(async () => {
         const chatGroups = getChatlogGroups(avatar);
         // 删除前记录当前聊天信息，用于判断是否删除了当前聊天
         const ctxBeforeBatchDel = getContext();
-        const curChatIdBeforeBatchDel = ctxBeforeBatchDel.getCurrentChatId ? ctxBeforeBatchDel.getCurrentChatId() : null;
+        const curChatIdBeforeBatchDel = ctxBeforeBatchDel.getCurrentChatId
+          ? ctxBeforeBatchDel.getCurrentChatId()
+          : null;
         const currentCharAvatarBeforeBatchDel = getCurrentCharAvatar();
         let deletedCurrentChat = false;
         for (const fn of selected) {
           try {
             // deleteChatFile 内部会处理 .jsonl 后缀
             const fnBase = fn.replace(/\.jsonl$/i, "");
-            const isCurrentChatFile = avatar === currentCharAvatarBeforeBatchDel && fnBase === curChatIdBeforeBatchDel;
+            const isCurrentChatFile =
+              avatar === currentCharAvatarBeforeBatchDel &&
+              fnBase === curChatIdBeforeBatchDel;
             const ok = await deleteChatFile(avatar, fn);
             if (ok) {
               // 清理聊天记录分组
@@ -21412,23 +21422,33 @@ jQuery(async () => {
         const suppressAutoCloseHandler = () => {
           try {
             _cfmSuppressAutoClose = true;
-          } catch (_) { /* _cfmSuppressAutoClose 未声明时静默跳过 */ }
+          } catch (_) {
+            /* _cfmSuppressAutoClose 未声明时静默跳过 */
+          }
           // 在保存完成 + 恢复预设选择之后再释放抑制标志，保留足够长的缓冲窗口。
           const releaseDelay = isSaveButton ? 1500 : 800;
           window.setTimeout(() => {
             try {
               _cfmSuppressAutoClose = false;
-            } catch (_) { /* 同上 */ }
+            } catch (_) {
+              /* 同上 */
+            }
           }, releaseDelay);
         };
-        btn.addEventListener("pointerdown", suppressAutoCloseHandler, { passive: true });
-        btn.addEventListener("touchstart", suppressAutoCloseHandler, { passive: true });
+        btn.addEventListener("pointerdown", suppressAutoCloseHandler, {
+          passive: true,
+        });
+        btn.addEventListener("touchstart", suppressAutoCloseHandler, {
+          passive: true,
+        });
 
         btn.addEventListener("click", () => {
           // click 时也再次确保抑制标志已设置（某些浏览器可能未触发 pointerdown）
           try {
             _cfmSuppressAutoClose = true;
-          } catch (_) { /* 同上 */ }
+          } catch (_) {
+            /* 同上 */
+          }
           // 对于保存按钮，需要等原生 handleSavePrompt 完成，
           // 再把当前运行时设置静默写回到当前选中的预设文件，
           // 最后才恢复原来的预设选择。
@@ -21451,7 +21471,9 @@ jQuery(async () => {
             window.setTimeout(() => {
               try {
                 _cfmSuppressAutoClose = false;
-              } catch (_) { /* 同上 */ }
+              } catch (_) {
+                /* 同上 */
+              }
             }, 900);
           }, delay);
         });
@@ -27232,7 +27254,10 @@ jQuery(async () => {
           await deleteCharacterChatByNameFunc(String(charIdx), fileNameNoExt);
           deleted = true;
         } catch (funcErr) {
-          console.warn("[CFM] deleteCharacterChatByName 抛出异常，回退到直接 API 调用:", funcErr);
+          console.warn(
+            "[CFM] deleteCharacterChatByName 抛出异常，回退到直接 API 调用:",
+            funcErr,
+          );
           // 回退到直接 API 调用
           const ctx = getContext();
           const response = await fetch("/api/chats/delete", {
@@ -31681,7 +31706,9 @@ jQuery(async () => {
         );
       $btn.attr(
         "title",
-        cfmShowHiddenChars ? "已显示隐藏角色卡（点击恢复隐藏）" : "显示隐藏的角色卡",
+        cfmShowHiddenChars
+          ? "已显示隐藏角色卡（点击恢复隐藏）"
+          : "显示隐藏的角色卡",
       );
       renderLeftTree();
       renderRightPane();
@@ -33160,6 +33187,7 @@ jQuery(async () => {
     renderLeftTree();
     // 触发初始tab对应视图的渲染
     if (initialTab === "chars") renderRightPane();
+    else if (initialTab === "chatlogs") renderChatlogsView();
     else if (initialTab === "presets") renderPresetsView();
     else if (initialTab === "worldinfo") renderWorldInfoView();
     else if (initialTab === "themes") renderThemesView();
@@ -35804,7 +35832,9 @@ jQuery(async () => {
     // 单个眼睛按钮点击事件：切换隐藏状态
     bindTouchSafeTap(row.find(".cfm-row-hide-btn"), () => {
       const nowHidden = toggleCharHidden(char.avatar);
-      cfmToastr.success(nowHidden ? `已隐藏「${char.name}」` : `已取消隐藏「${char.name}」`);
+      cfmToastr.success(
+        nowHidden ? `已隐藏「${char.name}」` : `已取消隐藏「${char.name}」`,
+      );
       // 重新渲染（如果总开关关闭则该行会消失）
       renderRightPane();
     });
@@ -44193,7 +44223,10 @@ jQuery(async () => {
           const dn = (folderTree[fid].displayName || fid).toLowerCase();
           return dn.includes(searchTerm);
         });
-        childFolders = (searchScope === "all" ? matchedFolderIds : childFolders.filter((fid) => matchedFolderIds.includes(fid)));
+        childFolders =
+          searchScope === "all"
+            ? matchedFolderIds
+            : childFolders.filter((fid) => matchedFolderIds.includes(fid));
         displayChats = [];
       } else {
         // 搜索聊天记录
@@ -44206,9 +44239,10 @@ jQuery(async () => {
         });
         childFolders = [];
       }
-      displayTitle = searchScope === "all"
-        ? `全部 (搜索: ${searchTerm})`
-        : `${displayTitle} (搜索: ${searchTerm})`;
+      displayTitle =
+        searchScope === "all"
+          ? `全部 (搜索: ${searchTerm})`
+          : `${displayTitle} (搜索: ${searchTerm})`;
     }
 
     const totalItems = childFolders.length + displayChats.length;
@@ -44270,7 +44304,10 @@ jQuery(async () => {
         const note = cfmChatNotes[fn.replace(/\.jsonl$/i, "")] || "";
         // 匹配当前聊天：统一去掉 .jsonl 后缀再比较，且只在当前角色卡下高亮
         const fnNoExt = fn.replace(/\.jsonl$/i, "");
-        const isCur = isCurrentChar && curChatId && (fn === curChatId || fnNoExt === curChatId);
+        const isCur =
+          isCurrentChar &&
+          curChatId &&
+          (fn === curChatId || fnNoExt === curChatId);
         const isDelSel = cfmResDeleteMode && cfmResDeleteSelected.has(fn);
         const isExpSel = cfmExportMode && cfmExportSelected.has(fn);
         const isMSel = cfmMultiSelectMode && cfmMultiSelected.has(fn);
@@ -44416,7 +44453,6 @@ jQuery(async () => {
         );
         renderChatlogsView();
       });
-
   }
 
   // ==================== 快速回复视图渲染（双栏 + 树形嵌套） ====================
