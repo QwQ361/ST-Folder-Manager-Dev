@@ -30418,6 +30418,7 @@ jQuery(async () => {
       }
       // 切换视图
       popup.find("#cfm-chars-view").hide();
+      popup.find("#cfm-chatlogs-view").toggle(initialTab === "chatlogs");
       popup.find("#cfm-presets-view").toggle(initialTab === "presets");
       popup.find("#cfm-worldinfo-view").toggle(initialTab === "worldinfo");
       popup.find("#cfm-themes-view").toggle(initialTab === "themes");
