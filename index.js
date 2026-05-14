@@ -3902,6 +3902,8 @@ jQuery(async () => {
       extension_settings[extensionName].folders = {};
     if (!extension_settings[extensionName].favorites)
       extension_settings[extensionName].favorites = [];
+    if (!Array.isArray(extension_settings[extensionName].hiddenChars))
+      extension_settings[extensionName].hiddenChars = [];
     // 迁移旧 localStorage 数据
     try {
       const oldRaw = localStorage.getItem(STORAGE_KEY);
@@ -4699,6 +4701,35 @@ jQuery(async () => {
   function getFavoriteCharacters() {
     const favs = getFavorites();
     return getCharacters().filter((c) => favs.includes(c.avatar));
+  }
+
+  // ==================== 隐藏角色卡管理 ====================
+  function getHiddenChars() {
+    return extension_settings[extensionName].hiddenChars || [];
+  }
+  function isCharHidden(avatar) {
+    return getHiddenChars().includes(avatar);
+  }
+  function toggleCharHidden(avatar) {
+    const arr = getHiddenChars();
+    const idx = arr.indexOf(avatar);
+    if (idx >= 0) {
+      arr.splice(idx, 1);
+    } else {
+      arr.push(avatar);
+    }
+    extension_settings[extensionName].hiddenChars = arr;
+    getContext().saveSettingsDebounced();
+    return idx < 0;
+  }
+  // 总开关：是否显示隐藏的角色卡（默认 false）
+  let cfmShowHiddenChars = false;
+  // 过滤掉隐藏角色卡（当总开关关闭时）
+  function filterHiddenChars(chars) {
+    if (cfmShowHiddenChars) return chars;
+    const hidden = getHiddenChars();
+    if (hidden.length === 0) return chars;
+    return chars.filter((c) => !hidden.includes(c.avatar));
   }
 
   // ==================== 标签自动同步 ====================
@@ -29787,6 +29818,7 @@ jQuery(async () => {
                         <div class="cfm-right-header">
                             <span class="cfm-rh-path" id="cfm-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-rh-count"></span>
+                            <button class="cfm-show-hidden-btn" id="cfm-show-hidden-char-btn" title="显示隐藏的角色卡"><i class="fa-regular fa-eye-slash"></i></button>
                             <button class="cfm-import-btn" id="cfm-import-char-btn" title="导入角色卡"><i class="fa-solid fa-file-import"></i></button>
                             <input type="file" id="cfm-import-char-file" multiple accept=".json,.png,.yaml,.yml,.charx,.byaf" style="display:none;">
                             <button class="cfm-chat-mode-btn" id="cfm-chat-mode-btn" title="显示聊天记录"><i class="fa-solid fa-comments"></i></button>
@@ -31632,6 +31664,27 @@ jQuery(async () => {
       e.preventDefault();
       e.stopPropagation();
       toggleCharRegexMode();
+    });
+
+    // ==================== 显示/隐藏 隐藏角色卡 总开关 ====================
+    popup.find("#cfm-show-hidden-char-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      cfmShowHiddenChars = !cfmShowHiddenChars;
+      const $btn = $(this);
+      $btn.toggleClass("cfm-show-hidden-active", cfmShowHiddenChars);
+      $btn
+        .find("i")
+        .attr(
+          "class",
+          cfmShowHiddenChars ? "fa-solid fa-eye" : "fa-regular fa-eye-slash",
+        );
+      $btn.attr(
+        "title",
+        cfmShowHiddenChars ? "已显示隐藏角色卡（点击恢复隐藏）" : "显示隐藏的角色卡",
+      );
+      renderLeftTree();
+      renderRightPane();
     });
 
     // ==================== 预设正则查看模式按钮 ====================
@@ -33496,7 +33549,7 @@ jQuery(async () => {
         chars = getCharacters();
       }
 
-      const matched = chars.filter((c) => {
+      let matched = chars.filter((c) => {
         const pool = [
           (c.name || "").toLowerCase(),
           (c.data?.creator || "").toLowerCase(),
@@ -33505,6 +33558,8 @@ jQuery(async () => {
         ];
         return fuzzyMatch(q, pool);
       });
+      // 过滤隐藏角色卡（当总开关关闭时）
+      matched = filterHiddenChars(matched);
 
       pathEl.text(`搜索角色: "${q}"`);
       countEl.text(`${matched.length} 个结果`);
@@ -35241,7 +35296,7 @@ jQuery(async () => {
 
     if (selectedTreeNode === "__uncategorized__") {
       pathEl.text("未归类角色");
-      let chars = getUncategorizedCharacters();
+      let chars = filterHiddenChars(getUncategorizedCharacters());
       if (rightCharSortMode) {
         chars = sortCharacters(chars, rightCharSortMode);
       }
@@ -35289,7 +35344,7 @@ jQuery(async () => {
 
     if (selectedTreeNode === "__favorites__") {
       pathEl.text("⭐ 收藏");
-      let chars = getFavoriteCharacters();
+      let chars = filterHiddenChars(getFavoriteCharacters());
       if (rightCharSortMode) {
         chars = sortCharacters(chars, rightCharSortMode);
       }
@@ -35345,7 +35400,7 @@ jQuery(async () => {
     pathEl.text(path);
 
     const childFolders = sortFolders(getChildFolders(folderId));
-    let chars = getCharactersInFolder(folderId);
+    let chars = filterHiddenChars(getCharactersInFolder(folderId));
     if (rightCharSortMode) {
       chars = sortCharacters(chars, rightCharSortMode);
     }
@@ -35666,6 +35721,12 @@ jQuery(async () => {
       !cfmExportMode && !cfmResDeleteMode && !cfmEditMode && !cfmMultiSelectMode
         ? `<div class="cfm-row-edit-btn" title="编辑作者名/版本名"><i class="fa-solid fa-pen-to-square"></i></div>`
         : "";
+    // 非模式状态下显示单个隐藏/取消隐藏按钮
+    const charIsHidden = isCharHidden(char.avatar);
+    const singleHideBtn =
+      !cfmExportMode && !cfmResDeleteMode && !cfmEditMode && !cfmMultiSelectMode
+        ? `<div class="cfm-row-hide-btn ${charIsHidden ? "cfm-row-hide-active" : ""}" title="${charIsHidden ? "取消隐藏角色卡" : "隐藏角色卡"}"><i class="fa-${charIsHidden ? "solid fa-eye-slash" : "regular fa-eye"}"></i></div>`
+        : "";
     // 聊天模式下的小三角按钮（需同时检查自定义布局中 chatmode 是否可见）
     const chatmodeVisible =
       cfmChatMode && getVisibleActions("chars").includes("chatmode");
@@ -35704,13 +35765,14 @@ jQuery(async () => {
     const isDetailExpanded = cfmCharDetailExpandedAvatars.has(char.avatar);
     const detailToggleHtml = `<div class="cfm-char-detail-toggle" title="展开/折叠角色卡具体设定"><i class="fa-solid fa-caret-${isDetailExpanded ? "down" : "right"}"></i></div>`;
     const row = $(`
-            <div class="cfm-row cfm-row-char ${regexHighlightClass} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
+            <div class="cfm-row cfm-row-char ${charIsHidden ? "cfm-row-char-hidden" : ""} ${regexHighlightClass} ${isDelSel ? "cfm-res-delete-row-selected" : ""} ${isExportSel ? "cfm-export-row-selected" : ""} ${isEditSel ? "cfm-edit-row-selected" : ""} ${isSelected ? "cfm-multisel-row-selected" : ""}" data-avatar="${escapeHtml(char.avatar)}" data-res-id="${escapeHtml(char.avatar)}" draggable="true">
                 ${checkboxHtml}
                 ${chatToggleHtml}
                 ${regexToggleHtml}
                 <div class="cfm-row-icon"><img src="${thumbUrl}" alt="" loading="lazy" onerror="this.src='/img/ai4.png'"></div>
                 <div class="cfm-row-name"><span class="cfm-char-name-inline">${detailToggleHtml}<span class="cfm-char-name-text">${escapeHtml(char.name)}</span></span>${charMetaHtml}${folderPathHtml}</div>
                 ${singleEditBtn}
+                ${singleHideBtn}
                 <div class="cfm-row-star ${fav ? "cfm-star-active" : ""}" title="${fav ? "取消收藏" : "添加收藏"}"><i class="fa-${fav ? "solid" : "regular"} fa-star"></i></div>
             </div>
         `);
@@ -35738,6 +35800,13 @@ jQuery(async () => {
     // 单个铅笔按钮点击事件
     bindTouchSafeTap(row.find(".cfm-row-edit-btn"), () => {
       executeCharEdit([char.avatar]);
+    });
+    // 单个眼睛按钮点击事件：切换隐藏状态
+    bindTouchSafeTap(row.find(".cfm-row-hide-btn"), () => {
+      const nowHidden = toggleCharHidden(char.avatar);
+      cfmToastr.success(nowHidden ? `已隐藏「${char.name}」` : `已取消隐藏「${char.name}」`);
+      // 重新渲染（如果总开关关闭则该行会消失）
+      renderRightPane();
     });
     // 聊天模式下小三角点击：展开/折叠聊天记录
     bindTouchSafeTap(row.find(".cfm-chat-toggle"), async () => {
@@ -35843,6 +35912,7 @@ jQuery(async () => {
       if (Date.now() < suppressRowClickUntil) return;
       if ($(e.target).closest(".cfm-row-star").length) return;
       if ($(e.target).closest(".cfm-row-edit-btn").length) return;
+      if ($(e.target).closest(".cfm-row-hide-btn").length) return;
       if ($(e.target).closest(".cfm-char-detail-toggle").length) return;
       if ($(e.target).closest(".cfm-chat-toggle").length) return;
       if ($(e.target).closest(".cfm-regex-toggle").length) return;

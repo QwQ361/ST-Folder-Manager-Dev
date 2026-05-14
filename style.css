@@ -3677,6 +3677,54 @@ input.cfm-rv-search {
   color: #89b4fa !important;
   background-color: rgba(137, 180, 250, 0.15);
 }
+/* 单行隐藏/显示角色卡眼睛按钮 */
+.cfm-row-hide-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  cursor: pointer;
+  color: var(--SmartThemeBodyColor, #cdd6f4);
+  opacity: 0.4;
+  transition:
+    opacity 0.15s,
+    color 0.15s,
+    background-color 0.15s;
+  flex-shrink: 0;
+  font-size: 12px;
+  border-radius: 3px;
+}
+.cfm-row-hide-btn:hover {
+  opacity: 1 !important;
+  color: #f9e2af !important;
+  background-color: rgba(249, 226, 175, 0.15);
+}
+.cfm-row-hide-btn.cfm-row-hide-active {
+  opacity: 0.85;
+  color: #f9e2af;
+}
+.cfm-row-hide-btn.cfm-row-hide-active:hover {
+  color: #fab387 !important;
+  background-color: rgba(250, 179, 135, 0.15);
+}
+/* 隐藏的角色卡（总开关开启时显示，灰一点） */
+.cfm-row.cfm-row-char-hidden {
+  opacity: 0.55;
+}
+.cfm-row.cfm-row-char-hidden:hover {
+  opacity: 0.85;
+}
+.cfm-row.cfm-row-char-hidden .cfm-row-icon img {
+  filter: grayscale(0.5);
+}
+/* 工具栏：显示隐藏角色卡总开关激活态 */
+#cfm-toggle-hidden-char-btn.cfm-show-hidden-active {
+  color: #f9e2af !important;
+  background-color: rgba(249, 226, 175, 0.15) !important;
+  border-color: rgba(249, 226, 175, 0.4) !important;
+}
 .cfm-row-rename-btn {
   display: flex;
   align-items: center;
