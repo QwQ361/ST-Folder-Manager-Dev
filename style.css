@@ -4021,6 +4021,84 @@ textarea.cfm-edit-input {
   resize: vertical;
 }
 
+/* ========== 插件内预设 Prompt 编辑器 ========== */
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-expandable {
+  width: min(820px, 94vw);
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 16px 18px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-field {
+  flex: 0 0 auto;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-field.cfm-preset-prompt-editor-content-field {
+  flex: 1 1 auto;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-actions {
+  flex: 0 0 auto;
+  padding-top: 14px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-maximized .cfm-edit-popup-body {
+  flex: 1 1 auto;
+}
+body.cfm-body-lock-scroll {
+  overflow: hidden !important;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-field-row .cfm-edit-popup-field {
+  flex: 1 1 200px;
+  min-width: 180px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-preset-prompt-editor-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-preset-prompt-editor-source {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(137, 180, 250, 0.12);
+  border: 1px solid rgba(137, 180, 250, 0.25);
+  color: #a6adc8;
+  font-size: 12px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-preset-prompt-editor-content {
+  min-height: 200px;
+  resize: vertical;
+  font-family: var(--mainFontFamily, inherit);
+  line-height: 1.5;
+}
+#cfm-preset-prompt-editor-overlay input[type="checkbox"].cfm-preset-prompt-editor-enabled {
+  width: 18px;
+  height: 18px;
+  accent-color: #89b4fa;
+}
+#cfm-preset-prompt-editor-overlay select.cfm-edit-input {
+  padding: 8px 10px;
+}
+#cfm-preset-prompt-editor-overlay .cfm-edit-popup-maximized .cfm-preset-prompt-editor-content {
+  min-height: 0;
+  height: 100%;
+}
+#cfm-preset-prompt-editor-overlay.cfm-edit-popup-maximized {
+  padding: 0;
+}
+
 /* ========== 条目互通弹窗 ========== */
 .cfm-entry-transfer-overlay {
   position: absolute;

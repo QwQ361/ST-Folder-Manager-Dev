@@ -165,6 +165,7 @@ import {
 } from "./features/presets/view.js";
 import * as presetPromptsCore from "./features/presets/prompts.js";
 import { createNativePresetPromptEditorApi as createNativePresetPromptEditorApiCore } from "./features/presets/prompts.js";
+import { createPresetPromptEditorApi as createPresetPromptEditorApiCore } from "./features/presets/prompt-editor.js";
 import { createQuickReplyNotesApiCore } from "./features/quickreply/notes.js";
 import { createQuickReplyRenameApiCore } from "./features/quickreply/rename.js";
 import {
@@ -6731,6 +6732,31 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getNativePresetPromptEditorApi().openNativePresetPromptEditor(presetName, promptKey, promptLabel);
   }
 
+  let _presetPromptEditorApi = null;
+  function getPresetPromptEditorApi() {
+    if (!_presetPromptEditorApi) {
+      _presetPromptEditorApi = createPresetPromptEditorApiCore({
+        $,
+        document,
+        window,
+        cfmToastr,
+        escapeHtml,
+        getContext,
+        getPresetDataForDetail,
+        getPresetPromptByKey,
+        getPresetPromptText,
+        findPresetPromptOrderEntryLocation,
+        saveNormalizedPresetData,
+        refreshPresetPanelView,
+      });
+    }
+    return _presetPromptEditorApi;
+  }
+
+  function openPresetPromptEditor(presetName, promptKey, promptLabel = "") {
+    return getPresetPromptEditorApi().openPresetPromptEditor(presetName, promptKey, promptLabel);
+  }
+
 
   function showPresetEditorOpeningLoading(fieldKey, label = "") {
     const normalizedFieldKey = String(fieldKey || "").trim();
@@ -6782,18 +6808,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     }
 
     const promptKey = fieldKey.slice("prompts.".length);
-    const hideLoading = showPresetEditorOpeningLoading(fieldKey, field.label);
-    try {
-      const opened = await openNativePresetPromptEditor(
-        presetName,
-        promptKey,
-        field.label,
-      );
-      if (!opened) {
-        cfmToastr.error(`无法打开预设条目「${field.label}」的原生编辑弹窗`);
-      }
-    } finally {
-      hideLoading?.();
+    const opened = openPresetPromptEditor(presetName, promptKey, field.label);
+    if (!opened) {
+      cfmToastr.error(`无法打开预设条目「${field.label}」的编辑弹窗`);
     }
   }
 
@@ -8303,9 +8320,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     try {
       const engine = await import("../../regex/engine.js");
       const { renderExtensionTemplateAsync } =
-        await import("../../extensions.js");
+        await import("../../../extensions.js");
       const { callGenericPopup, POPUP_TYPE: PT } =
-        await import("../../popup.js");
+        await import("../../../popup.js");
 
       const scriptIdx = scripts.findIndex(
         (s) => String(s?.id || "") === normalizedScriptId,

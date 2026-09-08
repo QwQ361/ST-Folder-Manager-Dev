@@ -2,6 +2,31 @@
 
 export const PRESET_PROMPT_ORDER_DUMMY_ID = 100001;
 
+// 原生 PromptManager 的注入位置模型（数字枚举，与酒馆 PromptManager.js 一致）
+export const PRESET_INJECTION_POSITION = {
+  RELATIVE: 0, // 相对：按提示词管理器中的相对顺序注入
+  ABSOLUTE: 1, // 聊天中：在聊天的指定深度注入
+};
+export const PRESET_INJECTION_DEPTH_DEFAULT = 4;
+
+// 酒馆原生内置 prompt 标识符（marker / 预置条目）。
+// 这些条目通常不在 presetData.prompts 数组中（内容来自角色卡/世界书等），
+// 但会出现在 prompt_order 中。sanitize 时必须保留，否则详情列表会丢失它们。
+export const PRESET_BUILTIN_PROMPT_KEYS = new Set([
+  "main",
+  "nsfw",
+  "dialogueExamples",
+  "jailbreak",
+  "chatHistory",
+  "worldInfoAfter",
+  "worldInfoBefore",
+  "enhanceDefinitions",
+  "charDescription",
+  "charPersonality",
+  "scenario",
+  "personaDescription",
+]);
+
 export function getPresetPromptIdentifier(prompt) {
   if (!prompt || typeof prompt !== "object") return "";
   return String(
@@ -148,7 +173,8 @@ export function sanitizePresetPromptOrderEntries(
     if (
       validIdentifierSet instanceof Set &&
       validIdentifierSet.size > 0 &&
-      !validIdentifierSet.has(identifier)
+      !validIdentifierSet.has(identifier) &&
+      !PRESET_BUILTIN_PROMPT_KEYS.has(identifier)
     ) {
       continue;
     }
@@ -361,6 +387,9 @@ export function buildDuplicatedPresetPromptLabel(existingLabels, sourceLabel) {
 export function createPresetPromptsApiCore() {
   return {
     PRESET_PROMPT_ORDER_DUMMY_ID,
+    PRESET_INJECTION_POSITION,
+    PRESET_INJECTION_DEPTH_DEFAULT,
+    PRESET_BUILTIN_PROMPT_KEYS,
     getPresetPromptIdentifier,
     getPresetPromptIdentifierCandidates,
     getPresetPromptOrderIdentifier,
