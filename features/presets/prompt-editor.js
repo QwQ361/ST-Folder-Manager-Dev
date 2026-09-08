@@ -83,6 +83,13 @@ export function createPresetPromptEditorApi(deps) {
     const editorTitle = normalizedPromptLabel || sourceLabel || normalizedPromptKey;
 
     const enabledValue = promptObj.enabled !== false;
+    // 名称（可编辑，写回 promptObj.name）
+    const nameValue =
+      getPromptFieldValue(promptObj, "name") ||
+      getPromptFieldValue(promptObj, "title") ||
+      getPromptFieldValue(promptObj, "label") ||
+      normalizedPromptLabel ||
+      "";
     // 注入位置：数字模型（0=相对 RELATIVE / 1=聊天中 ABSOLUTE），与原生 PromptManager 一致。
     // 兼容旧字符串值：in_chat/in_character/in_prompt/none 视为绝对注入（聊天中）。
     const rawInjectionPosition = promptObj?.injection_position;
@@ -103,6 +110,15 @@ export function createPresetPromptEditorApi(deps) {
       getPromptFieldValue(promptObj, "text") ||
       "";
 
+    // 内置条目（charDescription/personaDescription 等）内容来自角色卡/世界书，
+    // 不可直接编辑内容；移除内容编辑框，改为在内容区域居中显示来源地址。
+    const contentFieldHtml = sourceLabel
+      ? `<div class="cfm-preset-prompt-editor-source-center">${escapeHtml(sourceLabel)}</div>`
+      : `<div class="cfm-edit-popup-field cfm-preset-prompt-editor-content-field">
+              <label>内容</label>
+              <textarea class="cfm-edit-input cfm-preset-prompt-editor-content" rows="8" placeholder="发送给 AI 的提示文本">${escapeHtml(contentValue)}</textarea>
+            </div>`;
+
     const overlay = $(`
       <div class="cfm-edit-popup-overlay" id="cfm-preset-prompt-editor-overlay">
         <div class="cfm-edit-popup cfm-edit-popup-expandable">
@@ -113,10 +129,11 @@ export function createPresetPromptEditorApi(deps) {
             </button>
           </div>
           <div class="cfm-edit-popup-body">
-            <div class="cfm-edit-popup-field cfm-preset-prompt-editor-content-field">
-              <label>内容</label>
-              <textarea class="cfm-edit-input cfm-preset-prompt-editor-content" rows="8" placeholder="发送给 AI 的提示文本">${escapeHtml(contentValue)}</textarea>
+            <div class="cfm-edit-popup-field cfm-preset-prompt-editor-name-field">
+              <label>名称</label>
+              <input type="text" class="cfm-edit-input cfm-preset-prompt-editor-name" value="${escapeHtml(nameValue)}" placeholder="条目名称">
             </div>
+            ${contentFieldHtml}
             <div class="cfm-edit-popup-field-row">
               <div class="cfm-edit-popup-field">
                 <label>启用</label>
@@ -151,7 +168,6 @@ export function createPresetPromptEditorApi(deps) {
             <div class="cfm-edit-popup-field">
               <label>标识符 (identifier)</label>
               <input type="text" class="cfm-edit-input cfm-preset-prompt-editor-identifier" value="${escapeHtml(getPromptFieldValue(promptObj, "identifier") || normalizedPromptKey)}" disabled title="标识符由系统管理，不可修改">
-              ${sourceLabel ? `<div class="cfm-preset-prompt-editor-source">来源：${escapeHtml(sourceLabel)}</div>` : ""}
             </div>
           </div>
           <div class="cfm-edit-popup-actions">
@@ -201,6 +217,9 @@ export function createPresetPromptEditorApi(deps) {
 
     // 保存
     const submit = async () => {
+      const name = String(
+        overlay.find(".cfm-preset-prompt-editor-name").val() || "",
+      ).trim();
       const content = String(
         overlay.find(".cfm-preset-prompt-editor-content").val() || "",
       );
@@ -212,7 +231,16 @@ export function createPresetPromptEditorApi(deps) {
 
       try {
         // 写回 prompt 对象（数字模型：injection_position 0=相对 / 1=聊天中）
-        promptObj.content = content;
+        if (!sourceLabel) {
+          // 普通条目：内容可编辑
+          promptObj.content = content;
+        }
+        // 名称（普通条目与内置条目均可编辑名称）
+        if (name) {
+          promptObj.name = name;
+        } else if (Object.prototype.hasOwnProperty.call(promptObj, "name")) {
+          delete promptObj.name;
+        }
         promptObj.enabled = enabled;
         promptObj.injection_position = injectionPosition === 1 ? 1 : 0;
         if (injectionPosition === 1) {
@@ -226,13 +254,18 @@ export function createPresetPromptEditorApi(deps) {
           delete promptObj.role;
         }
 
-        // 同步 prompt_order 条目（enabled/role/injection_position/injection_depth）
+        // 同步 prompt_order 条目（name/enabled/role/injection_position/injection_depth）
         const location = findPresetPromptOrderEntryLocation(
           presetData,
           normalizedPromptKey,
           false,
         );
         if (location?.item && typeof location.item === "object") {
+          if (name) {
+            location.item.name = name;
+          } else if (Object.prototype.hasOwnProperty.call(location.item, "name")) {
+            delete location.item.name;
+          }
           location.item.enabled = enabled;
           if (role && role !== "none") {
             location.item.role = role;
@@ -270,14 +303,16 @@ export function createPresetPromptEditorApi(deps) {
       }
     });
 
-    // 聚焦内容区
+    // 聚焦（普通条目聚焦内容区，内置条目聚焦名称框）
     window.setTimeout(() => {
-      const textarea = overlay.find(".cfm-preset-prompt-editor-content").get(0);
-      if (textarea && typeof textarea.focus === "function") {
+      const focusTarget = sourceLabel
+        ? overlay.find(".cfm-preset-prompt-editor-name").get(0)
+        : overlay.find(".cfm-preset-prompt-editor-content").get(0);
+      if (focusTarget && typeof focusTarget.focus === "function") {
         try {
-          textarea.focus({ preventScroll: true });
+          focusTarget.focus({ preventScroll: true });
         } catch {
-          textarea.focus();
+          focusTarget.focus();
         }
       }
     }, 60);

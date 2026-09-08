@@ -4077,6 +4077,20 @@ body.cfm-body-lock-scroll {
   color: #a6adc8;
   font-size: 12px;
 }
+#cfm-preset-prompt-editor-overlay .cfm-preset-prompt-editor-source-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(137, 180, 250, 0.08);
+  border: 1px dashed rgba(137, 180, 250, 0.3);
+  color: #89b4fa;
+  font-size: 13px;
+  text-align: center;
+  user-select: none;
+}
 #cfm-preset-prompt-editor-overlay .cfm-preset-prompt-editor-content {
   min-height: 200px;
   resize: vertical;

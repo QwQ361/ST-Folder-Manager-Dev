@@ -827,6 +827,7 @@ export function createMainPopupCloserCore(deps) {
     $,
     _saveLastOpenState,
     clearMultiSelect,
+    setPresetRegexToastPersistentSuppress,
     closeWorldInfoEntryPanels,
     resetNativePresetPromptPopupStyles,
     restorePresetSelectionAfterEdit,
@@ -951,6 +952,8 @@ export function createMainPopupCloserCore(deps) {
           $("#cfm-topbar-button .drawer-icon")
             .removeClass("openIcon")
             .addClass("closedIcon");
+          // 面板关闭后解除常驻 toast 屏蔽（若无可恢复窗口立即恢复原生 toastr）
+          setPresetRegexToastPersistentSuppress(false);
         },
         () => {
           // 用户选择"否，撤回排序" → 恢复快照并关闭
@@ -963,6 +966,8 @@ export function createMainPopupCloserCore(deps) {
           $("#cfm-topbar-button .drawer-icon")
             .removeClass("openIcon")
             .addClass("closedIcon");
+          // 面板关闭后解除常驻 toast 屏蔽（若无可恢复窗口立即恢复原生 toastr）
+          setPresetRegexToastPersistentSuppress(false);
         },
       );
       return;
@@ -982,6 +987,8 @@ export function createMainPopupCloserCore(deps) {
     $("#cfm-topbar-button .drawer-icon")
       .removeClass("openIcon")
       .addClass("closedIcon");
+    // 面板关闭后解除常驻 toast 屏蔽（若无可恢复窗口立即恢复原生 toastr）
+    setPresetRegexToastPersistentSuppress(false);
   };
 
   return { closeMainPopup };

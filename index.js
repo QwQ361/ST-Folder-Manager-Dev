@@ -5727,17 +5727,8 @@ let _worldInfoEntriesApi = null;
   let _presetDetailApi = null;
   function getPresetDetailApi() {
     if (!_presetDetailApi) {
-      _presetDetailApi = createPresetDetailApiCore({
-        $,
-        extensionSettings: extension_settings,
-        extensionName,
-        ensureSettings,
-        saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
-        escapeHtml,
-        cfmConfirm,
-        getPresetDetailFields,
-        setPresetPromptEnabled,
-      });
+      // 与 createPresetDetailApi()（完整 deps）保持一致，避免两份 deps 漂移
+      _presetDetailApi = createPresetDetailApi();
     }
     return _presetDetailApi;
   }
@@ -6316,6 +6307,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   let _pendingSuppressPresetRegexToastRestoreTimer = null;
   let _lastPresetRegexToastFingerprint = "";
   let _lastPresetRegexToastAt = 0;
+  /** 常驻抑制标志：插件主面板打开期间为 true，命中“正则+重载聊天”toast 一律屏蔽 */
+  let _cfmPresetRegexToastPersistentSuppress = false;
 
   function normalizePresetRegexToastTextPart(value) {
     if (value == null) return "";
@@ -6387,6 +6380,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
     const fingerprint = normalized.replace(/\s+/g, " ").trim();
     const now = Date.now();
+
+    // 相同指纹防抖：2.5 秒内重复的同款 toast 直接屏蔽
     if (
       fingerprint &&
       _lastPresetRegexToastFingerprint === fingerprint &&
@@ -6395,6 +6390,14 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       return true;
     }
 
+    // 常驻抑制（插件面板打开期间）：命中即屏蔽，不受临时窗口限制
+    if (_cfmPresetRegexToastPersistentSuppress) {
+      _lastPresetRegexToastFingerprint = fingerprint;
+      _lastPresetRegexToastAt = now;
+      return true;
+    }
+
+    // 临时抑制窗口（begin/end 包裹的切换/编辑路径）
     if (
       _suppressPresetRegexToastDepth <= 0 ||
       now > _suppressPresetRegexToastUntil
@@ -6416,6 +6419,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
   function restorePresetRegexToastFnsIfNeeded() {
     clearSuppressPresetRegexToastRestoreTimer();
+    // 常驻抑制仍开启时（插件面板仍打开）不得恢复原始 toastr
+    if (_cfmPresetRegexToastPersistentSuppress) return;
     if (_originalToastrFnsForPresetRegexToast && window.toastr) {
       for (const [level, originalFn] of Object.entries(
         _originalToastrFnsForPresetRegexToast,
@@ -6451,15 +6456,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     restorePresetRegexToastFnsIfNeeded();
   }
 
-  function beginSuppressPresetRegexToast(durationMs = 9000) {
-    _suppressPresetRegexToastDepth += 1;
-    clearSuppressPresetRegexToastRestoreTimer();
-    _suppressPresetRegexToastUntil = Math.max(
-      _suppressPresetRegexToastUntil,
-      Date.now() + Math.max(0, Number(durationMs) || 0),
-    );
-    if (_suppressPresetRegexToastDepth !== 1) return;
-    if (!window.toastr) return;
+  function ensurePresetRegexToastFilterInstalled() {
+    if (!window.toastr) return false;
+    // 已安装（_originalToastrFnsForPresetRegexToast 非空表示包装中）
+    if (_originalToastrFnsForPresetRegexToast) return true;
 
     const toastLevels = ["info", "warning", "success", "error"];
     _originalToastrFnsForPresetRegexToast = {};
@@ -6475,6 +6475,18 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         return originalFn(...args);
       };
     }
+    return true;
+  }
+
+  function beginSuppressPresetRegexToast(durationMs = 9000) {
+    _suppressPresetRegexToastDepth += 1;
+    clearSuppressPresetRegexToastRestoreTimer();
+    _suppressPresetRegexToastUntil = Math.max(
+      _suppressPresetRegexToastUntil,
+      Date.now() + Math.max(0, Number(durationMs) || 0),
+    );
+    if (_suppressPresetRegexToastDepth !== 1) return;
+    ensurePresetRegexToastFilterInstalled();
   }
 
   function endSuppressPresetRegexToast(delayMs = 0) {
@@ -6492,6 +6504,22 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       return;
     }
     finalize();
+  }
+
+  /**
+   * 设置“正则重载聊天 toast”常驻抑制开关（与插件主面板开/关绑定）。
+   * 开启：确保 toastr 过滤器已安装，命中“正则+重载聊天”的 toast 一律屏蔽；
+   * 关闭：若无临时抑制窗口（begin/end 包裹的操作），立即恢复原始 toastr。
+   */
+  function setPresetRegexToastPersistentSuppress(enabled) {
+    const nextValue = Boolean(enabled);
+    if (nextValue === _cfmPresetRegexToastPersistentSuppress) return;
+    _cfmPresetRegexToastPersistentSuppress = nextValue;
+    if (nextValue) {
+      ensurePresetRegexToastFilterInstalled();
+    } else if (_suppressPresetRegexToastDepth <= 0) {
+      restorePresetRegexToastFnsIfNeeded();
+    }
   }
   function resetNativePresetPromptPopupStyles() {
     const popupEl = document.getElementById("completion_prompt_manager_popup");
@@ -9063,6 +9091,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
   function showMainPopup() {
     if ($("#cfm-overlay").length > 0) return;
+    // 面板打开期间常驻屏蔽“正则重载聊天”原生 toast（上移/下移/拖拽排序等操作不再弹出遮挡）
+    setPresetRegexToastPersistentSuppress(true);
     $("#cfm-topbar-button .drawer-icon")
       .removeClass("closedIcon")
       .addClass("openIcon");
@@ -10174,6 +10204,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         $,
         _saveLastOpenState,
         clearMultiSelect,
+        setPresetRegexToastPersistentSuppress,
         closeWorldInfoEntryPanels,
         resetNativePresetPromptPopupStyles,
         restorePresetSelectionAfterEdit,

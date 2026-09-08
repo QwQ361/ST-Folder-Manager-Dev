@@ -508,6 +508,7 @@ async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
 
     deps.sanitizePresetPromptStructure(presetData);
 
+    // 所有 prompts 条目（含内置 marker，如 charDescription/personaDescription 等）都参与排序。
     const currentOrderedFieldKeys = getPresetDetailFields(presetData)
       .map((item) => String(item?.key || "").trim())
       .filter((item) => item.startsWith("prompts."));
@@ -567,12 +568,13 @@ async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
       presetData,
       true,
     );
-    const primaryOrder = Array.isArray(primaryOrderContainer?.order)
-      ? primaryOrderContainer.order
-      : (primaryOrderContainer.order = []);
-    primaryOrder.length = 0;
+    if (!Array.isArray(primaryOrderContainer?.order)) {
+      primaryOrderContainer.order = [];
+    }
 
-    for (const promptId of orderedPromptIds) {
+    // 全量按新顺序重建主容器 order：所有条目（含内置 marker）都参与排序。
+    // 使用 existingOrderItemMap 中的条目对象（结构化克隆）以保留 enabled/role/injection 等字段。
+    const rebuiltOrderItems = orderedPromptIds.map((promptId) => {
       let orderItem = existingOrderItemMap.get(promptId);
       orderItem =
         orderItem && typeof orderItem === "object"
@@ -588,22 +590,18 @@ async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
       ) {
         orderItem.enabled = promptValue.enabled;
       }
+      return orderItem;
+    });
 
-      primaryOrder.push(orderItem);
-    }
+    // 直接替换容器.order 引用而非原地修改：getPresetDetailFields 等调用会触发
+    // ensurePresetPromptOrderContainers 重新 sanitize 并替换 order 数组引用，
+    // 若在获取 primaryOrder 后再修改其内容，修改会落到被替换的旧数组上（表现为按钮失效）。
+    primaryOrderContainer.order = rebuiltOrderItems;
 
-    for (const container of deps.getAllPresetPromptOrderContainers(presetData)) {
-      if (
-        container === primaryOrderContainer ||
-        !Array.isArray(container?.order)
-      ) {
-        continue;
-      }
-      container.order = container.order.filter(
-        (item) =>
-          !reorderedPromptIdSet.has(deps.getPresetPromptOrderIdentifier(item)),
-      );
-    }
+    // 注意：不修改其它容器（character_id 非主容器的 prompt_order 容器）。
+    // 这些容器（如 100000）由酒馆原生逻辑维护，删除其中条目会导致内置条目
+    // 永久丢失（写入磁盘后刷新无法恢复）。主容器已包含完整、正确顺序的全部条目，
+    // 其它容器保持原样即可。
 
     try {
       await deps.saveNormalizedPresetData(pm, presetName, presetData);
@@ -695,6 +693,7 @@ async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
 
 async function duplicatePresetDetailField(presetName, fieldKey) {
     if (!String(fieldKey || "").startsWith("prompts.")) return;
+    const promptKey = fieldKey.slice("prompts.".length);
 
     const pm = deps.getContext().getPresetManager();
     if (!pm) {
@@ -708,13 +707,16 @@ async function duplicatePresetDetailField(presetName, fieldKey) {
       return;
     }
 
-    const promptList = deps.ensurePresetPromptList(presetData);
-    const promptKey = fieldKey.slice("prompts.".length);
+    // 内置条目（charDescription 等带 sourceLabel）来自角色卡/世界书，不可复制
     const sourceField = getPresetDetailFields(presetData).find(
       (item) => item.key === fieldKey,
     );
     if (!sourceField) {
       deps.cfmToastr.error("未找到可复制的预设条目");
+      return;
+    }
+    if (String(sourceField.sourceLabel || "").trim()) {
+      deps.cfmToastr.warning("内置条目（来自角色卡/世界书）不可复制");
       return;
     }
 
@@ -779,6 +781,7 @@ async function duplicatePresetDetailField(presetName, fieldKey) {
     }
 
     const sourcePromptIndex = deps.getPresetPromptIndexByKey(presetData, promptKey);
+    const promptList = deps.ensurePresetPromptList(presetData);
     if (sourcePromptIndex === -1) {
       promptList.push(duplicatedPrompt);
     } else {
@@ -862,6 +865,12 @@ async function deletePresetDetailField(presetName, fieldKey) {
     );
     if (!field) {
       deps.cfmToastr.error("未找到可删除的预设条目");
+      return;
+    }
+
+    // 内置条目（charDescription 等带 sourceLabel）来自角色卡/世界书，不可删除
+    if (String(field.sourceLabel || "").trim()) {
+      deps.cfmToastr.warning("内置条目（来自角色卡/世界书）不可删除");
       return;
     }
 

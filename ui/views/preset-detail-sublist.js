@@ -43,9 +43,10 @@ export function createPresetDetailSublistApi(deps) {
     const presetData = getPresetDataForDetail(pm, preset.name);
     if (!presetData) return;
 
-    const fields = getPresetDetailFields(presetData).filter(
-      (field) => !String(field?.sourceLabel || "").trim(),
-    );
+    // 不再过滤带 sourceLabel 的内置条目（charDescription/personaDescription 等），
+    // 这些条目来自角色卡/世界书，需要在详情列表中展示（带"来源地址"标签，仅可编辑）。
+    // 此前此处 filter 会把 getPresetDetailFields 已生成的内置字段整批丢弃，导致详情不显示它们。
+    const fields = getPresetDetailFields(presetData);
     const isCurrentApplied = isCurrentAppliedPreset(preset.name);
     const isBatchOwner =
       state.cfmPresetDetailBatchMode && state.cfmPresetDetailBatchOwnerName === preset.name;
@@ -263,13 +264,12 @@ export function createPresetDetailSublistApi(deps) {
         const fieldKey = String(field.key || "");
         const sourceLabel = String(field.sourceLabel || "").trim();
         const isExternalSourceField = !!sourceLabel;
+        // 所有 prompts 条目（含内置 marker，如 charDescription/personaDescription 等）都参与排序，
+        // 与原生 PromptManager 一致：顺序即注入顺序，用户有移动内置条目的需求。
         const isSortableField =
           canSortFields && fieldKey.startsWith("prompts.");
         const canMoveUp = isSortableField && index > 0;
         const canMoveDown = isSortableField && index < fields.length - 1;
-        const sourceMetaHtml = sourceLabel
-          ? `<div class="cfm-persona-detail-value cfm-preset-detail-value">来源地址：${escapeHtml(sourceLabel)}</div>`
-          : "";
         const sortButtonsHtml = isSortableField
           ? `<button class="cfm-sort-arrow-btn cfm-preset-detail-move-up ${canMoveUp ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="上移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-up"></i></button>
                 <button class="cfm-sort-arrow-btn cfm-preset-detail-move-down ${canMoveDown ? "" : "cfm-sort-arrow-disabled"}" data-field="${escapeHtml(fieldKey)}" title="下移${escapeHtml(field.label)}"><i class="fa-solid fa-chevron-down"></i></button>`
@@ -292,7 +292,6 @@ export function createPresetDetailSublistApi(deps) {
                 ${actionButtonsHtml}
               </div>
             </div>
-            ${sourceMetaHtml}
           </div>
         `);
         row
@@ -466,6 +465,7 @@ export function createPresetDetailSublistApi(deps) {
         !cfmIsTouchDevice()
       ) {
         detailCard.sortable({
+          // 所有 prompts 条目（含内置 marker）都参与拖拽排序
           items: '.cfm-preset-detail-row[data-field^="prompts."]',
           axis: "y",
           tolerance: "pointer",
