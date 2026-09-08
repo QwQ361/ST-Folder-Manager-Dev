@@ -66,6 +66,7 @@ export function createSettingsPageCore(deps) {
     renderMobileTopbarAvoidSection,
     renderMobileFullscreenSection,
     renderLanguageSwitchSection,
+    renderBridgeConnectionSection,
     renderMergeSameNameUserSection,
     renderCustomLayoutSection,
     createConfigTabShell,
@@ -158,6 +159,8 @@ export function createSettingsPageCore(deps) {
     renderMobileFullscreenSection(settingsBody);
     // 0.67 界面语言切换
     renderLanguageSwitchSection(settingsBody);
+    // 0.675 本地备份桥接连接开关
+    renderBridgeConnectionSection(settingsBody);
     // 0.69 合并同名 User（布局页最上方）
     renderMergeSameNameUserSection(layoutBody);
     // 0.7 自定义布局（共享函数）
@@ -508,6 +511,8 @@ export function createSettingsPageCore(deps) {
     renderMobileFullscreenSection(settingsBody);
     // 0.67 界面语言切换
     renderLanguageSwitchSection(settingsBody);
+    // 0.675 本地备份桥接连接开关
+    renderBridgeConnectionSection(settingsBody);
     // 0.69 合并同名 User（布局页最上方）
     renderMergeSameNameUserSection(layoutBody);
     // 0.7 自定义布局（共享函数）
@@ -955,6 +960,7 @@ export function createSettingsPageCore(deps) {
     renderEntryTransferPostActionSection(settingsBody);
     renderMobileTopbarAvoidSection(settingsBody);
     renderLanguageSwitchSection(settingsBody);
+    renderBridgeConnectionSection(settingsBody);
     renderMergeSameNameUserSection(layoutBody);
     renderCustomLayoutSection(layoutBody);
 

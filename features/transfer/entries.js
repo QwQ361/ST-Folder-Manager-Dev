@@ -87,6 +87,7 @@ export function createEntryTransferApiCore(deps) {
               typeof promptObj === "object"
                 ? promptObj.role || "system"
                 : "system",
+            enabled: field.enabled !== false,
             rawPrompt: promptObj,
             fieldKey: key,
           });
@@ -117,6 +118,7 @@ export function createEntryTransferApiCore(deps) {
                 : String(entry.key || "")) ||
               `条目${entry.uid}`,
             content: entry.content || "",
+            enabled: entry.disable !== true,
             rawEntry: entry,
           });
         }
@@ -1244,6 +1246,7 @@ export function createEntryTransferApiCore(deps) {
             newEntry = structuredClone(entry.rawEntry);
             newEntry.uid = uid;
             newEntry.comment = newName;
+            newEntry.disable = entry.enabled === false;
           } else {
             // 预设→世界书：映射字段
             newEntry = {
@@ -1259,7 +1262,7 @@ export function createEntryTransferApiCore(deps) {
               addMemo: true,
               order: 100,
               position: 0,
-              disable: false,
+              disable: entry.enabled === false,
               excludeRecursion: false,
               preventRecursion: false,
               delayUntilRecursion: false,

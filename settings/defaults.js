@@ -72,6 +72,8 @@ export function ensureSettingsDefaults({
     settings.mobileFullscreenMode = "to-search";
   // 界面语言："zh-CN"(简体中文，默认) | "zh-TW"(繁体中文)
   if (!settings.language) settings.language = "zh-CN";
+  // 本地备份桥接（127.0.0.1:36925）连接开关：默认关闭，避免无后台服务时反复报 ERR_CONNECTION_REFUSED
+  if (settings.bridgeEnabled === undefined) settings.bridgeEnabled = false;
   // 角色卡右栏排序模式持久化：null | "az" | "za" | "time"
   if (settings.charRightSortMode === undefined)
     settings.charRightSortMode = null;

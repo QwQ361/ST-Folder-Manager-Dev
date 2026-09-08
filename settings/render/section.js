@@ -25,6 +25,7 @@ export function createSharedSectionsCore(deps) {
     getEntryTransferPostActionMode,
     setEntryTransferPostActionMode,
     renderPersonasView,
+    onBridgeEnabledChange,
   } = deps;
 
   function getDefaultSearchScope() {
@@ -556,6 +557,31 @@ export function createSharedSectionsCore(deps) {
     body.append(section);
   }
 
+  // ==================== 共享：本地备份桥接连接开关 ====================
+  // 默认关闭，避免无本地后台服务时每次启动都向 127.0.0.1:36925 发起轮询报错。
+  function renderBridgeConnectionSection(body) {
+    const enabled = extension_settings[extensionName].bridgeEnabled === true;
+    const section = $(`
+      <div class="cfm-config-section">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
+          <input type="checkbox" id="cfm-bridge-enabled" ${enabled ? "checked" : ""}>
+          <span><i class="fa-solid fa-link"></i> 连接本地备份桥接服务</span>
+        </label>
+        <div class="cfm-create-tag-hint">开启后插件会连接本机 127.0.0.1:36925 的备份桥接服务并轮询同步状态。若本机未运行对应的后台程序，请保持关闭，避免持续出现连接失败报错。</div>
+      </div>
+    `);
+    section.find("#cfm-bridge-enabled").on("change", function () {
+      const next = !!$(this).prop("checked");
+      if (typeof onBridgeEnabledChange === "function") onBridgeEnabledChange(next);
+      cfmToastr.success(
+        next
+          ? "已开启本地备份桥接连接"
+          : "已关闭本地备份桥接连接",
+      );
+    });
+    body.append(section);
+  }
+
   return {
     getDefaultSearchScope,
     getDefaultRegexTransferMode,
@@ -569,5 +595,6 @@ export function createSharedSectionsCore(deps) {
     renderMergeSameNameUserSection,
     renderMobileFullscreenSection,
     renderLanguageSwitchSection,
+    renderBridgeConnectionSection,
   };
 }

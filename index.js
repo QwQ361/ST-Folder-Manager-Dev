@@ -1904,9 +1904,34 @@ function ensureTabMenuConfig() {
     writeBackupBridgeResource,
   });
 
-  // 启动 HTTP 轮询
-  startSyncStatePoll();
-  publishBackupBridgeSignal("loading");
+  // 本地备份桥接连接开关：默认关闭，避免无后台服务时反复报 ERR_CONNECTION_REFUSED
+  function isBridgeEnabled() {
+    return extension_settings[extensionName]?.bridgeEnabled === true;
+  }
+  function setBridgeEnabled(next) {
+    extension_settings[extensionName].bridgeEnabled = !!next;
+    getContext().saveSettingsDebounced();
+    if (next) {
+      startSyncStatePoll();
+      publishBackupBridgeSignal("ready");
+    } else {
+      stopSyncStatePoll();
+      removeCfmSyncOverlay();
+      publishBackupBridgeSignal("disabled");
+    }
+  }
+  // 设置页开关回调：与 setBridgeEnabled 联动（保存与启停已包含其中）
+  function onBridgeEnabledChange(next) {
+    setBridgeEnabled(next);
+  }
+
+  // 启动 HTTP 轮询（仅当用户开启桥接连接时）
+  if (isBridgeEnabled()) {
+    startSyncStatePoll();
+    publishBackupBridgeSignal("loading");
+  } else {
+    publishBackupBridgeSignal("disabled");
+  }
 
   // ==================== 辅助函数 ====================
   // 获取显示名称（优先使用 displayName，用于UI展示）
@@ -10512,6 +10537,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         getEntryTransferPostActionMode,
         setEntryTransferPostActionMode,
         renderPersonasView,
+        setBridgeEnabled,
+        onBridgeEnabledChange,
       });
     }
     return _sharedSectionsApi;
@@ -10545,6 +10572,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
   function renderLanguageSwitchSection(body) {
     return getSharedSectionsApi().renderLanguageSwitchSection(body);
+  }
+  function renderBridgeConnectionSection(body) {
+    return getSharedSectionsApi().renderBridgeConnectionSection(body);
   }
   function getDefaultSearchScope() {
     return getSharedSectionsApi().getDefaultSearchScope();
@@ -10663,6 +10693,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         renderMobileTopbarAvoidSection,
         renderMobileFullscreenSection,
         renderLanguageSwitchSection,
+        renderBridgeConnectionSection,
         renderMergeSameNameUserSection,
         renderCustomLayoutSection,
         createConfigTabShell,
