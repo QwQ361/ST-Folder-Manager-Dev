@@ -59,74 +59,16 @@ export function createEntryTransferApiCore(deps) {
     }
 
     // ── 收集源条目数据 ──
-    let sourceEntries = [];
-    if (sourceType === "preset") {
-      const pm = getContext().getPresetManager();
-      if (!pm) {
-        cfmToastr.error("无法获取预设管理器");
-        return;
-      }
-      const presetData = getPresetDataForDetail(pm, sourceName);
-      if (!presetData) {
-        cfmToastr.error(`找不到预设「${sourceName}」`);
-        return;
-      }
-      const fields = getPresetDetailFields(presetData);
-      for (const key of selectedKeys) {
-        const field = fields.find((f) => f.key === key);
-        if (field) {
-          const promptKey = key.startsWith("prompts.")
-            ? key.slice("prompts.".length)
-            : key;
-          const promptObj = getPresetPromptByKey(presetData, promptKey);
-          sourceEntries.push({
-            name: field.label || promptKey,
-            content:
-              typeof promptObj === "object"
-                ? (promptObj.content ?? promptObj.prompt ?? "")
-                : String(promptObj ?? ""),
-            role:
-              typeof promptObj === "object"
-                ? promptObj.role || "system"
-                : "system",
-            enabled: field.enabled !== false,
-            rawPrompt: promptObj,
-            fieldKey: key,
-          });
-        }
-      }
-    } else if (sourceType === "worldinfo") {
-      // selectedKeys 格式: "bookName::uid"
-      const wiData = await fetchWorldInfoDetailData(sourceName);
-      if (!wiData?.entries) {
-        cfmToastr.error(`无法获取世界书「${sourceName}」的数据`);
-        return;
-      }
-      const entriesMap = new Map();
-      for (const [uid, entry] of Object.entries(wiData.entries)) {
-        entriesMap.set(getWorldInfoEntrySelectionKey(sourceName, uid), {
-          ...entry,
-          uid,
-        });
-      }
-      for (const key of selectedKeys) {
-        const entry = entriesMap.get(key);
-        if (entry) {
-          sourceEntries.push({
-            name:
-              entry.comment ||
-              (Array.isArray(entry.key)
-                ? entry.key[0]
-                : String(entry.key || "")) ||
-              `条目${entry.uid}`,
-            content: entry.content || "",
-            enabled: entry.disable !== true,
-            rawEntry: entry,
-          });
-        }
-      }
+    const collected = await collectSourceEntries(
+      sourceType,
+      sourceName,
+      selectedKeys,
+    );
+    if (collected.error) {
+      cfmToastr.error(collected.error);
+      return;
     }
-
+    const sourceEntries = collected.sourceEntries;
     if (sourceEntries.length === 0) {
       cfmToastr.warning("未找到可互通的条目数据");
       return;
@@ -179,6 +121,369 @@ export function createEntryTransferApiCore(deps) {
       cfmToastr.error(`互通失败: ${err?.message || err}`);
       return false;
     }
+  }
+
+  /**
+   * 收集源条目数据（预设按 selectedKeys[fieldKey] / 世界书按 selectedKeys["bookName::uid"]）。
+   * 供互通主流程与"缝合备忘录收藏组更新检测"复用。
+   * @returns {Promise<{sourceEntries:Array, error?:string}>}
+   */
+  async function collectSourceEntries(sourceType, sourceName, selectedKeys) {
+    const sourceEntries = [];
+    if (sourceType === "preset") {
+      const pm = getContext().getPresetManager();
+      if (!pm) {
+        return { sourceEntries, error: "无法获取预设管理器" };
+      }
+      const presetData = getPresetDataForDetail(pm, sourceName);
+      if (!presetData) {
+        return { sourceEntries, error: `找不到预设「${sourceName}」` };
+      }
+      const fields = getPresetDetailFields(presetData);
+      for (const key of selectedKeys) {
+        const field = fields.find((f) => f.key === key);
+        if (field) {
+          const promptKey = key.startsWith("prompts.")
+            ? key.slice("prompts.".length)
+            : key;
+          const promptObj = getPresetPromptByKey(presetData, promptKey);
+          sourceEntries.push({
+            name: field.label || promptKey,
+            content:
+              typeof promptObj === "object"
+                ? (promptObj.content ?? promptObj.prompt ?? "")
+                : String(promptObj ?? ""),
+            role:
+              typeof promptObj === "object"
+                ? promptObj.role || "system"
+                : "system",
+            enabled: field.enabled !== false,
+            rawPrompt: promptObj,
+            fieldKey: key,
+          });
+        }
+      }
+    } else if (sourceType === "worldinfo") {
+      // selectedKeys 格式: "bookName::uid"
+      const wiData = await fetchWorldInfoDetailData(sourceName);
+      if (!wiData?.entries) {
+        return {
+          sourceEntries,
+          error: `无法获取世界书「${sourceName}」的数据`,
+        };
+      }
+      const entriesMap = new Map();
+      for (const [uid, entry] of Object.entries(wiData.entries)) {
+        entriesMap.set(getWorldInfoEntrySelectionKey(sourceName, uid), {
+          ...entry,
+          uid,
+        });
+      }
+      for (const key of selectedKeys) {
+        const entry = entriesMap.get(key);
+        if (entry) {
+          sourceEntries.push({
+            name:
+              entry.comment ||
+              (Array.isArray(entry.key)
+                ? entry.key[0]
+                : String(entry.key || "")) ||
+              `条目${entry.uid}`,
+            content: entry.content || "",
+            enabled: entry.disable !== true,
+            rawEntry: entry,
+          });
+        }
+      }
+    }
+    return { sourceEntries };
+  }
+
+  /**
+   * 获取可选预设名称列表（供"快速更新"选择新旧预设）。
+   */
+  function getPresetQuickUpdateOptions() {
+    return getCurrentPresets()
+      .map((p) => String(p?.name || ""))
+      .filter(Boolean);
+  }
+
+  /**
+   * 对比旧预设（已缝合）与新预设（作者更新），识别旧预设中"缝合的条目"。
+   * 匹配规则：旧预设中名称在新预设中不存在的条目视为缝合条目；
+   * 按旧预设显示顺序分组，每组记录锚点（前一个与新预设同名的作者条目）。
+   * @returns {Promise<{blocks:Array, oldTotal:number, newTotal:number, authorCount:number, stitchedCount:number, error?:string}>}
+   *   blocks: [{ anchorName, anchorKey, fieldKeys, entries }]
+   */
+  async function analyzePresetQuickUpdate(oldPresetName, newPresetName) {
+    const pm = getContext().getPresetManager();
+    if (!pm) return { error: "无法获取预设管理器" };
+    const oldData = getPresetDataForDetail(pm, oldPresetName);
+    if (!oldData) return { error: `找不到旧预设「${oldPresetName}」` };
+    const newData = getPresetDataForDetail(pm, newPresetName);
+    if (!newData) return { error: `找不到新预设「${newPresetName}」` };
+
+    const oldFields = getPresetDetailFields(oldData).filter((f) =>
+      String(f?.key || "").startsWith("prompts."),
+    );
+    const newFields = getPresetDetailFields(newData).filter((f) =>
+      String(f?.key || "").startsWith("prompts."),
+    );
+    if (oldFields.length === 0) return { error: "旧预设没有可对比的条目" };
+    if (newFields.length === 0) return { error: "新预设没有可对比的条目" };
+
+    // 新预设的名称集合：用于识别旧预设中的"作者条目"（锚点）
+    const newNameSet = new Set(
+      newFields.map((f) => String(f?.label || "").trim()).filter(Boolean),
+    );
+
+    const blocks = [];
+    let currentAnchorName = null;
+    let currentAnchorKey = null;
+    let currentBlock = null;
+    let authorCount = 0;
+    let stitchedCount = 0;
+
+    for (const field of oldFields) {
+      const label = String(field?.label || "").trim();
+      if (newNameSet.has(label)) {
+        // 作者条目：作为新锚点，结束当前缝合块
+        authorCount++;
+        currentAnchorName = label;
+        currentAnchorKey = field.key;
+        currentBlock = null;
+      } else {
+        // 缝合条目：归入当前块（锚点为前一个作者条目）
+        stitchedCount++;
+        if (!currentBlock) {
+          currentBlock = {
+            anchorName: currentAnchorName,
+            anchorKey: currentAnchorKey,
+            fieldKeys: [],
+          };
+          blocks.push(currentBlock);
+        }
+        currentBlock.fieldKeys.push(field.key);
+      }
+    }
+
+    const result = {
+      blocks,
+      oldTotal: oldFields.length,
+      newTotal: newFields.length,
+      authorCount,
+      stitchedCount,
+    };
+
+    if (stitchedCount === 0) return result;
+
+    // 按块顺序收集缝合条目完整数据（复用互通收集逻辑）
+    const allKeys = blocks.flatMap((b) => b.fieldKeys);
+    const { sourceEntries, error } = await collectSourceEntries(
+      "preset",
+      oldPresetName,
+      allKeys,
+    );
+    if (error) return { ...result, error };
+    if (sourceEntries.length !== allKeys.length) {
+      return { ...result, error: "收集缝合条目数据不完整，请重试" };
+    }
+
+    let cursor = 0;
+    for (const block of blocks) {
+      block.entries = sourceEntries.slice(
+        cursor,
+        cursor + block.fieldKeys.length,
+      );
+      cursor += block.fieldKeys.length;
+    }
+
+    return result;
+  }
+
+  /**
+   * 执行"快速更新"：将分析得到的缝合条目块按锚点插入到新预设。
+   * 只切换一次预设，逐块复用 transferToPreset（自动生成唯一 key/label），
+   * 每次基于最新数据计算锚点索引，天然支持多块顺序插入。
+   * @returns {Promise<{insertedTotal:number, blockResults:Array, totalBlocks:number, error?:string}>}
+   */
+  async function executePresetQuickUpdate(
+    oldPresetName,
+    newPresetName,
+    blocks,
+  ) {
+    const pm = getContext().getPresetManager();
+    if (!pm) return { error: "无法获取预设管理器" };
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return { error: "没有可缝合的条目块" };
+    }
+    const targetValue = findPresetSelectValueByName(pm, newPresetName);
+    if (!targetValue) return { error: `找不到新预设「${newPresetName}」` };
+
+    // 临时切换到新预设（与 transferToPreset 内逻辑一致，只切换一次）
+    const currentPresetValue = String(pm.select.val() || "");
+    const needSwitch = currentPresetValue !== targetValue;
+    if (needSwitch) {
+      beginSuppressPresetRegexToast();
+      pm.select.val(targetValue);
+      pm.select.trigger("change");
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    try {
+      const blockResults = [];
+      let insertedTotal = 0;
+
+      for (const block of blocks) {
+        const entries = Array.isArray(block?.entries) ? block.entries : [];
+        if (entries.length === 0) continue;
+
+        // 基于最新数据计算锚点索引
+        const latestData = getPresetDataForDetail(pm, newPresetName);
+        const latestFields = latestData
+          ? getPresetDetailFields(latestData).filter((f) =>
+              String(f?.key || "").startsWith("prompts."),
+            )
+          : [];
+        let insertIndex;
+        if (block.anchorName) {
+          const anchorIdx = latestFields.findIndex(
+            (f) => String(f?.label || "").trim() === block.anchorName,
+          );
+          if (anchorIdx === -1) {
+            blockResults.push({
+              anchorName: block.anchorName,
+              count: entries.length,
+              status: "skip",
+              reason: `新预设中找不到锚点条目「${block.anchorName}」`,
+            });
+            continue;
+          }
+          insertIndex = anchorIdx + 1;
+        } else {
+          insertIndex = 0;
+        }
+
+        const result = await transferToPreset(
+          "preset",
+          entries,
+          newPresetName,
+          insertIndex,
+        );
+        if (!result) {
+          blockResults.push({
+            anchorName: block.anchorName || "(开头)",
+            count: entries.length,
+            status: "failed",
+            reason: "缝合失败",
+          });
+          continue;
+        }
+        insertedTotal += Number(result.insertedCount || 0);
+        blockResults.push({
+          anchorName: block.anchorName || "(开头)",
+          count: Number(result.insertedCount || 0),
+          status: "done",
+        });
+      }
+
+      return { insertedTotal, blockResults, totalBlocks: blocks.length };
+    } finally {
+      // 恢复原预设
+      if (needSwitch) {
+        try {
+          pm.select.val(currentPresetValue);
+          pm.select.trigger("change");
+        } catch {}
+        setTimeout(() => endSuppressPresetRegexToast(), 300);
+      }
+    }
+  }
+
+  /**
+   * 获取缝合备忘录收藏组对应"原条目"的最新数据，并与收藏快照对比。
+   * @param {object} group 收藏组（含 sourceType / sourceName / entries）
+   * @returns {Promise<{changed:boolean, freshEntries:Array|null, error?:string}>}
+   *   changed=true 表示原条目有变化；freshEntries 为最新收集到的条目（changed=false 时也可能返回 null）。
+   */
+  async function getEntryTransferMemoGroupFreshEntries(group) {
+    if (!group || !group.sourceType) {
+      return { changed: false, freshEntries: null };
+    }
+    // 由快照条目反推 selection keys
+    const keys = Array.isArray(group.entries)
+      ? group.entries.map((e) => {
+          if (group.sourceType === "preset") {
+            return String(e?.fieldKey || "");
+          }
+          const uid = e?.rawEntry?.uid;
+          if (uid !== undefined && uid !== null) {
+            return getWorldInfoEntrySelectionKey(group.sourceName, uid);
+          }
+          return "";
+        })
+      : [];
+    const realKeys = keys.filter(Boolean);
+    if (realKeys.length === 0) {
+      return { changed: false, freshEntries: null };
+    }
+    const { sourceEntries, error } = await collectSourceEntries(
+      group.sourceType,
+      group.sourceName,
+      realKeys,
+    );
+    if (error) {
+      return { changed: false, freshEntries: null, error };
+    }
+    const changed = !sameMemoEntries(group.entries, sourceEntries);
+    return { changed, freshEntries: sourceEntries };
+  }
+
+  /**
+   * 对比两组缝合条目是否一致（仅比较互通时会写入目标的关键字段）。
+   */
+  function sameMemoEntries(oldEntries, newEntries) {
+    const norm = (list) =>
+      Array.isArray(list)
+        ? list.map((e) => ({
+            name: String(e?.name || ""),
+            content: String(e?.content || ""),
+            enabled: e?.enabled !== false,
+          }))
+        : [];
+    const a = JSON.stringify(norm(oldEntries));
+    const b = JSON.stringify(norm(newEntries));
+    return a === b;
+  }
+
+  /**
+   * 将缝合备忘录收藏组的条目快照更新为原条目的最新内容（仅收藏组，临时组不更新）。
+   * @param {string} memoGroupId 缝合备忘录组 id
+   * @returns {Promise<{updated:boolean, changedCount:number, error?:string}>}
+   *   updated=true 表示快照已被更新；changedCount 为发生变化的条目数量。
+   */
+  async function updateEntryTransferMemoGroupFromSource(memoGroupId) {
+    const group = memoApi
+      .getEntryTransferMemoGroups()
+      .find((g) => g.id === memoGroupId);
+    if (!group) {
+      return { updated: false, changedCount: 0, error: "缝合备忘录分组不存在" };
+    }
+    if (!group.favorite) {
+      return { updated: false, changedCount: 0, error: "仅收藏组支持更新快照" };
+    }
+    const { changed, freshEntries, error } =
+      await getEntryTransferMemoGroupFreshEntries(group);
+    if (error) {
+      return { updated: false, changedCount: 0, error };
+    }
+    if (!changed || !Array.isArray(freshEntries)) {
+      return { updated: false, changedCount: 0 };
+    }
+    memoApi.updateEntryTransferMemoGroup(memoGroupId, {
+      entries: freshEntries,
+    });
+    return { updated: true, changedCount: freshEntries.length };
   }
 
   /**
@@ -695,21 +1000,37 @@ export function createEntryTransferApiCore(deps) {
       batchMode = false, // 全部缝合规划阶段：按钮文案带"并开始下一组"，返回 action
       isLast = false, // batchMode 下最后一组：取消改为触发末组选择弹窗
       headerHint = "", // batchMode 顶部提示：正在缝合 N/M：[摘要] by [来源] [备注]
+      title = "", // 自定义标题（如批量操作"移动位置"）
+      description = "", // 自定义描述
+      moveMode = false, // 移动模式（批量换位置）：描述/按钮语义改为"移动到/移动"，而非"互通/插入"
     } = options || {};
     const normalizedItems = Array.isArray(existingItems) ? existingItems : [];
     const entryCount = Array.isArray(sourceEntries) ? sourceEntries.length : 0;
     const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
 
-    const confirmLabel = batchMode
-      ? isLast
-        ? "确认插入"
-        : "确认插入并开始下一组"
-      : "确认插入";
-    const skipLabel = batchMode
-      ? isLast
-        ? "追加到末尾"
-        : "追加到末尾并开始下一组"
-      : "追加到末尾";
+    // 移动模式：确认/追加/取消文案带"移动"语义
+    const confirmLabel = moveMode
+      ? batchMode
+        ? isLast
+          ? "确认移动"
+          : "确认移动并开始下一组"
+        : "确认移动"
+      : batchMode
+        ? isLast
+          ? "确认插入"
+          : "确认插入并开始下一组"
+        : "确认插入";
+    const skipLabel = moveMode
+      ? batchMode
+        ? isLast
+          ? "移动到末尾"
+          : "移动到末尾并开始下一组"
+        : "移动到末尾"
+      : batchMode
+        ? isLast
+          ? "追加到末尾"
+          : "追加到末尾并开始下一组"
+        : "追加到末尾";
     const cancelLabel = batchMode
       ? isLast
         ? "取消"
@@ -721,12 +1042,18 @@ export function createEntryTransferApiCore(deps) {
       const overlay = $(
         '<div class="cfm-edit-popup-overlay cfm-entry-transfer-sort-overlay"></div>',
       );
+      const dialogTitle = title || (moveMode ? "选择移动位置" : "选择插入位置");
+      const dialogDesc = description
+        ? description
+        : moveMode
+          ? `即将把 ${entryCount} 个条目移动到${targetTypeLabel}「${escapeHtml(targetName)}」的新位置，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择移动目标位置；点击“移动到末尾”则直接放到最后。`
+          : `即将把 ${entryCount} 个条目互通到${targetTypeLabel}「${escapeHtml(targetName)}」，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择插入位置；点击“追加到末尾”则直接放到最后。`;
       const dialog = $(`
         <div class='cfm-sort-dialog cfm-sort-dialog-insert ${batchMode ? "cfm-sort-dialog-insert-batch" : ""}'>
           ${batchMode && headerHint ? `<div class='cfm-sort-dialog-batch-hint'>${headerHint}</div>` : ""}
           <div class='cfm-sort-dialog-header'>
-            <span class='cfm-sort-dialog-title'><i class='fa-solid fa-sort'></i> 选择插入位置</span>
-            <span class='cfm-sort-dialog-desc'>即将把 ${entryCount} 个条目互通到${targetTypeLabel}「${escapeHtml(targetName)}」，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择插入位置；点击“追加到末尾”则直接放到最后。</span>
+            <span class='cfm-sort-dialog-title'><i class='fa-solid fa-sort'></i> ${dialogTitle}</span>
+            <span class='cfm-sort-dialog-desc'>${dialogDesc}</span>
           </div>
           <div class='cfm-sort-dialog-body'>
             <div class='cfm-sort-dialog-list cfm-sort-dialog-list-insert'></div>
@@ -1575,9 +1902,14 @@ export function createEntryTransferApiCore(deps) {
   }
 
   return {
+    analyzePresetQuickUpdate,
     askEntryTransferNowOrLater,
+    collectSourceEntries,
     executeEntryTransfer,
+    executePresetQuickUpdate,
     getEntryTransferInsertItems,
+    getEntryTransferMemoGroupFreshEntries,
+    getPresetQuickUpdateOptions,
     getEntryTransferPostActionMode,
     openEntryTransferInsertDialog,
     openEntryTransferTargetDialog,
@@ -1592,5 +1924,6 @@ export function createEntryTransferApiCore(deps) {
     showEntryTransferProgressLoading,
     transferToPreset,
     transferToWorldInfo,
+    updateEntryTransferMemoGroupFromSource,
   };
 }

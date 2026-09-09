@@ -239,13 +239,15 @@ export function createWorldInfoEntrySublistApi(deps) {
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-range ${state.cfmWorldInfoEntryBatchRangeMode ? "cfm-range-active" : ""}"><i class="fa-solid fa-arrow-down-short-wide"></i> 框选${state.cfmWorldInfoEntryBatchRangeMode ? "(开)" : ""}</button>
           <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
           <button class="cfm-btn cfm-btn-sm cfm-entry-transfer-btn"><i class="fa-solid fa-right-left"></i> 互通</button>
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-move"><i class="fa-solid fa-arrows-up-down-left-right"></i> 换位置</button>
+          <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-delete"><i class="fa-solid fa-trash-can"></i> 删除</button>
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-activate"><i class="fa-solid fa-play"></i> 激活</button>
           <button class="cfm-btn cfm-btn-sm cfm-worldinfo-entry-batch-deactivate"><i class="fa-solid fa-stop"></i> 取消激活</button>
         </div>
       `);
       batchToolbar
         .find(
-          ".cfm-worldinfo-entry-batch-selall, .cfm-worldinfo-entry-batch-range, .cfm-entry-transfer-btn, .cfm-worldinfo-entry-batch-activate, .cfm-worldinfo-entry-batch-deactivate",
+          ".cfm-worldinfo-entry-batch-selall, .cfm-worldinfo-entry-batch-range, .cfm-entry-transfer-btn, .cfm-worldinfo-entry-batch-move, .cfm-worldinfo-entry-batch-delete, .cfm-worldinfo-entry-batch-activate, .cfm-worldinfo-entry-batch-deactivate",
         )
         .on("touchstart", (e) =>
           deps.recordTouchTapStart(e, "cfmWorldInfoEntryTap"),
@@ -357,6 +359,105 @@ export function createWorldInfoEntrySublistApi(deps) {
             state.cfmWorldInfoEntryBatchSelected.clear();
             state.cfmWorldInfoEntryBatchLastClicked = null;
             rerenderCurrentSubList();
+          }
+        });
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-move")
+        .on("click touchend", async (e) => {
+          if (deps.shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          // 按列表可见顺序重排选中项
+          const visibleKeys = entries.map((entry) =>
+            deps.getWorldInfoEntrySelectionKey(normalizedName, entry.uid),
+          );
+          const selected = visibleKeys.filter((key) =>
+            state.cfmWorldInfoEntryBatchSelected.has(key),
+          );
+          if (selected.length === 0) {
+            deps.cfmToastr.warning("请先选择要移动的条目");
+            return;
+          }
+          try {
+            const existingItems = await deps.getEntryTransferInsertItems(
+              "worldinfo",
+              normalizedName,
+            );
+            // 弹窗列表中排除当前选中的条目（它们将被"剪切"到目标位置）
+            const selectedUids = new Set(
+              selected.map((key) => {
+                const prefix = `${normalizedName}::`;
+                return key.startsWith(prefix)
+                  ? key.slice(prefix.length)
+                  : key;
+              }),
+            );
+            const moveableItems = existingItems.filter(
+              (item) => !selectedUids.has(String(item?.id ?? "")),
+            );
+            const result = await deps.openEntryTransferInsertDialog({
+              sourceEntries: selected,
+              targetType: "worldinfo",
+              targetName: normalizedName,
+              existingItems: moveableItems,
+              title: "选择移动位置",
+              description: `即将把 ${selected.length} 个条目移动到世界书「${deps.escapeHtml(normalizedName)}」的新位置，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择移动目标位置；点击“移动到末尾”则直接放到最后。`,
+              moveMode: true,
+            });
+            if (result && typeof result.targetIndex === "number") {
+              const moved = await deps.moveWorldInfoEntriesToIndex(
+                normalizedName,
+                selected,
+                result.targetIndex,
+              );
+              if (moved) {
+                state.cfmWorldInfoEntryBatchSelected.clear();
+                state.cfmWorldInfoEntryBatchLastClicked = null;
+                rerenderCurrentSubList();
+              }
+            }
+          } catch (error) {
+            console.error("[CFM] 移动世界书条目失败:", error);
+            deps.cfmToastr.error(`移动失败: ${error.message || error}`);
+          }
+        });
+      batchToolbar
+        .find(".cfm-worldinfo-entry-batch-delete")
+        .on("click touchend", async (e) => {
+          if (deps.shouldIgnoreWorldInfoEntryTap(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const visibleKeys = entries.map((entry) =>
+            deps.getWorldInfoEntrySelectionKey(normalizedName, entry.uid),
+          );
+          const selected = visibleKeys.filter((key) =>
+            state.cfmWorldInfoEntryBatchSelected.has(key),
+          );
+          if (selected.length === 0) {
+            deps.cfmToastr.warning("请先选择要删除的条目");
+            return;
+          }
+          try {
+            const deletedCount = await deps.batchDeleteWorldInfoEntries(
+              normalizedName,
+              selected,
+            );
+            if (deletedCount > 0) {
+              state.cfmWorldInfoEntryBatchSelected.clear();
+              state.cfmWorldInfoEntryBatchLastClicked = null;
+              rerenderCurrentSubList();
+            }
+          } catch (error) {
+            console.error("[CFM] 批量删除世界书条目失败:", error);
+            deps.cfmToastr.error(`删除失败: ${error.message || error}`);
           }
         });
       detailCard.append(batchToolbar);

@@ -3194,18 +3194,28 @@ jQuery(async () => {
       cfmToastr,
       memoApi: createEntryTransferMemoApi(),
       entriesApi: {
+        analyzePresetQuickUpdate: (...args) =>
+          createEntryTransferApi().analyzePresetQuickUpdate(...args),
+        executePresetQuickUpdate: (...args) =>
+          createEntryTransferApi().executePresetQuickUpdate(...args),
+        getPresetQuickUpdateOptions: (...args) =>
+          createEntryTransferApi().getPresetQuickUpdateOptions(...args),
         openEntryTransferTargetDialog: (...args) =>
           createEntryTransferApi().openEntryTransferTargetDialog(...args),
         openEntryTransferInsertDialog: (options) =>
           createEntryTransferApi().openEntryTransferInsertDialog(options),
         getEntryTransferInsertItems: (...args) =>
           createEntryTransferApi().getEntryTransferInsertItems(...args),
+        getEntryTransferMemoGroupFreshEntries: (...args) =>
+          createEntryTransferApi().getEntryTransferMemoGroupFreshEntries(...args),
         executeEntryTransfer: (...args) =>
           createEntryTransferApi().executeEntryTransfer(...args),
         transferToPreset: (...args) =>
           createEntryTransferApi().transferToPreset(...args),
         transferToWorldInfo: (...args) =>
           createEntryTransferApi().transferToWorldInfo(...args),
+        updateEntryTransferMemoGroupFromSource: (...args) =>
+          createEntryTransferApi().updateEntryTransferMemoGroupFromSource(...args),
       },
     });
   }
@@ -6041,6 +6051,14 @@ jQuery(async () => {
     );
   }
 
+  async function moveWorldInfoEntriesToIndex(bookName, selectionKeys, targetIndex) {
+    return await getWorldInfoEntriesApi().moveWorldInfoEntriesToIndex(
+      bookName,
+      selectionKeys,
+      targetIndex,
+    );
+  }
+
   async function applyWorldInfoEntryBatchActivation(
     bookName,
     selectionKeys,
@@ -6461,6 +6479,7 @@ jQuery(async () => {
       _presetDetailSublistApi = createPresetDetailSublistApi({
         $,
         applyPresetDetailBatchActivation,
+        batchDeletePresetDetailFields,
         cfmIsTouchDevice,
         cfmToastr,
         deletePresetDetailActivePreset,
@@ -6471,12 +6490,15 @@ jQuery(async () => {
         escapeHtml,
         flashDraggedElement,
         getContext,
+        getEntryTransferInsertItems,
         getPresetDataForDetail,
         getPresetDetailActivePresets,
         getPresetDetailFields,
         isCurrentAppliedPreset,
         movePresetDetailFieldByStep,
+        movePresetDetailFieldsToIndex,
         normalizePresetDetailFieldKeys,
+        openEntryTransferInsertDialog,
         recordTouchTapStart,
         refreshPresetPanelView,
         renamePresetDetailActivePreset,
@@ -6602,6 +6624,22 @@ jQuery(async () => {
     return await createPresetDetailApi().deletePresetDetailField(
       presetName,
       fieldKey,
+    );
+  }
+
+  async function batchDeletePresetDetailFields(presetName, fieldKeys, silent) {
+    return await createPresetDetailApi().batchDeletePresetDetailFields(
+      presetName,
+      fieldKeys,
+      silent,
+    );
+  }
+
+  async function movePresetDetailFieldsToIndex(presetName, fieldKeys, targetIndex) {
+    return await createPresetDetailApi().movePresetDetailFieldsToIndex(
+      presetName,
+      fieldKeys,
+      targetIndex,
     );
   }
 
@@ -7363,6 +7401,10 @@ jQuery(async () => {
         applyWorldInfoEntryBatchActivation,
         duplicateWorldInfoEntryInBook,
         deleteWorldInfoEntryInBook,
+        batchDeleteWorldInfoEntries,
+        moveWorldInfoEntriesToIndex,
+        getEntryTransferInsertItems,
+        openEntryTransferInsertDialog,
         showEntryTransferPopup,
         shouldIgnoreWorldInfoEntryTap,
         recordTouchTapStart,

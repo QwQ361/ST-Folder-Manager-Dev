@@ -4,35 +4,39 @@
 export function createPresetDetailSublistApi(deps) {
   const state = deps.state;
   const {
-  $,
-  applyPresetDetailBatchActivation,
-  cfmIsTouchDevice,
-  cfmToastr,
-  deletePresetDetailActivePreset,
-  deletePresetDetailField,
-  duplicatePresetDetailField,
-  editPresetDetailField,
-  ensureCurrentAppliedPreset,
-  escapeHtml,
-  flashDraggedElement,
-  getContext,
-  getPresetDataForDetail,
-  getPresetDetailActivePresets,
-  getPresetDetailFields,
-  isCurrentAppliedPreset,
-  movePresetDetailFieldByStep,
-  normalizePresetDetailFieldKeys,
-  recordTouchTapStart,
-  refreshPresetPanelView,
-  renamePresetDetailActivePreset,
-  savePresetDetailActivePreset,
-  savePresetDetailPromptOrder,
-  setPresetDetailAppliedPresetIndices,
-  shouldIgnoreTouchTapAfterMove,
-  showEntryTransferPopup,
-  showPresetDetailGroupPanel,
-  togglePresetDetailBatchItem,
-  togglePresetDetailFieldActivation,
+    $,
+    applyPresetDetailBatchActivation,
+    batchDeletePresetDetailFields,
+    cfmIsTouchDevice,
+    cfmToastr,
+    deletePresetDetailActivePreset,
+    deletePresetDetailField,
+    duplicatePresetDetailField,
+    editPresetDetailField,
+    ensureCurrentAppliedPreset,
+    escapeHtml,
+    flashDraggedElement,
+    getContext,
+    getEntryTransferInsertItems,
+    getPresetDataForDetail,
+    getPresetDetailActivePresets,
+    getPresetDetailFields,
+    isCurrentAppliedPreset,
+    movePresetDetailFieldByStep,
+    movePresetDetailFieldsToIndex,
+    normalizePresetDetailFieldKeys,
+    openEntryTransferInsertDialog,
+    recordTouchTapStart,
+    refreshPresetPanelView,
+    renamePresetDetailActivePreset,
+    savePresetDetailActivePreset,
+    savePresetDetailPromptOrder,
+    setPresetDetailAppliedPresetIndices,
+    shouldIgnoreTouchTapAfterMove,
+    showEntryTransferPopup,
+    showPresetDetailGroupPanel,
+    togglePresetDetailBatchItem,
+    togglePresetDetailFieldActivation,
   } = deps;
 
   function renderPresetDetailSubList(presetRow, preset) {
@@ -49,7 +53,8 @@ export function createPresetDetailSublistApi(deps) {
     const fields = getPresetDetailFields(presetData);
     const isCurrentApplied = isCurrentAppliedPreset(preset.name);
     const isBatchOwner =
-      state.cfmPresetDetailBatchMode && state.cfmPresetDetailBatchOwnerName === preset.name;
+      state.cfmPresetDetailBatchMode &&
+      state.cfmPresetDetailBatchOwnerName === preset.name;
     const subList = $(
       '<div class="cfm-chat-sublist cfm-preset-detail-sublist"></div>',
     );
@@ -120,7 +125,9 @@ export function createPresetDetailSublistApi(deps) {
     if (isBatchOwner && fields.length > 0) {
       const allSel =
         fields.length > 0 &&
-        fields.every((field) => state.cfmPresetDetailBatchSelected.has(field.key));
+        fields.every((field) =>
+          state.cfmPresetDetailBatchSelected.has(field.key),
+        );
       const selCount = fields.filter((field) =>
         state.cfmPresetDetailBatchSelected.has(field.key),
       ).length;
@@ -134,13 +141,15 @@ export function createPresetDetailSublistApi(deps) {
           </button>
           <span class="cfm-regex-batch-count">${selCount > 0 ? `已选 ${selCount} 项` : ""}</span>
           <button class="cfm-btn cfm-btn-sm cfm-entry-transfer-btn" title="条目互通"><i class="fa-solid fa-right-left"></i> 互通</button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-move" title="移动所选条目到指定位置"><i class="fa-solid fa-arrows-up-down-left-right"></i> 换位置</button>
+          <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-delete" title="删除所选条目"><i class="fa-solid fa-trash-can"></i> 删除</button>
           <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-activate" title="${isCurrentApplied ? "批量激活" : "仅当前应用的预设可使用激活"}" ${!isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-play"></i> 激活</button>
           <button class="cfm-btn cfm-btn-sm cfm-preset-detail-batch-deactivate" title="${isCurrentApplied ? "批量取消激活" : "仅当前应用的预设可使用取消激活"}" ${!isCurrentApplied ? "disabled" : ""}><i class="fa-solid fa-stop"></i> 取消激活</button>
         </div>
       `);
       batchToolbar
         .find(
-          ".cfm-preset-detail-batch-selall, .cfm-preset-detail-batch-range, .cfm-entry-transfer-btn, .cfm-preset-detail-batch-activate, .cfm-preset-detail-batch-deactivate",
+          ".cfm-preset-detail-batch-selall, .cfm-preset-detail-batch-range, .cfm-entry-transfer-btn, .cfm-preset-detail-batch-move, .cfm-preset-detail-batch-delete, .cfm-preset-detail-batch-activate, .cfm-preset-detail-batch-deactivate",
         )
         .on("touchstart", (e) => recordTouchTapStart(e, "cfmPresetDetailTap"));
       batchToolbar
@@ -182,7 +191,8 @@ export function createPresetDetailSublistApi(deps) {
           }
           e.preventDefault();
           e.stopPropagation();
-          state.cfmPresetDetailBatchRangeMode = !state.cfmPresetDetailBatchRangeMode;
+          state.cfmPresetDetailBatchRangeMode =
+            !state.cfmPresetDetailBatchRangeMode;
           if (state.cfmPresetDetailBatchRangeMode)
             state.cfmPresetDetailBatchLastClicked = null;
           refreshPresetPanelView();
@@ -262,6 +272,104 @@ export function createPresetDetailSublistApi(deps) {
             state.cfmPresetDetailBatchSelected.clear();
             state.cfmPresetDetailBatchLastClicked = null;
             refreshPresetPanelView();
+          }
+        });
+      batchToolbar
+        .find(".cfm-preset-detail-batch-move")
+        .on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          // 按列表可见顺序重排选中项
+          const visibleKeys = fields
+            .map((field) => String(field?.key || ""))
+            .filter(Boolean);
+          const selected = visibleKeys.filter((key) =>
+            state.cfmPresetDetailBatchSelected.has(key),
+          );
+          if (selected.length === 0) {
+            cfmToastr.warning("请先选择要移动的条目");
+            return;
+          }
+          try {
+            const existingItems = await getEntryTransferInsertItems(
+              "preset",
+              preset.name,
+            );
+            // 弹窗列表中排除当前选中的条目（它们将被"剪切"到目标位置）
+            const selectedSet = new Set(selected);
+            const moveableItems = existingItems.filter(
+              (item) => !selectedSet.has(`prompts.${item.id}`),
+            );
+            const result = await openEntryTransferInsertDialog({
+              sourceEntries: selected,
+              targetType: "preset",
+              targetName: preset.name,
+              existingItems: moveableItems,
+              title: "选择移动位置",
+              description: `即将把 ${selected.length} 个条目移动到预设「${escapeHtml(preset.name)}」的新位置，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择移动目标位置；点击“移动到末尾”则直接放到最后。`,
+              moveMode: true,
+            });
+            if (result && typeof result.targetIndex === "number") {
+              await movePresetDetailFieldsToIndex(
+                preset.name,
+                selected,
+                result.targetIndex,
+              );
+              state.cfmPresetDetailBatchSelected.clear();
+              state.cfmPresetDetailBatchLastClicked = null;
+              refreshPresetPanelView();
+            }
+          } catch (error) {
+            console.error("[CFM] 移动预设条目失败:", error);
+            cfmToastr.error(`移动失败: ${error.message || error}`);
+          }
+        });
+      batchToolbar
+        .find(".cfm-preset-detail-batch-delete")
+        .on("click touchend", async (e) => {
+          if (
+            shouldIgnoreTouchTapAfterMove(e, {
+              prefix: "cfmPresetDetailTap",
+            })
+          ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const visibleKeys = fields
+            .map((field) => String(field?.key || ""))
+            .filter(Boolean);
+          const selected = visibleKeys.filter((key) =>
+            state.cfmPresetDetailBatchSelected.has(key),
+          );
+          if (selected.length === 0) {
+            cfmToastr.warning("请先选择要删除的条目");
+            return;
+          }
+          try {
+            const deletedCount = await batchDeletePresetDetailFields(
+              preset.name,
+              selected,
+            );
+            if (deletedCount > 0) {
+              state.cfmPresetDetailBatchSelected.clear();
+              state.cfmPresetDetailBatchLastClicked = null;
+              refreshPresetPanelView();
+            }
+          } catch (error) {
+            console.error("[CFM] 批量删除预设条目失败:", error);
+            cfmToastr.error(`删除失败: ${error.message || error}`);
           }
         });
       detailCard.append(batchToolbar);

@@ -41,10 +41,14 @@ export function createEntryTransferMemoViewApiCore(deps) {
             <i class="fa-solid fa-box-archive"></i> 临时区
             <span class="cfm-entry-memo-tab-count"></span>
           </button>
+          <button type="button" class="cfm-entry-memo-tab cfm-entry-memo-tab-quickupdate" data-tab="quickupdate">
+            <i class="fa-solid fa-bolt"></i> 快速更新
+          </button>
         </div>
         <div class="cfm-entry-memo-body">
           <div class="cfm-entry-memo-list cfm-entry-memo-list-fav"></div>
           <div class="cfm-entry-memo-list cfm-entry-memo-list-pending"></div>
+          <div class="cfm-entry-memo-quickupdate-panel"></div>
         </div>
         <div class="cfm-edit-popup-footer">
           <button class="menu_button cfm-entry-memo-close"><i class="fa-solid fa-xmark"></i> 关闭</button>
@@ -54,6 +58,7 @@ export function createEntryTransferMemoViewApiCore(deps) {
 
     let activeTab = "pending";
     let renderInFlight = false;
+    let quickUpdateAnalysis = null;
 
     function getGroupsForTab(tab) {
       return groups.filter((g) => (tab === "fav" ? g.favorite : !g.favorite));
@@ -68,7 +73,13 @@ export function createEntryTransferMemoViewApiCore(deps) {
         .find(`.cfm-entry-memo-tab[data-tab="${tab}"]`)
         .addClass("cfm-entry-memo-tab-active");
       dialog.find(".cfm-entry-memo-list").hide();
-      dialog.find(`.cfm-entry-memo-list-${tab}`).show();
+      dialog.find(".cfm-entry-memo-quickupdate-panel").hide();
+      if (tab === "quickupdate") {
+        dialog.find(".cfm-entry-memo-quickupdate-panel").show();
+        renderQuickUpdatePanel();
+      } else {
+        dialog.find(`.cfm-entry-memo-list-${tab}`).show();
+      }
     }
 
     function formatTime(ts) {
@@ -78,6 +89,60 @@ export function createEntryTransferMemoViewApiCore(deps) {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    // 异步检测收藏组快照与源条目是否一致；不一致时高亮"更新"按钮（呼吸式闪烁）
+    function checkMemoGroupFreshness(group, card) {
+      const updateBtn = card.find(".cfm-entry-memo-card-update");
+      if (!updateBtn.length) return;
+      const isAttached = () =>
+        updateBtn[0] && document.contains(updateBtn[0]);
+      entriesApi
+        .getEntryTransferMemoGroupFreshEntries(group)
+        .then((result) => {
+          // 卡片可能已被重新渲染，若按钮已不在文档中则忽略
+          if (!isAttached()) return;
+          if (result?.changed) {
+            updateBtn.show().addClass("cfm-entry-memo-card-update-dirty");
+          } else {
+            updateBtn.hide().removeClass("cfm-entry-memo-card-update-dirty");
+          }
+        })
+        .catch(() => {
+          // 检测失败（源不可用等）静默处理，不显示更新按钮
+          if (isAttached()) {
+            updateBtn.hide().removeClass("cfm-entry-memo-card-update-dirty");
+          }
+        });
+    }
+
+    // 点击"更新"：从源重新收集条目并写入收藏组快照
+    async function updateMemoGroupFromSource(group, card) {
+      const updateBtn = card.find(".cfm-entry-memo-card-update");
+      const oldText = updateBtn.html();
+      updateBtn
+        .prop("disabled", true)
+        .html('<i class="fa-solid fa-spinner fa-spin"></i><span>更新中</span>');
+      try {
+        const result = await entriesApi.updateEntryTransferMemoGroupFromSource(
+          group.id,
+        );
+        if (result?.updated) {
+          cfmToastr.success(`已更新 ${result.changedCount} 条条目快照`);
+          rerender();
+          return;
+        }
+        if (result?.error) {
+          cfmToastr.error(result.error);
+          updateBtn.prop("disabled", false).html(oldText);
+          return;
+        }
+        cfmToastr.info("条目已是最新，无需更新");
+        updateBtn.prop("disabled", false).html(oldText);
+      } catch (err) {
+        cfmToastr.error("更新快照失败：" + String(err?.message || err));
+        updateBtn.prop("disabled", false).html(oldText);
+      }
+    }
+
     function renderGroupCard(group) {
       const count = Array.isArray(group.entries) ? group.entries.length : 0;
       const sourceTypeLabel =
@@ -85,6 +150,41 @@ export function createEntryTransferMemoViewApiCore(deps) {
       const noteHtml = group.note
         ? `<div class="cfm-entry-memo-card-note"><i class="fa-solid fa-note-sticky"></i> ${escapeHtml(group.note)}</div>`
         : "";
+      const isFav = !!group.favorite;
+      const actionHtml = isFav
+        ? `
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-transfer" title="互通（缝合）该组">
+              <i class="fa-solid fa-right-left"></i><span>互通</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-update" title="检测到原条目有变化，点击更新快照" style="display:none;">
+              <i class="fa-solid fa-rotate"></i><span>更新</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-fav" title="在临时区创建副本（收藏组保留）">
+              <i class="fa-solid fa-box-archive"></i><span>转到临时</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-note-btn" title="编辑备注">
+              <i class="fa-solid fa-pen"></i><span>备注</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-unfav" title="取消收藏（从收藏区移除该组）">
+              <i class="fa-solid fa-bookmark-slash"></i><span>取消收藏</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-delete" title="删除该组">
+              <i class="fa-solid fa-trash"></i><span>删除</span>
+            </button>`
+        : `
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-transfer" title="互通（缝合）该组">
+              <i class="fa-solid fa-right-left"></i><span>互通</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-fav" title="在收藏区创建副本（临时组保留）">
+              <i class="fa-solid fa-bookmark"></i><span>收藏</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-note-btn" title="编辑备注">
+              <i class="fa-solid fa-pen"></i><span>备注</span>
+            </button>
+            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-delete" title="删除该组">
+              <i class="fa-solid fa-trash"></i><span>删除</span>
+            </button>`;
+
       const card = $(`
         <div class="cfm-entry-memo-card" data-id="${escapeHtml(group.id)}">
           <div class="cfm-entry-memo-card-main">
@@ -96,20 +196,7 @@ export function createEntryTransferMemoViewApiCore(deps) {
             <span class="cfm-entry-memo-card-time">${formatTime(group.createdAt)}</span>
           </div>
           ${noteHtml}
-          <div class="cfm-entry-memo-card-actions">
-            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-transfer" title="互通（缝合）该组">
-              <i class="fa-solid fa-right-left"></i><span>互通</span>
-            </button>
-            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-fav" title="${group.favorite ? "转为临时区" : "收藏到收藏区（永久保留）"}">
-              <i class="fa-solid ${group.favorite ? "fa-bookmark" : "fa-bookmark-o"}"></i><span>${group.favorite ? "转为临时" : "收藏"}</span>
-            </button>
-            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-note-btn" title="编辑备注">
-              <i class="fa-solid fa-pen"></i><span>备注</span>
-            </button>
-            <button type="button" class="cfm-entry-memo-card-btn cfm-entry-memo-card-delete" title="删除该组">
-              <i class="fa-solid fa-trash"></i><span>删除</span>
-            </button>
-          </div>
+          <div class="cfm-entry-memo-card-actions">${actionHtml}</div>
         </div>
       `);
 
@@ -120,14 +207,54 @@ export function createEntryTransferMemoViewApiCore(deps) {
         transferSingleGroup(group);
       });
 
-      // 收藏/转为临时
+      // 收藏区：更新快照（点击后从源重新收集条目）
+      card.find(".cfm-entry-memo-card-update").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateMemoGroupFromSource(group, card);
+      });
+
+      // 收藏区：异步检测原条目是否变化，变化则高亮"更新"按钮（呼吸式闪烁）
+      if (
+        isFav &&
+        typeof entriesApi?.getEntryTransferMemoGroupFreshEntries === "function"
+      ) {
+        checkMemoGroupFreshness(group, card);
+      }
+
+      // 收藏区：转到临时（复制副本到临时区，收藏组保留）
+      // 临时区：收藏（复制副本到收藏区，临时组保留）
       card.find(".cfm-entry-memo-card-fav").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        memoApi.setEntryTransferMemoGroupFavorite(group.id, !group.favorite);
-        cfmToastr.success(
-          group.favorite ? "已转为临时区" : "已收藏（永久保留）",
-        );
+        if (isFav) {
+          const newId = memoApi.copyEntryTransferMemoGroupToPending(group.id);
+          if (newId) {
+            cfmToastr.success("已在临时区创建副本");
+            rerender();
+          }
+        } else {
+          const newId = memoApi.copyEntryTransferMemoGroupToFavorite(group.id);
+          if (newId) {
+            cfmToastr.success("已在收藏区创建副本（永久保留）");
+            rerender();
+          }
+        }
+      });
+
+      // 收藏区：取消收藏（从收藏区移除该组）
+      card.find(".cfm-entry-memo-card-unfav").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (
+          !window.confirm(
+            `确定取消收藏该分组？\n${group.summary}\n（收藏区将移除该组，若临时区有副本则保留）`,
+          )
+        ) {
+          return;
+        }
+        memoApi.deleteEntryTransferMemoGroup(group.id);
+        cfmToastr.success("已取消收藏");
         rerender();
       });
 
@@ -210,8 +337,223 @@ export function createEntryTransferMemoViewApiCore(deps) {
       const tabCount = dialog.find(".cfm-entry-memo-tab-count");
       tabCount.text(pendingCount > 0 ? String(pendingCount) : "");
 
+      if (activeTab === "quickupdate") renderQuickUpdatePanel();
       switchTab(activeTab);
       renderHeaderMemoBadge();
+    }
+
+    // ==================== 快速更新标签页 ====================
+
+    // 渲染快速更新面板：选择旧/新预设 → 点击"对比并预览" → 展示待缝合条目块 → 确认执行
+    function renderQuickUpdatePanel() {
+      const panel = dialog.find(".cfm-entry-memo-quickupdate-panel");
+      if (!panel.length) return;
+      const presets = entriesApi.getPresetQuickUpdateOptions();
+
+      panel.html(`
+        <div class="cfm-entry-memo-quickup-wrap">
+          <div class="cfm-entry-memo-quickup-desc">
+            <i class="fa-solid fa-bolt"></i>
+            快速更新：选择<b>旧预设</b>（已缝合多条目的）与<b>新预设</b>（作者更新版），
+            插件会对比找出旧预设中<b>新预设没有的条目</b>（即你缝合的条目），
+            按旧预设顺序在新预设对应位置补齐。
+          </div>
+          <div class="cfm-entry-memo-quickup-pickers">
+            <label class="cfm-entry-memo-quickup-picker">
+              <span class="cfm-entry-memo-quickup-picker-label">旧预设（已缝合）</span>
+              <select class="cfm-entry-memo-quickup-old"></select>
+            </label>
+            <label class="cfm-entry-memo-quickup-picker">
+              <span class="cfm-entry-memo-quickup-picker-label">新预设（作者更新）</span>
+              <select class="cfm-entry-memo-quickup-new"></select>
+            </label>
+            <button type="button" class="menu_button cfm-entry-memo-quickup-analyze">
+              <i class="fa-solid fa-magnifying-glass"></i> 对比并预览
+            </button>
+          </div>
+          <div class="cfm-entry-memo-quickup-result"></div>
+        </div>
+      `);
+
+      const oldSelect = panel.find(".cfm-entry-memo-quickup-old");
+      const newSelect = panel.find(".cfm-entry-memo-quickup-new");
+      const result = panel.find(".cfm-entry-memo-quickup-result");
+
+      // 填充预设下拉框
+      presets.forEach((name) => {
+        oldSelect.append(
+          `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`,
+        );
+        newSelect.append(
+          `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`,
+        );
+      });
+      if (presets.length < 2) {
+        result.html(
+          '<div class="cfm-entry-memo-quickup-empty">需要至少 2 个预设才能快速更新</div>',
+        );
+        return;
+      }
+      // 默认：新预设选第 2 个，旧预设选第 1 个
+      if (presets.length >= 2) newSelect.val(presets[1]);
+      oldSelect.val(presets[0]);
+
+      // 若已有分析结果（弹窗未关）则保留
+      if (quickUpdateAnalysis) {
+        renderQuickUpdateResult(result);
+      }
+
+      panel
+        .find(".cfm-entry-memo-quickup-analyze")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const oldName = String(oldSelect.val() || "").trim();
+          const newName = String(newSelect.val() || "").trim();
+          if (!oldName || !newName) {
+            cfmToastr.warning("请选择旧预设与新预设");
+            return;
+          }
+          if (oldName === newName) {
+            cfmToastr.warning("旧预设与新预设不能相同");
+            return;
+          }
+          const btn = panel.find(".cfm-entry-memo-quickup-analyze");
+          const oldText = btn.html();
+          btn
+            .prop("disabled", true)
+            .html('<i class="fa-solid fa-spinner fa-spin"></i> 对比中...');
+          result.html(
+            '<div class="cfm-entry-memo-quickup-loading"><i class="fa-solid fa-spinner fa-spin"></i> 正在对比新旧预设...</div>',
+          );
+          try {
+            const analysis = await entriesApi.analyzePresetQuickUpdate(
+              oldName,
+              newName,
+            );
+            quickUpdateAnalysis = { ...analysis, oldName, newName };
+            renderQuickUpdateResult(result);
+          } catch (err) {
+            console.error("[CFM] 快速更新对比失败", err);
+            result.html(
+              `<div class="cfm-entry-memo-quickup-empty">对比失败：${escapeHtml(String(err?.message || err))}</div>`,
+            );
+          } finally {
+            btn.prop("disabled", false).html(oldText);
+          }
+        });
+    }
+
+    // 渲染对比结果（待缝合块列表 + 确认执行）
+    function renderQuickUpdateResult(resultEl) {
+      const analysis = quickUpdateAnalysis;
+      if (!analysis) {
+        resultEl.html("");
+        return;
+      }
+      if (analysis.error) {
+        resultEl.html(
+          `<div class="cfm-entry-memo-quickup-empty">${escapeHtml(analysis.error)}</div>`,
+        );
+        return;
+      }
+
+      const blocks = Array.isArray(analysis.blocks) ? analysis.blocks : [];
+      if (blocks.length === 0) {
+        resultEl.html(`
+          <div class="cfm-entry-memo-quickup-empty">
+            未发现需要迁移的缝合条目（旧预设 ${analysis.oldTotal} 条，新预设 ${analysis.newTotal} 条，缝合条目 0 条）
+          </div>
+        `);
+        return;
+      }
+
+      const totalStitched = blocks.reduce(
+        (sum, b) => sum + (Array.isArray(b.entries) ? b.entries.length : 0),
+        0,
+      );
+
+      const blockHtml = blocks
+        .map((block, idx) => {
+          const entries = Array.isArray(block.entries) ? block.entries : [];
+          const names = entries.map((e) => escapeHtml(String(e?.name || "")));
+          const anchorText = block.anchorName
+            ? `插入到「<b>${escapeHtml(block.anchorName)}</b>」之后`
+            : "插入到<b>开头</b>";
+          return `
+            <div class="cfm-entry-memo-quickup-block">
+              <div class="cfm-entry-memo-quickup-block-head">
+                <span class="cfm-entry-memo-quickup-block-idx">第 ${idx + 1} 块</span>
+                <span class="cfm-entry-memo-quickup-block-anchor">${anchorText}</span>
+                <span class="cfm-entry-memo-quickup-block-count">${entries.length} 条</span>
+              </div>
+              <div class="cfm-entry-memo-quickup-block-names">${names.join("、")}</div>
+            </div>`;
+        })
+        .join("");
+
+      resultEl.html(`
+        <div class="cfm-entry-memo-quickup-summary">
+          <span>旧预设 ${analysis.oldTotal} 条</span>
+          <span>新预设 ${analysis.newTotal} 条</span>
+          <span>识别到 <b>${totalStitched}</b> 条缝合条目</span>
+          <span>共 <b>${blocks.length}</b> 个插入位置</span>
+        </div>
+        <div class="cfm-entry-memo-quickup-blocks">${blockHtml}</div>
+        <div class="cfm-entry-memo-quickup-actions">
+          <button type="button" class="menu_button cfm-entry-memo-quickup-execute">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> 执行快速更新（缝合 ${totalStitched} 条）
+          </button>
+        </div>
+      `);
+
+      resultEl
+        .find(".cfm-entry-memo-quickup-execute")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (
+            !window.confirm(
+              `确定将 ${totalStitched} 条缝合条目快速更新到新预设「${analysis.newName}」？\n此操作会向新预设追加这些条目。`,
+            )
+          ) {
+            return;
+          }
+          const btn = resultEl.find(".cfm-entry-memo-quickup-execute");
+          const oldText = btn.html();
+          btn
+            .prop("disabled", true)
+            .html('<i class="fa-solid fa-spinner fa-spin"></i> 更新中...');
+          try {
+            const result = await entriesApi.executePresetQuickUpdate(
+              analysis.oldName,
+              analysis.newName,
+              blocks,
+            );
+            if (result?.error) {
+              cfmToastr.error(result.error);
+              btn.prop("disabled", false).html(oldText);
+              return;
+            }
+            const doneCount = Array.isArray(result.blockResults)
+              ? result.blockResults.filter((b) => b.status === "done").length
+              : 0;
+            if (result.insertedTotal > 0) {
+              cfmToastr.success(
+                `快速更新完成：成功 ${doneCount}/${result.totalBlocks} 块，共缝合 ${result.insertedTotal} 条`,
+              );
+            } else {
+              cfmToastr.warning("快速更新完成，但没有条目被缝合（可能都跳过了）");
+            }
+            // 清空分析结果，提示用户可重新对比
+            quickUpdateAnalysis = null;
+            renderQuickUpdatePanel();
+          } catch (err) {
+            console.error("[CFM] 快速更新执行失败", err);
+            cfmToastr.error(`快速更新失败：${String(err?.message || err)}`);
+            btn.prop("disabled", false).html(oldText);
+          }
+        });
     }
 
     // ---- 备注编辑弹窗 ----

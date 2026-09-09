@@ -845,7 +845,163 @@ async function duplicatePresetDetailField(presetName, fieldKey) {
 
 
 
-async function deletePresetDetailField(presetName, fieldKey) {
+async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = false) {
+    const normalizedKeys = Array.from(
+      new Set(
+        (Array.isArray(fieldKeys) ? fieldKeys : [])
+          .map((fieldKey) => String(fieldKey || ""))
+          .filter((fieldKey) => fieldKey.startsWith("prompts.")),
+      ),
+    );
+    if (!normalizedKeys.length) {
+      deps.cfmToastr.warning("请先选择要删除的预设条目");
+      return 0;
+    }
+
+    const pm = deps.getContext().getPresetManager();
+    if (!pm) {
+      deps.cfmToastr.error("无法获取预设管理器");
+      return 0;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      deps.cfmToastr.error(`找不到预设「${presetName}」的数据`);
+      return 0;
+    }
+
+    const fields = getPresetDetailFields(presetData);
+    // 过滤内置条目（charDescription 等带 sourceLabel 的不可删除）
+    const deletableKeys = normalizedKeys.filter((fieldKey) => {
+      const field = fields.find((item) => item.key === fieldKey);
+      return field && !String(field.sourceLabel || "").trim();
+    });
+    const blockedCount = normalizedKeys.length - deletableKeys.length;
+
+    if (!deletableKeys.length) {
+      deps.cfmToastr.warning("所选条目均为内置条目（来自角色卡/世界书），不可删除");
+      return 0;
+    }
+
+    if (!silent) {
+      const confirmed = deps.cfmConfirm(
+        `确定要删除选中的 ${deletableKeys.length} 个预设条目吗？\n此操作不可撤销！${
+          blockedCount > 0 ? `\n（另有 ${blockedCount} 个内置条目不可删除，已跳过）` : ""
+        }`,
+      );
+      if (!confirmed) return 0;
+    }
+
+    const promptList = deps.ensurePresetPromptList(presetData);
+    for (const fieldKey of deletableKeys) {
+      const promptKey = fieldKey.slice("prompts.".length);
+      const promptIndex = deps.getPresetPromptIndexByKey(presetData, promptKey);
+      if (promptIndex !== -1) {
+        promptList.splice(promptIndex, 1);
+      }
+    }
+
+    const deletableKeySet = new Set(deletableKeys);
+    for (const container of deps.ensurePresetPromptOrderContainers(presetData)) {
+      if (!Array.isArray(container?.order)) continue;
+      container.order = container.order.filter((item) => {
+        const identifier = deps.getPresetPromptOrderIdentifier(item);
+        return !deletableKeySet.has(`prompts.${identifier}`);
+      });
+    }
+
+    for (const fieldKey of deletableKeys) {
+      deps.state.cfmPresetDetailBatchSelected.delete(fieldKey);
+      if (deps.state.cfmPresetDetailBatchLastClicked === fieldKey) {
+        deps.state.cfmPresetDetailBatchLastClicked = null;
+      }
+    }
+
+    try {
+      await deps.saveNormalizedPresetData(pm, presetName, presetData);
+      const msg = `已删除 ${deletableKeys.length} 个预设条目`;
+      deps.cfmToastr.success(msg);
+      deps.refreshPresetPanelView();
+      return deletableKeys.length;
+    } catch (error) {
+      deps.console.error("[CFM] 批量删除预设条目失败:", error);
+      deps.cfmToastr.error(`删除失败: ${error.message || error}`);
+      return 0;
+    }
+  }
+
+  async function movePresetDetailFieldsToIndex(presetName, fieldKeys, targetIndex) {
+    const normalizedKeys = Array.from(
+      new Set(
+        (Array.isArray(fieldKeys) ? fieldKeys : [])
+          .map((fieldKey) => String(fieldKey || "").trim())
+          .filter((fieldKey) => fieldKey.startsWith("prompts.")),
+      ),
+    );
+    if (!normalizedKeys.length) {
+      deps.cfmToastr.warning("请先选择要移动的预设条目");
+      return false;
+    }
+    const normalizedTargetIndex = Number.isInteger(targetIndex)
+      ? targetIndex
+      : null;
+    if (normalizedTargetIndex === null || normalizedTargetIndex < 0) {
+      deps.cfmToastr.warning("移动目标位置无效");
+      return false;
+    }
+
+    const pm = deps.getContext().getPresetManager();
+    if (!pm) {
+      deps.cfmToastr.error("无法获取预设管理器");
+      return false;
+    }
+
+    const presetData = getPresetDataForDetail(pm, presetName);
+    if (!presetData) {
+      deps.cfmToastr.error(`找不到预设「${presetName}」的数据`);
+      return false;
+    }
+
+    const currentOrderedFieldKeys = getPresetDetailFields(presetData)
+      .map((item) => String(item?.key || "").trim())
+      .filter((item) => item.startsWith("prompts."));
+    if (currentOrderedFieldKeys.length < 2) return false;
+
+    const selectedSet = new Set(normalizedKeys);
+    const selectedInVisibleOrder = currentOrderedFieldKeys.filter((key) =>
+      selectedSet.has(key),
+    );
+    if (!selectedInVisibleOrder.length) {
+      deps.cfmToastr.warning("未找到可移动的预设条目");
+      return false;
+    }
+
+    // 剪切：从原数组移除选中项，再按目标索引插入。
+    // 目标索引基于"移除后的剩余列表"，与弹窗渲染（不含选中项）一致。
+    const remainingKeys = currentOrderedFieldKeys.filter(
+      (key) => !selectedSet.has(key),
+    );
+    const clampedTargetIndex = Math.max(
+      0,
+      Math.min(normalizedTargetIndex, remainingKeys.length),
+    );
+    const nextOrderedFieldKeys = Array.from(remainingKeys);
+    nextOrderedFieldKeys.splice(clampedTargetIndex, 0, ...selectedInVisibleOrder);
+
+    const orderChanged =
+      currentOrderedFieldKeys.length === nextOrderedFieldKeys.length &&
+      currentOrderedFieldKeys.some(
+        (key, index) => nextOrderedFieldKeys[index] !== key,
+      );
+    if (!orderChanged) {
+      deps.cfmToastr.info("所选条目已在目标位置");
+      return false;
+    }
+
+    return savePresetDetailPromptOrder(presetName, nextOrderedFieldKeys);
+  }
+
+  async function deletePresetDetailField(presetName, fieldKey) {
     if (!String(fieldKey || "").startsWith("prompts.")) return;
 
     const pm = deps.getContext().getPresetManager();
@@ -930,6 +1086,8 @@ async function deletePresetDetailField(presetName, fieldKey) {
     movePresetDetailFieldByStep,
     duplicatePresetDetailField,
     deletePresetDetailField,
+    batchDeletePresetDetailFields,
+    movePresetDetailFieldsToIndex,
     showPresetDetailFieldPopup,
   };
 }

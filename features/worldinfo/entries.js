@@ -377,6 +377,97 @@ export function createWorldInfoEntriesApiCore(deps) {
     return duplicatedCount;
   }
 
+  async function moveWorldInfoEntriesToIndex(bookName, selectionKeys, targetIndex) {
+    const normalizedName = String(bookName || "");
+    const prefix = `${normalizedName}::`;
+    const targetUids = Array.from(
+      new Set(
+        (Array.isArray(selectionKeys) ? selectionKeys : [])
+          .map((key) => String(key || ""))
+          .filter((key) => key.startsWith(prefix))
+          .map((key) => key.slice(prefix.length))
+          .filter(Boolean),
+      ),
+    );
+    if (!targetUids.length) {
+      deps.cfmToastr.warning("请先选择要移动的世界书条目");
+      return false;
+    }
+    const normalizedTargetIndex = Number.isInteger(targetIndex)
+      ? targetIndex
+      : null;
+    if (normalizedTargetIndex === null || normalizedTargetIndex < 0) {
+      deps.cfmToastr.warning("移动目标位置无效");
+      return false;
+    }
+
+    const worldInfoData = await fetchWorldInfoDetailData(normalizedName);
+    if (!worldInfoData?.entries || typeof worldInfoData.entries !== "object") {
+      deps.cfmToastr.error(`无法获取世界书「${normalizedName}」的数据`);
+      return false;
+    }
+
+    const sortMode = getWorldInfoEntryDetailSortMode();
+    // 仅自定义排序模式支持重排（displayIndex 控制顺序）；优先级模式按 order 排序，不支持换位置
+    if (sortMode !== "custom") {
+      deps.cfmToastr.warning(
+        "当前为“优先级”排序模式，请先切换到“自定义”排序再移动条目位置",
+      );
+      return false;
+    }
+
+    // 按当前可见顺序取条目，切出选中项后按目标索引插入，最后重写 displayIndex
+    const visibleEntries = getWorldInfoEntriesForDetail(
+      normalizedName,
+      worldInfoData,
+      sortMode,
+    );
+    const selectedUidSet = new Set(targetUids);
+    const selectedEntries = visibleEntries.filter((entry) =>
+      selectedUidSet.has(entry.uid),
+    );
+    const remainingEntries = visibleEntries.filter(
+      (entry) => !selectedUidSet.has(entry.uid),
+    );
+    if (!selectedEntries.length) {
+      deps.cfmToastr.warning("未找到可移动的世界书条目");
+      return false;
+    }
+
+    const clampedTargetIndex = Math.max(
+      0,
+      Math.min(normalizedTargetIndex, remainingEntries.length),
+    );
+    const reorderedEntries = Array.from(remainingEntries);
+    reorderedEntries.splice(clampedTargetIndex, 0, ...selectedEntries);
+
+    // 与原顺序比对，无变化则跳过保存
+    const orderChanged =
+      visibleEntries.length === reorderedEntries.length &&
+      visibleEntries.some(
+        (entry, index) => String(reorderedEntries[index]?.uid) !== String(entry?.uid),
+      );
+    if (!orderChanged) {
+      deps.cfmToastr.info("所选条目已在目标位置");
+      return false;
+    }
+
+    // 重写所有条目的 displayIndex 并写回原始 entries
+    reorderedEntries.forEach((entry, index) => {
+      const rawEntry = worldInfoData.entries[entry.uid];
+      if (rawEntry && typeof rawEntry === "object") {
+        rawEntry.displayIndex = index;
+      }
+    });
+
+    await saveWorldInfoDetailData(normalizedName, worldInfoData);
+    deps.cfmToastr.success(
+      `已移动 ${selectedEntries.length} 个世界书条目到新位置`,
+    );
+    refreshWorldInfoPanelView();
+    return true;
+  }
+
   async function batchDeleteWorldInfoEntries(bookName, selectionKeys) {
     const normalizedName = String(bookName || "");
     const prefix = `${normalizedName}::`;
@@ -506,6 +597,7 @@ export function createWorldInfoEntriesApiCore(deps) {
     deleteWorldInfoEntryInBook,
     batchDuplicateWorldInfoEntries,
     batchDeleteWorldInfoEntries,
+    moveWorldInfoEntriesToIndex,
     applyWorldInfoEntryBatchActivation,
   };
 }
