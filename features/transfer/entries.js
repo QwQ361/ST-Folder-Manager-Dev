@@ -34,7 +34,9 @@ export function createEntryTransferApiCore(deps) {
     getWorldInfoEntrySelectionKey,
     getWorldInfoExpandedNodes,
     getWorldInfoNames,
+    memoApi,
     refreshPresetPanelView,
+    renderHeaderMemoBadge,
     renderPresetsView,
     renderWorldInfoView,
     saveNormalizedPresetData,
@@ -130,7 +132,72 @@ export function createEntryTransferApiCore(deps) {
       return;
     }
 
-    // ── 构建目标选择弹窗 ──
+    // ── 第一步：询问现在就缝合，还是存入缝合备忘录（在选目标之前）──
+    const decision = await askEntryTransferNowOrLater(sourceEntries.length);
+    if (!decision) return;
+
+    if (decision === "later") {
+      // 选"存入"：询问备注后存入备忘录（不选目标）
+      const noteResult = await askEntryTransferMemoNote(sourceEntries.length);
+      if (!noteResult) return false;
+      deps.memoApi.addEntryTransferMemoGroup({
+        sourceType,
+        sourceName,
+        entries: sourceEntries,
+        note: noteResult.note || "",
+      });
+      deps.renderHeaderMemoBadge?.();
+      cfmToastr.success(
+        `已存入缝合备忘录${noteResult.note ? "（含备注）" : ""}`,
+      );
+      return true;
+    }
+
+    // 选"现在缝合"：进入选择目标
+    const targetResult = await openEntryTransferTargetDialog(
+      sourceType,
+      sourceName,
+      sourceEntries,
+      {
+        title: `条目互通 (${sourceEntries.length} 个条目)`,
+        confirmLabel: "确认互通",
+      },
+    );
+    if (!targetResult) return false;
+
+    try {
+      const transferResult = await executeEntryTransfer(
+        sourceType,
+        sourceName,
+        sourceEntries,
+        targetResult.targetType,
+        targetResult.targetName,
+      );
+      return transferResult ? true : false;
+    } catch (err) {
+      console.error("[CFM] 条目互通失败:", err);
+      cfmToastr.error(`互通失败: ${err?.message || err}`);
+      return false;
+    }
+  }
+
+  /**
+   * "选择目标预设或世界书"弹窗（从 showEntryTransferPopup 抽出，供互通主流程、备忘录单组缝合、全部缝合规划复用）。
+   * @returns {Promise<{targetType:string, targetName:string, confirmText?:string}|null>}
+   */
+  async function openEntryTransferTargetDialog(
+    sourceType,
+    sourceName,
+    sourceEntries,
+    options = {},
+  ) {
+    const {
+      title = `条目互通 (${sourceEntries.length} 个条目)`,
+      confirmLabel = "确认互通",
+      headerHint = "",
+      confirmText = "",
+    } = options || {};
+
     const presets = getCurrentPresets();
     const wiNames = await getWorldInfoNames();
     const presetGroups = getResourceGroups("presets");
@@ -143,13 +210,15 @@ export function createEntryTransferApiCore(deps) {
     let selectedTargetName = null;
     let transferExpandedFolders = new Set();
 
+    // 使用专用全屏高 z-index 遮罩（高于缝合备忘录弹窗 100000），避免被备忘录遮罩盖住
     const overlay = $(
-      '<div class="cfm-edit-popup-overlay cfm-entry-transfer-overlay"></div>',
+      '<div class="cfm-edit-popup-overlay cfm-entry-transfer-overlay cfm-entry-transfer-overlay-fixed"></div>',
     );
     const dialog = $(`
       <div class="cfm-edit-popup cfm-entry-transfer-dialog">
+        ${headerHint ? `<div class="cfm-entry-transfer-header-hint">${headerHint}</div>` : ""}
         <div class="cfm-edit-popup-header">
-          <span><i class="fa-solid fa-right-left"></i> 条目互通 (${sourceEntries.length} 个条目)</span>
+          <span><i class="fa-solid fa-right-left"></i> ${escapeHtml(title)}</span>
         </div>
         <div class="cfm-entry-transfer-body">
           <div class="cfm-entry-transfer-type-row">
@@ -165,7 +234,7 @@ export function createEntryTransferApiCore(deps) {
           <div class="cfm-entry-transfer-selected-hint"></div>
         </div>
         <div class="cfm-edit-popup-footer">
-          <button class="menu_button cfm-entry-transfer-confirm" disabled><i class="fa-solid fa-check"></i> 确认互通</button>
+          <button class="menu_button cfm-entry-transfer-confirm" disabled><i class="fa-solid fa-check"></i> ${escapeHtml(confirmLabel)}</button>
           <button class="menu_button cfm-entry-transfer-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
         </div>
       </div>
@@ -402,44 +471,181 @@ export function createEntryTransferApiCore(deps) {
 
     searchInput.on("input", () => renderTransferTree());
 
-    dialog.find(".cfm-entry-transfer-cancel").on("click", (e) => {
-      e.preventDefault();
-      overlay.remove();
-      dialog.remove();
-    });
-    overlay.on("click", (e) => {
-      if ($(e.target).hasClass("cfm-entry-transfer-overlay")) {
+    return new Promise((resolve) => {
+      let settled = false;
+      function settle(result) {
+        if (settled) return;
+        settled = true;
         overlay.remove();
         dialog.remove();
+        resolve(result);
       }
+
+      dialog.find(".cfm-entry-transfer-cancel").on("click touchend", (e) => {
+        e.preventDefault();
+        settle(null);
+      });
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-entry-transfer-overlay")) {
+          settle(null);
+        }
+      });
+
+      // ── 确认 ──
+      confirmBtn.on("click touchend", (e) => {
+        e.preventDefault();
+        if (!selectedTargetName) return;
+        settle({
+          targetType: selectedTargetType,
+          targetName: selectedTargetName,
+          confirmText: confirmText || "",
+        });
+      });
+
+      renderTransferTree();
+      updateHint();
+      overlay.append(dialog);
+      const host = $("#cfm-popup");
+      if (host.length) host.append(overlay);
+      else $("body").append(overlay);
     });
+  }
 
-    // ── 确认互通 ──
-    confirmBtn.on("click", async (e) => {
-      e.preventDefault();
-      if (!selectedTargetName) return;
+  /**
+   * 第一步询问：现在就缝合，还是存入缝合备忘录？（在选目标之前弹出）
+   * @param {number} entryCount 条目数量
+   * @returns {Promise<"now"|"later"|null>} "now"=现在缝合；"later"=存入缝合备忘录；null=取消
+   */
+  function askEntryTransferNowOrLater(entryCount) {
+    return new Promise((resolve) => {
+      const overlay = $(`
+        <div class="cfm-edit-popup-overlay cfm-entry-transfer-ask-overlay">
+          <div class="cfm-edit-popup cfm-entry-transfer-ask-dialog" style="max-width:min(calc(100vw - 24px), 460px);">
+            <div class="cfm-edit-popup-header">
+              <span><i class="fa-solid fa-question-circle"></i> 缝合方式</span>
+            </div>
+            <div class="cfm-entry-transfer-ask-body" style="display:flex;flex-direction:column;gap:12px;padding:16px 18px 10px;">
+              <div style="font-size:14px;line-height:1.6;color:var(--SmartThemeBodyColor, #eef4ff);">
+                将 <strong>${entryCount}</strong> 个条目互通到目标，要现在缝合吗？
+              </div>
+              <div style="font-size:12px;line-height:1.6;opacity:0.86;">
+                选择「现在缝合」将弹出目标选择，选择目标后可直接决定插入位置。<br>
+                选择「存入备忘录」可稍后统一批量缝合，并可添加备注。
+              </div>
+            </div>
+            <div class="cfm-edit-popup-footer">
+              <button class="menu_button cfm-entry-transfer-ask-later"><i class="fa-solid fa-bookmark"></i> 存入备忘录</button>
+              <button class="menu_button cfm-entry-transfer-ask-now"><i class="fa-solid fa-bolt"></i> 现在缝合</button>
+              <button class="menu_button cfm-entry-transfer-ask-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+            </div>
+          </div>
+        </div>
+      `);
 
-      overlay.remove();
-      dialog.remove();
+      let settled = false;
+      const settle = (result) => {
+        if (settled) return;
+        settled = true;
+        overlay.remove();
+        resolve(result);
+      };
 
-      try {
-        await executeEntryTransfer(
-          sourceType,
-          sourceName,
-          sourceEntries,
-          selectedTargetType,
-          selectedTargetName,
-        );
-      } catch (err) {
-        console.error("[CFM] 条目互通失败:", err);
-        cfmToastr.error(`互通失败: ${err?.message || err}`);
-      }
+      overlay
+        .find(".cfm-entry-transfer-ask-later")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settle("later");
+        });
+      overlay.find(".cfm-entry-transfer-ask-now").on("click touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        settle("now");
+      });
+      overlay
+        .find(".cfm-entry-transfer-ask-cancel")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settle(null);
+        });
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-entry-transfer-ask-overlay")) {
+          settle(null);
+        }
+      });
+
+      const host = $("#cfm-popup");
+      if (host.length) host.append(overlay);
+      else $("body").append(overlay);
     });
+  }
 
-    renderTransferTree();
-    updateHint();
-    overlay.append(dialog);
-    $("#cfm-popup").append(overlay);
+  /**
+   * 存入缝合备忘录时询问备注（在选目标之前弹出，故不含目标信息）
+   * @param {number} entryCount 条目数量
+   * @returns {Promise<{action:"later", note:string}|null>} null=取消存入
+   */
+  function askEntryTransferMemoNote(entryCount) {
+    return new Promise((resolve) => {
+      const overlay = $(`
+        <div class="cfm-edit-popup-overlay cfm-entry-transfer-note-overlay">
+          <div class="cfm-edit-popup cfm-entry-transfer-note-dialog" style="max-width:min(calc(100vw - 24px), 440px);">
+            <div class="cfm-edit-popup-header">
+              <span><i class="fa-solid fa-note-sticky"></i> 存入缝合备忘录</span>
+            </div>
+            <div class="cfm-entry-transfer-note-body" style="display:flex;flex-direction:column;gap:10px;padding:14px 18px 10px;">
+              <div style="font-size:13px;line-height:1.6;opacity:0.92;">将 <strong>${entryCount}</strong> 个条目存入缝合备忘录。</div>
+              <div style="font-size:12px;line-height:1.6;opacity:0.78;">备注可帮您记住这批条目打算缝合到哪里。</div>
+              <input type="text" class="cfm-edit-input cfm-entry-transfer-note-input" placeholder="备注（可选，例如：缝合到主预设A）" />
+            </div>
+            <div class="cfm-edit-popup-footer">
+              <button class="menu_button cfm-entry-transfer-note-save"><i class="fa-solid fa-check"></i> 存入</button>
+              <button class="menu_button cfm-entry-transfer-note-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      let settled = false;
+      const settle = (result) => {
+        if (settled) return;
+        settled = true;
+        overlay.remove();
+        resolve(result);
+      };
+
+      overlay
+        .find(".cfm-entry-transfer-note-save")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const note = String(
+            overlay.find(".cfm-entry-transfer-note-input").val() || "",
+          ).trim();
+          settle({ action: "later", note });
+        });
+      overlay
+        .find(".cfm-entry-transfer-note-cancel")
+        .on("click touchend", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          settle(null);
+        });
+      overlay.on("click", (e) => {
+        if ($(e.target).hasClass("cfm-entry-transfer-note-overlay")) {
+          settle(null);
+        }
+      });
+
+      const host = $("#cfm-popup");
+      if (host.length) host.append(overlay);
+      else $("body").append(overlay);
+      setTimeout(
+        () => overlay.find(".cfm-entry-transfer-note-input").trigger("focus"),
+        50,
+      );
+    });
   }
 
   async function getEntryTransferInsertItems(targetType, targetName) {
@@ -486,15 +692,38 @@ export function createEntryTransferApiCore(deps) {
       targetType = "preset",
       targetName = "",
       existingItems = [],
+      batchMode = false, // 全部缝合规划阶段：按钮文案带"并开始下一组"，返回 action
+      isLast = false, // batchMode 下最后一组：取消改为触发末组选择弹窗
+      headerHint = "", // batchMode 顶部提示：正在缝合 N/M：[摘要] by [来源] [备注]
     } = options || {};
     const normalizedItems = Array.isArray(existingItems) ? existingItems : [];
     const entryCount = Array.isArray(sourceEntries) ? sourceEntries.length : 0;
     const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
 
+    const confirmLabel = batchMode
+      ? isLast
+        ? "确认插入"
+        : "确认插入并开始下一组"
+      : "确认插入";
+    const skipLabel = batchMode
+      ? isLast
+        ? "追加到末尾"
+        : "追加到末尾并开始下一组"
+      : "追加到末尾";
+    const cancelLabel = batchMode
+      ? isLast
+        ? "取消"
+        : "取消并开始下一组"
+      : "取消";
+
     return new Promise((resolve) => {
-      const overlay = $('<div class="cfm-sort-dialog-overlay"></div>');
+      // 使用专用全屏高 z-index 遮罩（高于缝合备忘录弹窗 100000），避免被备忘录遮罩盖住
+      const overlay = $(
+        '<div class="cfm-edit-popup-overlay cfm-entry-transfer-sort-overlay"></div>',
+      );
       const dialog = $(`
-        <div class='cfm-sort-dialog cfm-sort-dialog-insert'>
+        <div class='cfm-sort-dialog cfm-sort-dialog-insert ${batchMode ? "cfm-sort-dialog-insert-batch" : ""}'>
+          ${batchMode && headerHint ? `<div class='cfm-sort-dialog-batch-hint'>${headerHint}</div>` : ""}
           <div class='cfm-sort-dialog-header'>
             <span class='cfm-sort-dialog-title'><i class='fa-solid fa-sort'></i> 选择插入位置</span>
             <span class='cfm-sort-dialog-desc'>即将把 ${entryCount} 个条目互通到${targetTypeLabel}「${escapeHtml(targetName)}」，请点击分隔线中间的 <i class='fa-solid fa-plus'></i> 选择插入位置；点击“追加到末尾”则直接放到最后。</span>
@@ -503,9 +732,9 @@ export function createEntryTransferApiCore(deps) {
             <div class='cfm-sort-dialog-list cfm-sort-dialog-list-insert'></div>
           </div>
           <div class='cfm-sort-dialog-footer'>
-            <button class='cfm-btn cfm-sort-dialog-confirm cfm-sort-dialog-insert-confirm' disabled><i class='fa-solid fa-check'></i> 确认插入</button>
-            <button class='cfm-btn cfm-sort-dialog-skip'><i class='fa-solid fa-forward'></i> 追加到末尾</button>
-            <button class='cfm-btn cfm-sort-dialog-cancel'><i class='fa-solid fa-xmark'></i> 取消</button>
+            <button class='cfm-btn cfm-sort-dialog-confirm cfm-sort-dialog-insert-confirm' disabled><i class='fa-solid fa-check'></i> ${confirmLabel}</button>
+            <button class='cfm-btn cfm-sort-dialog-skip'><i class='fa-solid fa-forward'></i> ${skipLabel}</button>
+            <button class='cfm-btn cfm-sort-dialog-cancel'><i class='fa-solid fa-xmark'></i> ${cancelLabel}</button>
           </div>
         </div>
       `);
@@ -608,26 +837,39 @@ export function createEntryTransferApiCore(deps) {
           cfmToastr.warning("请先选择一个插入位置");
           return;
         }
-        settle({ targetIndex: selectedTargetIndex });
+        settle(
+          batchMode
+            ? { action: "insert", targetIndex: selectedTargetIndex, isLast }
+            : { targetIndex: selectedTargetIndex },
+        );
       });
 
       dialog.find(".cfm-sort-dialog-skip").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        settle({ targetIndex: normalizedItems.length });
+        settle(
+          batchMode
+            ? { action: "append", targetIndex: normalizedItems.length, isLast }
+            : { targetIndex: normalizedItems.length },
+        );
       });
 
       dialog.find(".cfm-sort-dialog-cancel").on("click touchend", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        settle(null);
+        settle(batchMode ? { action: "cancel", isLast } : null);
       });
 
       overlay.on("click", (e) => {
-        if ($(e.target).is(overlay)) settle(null);
+        if ($(e.target).hasClass("cfm-entry-transfer-sort-overlay")) {
+          settle(batchMode ? { action: "cancel", isLast } : null);
+        }
       });
 
-      $("#cfm-popup").append(overlay).append(dialog);
+      overlay.append(dialog);
+      const host = $("#cfm-popup");
+      if (host.length) host.append(overlay);
+      else $("body").append(overlay);
     });
   }
 
@@ -1333,10 +1575,12 @@ export function createEntryTransferApiCore(deps) {
   }
 
   return {
+    askEntryTransferNowOrLater,
     executeEntryTransfer,
     getEntryTransferInsertItems,
     getEntryTransferPostActionMode,
     openEntryTransferInsertDialog,
+    openEntryTransferTargetDialog,
     revealEntryTransferTargetResource,
     revealTransferredPresetTarget,
     revealTransferredWorldInfoTarget,

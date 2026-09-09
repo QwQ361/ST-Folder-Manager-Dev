@@ -336,12 +336,28 @@ export function createWorldInfoEntrySublistApi(deps) {
           }
           e.preventDefault();
           e.stopPropagation();
-          const selected = Array.from(state.cfmWorldInfoEntryBatchSelected);
+          // 按列表可见顺序重排选中项（框选/跨选可能按点击顺序插入 Set）
+          const visibleKeys = entries.map((entry) =>
+            deps.getWorldInfoEntrySelectionKey(normalizedName, entry.uid),
+          );
+          const selected = visibleKeys.filter((key) =>
+            state.cfmWorldInfoEntryBatchSelected.has(key),
+          );
           if (selected.length === 0) {
             deps.cfmToastr.warning("请先选择要互通的条目");
             return;
           }
-          await deps.showEntryTransferPopup("worldinfo", normalizedName, selected);
+          const done = await deps.showEntryTransferPopup(
+            "worldinfo",
+            normalizedName,
+            selected,
+          );
+          // 互通完成或已存入备忘录后，清空选中，便于继续选择其它条目
+          if (done) {
+            state.cfmWorldInfoEntryBatchSelected.clear();
+            state.cfmWorldInfoEntryBatchLastClicked = null;
+            rerenderCurrentSubList();
+          }
         });
       detailCard.append(batchToolbar);
     }

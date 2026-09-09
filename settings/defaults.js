@@ -23,6 +23,13 @@ export function ensureSettingsDefaults({
   if (!settings.folders) settings.folders = {};
   if (!settings.favorites) settings.favorites = [];
   if (!Array.isArray(settings.hiddenChars)) settings.hiddenChars = [];
+  // 缝合备忘录（预设/世界书条目互通收藏与暂存）
+  if (
+    !settings.entryTransferMemo ||
+    !Array.isArray(settings.entryTransferMemo.groups)
+  ) {
+    settings.entryTransferMemo = { groups: [] };
+  }
 
   migrateLegacyFolderConfig({ settings, storageKey });
 

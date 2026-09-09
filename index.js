@@ -1,36 +1,22 @@
 import { getBackupBridgeDetailsCore } from "./bridge/capabilities.js";
-import { createBackupBridgeSyncController } from "./bridge/sync.js";
 import {
   listBackupBridgeResources as listBackupBridgeResourcesCore,
   readBackupBridgeResource as readBackupBridgeResourceCore,
 } from "./bridge/export.js";
 import { writeBackupBridgeResource as writeBackupBridgeResourceCore } from "./bridge/import.js";
+import { createBackupBridgeSyncController } from "./bridge/sync.js";
 import {
-  createResourceExportApi,
-  executeResourceExportCore,
-} from "./features/backup/export.js";
-import {
-  enterExportModeCore,
-  exitExportModeCore,
-  prependExportToolbarCore,
-  toggleExportItemCore,
-} from "./features/backup/export-mode.js";
+  BACKUP_BRIDGE_PROTOCOL_VERSION,
+  BACKUP_BRIDGE_VERSION,
+  CFM_SYNC_POLL_INTERVAL_MS,
+  CFM_SYNC_STATE_URL,
+  STORAGE_KEY,
+  STORAGE_KEY_BTN_POS,
+  extensionFolderPath,
+  extensionName,
+} from "./core/constants.js";
+import { CFM_ACTION_META, CFM_TAB_META } from "./core/resource-types.js";
 import { loadFolderConfig, saveFolderConfig } from "./core/storage.js";
-import {
-  bindCharSortBindings,
-  bindResSortBindings,
-} from "./features/sort/sort-bindings.js";
-import {
-  CFM_STYLE_PRESETS as CFM_STYLE_PRESETS_CORE,
-  applyCustomStyleCore,
-  colorToAlpha as colorToAlphaCore,
-  colorToHex as colorToHexCore,
-  getComputedThemeDefaultsCore,
-  getCurrentThemeNameCore,
-  hexToRgba as hexToRgbaCore,
-  showThemeCustomizePopupCore,
-  updateThemePreviewCore,
-} from "./features/appearance/ui-style.js";
 import {
   handleDefaultBgSettingCore,
   updateDefaultBgBtnStateCore,
@@ -43,6 +29,17 @@ import {
   setThemeBgBindingCore,
 } from "./features/appearance/theme-binding.js";
 import {
+  CFM_STYLE_PRESETS as CFM_STYLE_PRESETS_CORE,
+  applyCustomStyleCore,
+  colorToAlpha as colorToAlphaCore,
+  colorToHex as colorToHexCore,
+  getComputedThemeDefaultsCore,
+  getCurrentThemeNameCore,
+  hexToRgba as hexToRgbaCore,
+  showThemeCustomizePopupCore,
+  updateThemePreviewCore,
+} from "./features/appearance/ui-style.js";
+import {
   createBgNotePopupApi,
   getBgNoteCore,
   setBgNoteCore,
@@ -54,12 +51,6 @@ import {
   setBgOrientationCore,
 } from "./features/backgrounds/orientation.js";
 import {
-  applyBackgroundCore,
-  getBackgroundDisplayNameCore,
-  getBackgroundNamesCore,
-  getBackgroundThumbnailUrlCore,
-} from "./features/backgrounds/view.js";
-import {
   enterBgRenameModeCore,
   executeBgRenameCore,
   exitBgRenameModeCore,
@@ -67,32 +58,50 @@ import {
   showBgRenamePopupCore,
   toggleBgRenameItemCore,
 } from "./features/backgrounds/rename.js";
-import { renderThemesViewCore } from "./ui/views/themes-view.js";
-import { renderWorldInfoViewCore } from "./ui/views/worldinfo-view.js";
-import { createPresetDetailSublistApi } from "./ui/views/preset-detail-sublist.js";
-import { createChatSublistApi } from "./ui/views/chat-sublist.js";
-import { createToolbarActionsApi } from "./features/layout/toolbar-actions.js";
-import { createBatchTemplateApi } from "./features/folders/batch-templates.js";
-import { createWorldInfoEntryDetailApi } from "./ui/views/worldinfo-entry-detail.js";
-import { createWorldInfoEntrySublistApi } from "./ui/views/worldinfo-entry-sublist.js";
+import {
+  applyBackgroundCore,
+  getBackgroundDisplayNameCore,
+  getBackgroundNamesCore,
+  getBackgroundThumbnailUrlCore,
+} from "./features/backgrounds/view.js";
+import {
+  enterExportModeCore,
+  exitExportModeCore,
+  prependExportToolbarCore,
+  toggleExportItemCore,
+} from "./features/backup/export-mode.js";
+import {
+  createResourceExportApi,
+  executeResourceExportCore,
+} from "./features/backup/export.js";
 import { createBackupImportExportApi } from "./features/backup/import-export.js";
 import { createBackupImportApi } from "./features/backup/import.js";
-import { createRegexPresetEditApi } from "./features/regex/preset-edit.js";
-import { createQuickAddApi } from "./features/folders/quick-add.js";
-import { createClearModesApi } from "./features/selection/clear-modes.js";
-import { renderBackgroundsViewCore } from "./ui/views/backgrounds-view.js";
-import { renderChatlogsViewCore } from "./ui/views/chatlogs-view.js";
-import { renderPersonasViewCore } from "./ui/views/personas-view.js";
-import { renderPresetsViewCore } from "./ui/views/presets-view.js";
-import { renderQRViewCore } from "./ui/views/qr-view.js";
-import { renderRegexViewCore } from "./ui/views/regex-view.js";
 import { splitChatlogFileName as splitChatlogFileNameCore } from "./features/chatlogs/api.js";
 import { createChatlogCacheApiCore } from "./features/chatlogs/cache.js";
 import { createChatlogImportExportApiCore } from "./features/chatlogs/import-export.js";
-import { createChatlogNotesApiCore } from "./features/chatlogs/notes.js";
-import { createChatlogRenameApiCore } from "./features/chatlogs/rename.js";
-import { createChatlogPinningApiCore } from "./features/chatlogs/pinning.js";
 import { createChatlogNativeEnhancerApiCore } from "./features/chatlogs/native-enhancer.js";
+import { createChatlogNotesApiCore } from "./features/chatlogs/notes.js";
+import { createChatlogPinningApiCore } from "./features/chatlogs/pinning.js";
+import { createChatlogRenameApiCore } from "./features/chatlogs/rename.js";
+import {
+  cfmDebugDragLogCore,
+  pcDragEndCore,
+  pcDragStartCore,
+  pcGetDropDataCore,
+} from "./features/dragdrop/desktop.js";
+import {
+  buildDraggedHighlightSelectorCore,
+  ensureDragLocateHighlightStyleCore,
+  flashDraggedElementCore,
+} from "./features/dragdrop/drop-zones.js";
+import {
+  bindTouchSafeTapCore,
+  cfmIsTouchDeviceCore,
+  createMobileTouchTapGuardController,
+  createTouchDragMgrCore,
+  recordTouchTapStartCore,
+  shouldIgnoreTouchTapAfterMoveCore,
+} from "./features/dragdrop/mobile.js";
 import {
   ensureResFavoritesCore,
   getFavoriteCharactersCore,
@@ -103,6 +112,7 @@ import {
   toggleFavoriteCore,
   toggleResFavoriteCore,
 } from "./features/favorites/favorites.js";
+import { createBatchTemplateApi } from "./features/folders/batch-templates.js";
 import {
   countCharsInFolderRecursiveCore,
   countResItemsRecursiveCore,
@@ -115,19 +125,21 @@ import {
   createNewTagInSystemCore,
 } from "./features/folders/create.js";
 import {
-  executeResourceDeleteCore,
-  removeResFolderCore,
-} from "./features/folders/delete.js";
-import {
   enterResDeleteModeCore,
   exitResDeleteModeCore,
   prependResDeleteToolbarCore,
   toggleResDeleteItemCore,
 } from "./features/folders/delete-mode.js";
 import {
+  executeResourceDeleteCore,
+  removeResFolderCore,
+} from "./features/folders/delete.js";
+import { createTagImportController } from "./features/folders/import-tags.js";
+import {
   reorderFolderCore,
   reorderResFolderCore,
 } from "./features/folders/move.js";
+import { createQuickAddApi } from "./features/folders/quick-add.js";
 import {
   buildPrefixedTagNameCore,
   findOrCreateTagCore,
@@ -154,29 +166,189 @@ import {
   wouldCreateCycleCore,
   wouldCreateResCycleCore,
 } from "./features/folders/tree.js";
+import { cfmTCore } from "./features/i18n/language.js";
+import {
+  cfmConvertDomTextCore,
+  initCfmS2tObserverCore,
+} from "./features/i18n/s2t-bridge.js";
 import { getTabMenuConfigCore } from "./features/layout/tabs.js";
+import { createToolbarActionsApi } from "./features/layout/toolbar-actions.js";
 import { getToolbarMenuConfigCore } from "./features/layout/toolbar-config.js";
+import { createPersonaBindingsApiCore } from "./features/personas/bindings.js";
+import { createCharacterDetailApiCore } from "./features/personas/character-detail.js";
+import { createPersonaDetailApiCore } from "./features/personas/detail.js";
+import {
+  addTagToCharCore,
+  autoCleanRedundantTagsCore,
+  copyCharToFolderCore,
+  handleCharDropToFolderCore,
+  moveCharToFolderCore,
+  removeCharFromAllFoldersCore,
+  removeTagFromCharCore,
+} from "./features/personas/folders.js";
+import {
+  filterHiddenCharsCore,
+  getHiddenCharsCore,
+  isCharHiddenCore,
+  toggleCharHiddenCore,
+} from "./features/personas/hidden.js";
+import { createPersonaNotesApiCore } from "./features/personas/notes.js";
+import { createPersonaViewApiCore } from "./features/personas/view.js";
 import { createPresetDetailApiCore } from "./features/presets/detail.js";
 import { createPresetNotesApiCore } from "./features/presets/notes.js";
+import { createPresetPromptEditorApi as createPresetPromptEditorApiCore } from "./features/presets/prompt-editor.js";
+import * as presetPromptsCore from "./features/presets/prompts.js";
+import { createNativePresetPromptEditorApi as createNativePresetPromptEditorApiCore } from "./features/presets/prompts.js";
 import { createPresetRenameApiCore } from "./features/presets/rename.js";
 import {
   getCurrentPresetNameCore,
   getCurrentPresetsCore,
 } from "./features/presets/view.js";
-import * as presetPromptsCore from "./features/presets/prompts.js";
-import { createNativePresetPromptEditorApi as createNativePresetPromptEditorApiCore } from "./features/presets/prompts.js";
-import { createPresetPromptEditorApi as createPresetPromptEditorApiCore } from "./features/presets/prompt-editor.js";
 import { createQuickReplyNotesApiCore } from "./features/quickreply/notes.js";
-import { createQuickReplyRenameApiCore } from "./features/quickreply/rename.js";
 import {
   createQuickReplyPresetsApiCore,
   saveBackupBridgeQuickReplySet,
 } from "./features/quickreply/presets.js";
+import { createQuickReplyRenameApiCore } from "./features/quickreply/rename.js";
+import { createRegexGroupsApiCore } from "./features/regex/groups.js";
+import { createRegexNativeStateApi } from "./features/regex/native-state.js";
+import { createRegexPresetEditApi } from "./features/regex/preset-edit.js";
+import { createRegexTreeApiCore } from "./features/regex/tree.js";
+import { createRegexViewApiCore } from "./features/regex/view.js";
+import { renameTagInSystemCore } from "./features/rename/rename.js";
+import { fuzzyMatch as matcherFuzzyMatch } from "./features/search/matcher.js";
+import { createResourceSearchApiCore } from "./features/search/resource-search.js";
+import { bindSearchInputs } from "./features/search/search-bindings.js";
+import { createGlobalSearchCore } from "./features/search/search-global.js";
+import { createSearchHelpers } from "./features/search/search-helpers.js";
+import { createPresetSearchCore } from "./features/search/search-preset.js";
+import { createQrSearchCore } from "./features/search/search-qr.js";
+import { createRegexSearchCore } from "./features/search/search-regex.js";
+import { createWorldInfoSearchCore } from "./features/search/search-worldinfo.js";
+import { createClearModesApi } from "./features/selection/clear-modes.js";
+import {
+  clearMultiSelectCore,
+  getMultiDragDataCore,
+  getVisibleResourceIdsCore,
+  handleFolderTargetMoveCore,
+  selectAllVisibleCore,
+  toggleMultiSelectItemCore,
+} from "./features/selection/mode.js";
+import {
+  revertResSortCore,
+  revertSortCore,
+  takeResSortSnapshotCore,
+  takeSortSnapshotCore,
+} from "./features/sort/snapshot.js";
+import {
+  bindCharSortBindings,
+  bindResSortBindings,
+} from "./features/sort/sort-bindings.js";
+import {
+  applyResSortToFoldersCore,
+  applySortToFoldersCore,
+  sortResItemsCore,
+} from "./features/sort/sort.js";
+import {
+  createThemeNoteModeApi,
+  getThemeNoteCore,
+  setThemeNoteCore,
+} from "./features/themes/notes.js";
+import { createThemeRenameModeApi } from "./features/themes/rename.js";
+import {
+  applyImportedThemeCustomCssCore,
+  applyThemeCore,
+  getThemeNamesCore,
+  normalizeImportedThemeDataCore,
+  refreshThemeRuntimeAfterImportCore,
+  reloadNativeThemeRuntimeCore,
+  rememberImportedThemeRuntimeCore,
+  syncThemeSelectOptionsWithRuntimeThemesCore,
+} from "./features/themes/view.js";
+import { createEntryTransferApiCore } from "./features/transfer/entries.js";
+import { createEntryTransferMemoApiCore } from "./features/transfer/memo.js";
+import { createEntryTransferMemoViewApiCore } from "./features/transfer/memo-view.js";
+import {
+  applyWorldInfoPresetCore,
+  filterExistingWorldInfoNamesCore,
+  getActiveWorldInfoSetCore,
+  getCharBoundWorldBooksCore,
+  getExistingWorldInfoNameSetCore,
+  isWorldInfoActiveCore,
+  toggleWorldInfoActivationCore,
+} from "./features/worldinfo/activation.js";
+import {
+  autoApplyWiPresetsCore,
+  getAutoApplyPresetIndicesCore,
+  refreshAllWiPresetTrackingStateCore,
+  syncWiPresetTrackingForManualToggleCore,
+  unapplyWiPresetIndexCore,
+} from "./features/worldinfo/auto-apply.js";
+import {
+  bindWiPresetToCharCore,
+  bindWiPresetToChatCore,
+  bindWiPresetToPresetCore,
+  getCurrentCharAvatarCore,
+  getCurrentCharNameCore,
+  getCurrentChatBindKeyCore,
+  getCurrentChatFileNameCore,
+  getWiPresetBindSummaryCore,
+  makeChatBindKeyCore,
+  parseChatBindKeyCore,
+  setWiPresetScopeCore,
+  unbindWiPresetFromCharCore,
+  unbindWiPresetFromChatCore,
+  unbindWiPresetFromPresetCore,
+} from "./features/worldinfo/bindings.js";
+import { createWorldInfoEntriesApiCore } from "./features/worldinfo/entries.js";
+import { createWorldInfoNotesApiCore } from "./features/worldinfo/notes.js";
+import {
+  collectWorldInfoNamesFromDomCore,
+  createWiPresetPanelApi as createWiPresetPanelApiCore,
+  deleteWiActivePresetCore,
+  getWiActivePresetsCore,
+  getWorldInfoNamesCore,
+  normalizeWorldInfoNameListCore,
+  renameWiActivePresetCore,
+  sanitizeWiActivePresetStateCore,
+  saveWiActivePresetCore,
+} from "./features/worldinfo/presets.js";
+import { createWorldInfoRenameApiCore } from "./features/worldinfo/rename.js";
 import {
   getButtonModeCore,
   initButtonCore,
   setButtonModeCore,
 } from "./integrations/native-buttons.js";
+import { createNativeFiltersApiCore } from "./integrations/native-filters.js";
+import { getStContext, loadStCoreModules } from "./integrations/sillytavern.js";
+import { createThemeObserverApi } from "./integrations/theme-observer.js";
+import { createBatchCreateCore } from "./settings/batch-create.js";
+import { ensureSettingsDefaults } from "./settings/defaults.js";
+import { createCustomLayoutCore } from "./settings/pages/layout.js";
+import { createSettingsPageCore } from "./settings/pages/settings.js";
+import {
+  ensureTabMenuConfigRegistry,
+  ensureToolbarMenuConfigRegistry,
+} from "./settings/registry.js";
+import { createBatchControlsCore } from "./settings/render/controls.js";
+import { createConfigTabShellCore } from "./settings/render/page.js";
+import { createSharedSectionsCore } from "./settings/render/section.js";
+import { ensureResourceSettingsSchema } from "./settings/schema.js";
+import { cfmConfirmCore } from "./ui/dialogs/confirm.js";
+import { createSettingsDialogApiCore } from "./ui/dialogs/settings-dialog.js";
+import { createRightListApiCore } from "./ui/list/list-view.js";
+import { bindImportButtonEvents } from "./ui/modal/import-bindings.js";
+import { createModalApiCore } from "./ui/modal/modal.js";
+import { bindNoteRenameButtonEvents } from "./ui/modal/note-rename-bindings.js";
+import {
+  bindMainPopupHeaderEvents,
+  bindMainPopupMobileBehaviors,
+  bindModeToolbarEvents,
+  buildMainPopupShell,
+  createMainPopupCloserCore,
+  createResourceTabSwitcher,
+} from "./ui/modal/shell.js";
+import { createCharDetailApi } from "./ui/panels/character-detail.js";
 import {
   applyCustomIconCore,
   applyTopbarIconFromConfigCore,
@@ -190,176 +362,26 @@ import {
   isImageIconBackgroundCore,
   switchButtonModeCore,
 } from "./ui/toolbar/buttons.js";
-import {
-  getStContext,
-  loadStCoreModules,
-} from "./integrations/sillytavern.js";
-import { createThemeObserverApi } from "./integrations/theme-observer.js";
-import { renameTagInSystemCore } from "./features/rename/rename.js";
-import {
-  clearMultiSelectCore,
-  getMultiDragDataCore,
-  getVisibleResourceIdsCore,
-  handleFolderTargetMoveCore,
-  selectAllVisibleCore,
-  toggleMultiSelectItemCore,
-} from "./features/selection/mode.js";
-import { createEntryTransferApiCore } from "./features/transfer/entries.js";
-import {
-  revertResSortCore,
-  revertSortCore,
-  takeResSortSnapshotCore,
-  takeSortSnapshotCore,
-} from "./features/sort/snapshot.js";
-import {
-  applyResSortToFoldersCore,
-  applySortToFoldersCore,
-  sortResItemsCore,
-} from "./features/sort/sort.js";
-import {
-  createThemeNoteModeApi,
-  getThemeNoteCore,
-  setThemeNoteCore,
-} from "./features/themes/notes.js";
-import {
-  createThemeRenameModeApi,
-} from "./features/themes/rename.js";
-import {
-  applyImportedThemeCustomCssCore,
-  applyThemeCore,
-  getThemeNamesCore,
-  normalizeImportedThemeDataCore,
-  refreshThemeRuntimeAfterImportCore,
-  reloadNativeThemeRuntimeCore,
-  rememberImportedThemeRuntimeCore,
-  syncThemeSelectOptionsWithRuntimeThemesCore,
-} from "./features/themes/view.js";
-import {
-  applyWorldInfoPresetCore,
-  filterExistingWorldInfoNamesCore,
-  getActiveWorldInfoSetCore,
-  getCharBoundWorldBooksCore,
-  getExistingWorldInfoNameSetCore,
-  isWorldInfoActiveCore,
-  toggleWorldInfoActivationCore,
-} from "./features/worldinfo/activation.js";
-import {
-  getCurrentCharAvatarCore,
-  getCurrentCharNameCore,
-  getCurrentChatBindKeyCore,
-  getCurrentChatFileNameCore,
-  getWiPresetBindSummaryCore,
-  bindWiPresetToCharCore,
-  bindWiPresetToChatCore,
-  bindWiPresetToPresetCore,
-  makeChatBindKeyCore,
-  parseChatBindKeyCore,
-  setWiPresetScopeCore,
-  unbindWiPresetFromCharCore,
-  unbindWiPresetFromChatCore,
-  unbindWiPresetFromPresetCore,
-} from "./features/worldinfo/bindings.js";
-import {
-  autoApplyWiPresetsCore,
-  getAutoApplyPresetIndicesCore,
-  refreshAllWiPresetTrackingStateCore,
-  syncWiPresetTrackingForManualToggleCore,
-  unapplyWiPresetIndexCore,
-} from "./features/worldinfo/auto-apply.js";
-import {
-  collectWorldInfoNamesFromDomCore,
-  deleteWiActivePresetCore,
-  getWiActivePresetsCore,
-  getWorldInfoNamesCore,
-  normalizeWorldInfoNameListCore,
-  renameWiActivePresetCore,
-  sanitizeWiActivePresetStateCore,
-  saveWiActivePresetCore,
-  createWiPresetPanelApi as createWiPresetPanelApiCore,
-} from "./features/worldinfo/presets.js";
-import { createWorldInfoEntriesApiCore } from "./features/worldinfo/entries.js";
-import { createWorldInfoNotesApiCore } from "./features/worldinfo/notes.js";
-import { createWorldInfoRenameApiCore } from "./features/worldinfo/rename.js";
-import { createRegexTreeApiCore } from "./features/regex/tree.js";
-import { createRegexGroupsApiCore } from "./features/regex/groups.js";
-import { createRegexViewApiCore } from "./features/regex/view.js";
-import { createRegexNativeStateApi } from "./features/regex/native-state.js";
-import { fuzzyMatch as matcherFuzzyMatch } from "./features/search/matcher.js";
-import { createSearchHelpers } from "./features/search/search-helpers.js";
-import { bindSearchInputs } from "./features/search/search-bindings.js";
-import { createResourceSearchApiCore } from "./features/search/resource-search.js";
-import { createGlobalSearchCore } from "./features/search/search-global.js";
-import { createPresetSearchCore } from "./features/search/search-preset.js";
-import { createWorldInfoSearchCore } from "./features/search/search-worldinfo.js";
-import { createQrSearchCore } from "./features/search/search-qr.js";
-import { createRegexSearchCore } from "./features/search/search-regex.js";
-import {
-  bindMainPopupHeaderEvents,
-  bindMainPopupMobileBehaviors,
-  bindModeToolbarEvents,
-  buildMainPopupShell,
-  createMainPopupCloserCore,
-  createResourceTabSwitcher,
-} from "./ui/modal/shell.js";
-import { bindNoteRenameButtonEvents } from "./ui/modal/note-rename-bindings.js";
-import { bindImportButtonEvents } from "./ui/modal/import-bindings.js";
-import { createModalApiCore } from "./ui/modal/modal.js";
 import { createLeftTreeApiCore } from "./ui/tree/tree-view.js";
-import { createRightListApiCore } from "./ui/list/list-view.js";
-import { createTagImportController } from "./features/folders/import-tags.js";
+import { renderBackgroundsViewCore } from "./ui/views/backgrounds-view.js";
+import { createChatSublistApi } from "./ui/views/chat-sublist.js";
+import { renderChatlogsViewCore } from "./ui/views/chatlogs-view.js";
+import { renderPersonasViewCore } from "./ui/views/personas-view.js";
+import { createPresetDetailSublistApi } from "./ui/views/preset-detail-sublist.js";
+import { renderPresetsViewCore } from "./ui/views/presets-view.js";
+import { renderQRViewCore } from "./ui/views/qr-view.js";
 import {
-  filterHiddenCharsCore,
-  getHiddenCharsCore,
-  isCharHiddenCore,
-  toggleCharHiddenCore,
-} from "./features/personas/hidden.js";
+  createRegexSublistApi as createRegexSublistApiCore,
+  renderRegexViewCore,
+} from "./ui/views/regex-view.js";
+import { renderThemesViewCore } from "./ui/views/themes-view.js";
+import { createWorldInfoEntryDetailApi } from "./ui/views/worldinfo-entry-detail.js";
+import { createWorldInfoEntrySublistApi } from "./ui/views/worldinfo-entry-sublist.js";
+import { renderWorldInfoViewCore } from "./ui/views/worldinfo-view.js";
 import {
-  addTagToCharCore,
-  autoCleanRedundantTagsCore,
-  copyCharToFolderCore,
-  handleCharDropToFolderCore,
-  moveCharToFolderCore,
-  removeCharFromAllFoldersCore,
-  removeTagFromCharCore,
-} from "./features/personas/folders.js";
-import { createPersonaNotesApiCore } from "./features/personas/notes.js";
-import { createPersonaViewApiCore } from "./features/personas/view.js";
-import { createPersonaBindingsApiCore } from "./features/personas/bindings.js";
-import { createPersonaDetailApiCore } from "./features/personas/detail.js";
-import { createCharacterDetailApiCore } from "./features/personas/character-detail.js";
-import { createCharDetailApi } from "./ui/panels/character-detail.js";
-import { createNativeFiltersApiCore } from "./integrations/native-filters.js";
-import { cfmTCore } from "./features/i18n/language.js";
-import {
-  cfmConvertDomTextCore,
-  initCfmS2tObserverCore,
-} from "./features/i18n/s2t-bridge.js";
-import {
-  bindTouchSafeTapCore,
-  cfmIsTouchDeviceCore,
-  createMobileTouchTapGuardController,
-  createTouchDragMgrCore,
-  recordTouchTapStartCore,
-  shouldIgnoreTouchTapAfterMoveCore,
-} from "./features/dragdrop/mobile.js";
-import {
-  buildDraggedHighlightSelectorCore,
-  ensureDragLocateHighlightStyleCore,
-  flashDraggedElementCore,
-} from "./features/dragdrop/drop-zones.js";
-import {
-  cfmDebugDragLogCore,
-  pcDragEndCore,
-  pcGetDropDataCore,
-  pcDragStartCore,
-} from "./features/dragdrop/desktop.js";
-import { ensureSettingsDefaults } from "./settings/defaults.js";
-import {
-  ensureTabMenuConfigRegistry,
-  ensureToolbarMenuConfigRegistry,
-} from "./settings/registry.js";
-import { ensureResourceSettingsSchema } from "./settings/schema.js";
-import { cfmConfirmCore } from "./ui/dialogs/confirm.js";
+  getEventClientX as getEventClientXCore,
+  scrollElementIntoViewCentered as scrollElementIntoViewCenteredCore,
+} from "./utils/dom.js";
 import {
   escapeHtml as escapeHtmlCore,
   extractUrlFromCss as extractUrlFromCssCore,
@@ -367,38 +389,14 @@ import {
   toCssUrl as toCssUrlCore,
 } from "./utils/text.js";
 import {
-  getEventClientX as getEventClientXCore,
-  scrollElementIntoViewCentered as scrollElementIntoViewCenteredCore,
-} from "./utils/dom.js";
-import {
   formatFileSize as formatFileSizeCore,
   parseCharTime as parseCharTimeCore,
 } from "./utils/time.js";
-import { createSettingsDialogApiCore } from "./ui/dialogs/settings-dialog.js";
-import { createConfigTabShellCore } from "./settings/render/page.js";
-import { createSharedSectionsCore } from "./settings/render/section.js";
-import { createCustomLayoutCore } from "./settings/pages/layout.js";
-import { createSettingsPageCore } from "./settings/pages/settings.js";
-import { createBatchControlsCore } from "./settings/render/controls.js";
-import { createBatchCreateCore } from "./settings/batch-create.js";
-import { createRegexSublistApi as createRegexSublistApiCore } from "./ui/views/regex-view.js";
-import {
-  BACKUP_BRIDGE_PROTOCOL_VERSION,
-  BACKUP_BRIDGE_VERSION,
-  CFM_SYNC_POLL_INTERVAL_MS,
-  CFM_SYNC_STATE_URL,
-  STORAGE_KEY,
-  STORAGE_KEY_BTN_POS,
-  extensionFolderPath,
-  extensionName,
-} from "./core/constants.js";
-import { CFM_ACTION_META, CFM_TAB_META } from "./core/resource-types.js";
 
 // 酒馆资源管理器 - Edge收藏夹风格双栏布局
 // 在 jQuery 回调之前捕获当前脚本路径，用于后续动态加载同目录下的资源
 const _cfmCurrentScriptSrc = document.currentScript?.src || "";
 jQuery(async () => {
-
   function getBackupBridgeExportDeps() {
     return {
       $,
@@ -472,11 +470,10 @@ jQuery(async () => {
   function getBackupBridgeDetails() {
     return getBackupBridgeDetailsCore(getBackupBridgeDetailsDeps());
   }
-// ==================== 备份同步进度遮罩（HTTP 轮询） ====================
-// CFM_SYNC_STATE_URL / CFM_SYNC_POLL_INTERVAL_MS 已迁移至 core/constants.js（顶部 import 同名提供）
+  // ==================== 备份同步进度遮罩（HTTP 轮询） ====================
+  // CFM_SYNC_STATE_URL / CFM_SYNC_POLL_INTERVAL_MS 已迁移至 core/constants.js（顶部 import 同名提供）
 
-let backupBridgeSyncController;
-
+  let backupBridgeSyncController;
 
   function showCfmSyncOverlay(message, current, total) {
     return backupBridgeSyncController.showSyncOverlay(message, current, total);
@@ -688,7 +685,11 @@ let backupBridgeSyncController;
     return getRegexTreeApi().wouldCreateRegexCycle(folderId, parentId);
   }
   function reorderRegexFolder(folderId, newParentId, insertBeforeId) {
-    return getRegexTreeApi().reorderRegexFolder(folderId, newParentId, insertBeforeId);
+    return getRegexTreeApi().reorderRegexFolder(
+      folderId,
+      newParentId,
+      insertBeforeId,
+    );
   }
   function moveRegexFolder(data, target) {
     return getRegexTreeApi().moveRegexFolder(data, target);
@@ -1051,7 +1052,8 @@ let backupBridgeSyncController;
           body: JSON.stringify({}),
           cache: "no-cache",
         }),
-      getNativeThemeRuntimeReloadPromise: () => _nativeThemeRuntimeReloadPromise,
+      getNativeThemeRuntimeReloadPromise: () =>
+        _nativeThemeRuntimeReloadPromise,
       importPowerUser: () => import("/scripts/power-user.js"),
       selectOriginalOrder: _selectOriginalOrder,
       setNativeThemeRuntimeReloadPromise: (promise) => {
@@ -1463,11 +1465,10 @@ let backupBridgeSyncController;
     });
   }
   ensureSettings();
-// ==================== 自定义布局：元数据定义 ====================
-// CFM_TAB_META / CFM_ACTION_META 已迁移至 core/resource-types.js（顶部 import 同名提供）
+  // ==================== 自定义布局：元数据定义 ====================
+  // CFM_TAB_META / CFM_ACTION_META 已迁移至 core/resource-types.js（顶部 import 同名提供）
 
-function ensureTabMenuConfig() {
-
+  function ensureTabMenuConfig() {
     return ensureTabMenuConfigRegistry(
       extension_settings[extensionName].customLayout,
     );
@@ -2993,7 +2994,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependChatlogNoteToolbar(listContainer, renderFn) {
-    return createChatlogNotesApi().prependChatlogNoteToolbar(listContainer, renderFn);
+    return createChatlogNotesApi().prependChatlogNoteToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   function createChatlogRenameApi() {
@@ -3018,16 +3022,36 @@ function ensureTabMenuConfig() {
       splitChatlogFileName,
       syncChatlogPopupModeClasses,
       state: {
-        get cfmChatNotes() { return cfmChatNotes; },
-        set cfmChatNotes(value) { cfmChatNotes = value; },
-        get cfmChatlogRenameMode() { return cfmChatlogRenameMode; },
-        set cfmChatlogRenameMode(value) { cfmChatlogRenameMode = value; },
-        get cfmChatlogRenameSelected() { return cfmChatlogRenameSelected; },
-        set cfmChatlogRenameSelected(value) { cfmChatlogRenameSelected = value; },
-        get cfmChatlogRenameRangeMode() { return cfmChatlogRenameRangeMode; },
-        set cfmChatlogRenameRangeMode(value) { cfmChatlogRenameRangeMode = value; },
-        get cfmChatlogRenameLastClicked() { return cfmChatlogRenameLastClicked; },
-        set cfmChatlogRenameLastClicked(value) { cfmChatlogRenameLastClicked = value; },
+        get cfmChatNotes() {
+          return cfmChatNotes;
+        },
+        set cfmChatNotes(value) {
+          cfmChatNotes = value;
+        },
+        get cfmChatlogRenameMode() {
+          return cfmChatlogRenameMode;
+        },
+        set cfmChatlogRenameMode(value) {
+          cfmChatlogRenameMode = value;
+        },
+        get cfmChatlogRenameSelected() {
+          return cfmChatlogRenameSelected;
+        },
+        set cfmChatlogRenameSelected(value) {
+          cfmChatlogRenameSelected = value;
+        },
+        get cfmChatlogRenameRangeMode() {
+          return cfmChatlogRenameRangeMode;
+        },
+        set cfmChatlogRenameRangeMode(value) {
+          cfmChatlogRenameRangeMode = value;
+        },
+        get cfmChatlogRenameLastClicked() {
+          return cfmChatlogRenameLastClicked;
+        },
+        set cfmChatlogRenameLastClicked(value) {
+          cfmChatlogRenameLastClicked = value;
+        },
       },
     });
   }
@@ -3053,7 +3077,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependChatlogRenameToolbar(listContainer, renderFn) {
-    return createChatlogRenameApi().prependChatlogRenameToolbar(listContainer, renderFn);
+    return createChatlogRenameApi().prependChatlogRenameToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   function splitChatlogFileName(fileName) {
@@ -3063,7 +3090,8 @@ function ensureTabMenuConfig() {
   function getWorldInfoDisplayName(name) {
     const safeName = String(name || "");
     return safeName.replace(/\.(json|jsonl)$/i, "");
-  }  function enterExportMode() {
+  }
+  function enterExportMode() {
     return enterExportModeCore({
       $,
       clearAllExclusiveModes,
@@ -3144,6 +3172,52 @@ function ensureTabMenuConfig() {
   // 预设/世界书 条目互通缝合
   // ══════════════════════════════════════════════════════════════
 
+  // ── 缝合备忘录数据层 ──
+  function createEntryTransferMemoApi() {
+    return createEntryTransferMemoApiCore({
+      extensionName,
+      extensionSettings: extension_settings,
+      saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
+      ensureSettings,
+    });
+  }
+
+  function addEntryTransferMemoGroup(options) {
+    return createEntryTransferMemoApi().addEntryTransferMemoGroup(options);
+  }
+
+  // ── 缝合备忘录视图层（弹窗 + 角标） ──
+  function createEntryTransferMemoViewApi() {
+    return createEntryTransferMemoViewApiCore({
+      $,
+      escapeHtml,
+      cfmToastr,
+      memoApi: createEntryTransferMemoApi(),
+      entriesApi: {
+        openEntryTransferTargetDialog: (...args) =>
+          createEntryTransferApi().openEntryTransferTargetDialog(...args),
+        openEntryTransferInsertDialog: (options) =>
+          createEntryTransferApi().openEntryTransferInsertDialog(options),
+        getEntryTransferInsertItems: (...args) =>
+          createEntryTransferApi().getEntryTransferInsertItems(...args),
+        executeEntryTransfer: (...args) =>
+          createEntryTransferApi().executeEntryTransfer(...args),
+        transferToPreset: (...args) =>
+          createEntryTransferApi().transferToPreset(...args),
+        transferToWorldInfo: (...args) =>
+          createEntryTransferApi().transferToWorldInfo(...args),
+      },
+    });
+  }
+
+  function showEntryTransferMemoPopup() {
+    return createEntryTransferMemoViewApi().showEntryTransferMemoPopup();
+  }
+
+  function renderHeaderMemoBadge() {
+    return createEntryTransferMemoViewApi().renderHeaderMemoBadge();
+  }
+
   function createEntryTransferApi() {
     return createEntryTransferApiCore({
       $,
@@ -3177,7 +3251,9 @@ function ensureTabMenuConfig() {
       getWorldInfoEntrySelectionKey,
       getWorldInfoExpandedNodes: () => worldInfoExpandedNodes,
       getWorldInfoNames,
+      memoApi: createEntryTransferMemoApi(),
       refreshPresetPanelView,
+      renderHeaderMemoBadge,
       renderPresetsView,
       renderWorldInfoView,
       saveNormalizedPresetData,
@@ -3230,10 +3306,17 @@ function ensureTabMenuConfig() {
   }
 
   function showBatchProgressOverlay(actionLabel, total) {
-    return createEntryTransferApi().showBatchProgressOverlay(actionLabel, total);
+    return createEntryTransferApi().showBatchProgressOverlay(
+      actionLabel,
+      total,
+    );
   }
 
-  function showEntryTransferProgressLoading(sourceEntries, targetType, targetName) {
+  function showEntryTransferProgressLoading(
+    sourceEntries,
+    targetType,
+    targetName,
+  ) {
     return createEntryTransferApi().showEntryTransferProgressLoading(
       sourceEntries,
       targetType,
@@ -3254,7 +3337,9 @@ function ensureTabMenuConfig() {
   }
 
   async function revealTransferredWorldInfoTarget(bookName) {
-    return await createEntryTransferApi().revealTransferredWorldInfoTarget(bookName);
+    return await createEntryTransferApi().revealTransferredWorldInfoTarget(
+      bookName,
+    );
   }
 
   async function revealEntryTransferTargetResource(targetType, targetName) {
@@ -3314,7 +3399,9 @@ function ensureTabMenuConfig() {
   async function persistPresetData(pm, presetName) {
     try {
       const presetList =
-        typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+        typeof pm.getPresetList === "function"
+          ? pm.getPresetList.call(pm)
+          : null;
       if (!presetList) throw new Error("无法获取预设列表");
       const { presets: presetsArr, preset_names } = presetList;
       if (!Array.isArray(presetsArr) || !preset_names)
@@ -3602,14 +3689,30 @@ function ensureTabMenuConfig() {
       renderThemesView,
       setThemeNote,
       state: {
-        get cfmThemeNoteMode() { return cfmThemeNoteMode; },
-        set cfmThemeNoteMode(value) { cfmThemeNoteMode = value; },
-        get cfmThemeNoteSelected() { return cfmThemeNoteSelected; },
-        set cfmThemeNoteSelected(value) { cfmThemeNoteSelected = value; },
-        get cfmThemeNoteRangeMode() { return cfmThemeNoteRangeMode; },
-        set cfmThemeNoteRangeMode(value) { cfmThemeNoteRangeMode = value; },
-        get cfmThemeNoteLastClicked() { return cfmThemeNoteLastClicked; },
-        set cfmThemeNoteLastClicked(value) { cfmThemeNoteLastClicked = value; },
+        get cfmThemeNoteMode() {
+          return cfmThemeNoteMode;
+        },
+        set cfmThemeNoteMode(value) {
+          cfmThemeNoteMode = value;
+        },
+        get cfmThemeNoteSelected() {
+          return cfmThemeNoteSelected;
+        },
+        set cfmThemeNoteSelected(value) {
+          cfmThemeNoteSelected = value;
+        },
+        get cfmThemeNoteRangeMode() {
+          return cfmThemeNoteRangeMode;
+        },
+        set cfmThemeNoteRangeMode(value) {
+          cfmThemeNoteRangeMode = value;
+        },
+        get cfmThemeNoteLastClicked() {
+          return cfmThemeNoteLastClicked;
+        },
+        set cfmThemeNoteLastClicked(value) {
+          cfmThemeNoteLastClicked = value;
+        },
       },
     };
   }
@@ -3887,6 +3990,7 @@ function ensureTabMenuConfig() {
         getBgNote,
         getBgOrientation,
         getBackgroundDisplayName,
+        getBackgroundThumbnailUrl,
         setBgNote,
         setBgOrientation,
         renderBackgroundsView,
@@ -3925,7 +4029,8 @@ function ensureTabMenuConfig() {
       console,
       escapeHtml,
       fetch: window.fetch.bind(window),
-      getNativeThemesArray: () => (typeof themes !== "undefined" ? themes : null),
+      getNativeThemesArray: () =>
+        typeof themes !== "undefined" ? themes : null,
       getRequestHeaders: () => getContext().getRequestHeaders(),
       getThemeNames,
       getVisibleResourceIds,
@@ -3934,14 +4039,30 @@ function ensureTabMenuConfig() {
       structuredClone,
       updateSettingsAfterRename,
       state: {
-        get cfmThemeRenameMode() { return cfmThemeRenameMode; },
-        set cfmThemeRenameMode(value) { cfmThemeRenameMode = value; },
-        get cfmThemeRenameSelected() { return cfmThemeRenameSelected; },
-        set cfmThemeRenameSelected(value) { cfmThemeRenameSelected = value; },
-        get cfmThemeRenameRangeMode() { return cfmThemeRenameRangeMode; },
-        set cfmThemeRenameRangeMode(value) { cfmThemeRenameRangeMode = value; },
-        get cfmThemeRenameLastClicked() { return cfmThemeRenameLastClicked; },
-        set cfmThemeRenameLastClicked(value) { cfmThemeRenameLastClicked = value; },
+        get cfmThemeRenameMode() {
+          return cfmThemeRenameMode;
+        },
+        set cfmThemeRenameMode(value) {
+          cfmThemeRenameMode = value;
+        },
+        get cfmThemeRenameSelected() {
+          return cfmThemeRenameSelected;
+        },
+        set cfmThemeRenameSelected(value) {
+          cfmThemeRenameSelected = value;
+        },
+        get cfmThemeRenameRangeMode() {
+          return cfmThemeRenameRangeMode;
+        },
+        set cfmThemeRenameRangeMode(value) {
+          cfmThemeRenameRangeMode = value;
+        },
+        get cfmThemeRenameLastClicked() {
+          return cfmThemeRenameLastClicked;
+        },
+        set cfmThemeRenameLastClicked(value) {
+          cfmThemeRenameLastClicked = value;
+        },
       },
     };
   }
@@ -3963,7 +4084,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependThemeRenameToolbar(listContainer, renderFn) {
-    return getThemeRenameApi().prependThemeRenameToolbar(listContainer, renderFn);
+    return getThemeRenameApi().prependThemeRenameToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   async function showThemeRenamePopup(names) {
@@ -3992,6 +4116,7 @@ function ensureTabMenuConfig() {
       exitBgRenameMode,
       fetch: window.fetch.bind(window),
       getBackgroundDisplayName,
+      getBackgroundThumbnailUrl,
       getRequestHeaders: () => getContext().getRequestHeaders(),
       getVisibleResourceIds,
       importBackgroundsModule: () => import("../../../backgrounds.js"),
@@ -4041,7 +4166,11 @@ function ensureTabMenuConfig() {
   }
 
   function prependBgRenameToolbar(listContainer, renderFn) {
-    return prependBgRenameToolbarCore(listContainer, renderFn, getBgRenameDeps());
+    return prependBgRenameToolbarCore(
+      listContainer,
+      renderFn,
+      getBgRenameDeps(),
+    );
   }
 
   async function showBgRenamePopup(names) {
@@ -4075,14 +4204,30 @@ function ensureTabMenuConfig() {
         getVisibleResourceIds,
         renderPresetsView,
         state: {
-          get cfmPresetNoteMode() { return cfmPresetNoteMode; },
-          set cfmPresetNoteMode(value) { cfmPresetNoteMode = value; },
-          get cfmPresetNoteSelected() { return cfmPresetNoteSelected; },
-          set cfmPresetNoteSelected(value) { cfmPresetNoteSelected = value; },
-          get cfmPresetNoteRangeMode() { return cfmPresetNoteRangeMode; },
-          set cfmPresetNoteRangeMode(value) { cfmPresetNoteRangeMode = value; },
-          get cfmPresetNoteLastClicked() { return cfmPresetNoteLastClicked; },
-          set cfmPresetNoteLastClicked(value) { cfmPresetNoteLastClicked = value; },
+          get cfmPresetNoteMode() {
+            return cfmPresetNoteMode;
+          },
+          set cfmPresetNoteMode(value) {
+            cfmPresetNoteMode = value;
+          },
+          get cfmPresetNoteSelected() {
+            return cfmPresetNoteSelected;
+          },
+          set cfmPresetNoteSelected(value) {
+            cfmPresetNoteSelected = value;
+          },
+          get cfmPresetNoteRangeMode() {
+            return cfmPresetNoteRangeMode;
+          },
+          set cfmPresetNoteRangeMode(value) {
+            cfmPresetNoteRangeMode = value;
+          },
+          get cfmPresetNoteLastClicked() {
+            return cfmPresetNoteLastClicked;
+          },
+          set cfmPresetNoteLastClicked(value) {
+            cfmPresetNoteLastClicked = value;
+          },
         },
       });
     }
@@ -4197,7 +4342,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependPresetNoteToolbar(listContainer, renderFn) {
-    return getPresetNotesApi().prependPresetNoteToolbar(listContainer, renderFn);
+    return getPresetNotesApi().prependPresetNoteToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   async function showPresetNotePopup(presetNames) {
@@ -4923,7 +5071,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependWorldInfoNoteToolbar(listContainer, renderFn) {
-    return getWorldInfoNotesApi().prependWorldInfoNoteToolbar(listContainer, renderFn);
+    return getWorldInfoNotesApi().prependWorldInfoNoteToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   async function showWorldInfoNotePopup(wiNames) {
@@ -4956,14 +5107,30 @@ function ensureTabMenuConfig() {
         getVisibleResourceIds,
         renderQRView,
         state: {
-          get cfmQrNoteMode() { return cfmQrNoteMode; },
-          set cfmQrNoteMode(value) { cfmQrNoteMode = value; },
-          get cfmQrNoteSelected() { return cfmQrNoteSelected; },
-          set cfmQrNoteSelected(value) { cfmQrNoteSelected = value; },
-          get cfmQrNoteRangeMode() { return cfmQrNoteRangeMode; },
-          set cfmQrNoteRangeMode(value) { cfmQrNoteRangeMode = value; },
-          get cfmQrNoteLastClicked() { return cfmQrNoteLastClicked; },
-          set cfmQrNoteLastClicked(value) { cfmQrNoteLastClicked = value; },
+          get cfmQrNoteMode() {
+            return cfmQrNoteMode;
+          },
+          set cfmQrNoteMode(value) {
+            cfmQrNoteMode = value;
+          },
+          get cfmQrNoteSelected() {
+            return cfmQrNoteSelected;
+          },
+          set cfmQrNoteSelected(value) {
+            cfmQrNoteSelected = value;
+          },
+          get cfmQrNoteRangeMode() {
+            return cfmQrNoteRangeMode;
+          },
+          set cfmQrNoteRangeMode(value) {
+            cfmQrNoteRangeMode = value;
+          },
+          get cfmQrNoteLastClicked() {
+            return cfmQrNoteLastClicked;
+          },
+          set cfmQrNoteLastClicked(value) {
+            cfmQrNoteLastClicked = value;
+          },
         },
       });
     }
@@ -4983,7 +5150,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependQrNoteToolbar(listContainer, renderFn) {
-    return getQuickReplyNotesApi().prependQrNoteToolbar(listContainer, renderFn);
+    return getQuickReplyNotesApi().prependQrNoteToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   async function showQrNotePopup(qrNames) {
@@ -5016,14 +5186,30 @@ function ensureTabMenuConfig() {
         renderQRView,
         showBatchProgressOverlay,
         state: {
-          get cfmQrRenameMode() { return cfmQrRenameMode; },
-          set cfmQrRenameMode(value) { cfmQrRenameMode = value; },
-          get cfmQrRenameSelected() { return cfmQrRenameSelected; },
-          set cfmQrRenameSelected(value) { cfmQrRenameSelected = value; },
-          get cfmQrRenameRangeMode() { return cfmQrRenameRangeMode; },
-          set cfmQrRenameRangeMode(value) { cfmQrRenameRangeMode = value; },
-          get cfmQrRenameLastClicked() { return cfmQrRenameLastClicked; },
-          set cfmQrRenameLastClicked(value) { cfmQrRenameLastClicked = value; },
+          get cfmQrRenameMode() {
+            return cfmQrRenameMode;
+          },
+          set cfmQrRenameMode(value) {
+            cfmQrRenameMode = value;
+          },
+          get cfmQrRenameSelected() {
+            return cfmQrRenameSelected;
+          },
+          set cfmQrRenameSelected(value) {
+            cfmQrRenameSelected = value;
+          },
+          get cfmQrRenameRangeMode() {
+            return cfmQrRenameRangeMode;
+          },
+          set cfmQrRenameRangeMode(value) {
+            cfmQrRenameRangeMode = value;
+          },
+          get cfmQrRenameLastClicked() {
+            return cfmQrRenameLastClicked;
+          },
+          set cfmQrRenameLastClicked(value) {
+            cfmQrRenameLastClicked = value;
+          },
         },
         updateSettingsAfterRename,
       });
@@ -5079,7 +5265,10 @@ function ensureTabMenuConfig() {
   }
 
   function prependQrRenameToolbar(listContainer, renderFn) {
-    return getQuickReplyRenameApi().prependQrRenameToolbar(listContainer, renderFn);
+    return getQuickReplyRenameApi().prependQrRenameToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   // 显示快速回复集重命名弹窗（复用世界书重命名弹窗的结构）
@@ -5127,14 +5316,30 @@ function ensureTabMenuConfig() {
         syncPresetOptionInDOM,
         updateSettingsAfterRename,
         state: {
-          get cfmPresetRenameMode() { return cfmPresetRenameMode; },
-          set cfmPresetRenameMode(value) { cfmPresetRenameMode = value; },
-          get cfmPresetRenameSelected() { return cfmPresetRenameSelected; },
-          set cfmPresetRenameSelected(value) { cfmPresetRenameSelected = value; },
-          get cfmPresetRenameRangeMode() { return cfmPresetRenameRangeMode; },
-          set cfmPresetRenameRangeMode(value) { cfmPresetRenameRangeMode = value; },
-          get cfmPresetRenameLastClicked() { return cfmPresetRenameLastClicked; },
-          set cfmPresetRenameLastClicked(value) { cfmPresetRenameLastClicked = value; },
+          get cfmPresetRenameMode() {
+            return cfmPresetRenameMode;
+          },
+          set cfmPresetRenameMode(value) {
+            cfmPresetRenameMode = value;
+          },
+          get cfmPresetRenameSelected() {
+            return cfmPresetRenameSelected;
+          },
+          set cfmPresetRenameSelected(value) {
+            cfmPresetRenameSelected = value;
+          },
+          get cfmPresetRenameRangeMode() {
+            return cfmPresetRenameRangeMode;
+          },
+          set cfmPresetRenameRangeMode(value) {
+            cfmPresetRenameRangeMode = value;
+          },
+          get cfmPresetRenameLastClicked() {
+            return cfmPresetRenameLastClicked;
+          },
+          set cfmPresetRenameLastClicked(value) {
+            cfmPresetRenameLastClicked = value;
+          },
         },
       });
     }
@@ -5268,16 +5473,36 @@ function ensureTabMenuConfig() {
       saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
       structuredClone: (value) => structuredClone(value),
       state: {
-        get cfmPresetDetailBatchMode() { return cfmPresetDetailBatchMode; },
-        set cfmPresetDetailBatchMode(value) { cfmPresetDetailBatchMode = value; },
-        get cfmPresetDetailBatchOwnerName() { return cfmPresetDetailBatchOwnerName; },
-        set cfmPresetDetailBatchOwnerName(value) { cfmPresetDetailBatchOwnerName = value; },
-        get cfmPresetDetailBatchSelected() { return cfmPresetDetailBatchSelected; },
-        set cfmPresetDetailBatchSelected(value) { cfmPresetDetailBatchSelected = value; },
-        get cfmPresetDetailBatchRangeMode() { return cfmPresetDetailBatchRangeMode; },
-        set cfmPresetDetailBatchRangeMode(value) { cfmPresetDetailBatchRangeMode = value; },
-        get cfmPresetDetailBatchLastClicked() { return cfmPresetDetailBatchLastClicked; },
-        set cfmPresetDetailBatchLastClicked(value) { cfmPresetDetailBatchLastClicked = value; },
+        get cfmPresetDetailBatchMode() {
+          return cfmPresetDetailBatchMode;
+        },
+        set cfmPresetDetailBatchMode(value) {
+          cfmPresetDetailBatchMode = value;
+        },
+        get cfmPresetDetailBatchOwnerName() {
+          return cfmPresetDetailBatchOwnerName;
+        },
+        set cfmPresetDetailBatchOwnerName(value) {
+          cfmPresetDetailBatchOwnerName = value;
+        },
+        get cfmPresetDetailBatchSelected() {
+          return cfmPresetDetailBatchSelected;
+        },
+        set cfmPresetDetailBatchSelected(value) {
+          cfmPresetDetailBatchSelected = value;
+        },
+        get cfmPresetDetailBatchRangeMode() {
+          return cfmPresetDetailBatchRangeMode;
+        },
+        set cfmPresetDetailBatchRangeMode(value) {
+          cfmPresetDetailBatchRangeMode = value;
+        },
+        get cfmPresetDetailBatchLastClicked() {
+          return cfmPresetDetailBatchLastClicked;
+        },
+        set cfmPresetDetailBatchLastClicked(value) {
+          cfmPresetDetailBatchLastClicked = value;
+        },
       },
     });
   }
@@ -5286,7 +5511,7 @@ function ensureTabMenuConfig() {
     return createPresetDetailApi().getPresetDataForDetail(pm, name);
   }
 
-const PRESET_PROMPT_ORDER_DUMMY_ID =
+  const PRESET_PROMPT_ORDER_DUMMY_ID =
     presetPromptsCore.PRESET_PROMPT_ORDER_DUMMY_ID;
 
   function getPresetPromptIdentifier(prompt) {
@@ -5370,11 +5595,11 @@ const PRESET_PROMPT_ORDER_DUMMY_ID =
     return presetPromptsCore.getPresetPromptIndexByKey(presetData, promptKey);
   }
 
-    function getPresetDetailFields(preset) {
+  function getPresetDetailFields(preset) {
     return createPresetDetailApi().getPresetDetailFields(preset);
   }
 
-function getPresetFieldCurrentValue(preset, fieldKey) {
+  function getPresetFieldCurrentValue(preset, fieldKey) {
     if (!preset || !fieldKey) return "";
     if (fieldKey.startsWith("prompts.")) {
       const promptKey = fieldKey.slice("prompts.".length);
@@ -5383,11 +5608,15 @@ function getPresetFieldCurrentValue(preset, fieldKey) {
     return String(preset[fieldKey] ?? "");
   }
 
-    function setPresetPromptEnabled(presetData, promptKey, enabled) {
-    return createPresetDetailApi().setPresetPromptEnabled(presetData, promptKey, enabled);
+  function setPresetPromptEnabled(presetData, promptKey, enabled) {
+    return createPresetDetailApi().setPresetPromptEnabled(
+      presetData,
+      promptKey,
+      enabled,
+    );
   }
 
-function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
+  function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
     try {
       if (!pm?.select) return;
       const effectiveValue =
@@ -5412,7 +5641,9 @@ function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
       if (!pm || String(pm.apiId || "") !== "openai") return false;
 
       const presetList =
-        typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+        typeof pm.getPresetList === "function"
+          ? pm.getPresetList.call(pm)
+          : null;
       const runtimeSettings = presetList?.settings;
       if (!runtimeSettings || typeof runtimeSettings !== "object") return false;
 
@@ -5463,14 +5694,18 @@ function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
       // 刷新插件面板时会重新读到旧的 prompts / prompt_order，表现为按钮有反馈但无变化。
       try {
         const presetList =
-          typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+          typeof pm.getPresetList === "function"
+            ? pm.getPresetList.call(pm)
+            : null;
         const runtimeSettings = presetList?.settings;
         if (runtimeSettings && typeof runtimeSettings === "object") {
           if (Array.isArray(presetData.prompts)) {
             runtimeSettings.prompts = structuredClone(presetData.prompts);
           }
           if (Array.isArray(presetData.prompt_order)) {
-            runtimeSettings.prompt_order = structuredClone(presetData.prompt_order);
+            runtimeSettings.prompt_order = structuredClone(
+              presetData.prompt_order,
+            );
           }
         }
       } catch (e) {
@@ -5496,7 +5731,9 @@ function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
       // 手动更新内存中的预设列表数据
       try {
         const presetList =
-          typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+          typeof pm.getPresetList === "function"
+            ? pm.getPresetList.call(pm)
+            : null;
         if (presetList) {
           const { presets, preset_names } = presetList;
           if (Array.isArray(presets) && preset_names) {
@@ -5613,19 +5850,39 @@ function syncCurrentPresetSelection(pm, presetName, preservedValue = null) {
     }
   }
 
-    async function togglePresetDetailFieldActivation(presetName, fieldKey, activate) {
-    return await createPresetDetailApi().togglePresetDetailFieldActivation(presetName, fieldKey, activate);
+  async function togglePresetDetailFieldActivation(
+    presetName,
+    fieldKey,
+    activate,
+  ) {
+    return await createPresetDetailApi().togglePresetDetailFieldActivation(
+      presetName,
+      fieldKey,
+      activate,
+    );
   }
 
   function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
-    return createPresetDetailApi().togglePresetDetailBatchItem(fieldKey, shiftKey, fields);
+    return createPresetDetailApi().togglePresetDetailBatchItem(
+      fieldKey,
+      shiftKey,
+      fields,
+    );
   }
 
-  async function applyPresetDetailBatchActivation(presetName, fieldKeys, activate) {
-    return await createPresetDetailApi().applyPresetDetailBatchActivation(presetName, fieldKeys, activate);
+  async function applyPresetDetailBatchActivation(
+    presetName,
+    fieldKeys,
+    activate,
+  ) {
+    return await createPresetDetailApi().applyPresetDetailBatchActivation(
+      presetName,
+      fieldKeys,
+      activate,
+    );
   }
 
-let _worldInfoEntriesApi = null;
+  let _worldInfoEntriesApi = null;
   function getWorldInfoEntriesApi() {
     if (!_worldInfoEntriesApi) {
       _worldInfoEntriesApi = createWorldInfoEntriesApiCore({
@@ -5678,7 +5935,10 @@ let _worldInfoEntriesApi = null;
   }
 
   function getWorldInfoEntrySelectionKey(bookName, uid) {
-    return getWorldInfoEntriesApi().getWorldInfoEntrySelectionKey(bookName, uid);
+    return getWorldInfoEntriesApi().getWorldInfoEntrySelectionKey(
+      bookName,
+      uid,
+    );
   }
 
   function getWorldInfoEntryOpenSet(bookName, create = false) {
@@ -5702,7 +5962,10 @@ let _worldInfoEntriesApi = null;
   }
 
   async function saveWorldInfoDetailData(bookName, worldInfoData) {
-    return await getWorldInfoEntriesApi().saveWorldInfoDetailData(bookName, worldInfoData);
+    return await getWorldInfoEntriesApi().saveWorldInfoDetailData(
+      bookName,
+      worldInfoData,
+    );
   }
 
   function getWorldInfoEntryDetailSortMode() {
@@ -5714,39 +5977,80 @@ let _worldInfoEntriesApi = null;
   }
 
   function sortWorldInfoEntriesForDetail(entries, sortMode = "custom") {
-    return getWorldInfoEntriesApi().sortWorldInfoEntriesForDetail(entries, sortMode);
+    return getWorldInfoEntriesApi().sortWorldInfoEntriesForDetail(
+      entries,
+      sortMode,
+    );
   }
 
-  function getWorldInfoEntriesForDetail(bookName, worldInfoData, sortMode = "custom") {
-    return getWorldInfoEntriesApi().getWorldInfoEntriesForDetail(bookName, worldInfoData, sortMode);
+  function getWorldInfoEntriesForDetail(
+    bookName,
+    worldInfoData,
+    sortMode = "custom",
+  ) {
+    return getWorldInfoEntriesApi().getWorldInfoEntriesForDetail(
+      bookName,
+      worldInfoData,
+      sortMode,
+    );
   }
 
   function toggleWorldInfoEntryBatchItem(bookName, uid, shiftKey, entries) {
-    return getWorldInfoEntriesApi().toggleWorldInfoEntryBatchItem(bookName, uid, shiftKey, entries);
+    return getWorldInfoEntriesApi().toggleWorldInfoEntryBatchItem(
+      bookName,
+      uid,
+      shiftKey,
+      entries,
+    );
   }
 
   async function toggleWorldInfoEntryActivation(bookName, uid, activate) {
-    return await getWorldInfoEntriesApi().toggleWorldInfoEntryActivation(bookName, uid, activate);
+    return await getWorldInfoEntriesApi().toggleWorldInfoEntryActivation(
+      bookName,
+      uid,
+      activate,
+    );
   }
 
   async function duplicateWorldInfoEntryInBook(bookName, uid) {
-    return await getWorldInfoEntriesApi().duplicateWorldInfoEntryInBook(bookName, uid);
+    return await getWorldInfoEntriesApi().duplicateWorldInfoEntryInBook(
+      bookName,
+      uid,
+    );
   }
 
   async function deleteWorldInfoEntryInBook(bookName, uid, options) {
-    return await getWorldInfoEntriesApi().deleteWorldInfoEntryInBook(bookName, uid, options);
+    return await getWorldInfoEntriesApi().deleteWorldInfoEntryInBook(
+      bookName,
+      uid,
+      options,
+    );
   }
 
   async function batchDuplicateWorldInfoEntries(bookName, selectionKeys) {
-    return await getWorldInfoEntriesApi().batchDuplicateWorldInfoEntries(bookName, selectionKeys);
+    return await getWorldInfoEntriesApi().batchDuplicateWorldInfoEntries(
+      bookName,
+      selectionKeys,
+    );
   }
 
   async function batchDeleteWorldInfoEntries(bookName, selectionKeys) {
-    return await getWorldInfoEntriesApi().batchDeleteWorldInfoEntries(bookName, selectionKeys);
+    return await getWorldInfoEntriesApi().batchDeleteWorldInfoEntries(
+      bookName,
+      selectionKeys,
+    );
   }
 
-  async function applyWorldInfoEntryBatchActivation(bookName, selectionKeys, activate) {
-    return await getWorldInfoEntriesApi().applyWorldInfoEntryBatchActivation(bookName, selectionKeys, activate);
+  async function applyWorldInfoEntryBatchActivation(
+    bookName,
+    selectionKeys,
+    activate,
+  ) {
+    return await getWorldInfoEntriesApi().applyWorldInfoEntryBatchActivation(
+      bookName,
+      selectionKeys,
+      activate,
+    );
   }
 
   let _presetDetailApi = null;
@@ -5802,7 +6106,10 @@ let _worldInfoEntriesApi = null;
   }
 
   function deletePresetDetailActivePreset(presetName, name) {
-    return getPresetDetailApi().deletePresetDetailActivePreset(presetName, name);
+    return getPresetDetailApi().deletePresetDetailActivePreset(
+      presetName,
+      name,
+    );
   }
 
   function renamePresetDetailActivePreset(presetName, oldName, newName) {
@@ -5977,9 +6284,22 @@ let _worldInfoEntriesApi = null;
             title: "应用方式",
             message: `当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：`,
             choices: [
-              { value: "cancel", label: "取消", className: "cfm-edit-popup-cancel" },
-              { value: "replace", label: "替换", className: "cfm-edit-popup-confirm", style: "background:#f38ba8;" },
-              { value: "stack", label: "叠加", className: "cfm-edit-popup-confirm" },
+              {
+                value: "cancel",
+                label: "取消",
+                className: "cfm-edit-popup-cancel",
+              },
+              {
+                value: "replace",
+                label: "替换",
+                className: "cfm-edit-popup-confirm",
+                style: "background:#f38ba8;",
+              },
+              {
+                value: "stack",
+                label: "叠加",
+                className: "cfm-edit-popup-confirm",
+              },
             ],
           });
           if (choice === "cancel") return;
@@ -6169,16 +6489,36 @@ let _worldInfoEntriesApi = null;
         togglePresetDetailBatchItem,
         togglePresetDetailFieldActivation,
         state: {
-          get cfmPresetDetailBatchMode() { return cfmPresetDetailBatchMode; },
-          set cfmPresetDetailBatchMode(value) { cfmPresetDetailBatchMode = value; },
-          get cfmPresetDetailBatchOwnerName() { return cfmPresetDetailBatchOwnerName; },
-          set cfmPresetDetailBatchOwnerName(value) { cfmPresetDetailBatchOwnerName = value; },
-          get cfmPresetDetailBatchSelected() { return cfmPresetDetailBatchSelected; },
-          set cfmPresetDetailBatchSelected(value) { cfmPresetDetailBatchSelected = value; },
-          get cfmPresetDetailBatchRangeMode() { return cfmPresetDetailBatchRangeMode; },
-          set cfmPresetDetailBatchRangeMode(value) { cfmPresetDetailBatchRangeMode = value; },
-          get cfmPresetDetailBatchLastClicked() { return cfmPresetDetailBatchLastClicked; },
-          set cfmPresetDetailBatchLastClicked(value) { cfmPresetDetailBatchLastClicked = value; },
+          get cfmPresetDetailBatchMode() {
+            return cfmPresetDetailBatchMode;
+          },
+          set cfmPresetDetailBatchMode(value) {
+            cfmPresetDetailBatchMode = value;
+          },
+          get cfmPresetDetailBatchOwnerName() {
+            return cfmPresetDetailBatchOwnerName;
+          },
+          set cfmPresetDetailBatchOwnerName(value) {
+            cfmPresetDetailBatchOwnerName = value;
+          },
+          get cfmPresetDetailBatchSelected() {
+            return cfmPresetDetailBatchSelected;
+          },
+          set cfmPresetDetailBatchSelected(value) {
+            cfmPresetDetailBatchSelected = value;
+          },
+          get cfmPresetDetailBatchRangeMode() {
+            return cfmPresetDetailBatchRangeMode;
+          },
+          set cfmPresetDetailBatchRangeMode(value) {
+            cfmPresetDetailBatchRangeMode = value;
+          },
+          get cfmPresetDetailBatchLastClicked() {
+            return cfmPresetDetailBatchLastClicked;
+          },
+          set cfmPresetDetailBatchLastClicked(value) {
+            cfmPresetDetailBatchLastClicked = value;
+          },
         },
       });
     }
@@ -6186,7 +6526,10 @@ let _worldInfoEntriesApi = null;
   }
 
   function showPresetDetailGroupEditPopup(presetName, preset) {
-    return getPresetDetailSublistApi().showPresetDetailGroupEditPopup(presetName, preset);
+    return getPresetDetailSublistApi().showPresetDetailGroupEditPopup(
+      presetName,
+      preset,
+    );
   }
 
   async function showPresetDetailFieldPopup(presetName, field) {
@@ -6221,27 +6564,48 @@ let _worldInfoEntriesApi = null;
     );
   }
 
-    async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
-    return await createPresetDetailApi().savePresetDetailPromptOrder(presetName, orderedFieldKeys);
+  async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
+    return await createPresetDetailApi().savePresetDetailPromptOrder(
+      presetName,
+      orderedFieldKeys,
+    );
   }
 
-  async function reorderPresetDetailField(presetName, sourceFieldKey, targetFieldKey) {
-    return await createPresetDetailApi().reorderPresetDetailField(presetName, sourceFieldKey, targetFieldKey);
+  async function reorderPresetDetailField(
+    presetName,
+    sourceFieldKey,
+    targetFieldKey,
+  ) {
+    return await createPresetDetailApi().reorderPresetDetailField(
+      presetName,
+      sourceFieldKey,
+      targetFieldKey,
+    );
   }
 
   async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
-    return await createPresetDetailApi().movePresetDetailFieldByStep(presetName, fieldKey, step);
+    return await createPresetDetailApi().movePresetDetailFieldByStep(
+      presetName,
+      fieldKey,
+      step,
+    );
   }
 
   async function duplicatePresetDetailField(presetName, fieldKey) {
-    return await createPresetDetailApi().duplicatePresetDetailField(presetName, fieldKey);
+    return await createPresetDetailApi().duplicatePresetDetailField(
+      presetName,
+      fieldKey,
+    );
   }
 
   async function deletePresetDetailField(presetName, fieldKey) {
-    return await createPresetDetailApi().deletePresetDetailField(presetName, fieldKey);
+    return await createPresetDetailApi().deletePresetDetailField(
+      presetName,
+      fieldKey,
+    );
   }
 
-function findNativePresetPromptRow(promptKey, promptLabel = "") {
+  function findNativePresetPromptRow(promptKey, promptLabel = "") {
     const normalizedPromptKey = String(promptKey || "").trim();
     const normalizedPromptLabel = String(promptLabel || "").trim();
     const rows = $(
@@ -6590,7 +6954,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       if (!presetName) return false;
 
       const runtimePresetList =
-        typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+        typeof pm.getPresetList === "function"
+          ? pm.getPresetList.call(pm)
+          : null;
       const runtimeSettings = runtimePresetList?.settings;
       if (!runtimeSettings || typeof runtimeSettings !== "object") {
         return false;
@@ -6602,7 +6968,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
       try {
         const presetList =
-          typeof pm.getPresetList === "function" ? pm.getPresetList.call(pm) : null;
+          typeof pm.getPresetList === "function"
+            ? pm.getPresetList.call(pm)
+            : null;
         if (presetList) {
           const { presets, preset_names } = presetList;
           if (Array.isArray(presets) && preset_names) {
@@ -6779,10 +7147,16 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return _nativePresetPromptEditorApi;
   }
 
-
-
-  async function openNativePresetPromptEditor(presetName, promptKey, promptLabel = "") {
-    return getNativePresetPromptEditorApi().openNativePresetPromptEditor(presetName, promptKey, promptLabel);
+  async function openNativePresetPromptEditor(
+    presetName,
+    promptKey,
+    promptLabel = "",
+  ) {
+    return getNativePresetPromptEditorApi().openNativePresetPromptEditor(
+      presetName,
+      promptKey,
+      promptLabel,
+    );
   }
 
   let _presetPromptEditorApi = null;
@@ -6807,9 +7181,12 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function openPresetPromptEditor(presetName, promptKey, promptLabel = "") {
-    return getPresetPromptEditorApi().openPresetPromptEditor(presetName, promptKey, promptLabel);
+    return getPresetPromptEditorApi().openPresetPromptEditor(
+      presetName,
+      promptKey,
+      promptLabel,
+    );
   }
-
 
   function showPresetEditorOpeningLoading(fieldKey, label = "") {
     const normalizedFieldKey = String(fieldKey || "").trim();
@@ -6946,7 +7323,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       );
   }
 
-    let _worldInfoEntryDetailApi = null;
+  let _worldInfoEntryDetailApi = null;
   function getWorldInfoEntryDetailApi() {
     if (!_worldInfoEntryDetailApi) {
       _worldInfoEntryDetailApi = createWorldInfoEntryDetailApi({
@@ -7036,7 +7413,12 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return _worldInfoEntrySublistApi;
   }
 
-  function renderWorldInfoEntrySubList(bookRow, bookName, refreshFn, renderOptions) {
+  function renderWorldInfoEntrySubList(
+    bookRow,
+    bookName,
+    refreshFn,
+    renderOptions,
+  ) {
     return getWorldInfoEntrySublistApi().renderWorldInfoEntrySubList(
       bookRow,
       bookName,
@@ -7046,7 +7428,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function renderPresetDetailSubList(presetRow, preset) {
-    return getPresetDetailSublistApi().renderPresetDetailSubList(presetRow, preset);
+    return getPresetDetailSublistApi().renderPresetDetailSubList(
+      presetRow,
+      preset,
+    );
   }
 
   function refreshPresetPanelView() {
@@ -7378,7 +7763,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function prependWorldInfoRenameToolbar(listContainer, renderFn) {
-    return getWorldInfoRenameApi().prependWorldInfoRenameToolbar(listContainer, renderFn);
+    return getWorldInfoRenameApi().prependWorldInfoRenameToolbar(
+      listContainer,
+      renderFn,
+    );
   }
 
   async function showWorldInfoRenamePopup(names) {
@@ -7386,7 +7774,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   async function updateCharWorldBindings(oldName, newName) {
-    return await getWorldInfoRenameApi().updateCharWorldBindings(oldName, newName);
+    return await getWorldInfoRenameApi().updateCharWorldBindings(
+      oldName,
+      newName,
+    );
   }
 
   async function executeWorldInfoRename(names) {
@@ -7540,16 +7931,36 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       getVisibleResourceIds,
       renderChatlogsView,
       state: {
-        get cfmChatNotes() { return cfmChatNotes; },
-        set cfmChatNotes(value) { cfmChatNotes = value; },
-        get cfmChatlogNoteMode() { return cfmChatlogNoteMode; },
-        set cfmChatlogNoteMode(value) { cfmChatlogNoteMode = value; },
-        get cfmChatlogNoteSelected() { return cfmChatlogNoteSelected; },
-        set cfmChatlogNoteSelected(value) { cfmChatlogNoteSelected = value; },
-        get cfmChatlogNoteRangeMode() { return cfmChatlogNoteRangeMode; },
-        set cfmChatlogNoteRangeMode(value) { cfmChatlogNoteRangeMode = value; },
-        get cfmChatlogNoteLastClicked() { return cfmChatlogNoteLastClicked; },
-        set cfmChatlogNoteLastClicked(value) { cfmChatlogNoteLastClicked = value; },
+        get cfmChatNotes() {
+          return cfmChatNotes;
+        },
+        set cfmChatNotes(value) {
+          cfmChatNotes = value;
+        },
+        get cfmChatlogNoteMode() {
+          return cfmChatlogNoteMode;
+        },
+        set cfmChatlogNoteMode(value) {
+          cfmChatlogNoteMode = value;
+        },
+        get cfmChatlogNoteSelected() {
+          return cfmChatlogNoteSelected;
+        },
+        set cfmChatlogNoteSelected(value) {
+          cfmChatlogNoteSelected = value;
+        },
+        get cfmChatlogNoteRangeMode() {
+          return cfmChatlogNoteRangeMode;
+        },
+        set cfmChatlogNoteRangeMode(value) {
+          cfmChatlogNoteRangeMode = value;
+        },
+        get cfmChatlogNoteLastClicked() {
+          return cfmChatlogNoteLastClicked;
+        },
+        set cfmChatlogNoteLastClicked(value) {
+          cfmChatlogNoteLastClicked = value;
+        },
       },
     });
   }
@@ -7992,22 +8403,50 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         startOwnedRegexTransferFlow,
         toggleRegexBatchItem,
         state: {
-          get cfmRegexBatchMode() { return cfmRegexBatchMode; },
-          set cfmRegexBatchMode(value) { cfmRegexBatchMode = value; },
-          get cfmRegexBatchSelected() { return cfmRegexBatchSelected; },
-          set cfmRegexBatchSelected(value) { cfmRegexBatchSelected = value; },
-          get cfmRegexBatchRangeMode() { return cfmRegexBatchRangeMode; },
-          set cfmRegexBatchRangeMode(value) { cfmRegexBatchRangeMode = value; },
-          get cfmRegexBatchLastClicked() { return cfmRegexBatchLastClicked; },
-          set cfmRegexBatchLastClicked(value) { cfmRegexBatchLastClicked = value; },
+          get cfmRegexBatchMode() {
+            return cfmRegexBatchMode;
+          },
+          set cfmRegexBatchMode(value) {
+            cfmRegexBatchMode = value;
+          },
+          get cfmRegexBatchSelected() {
+            return cfmRegexBatchSelected;
+          },
+          set cfmRegexBatchSelected(value) {
+            cfmRegexBatchSelected = value;
+          },
+          get cfmRegexBatchRangeMode() {
+            return cfmRegexBatchRangeMode;
+          },
+          set cfmRegexBatchRangeMode(value) {
+            cfmRegexBatchRangeMode = value;
+          },
+          get cfmRegexBatchLastClicked() {
+            return cfmRegexBatchLastClicked;
+          },
+          set cfmRegexBatchLastClicked(value) {
+            cfmRegexBatchLastClicked = value;
+          },
         },
       });
     }
     return _regexSublistApi;
   }
 
-  function renderCharRegexSubList(charRow, avatar, scripts, charName, isTarget = true) {
-    return getRegexSublistApi().renderCharRegexSubList(charRow, avatar, scripts, charName, isTarget);
+  function renderCharRegexSubList(
+    charRow,
+    avatar,
+    scripts,
+    charName,
+    isTarget = true,
+  ) {
+    return getRegexSublistApi().renderCharRegexSubList(
+      charRow,
+      avatar,
+      scripts,
+      charName,
+      isTarget,
+    );
   }
 
   /**
@@ -8534,8 +8973,18 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
    * @param {Array} scripts - 正则脚本列表
    * @param {boolean} [isTarget=true] - 是否为当前目标预设（只有目标预设可激活/取消激活正则）
    */
-  function renderPresetRegexSubList(presetRow, presetName, scripts, isTarget = true) {
-    return getRegexSublistApi().renderPresetRegexSubList(presetRow, presetName, scripts, isTarget);
+  function renderPresetRegexSubList(
+    presetRow,
+    presetName,
+    scripts,
+    isTarget = true,
+  ) {
+    return getRegexSublistApi().renderPresetRegexSubList(
+      presetRow,
+      presetName,
+      scripts,
+      isTarget,
+    );
   }
 
   /**
@@ -8550,7 +8999,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       getContext,
       getPastCharacterChatsFunc,
       state: {
-        get cfmChatCache() { return cfmChatCache; },
+        get cfmChatCache() {
+          return cfmChatCache;
+        },
       },
     });
   }
@@ -8633,7 +9084,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
    * 重命名聊天记录
    */
   async function renameChatFile(avatar, oldFileName, newName) {
-    return await createChatlogRenameApi().renameChatFile(avatar, oldFileName, newName);
+    return await createChatlogRenameApi().renameChatFile(
+      avatar,
+      oldFileName,
+      newName,
+    );
   }
 
   /**
@@ -8660,9 +9115,15 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       showBatchProgressOverlay,
       showImportFailureDialog,
       state: {
-        get cfmChatNotes() { return cfmChatNotes; },
-        set cfmChatNotes(value) { cfmChatNotes = value; },
-        get cfmChatBatchSelected() { return cfmChatBatchSelected; },
+        get cfmChatNotes() {
+          return cfmChatNotes;
+        },
+        set cfmChatNotes(value) {
+          cfmChatNotes = value;
+        },
+        get cfmChatBatchSelected() {
+          return cfmChatBatchSelected;
+        },
       },
       URL,
       window,
@@ -8670,19 +9131,31 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   async function deleteChatFile(avatar, chatFileName) {
-    return await createChatlogImportExportApi().deleteChatFile(avatar, chatFileName);
+    return await createChatlogImportExportApi().deleteChatFile(
+      avatar,
+      chatFileName,
+    );
   }
 
   async function exportChatFile(avatar, chatFileName, format = "jsonl") {
-    return await createChatlogImportExportApi().exportChatFile(avatar, chatFileName, format);
+    return await createChatlogImportExportApi().exportChatFile(
+      avatar,
+      chatFileName,
+      format,
+    );
   }
 
   async function exportChatlogFiles(chatFileNames) {
-    return await createChatlogImportExportApi().exportChatlogFiles(chatFileNames);
+    return await createChatlogImportExportApi().exportChatlogFiles(
+      chatFileNames,
+    );
   }
 
   async function openChatFile(avatar, chatFileName) {
-    return await createChatlogImportExportApi().openChatFile(avatar, chatFileName);
+    return await createChatlogImportExportApi().openChatFile(
+      avatar,
+      chatFileName,
+    );
   }
 
   async function importChatFiles(avatar, files) {
@@ -8713,7 +9186,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         settings: extension_settings[extensionName],
       });
     }
-    chatlogPinningApiInstance.setEnhanceRecentChatsWithNotesCallback(enhanceRecentChatsWithNotes);
+    chatlogPinningApiInstance.setEnhanceRecentChatsWithNotesCallback(
+      enhanceRecentChatsWithNotes,
+    );
     return chatlogPinningApiInstance;
   }
 
@@ -8774,8 +9249,12 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         saveChatNotes,
         showChatNotePopup,
         state: {
-          get cfmChatNotes() { return cfmChatNotes; },
-          set cfmChatNotes(value) { cfmChatNotes = value; },
+          get cfmChatNotes() {
+            return cfmChatNotes;
+          },
+          set cfmChatNotes(value) {
+            cfmChatNotes = value;
+          },
         },
         togglePinChat,
       });
@@ -8975,24 +9454,60 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         toggleChatBatchItem,
         togglePinChat,
         state: {
-          get cfmChatBatchMode() { return cfmChatBatchMode; },
-          set cfmChatBatchMode(value) { cfmChatBatchMode = value; },
-          get cfmChatBatchSelected() { return cfmChatBatchSelected; },
-          set cfmChatBatchSelected(value) { cfmChatBatchSelected = value; },
-          get cfmChatBatchRangeMode() { return cfmChatBatchRangeMode; },
-          set cfmChatBatchRangeMode(value) { cfmChatBatchRangeMode = value; },
-          get cfmChatBatchLastClicked() { return cfmChatBatchLastClicked; },
-          set cfmChatBatchLastClicked(value) { cfmChatBatchLastClicked = value; },
-          get cfmChatlogTargetAvatar() { return cfmChatlogTargetAvatar; },
-          set cfmChatlogTargetAvatar(value) { cfmChatlogTargetAvatar = value; },
-          get selectedChatlogFolder() { return selectedChatlogFolder; },
-          set selectedChatlogFolder(value) { selectedChatlogFolder = value; },
-          get _switchResourceTabFn() { return _switchResourceTabFn; },
-          set _switchResourceTabFn(value) { _switchResourceTabFn = value; },
-          get cfmChatNotes() { return cfmChatNotes; },
-          set cfmChatNotes(value) { cfmChatNotes = value; },
-          get cfmQrLastFocusedSetName() { return cfmQrLastFocusedSetName; },
-          set cfmQrLastFocusedSetName(value) { cfmQrLastFocusedSetName = value; },
+          get cfmChatBatchMode() {
+            return cfmChatBatchMode;
+          },
+          set cfmChatBatchMode(value) {
+            cfmChatBatchMode = value;
+          },
+          get cfmChatBatchSelected() {
+            return cfmChatBatchSelected;
+          },
+          set cfmChatBatchSelected(value) {
+            cfmChatBatchSelected = value;
+          },
+          get cfmChatBatchRangeMode() {
+            return cfmChatBatchRangeMode;
+          },
+          set cfmChatBatchRangeMode(value) {
+            cfmChatBatchRangeMode = value;
+          },
+          get cfmChatBatchLastClicked() {
+            return cfmChatBatchLastClicked;
+          },
+          set cfmChatBatchLastClicked(value) {
+            cfmChatBatchLastClicked = value;
+          },
+          get cfmChatlogTargetAvatar() {
+            return cfmChatlogTargetAvatar;
+          },
+          set cfmChatlogTargetAvatar(value) {
+            cfmChatlogTargetAvatar = value;
+          },
+          get selectedChatlogFolder() {
+            return selectedChatlogFolder;
+          },
+          set selectedChatlogFolder(value) {
+            selectedChatlogFolder = value;
+          },
+          get _switchResourceTabFn() {
+            return _switchResourceTabFn;
+          },
+          set _switchResourceTabFn(value) {
+            _switchResourceTabFn = value;
+          },
+          get cfmChatNotes() {
+            return cfmChatNotes;
+          },
+          set cfmChatNotes(value) {
+            cfmChatNotes = value;
+          },
+          get cfmQrLastFocusedSetName() {
+            return cfmQrLastFocusedSetName;
+          },
+          set cfmQrLastFocusedSetName(value) {
+            cfmQrLastFocusedSetName = value;
+          },
         },
       });
     }
@@ -9050,11 +9565,18 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       $,
       document,
       getPcDragData: () => _pcDragData,
-      setPcDragData: (v) => { _pcDragData = v; },
+      setPcDragData: (v) => {
+        _pcDragData = v;
+      },
       getPcDropHandled: () => _pcDropHandled,
-      setPcDropHandled: (v) => { _pcDropHandled = v; },
-      getPcLastResourceFolderHoverTarget: () => _pcLastResourceFolderHoverTarget,
-      setPcLastResourceFolderHoverTarget: (v) => { _pcLastResourceFolderHoverTarget = v; },
+      setPcDropHandled: (v) => {
+        _pcDropHandled = v;
+      },
+      getPcLastResourceFolderHoverTarget: () =>
+        _pcLastResourceFolderHoverTarget,
+      setPcLastResourceFolderHoverTarget: (v) => {
+        _pcLastResourceFolderHoverTarget = v;
+      },
       flashDraggedElement,
       buildDraggedHighlightSelector,
       clearMultiSelect,
@@ -9248,8 +9770,15 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
     // ==================== 主弹窗外壳（已模块化到 ui/modal/shell.js） ====================
     const { overlay, popup, menuTabs } = buildMainPopupShell({
-      $, window, cfmCopyMode, initialTab, CFM_TAB_META, getVisibleTabs,
-      getMenuTabs, extension_settings, extensionName,
+      $,
+      window,
+      cfmCopyMode,
+      initialTab,
+      CFM_TAB_META,
+      getVisibleTabs,
+      getMenuTabs,
+      extension_settings,
+      extensionName,
       getPcDragData: () => _pcDragData,
     });
 
@@ -9257,7 +9786,13 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     applyCustomStyle();
 
     // 移动端行为：栏高拖动 + 触摸误触抑制（已模块化到 ui/modal/shell.js）
-    bindMainPopupMobileBehaviors({ $, window, popup, extension_settings, extensionName });
+    bindMainPopupMobileBehaviors({
+      $,
+      window,
+      popup,
+      extension_settings,
+      extensionName,
+    });
 
     // 如果初始tab不是chars，动态切换tab/视图/搜索栏的显示状态
     if (initialTab !== "chars") {
@@ -9314,11 +9849,17 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       popup,
       handleCurrentTabRelocate,
       getCurrentResourceType: () => currentResourceType,
-      setCurrentResourceType: (v) => { currentResourceType = v; },
+      setCurrentResourceType: (v) => {
+        currentResourceType = v;
+      },
       clearMultiSelect,
       getCfmMultiSelectMode: () => cfmMultiSelectMode,
-      setCfmMultiSelectMode: (v) => { cfmMultiSelectMode = v; },
-      setCfmMultiSelectRangeMode: (v) => { cfmMultiSelectRangeMode = v; },
+      setCfmMultiSelectMode: (v) => {
+        cfmMultiSelectMode = v;
+      },
+      setCfmMultiSelectRangeMode: (v) => {
+        cfmMultiSelectRangeMode = v;
+      },
       getCfmExportMode: () => cfmExportMode,
       getCfmResDeleteMode: () => cfmResDeleteMode,
       getCfmThemeNoteMode: () => cfmThemeNoteMode,
@@ -9364,6 +9905,8 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       showConfigPopup,
       showImportExportPopup,
       showQuickAddFolderPopup,
+      showEntryTransferMemoPopup,
+      renderHeaderMemoBadge,
       getFolderTagIds,
       getExpandedNodes: () => expandedNodes,
       renderLeftTree,
@@ -9374,47 +9917,89 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     // 右栏排序按钮
     const sortDeps = {
       getRightCharSortMode: () => rightCharSortMode,
-      setRightCharSortMode: (v) => { rightCharSortMode = v; },
+      setRightCharSortMode: (v) => {
+        rightCharSortMode = v;
+      },
       getSortSnapshot: () => sortSnapshot,
-      setSortSnapshot: (v) => { sortSnapshot = v; },
+      setSortSnapshot: (v) => {
+        sortSnapshot = v;
+      },
       getSortDirty: () => sortDirty,
-      setSortDirty: (v) => { sortDirty = v; },
+      setSortDirty: (v) => {
+        sortDirty = v;
+      },
       getPresetLeftSortMode: () => presetLeftSortMode,
-      setPresetLeftSortMode: (v) => { presetLeftSortMode = v; },
+      setPresetLeftSortMode: (v) => {
+        presetLeftSortMode = v;
+      },
       getPresetRightSortMode: () => presetRightSortMode,
-      setPresetRightSortMode: (v) => { presetRightSortMode = v; },
+      setPresetRightSortMode: (v) => {
+        presetRightSortMode = v;
+      },
       getPresetSortSnapshot: () => presetSortSnapshot,
-      setPresetSortSnapshot: (v) => { presetSortSnapshot = v; },
+      setPresetSortSnapshot: (v) => {
+        presetSortSnapshot = v;
+      },
       getWorldInfoLeftSortMode: () => worldInfoLeftSortMode,
-      setWorldInfoLeftSortMode: (v) => { worldInfoLeftSortMode = v; },
+      setWorldInfoLeftSortMode: (v) => {
+        worldInfoLeftSortMode = v;
+      },
       getWorldInfoRightSortMode: () => worldInfoRightSortMode,
-      setWorldInfoRightSortMode: (v) => { worldInfoRightSortMode = v; },
+      setWorldInfoRightSortMode: (v) => {
+        worldInfoRightSortMode = v;
+      },
       getWorldInfoSortSnapshot: () => worldInfoSortSnapshot,
-      setWorldInfoSortSnapshot: (v) => { worldInfoSortSnapshot = v; },
+      setWorldInfoSortSnapshot: (v) => {
+        worldInfoSortSnapshot = v;
+      },
       getQrLeftSortMode: () => qrLeftSortMode,
-      setQrLeftSortMode: (v) => { qrLeftSortMode = v; },
+      setQrLeftSortMode: (v) => {
+        qrLeftSortMode = v;
+      },
       getQrRightSortMode: () => qrRightSortMode,
-      setQrRightSortMode: (v) => { qrRightSortMode = v; },
+      setQrRightSortMode: (v) => {
+        qrRightSortMode = v;
+      },
       getQrSortSnapshot: () => qrSortSnapshot,
-      setQrSortSnapshot: (v) => { qrSortSnapshot = v; },
+      setQrSortSnapshot: (v) => {
+        qrSortSnapshot = v;
+      },
       getThemeLeftSortMode: () => themeLeftSortMode,
-      setThemeLeftSortMode: (v) => { themeLeftSortMode = v; },
+      setThemeLeftSortMode: (v) => {
+        themeLeftSortMode = v;
+      },
       getThemeRightSortMode: () => themeRightSortMode,
-      setThemeRightSortMode: (v) => { themeRightSortMode = v; },
+      setThemeRightSortMode: (v) => {
+        themeRightSortMode = v;
+      },
       getThemeSortSnapshot: () => themeSortSnapshot,
-      setThemeSortSnapshot: (v) => { themeSortSnapshot = v; },
+      setThemeSortSnapshot: (v) => {
+        themeSortSnapshot = v;
+      },
       getBgLeftSortMode: () => bgLeftSortMode,
-      setBgLeftSortMode: (v) => { bgLeftSortMode = v; },
+      setBgLeftSortMode: (v) => {
+        bgLeftSortMode = v;
+      },
       getBgRightSortMode: () => bgRightSortMode,
-      setBgRightSortMode: (v) => { bgRightSortMode = v; },
+      setBgRightSortMode: (v) => {
+        bgRightSortMode = v;
+      },
       getBgSortSnapshot: () => bgSortSnapshot,
-      setBgSortSnapshot: (v) => { bgSortSnapshot = v; },
+      setBgSortSnapshot: (v) => {
+        bgSortSnapshot = v;
+      },
       getPersonaLeftSortMode: () => personaLeftSortMode,
-      setPersonaLeftSortMode: (v) => { personaLeftSortMode = v; },
+      setPersonaLeftSortMode: (v) => {
+        personaLeftSortMode = v;
+      },
       getPersonaRightSortMode: () => personaRightSortMode,
-      setPersonaRightSortMode: (v) => { personaRightSortMode = v; },
+      setPersonaRightSortMode: (v) => {
+        personaRightSortMode = v;
+      },
       getPersonaSortSnapshot: () => personaSortSnapshot,
-      setPersonaSortSnapshot: (v) => { personaSortSnapshot = v; },
+      setPersonaSortSnapshot: (v) => {
+        personaSortSnapshot = v;
+      },
       getSelectedTreeNode: () => selectedTreeNode,
       getSelectedPresetFolder: () => selectedPresetFolder,
       getSelectedWorldInfoFolder: () => selectedWorldInfoFolder,
@@ -9778,8 +10363,6 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       extensionName,
     });
 
-
-
     popup.find("#cfm-regex-create-btn").on("click touchend", function (e) {
       e.preventDefault();
       e.stopPropagation();
@@ -9820,8 +10403,6 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       handleDefaultBgSetting();
     });
 
-
-
     // 世界书激活分组按钮
     popup.find("#cfm-wi-preset-btn").on("click touchend", async function (e) {
       e.preventDefault();
@@ -9835,7 +10416,6 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       e.stopPropagation();
       showQrPresetPanel();
     });
-
 
     // 重置排序状态
     sortDirty = false;
@@ -9977,13 +10557,19 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         selectAllVisible,
         state: {
           getSelectedTreeNode: () => selectedTreeNode,
-          setSelectedTreeNode: (value) => { selectedTreeNode = value; },
+          setSelectedTreeNode: (value) => {
+            selectedTreeNode = value;
+          },
           getExpandedNodes: () => expandedNodes,
           getCfmMultiSelectMode: () => cfmMultiSelectMode,
           getCfmMultiSelected: () => cfmMultiSelected,
           getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-          setCfmMultiSelectRangeMode: (value) => { cfmMultiSelectRangeMode = value; },
-          setCfmMultiSelectLastClicked: (value) => { cfmMultiSelectLastClicked = value; },
+          setCfmMultiSelectRangeMode: (value) => {
+            cfmMultiSelectRangeMode = value;
+          },
+          setCfmMultiSelectLastClicked: (value) => {
+            cfmMultiSelectLastClicked = value;
+          },
         },
       });
     }
@@ -10041,7 +10627,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         touchDragMgr,
         state: {
           getSelectedPresetFolder: () => selectedPresetFolder,
-          setSelectedPresetFolder: (value) => { selectedPresetFolder = value; },
+          setSelectedPresetFolder: (value) => {
+            selectedPresetFolder = value;
+          },
           getPresetExpandedNodes: () => presetExpandedNodes,
           getCfmMultiSelectMode: () => cfmMultiSelectMode,
           getCfmMultiSelected: () => cfmMultiSelected,
@@ -10055,8 +10643,12 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
           getCfmPresetRenameSelected: () => cfmPresetRenameSelected,
           getCfmPresetDetailExpandedNames: () => cfmPresetDetailExpandedNames,
           getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-          setCfmMultiSelectRangeMode: (value) => { cfmMultiSelectRangeMode = value; },
-          setCfmMultiSelectLastClicked: (value) => { cfmMultiSelectLastClicked = value; },
+          setCfmMultiSelectRangeMode: (value) => {
+            cfmMultiSelectRangeMode = value;
+          },
+          setCfmMultiSelectLastClicked: (value) => {
+            cfmMultiSelectLastClicked = value;
+          },
         },
       });
     }
@@ -10121,7 +10713,9 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         touchDragMgr,
         state: {
           getSelectedWorldInfoFolder: () => selectedWorldInfoFolder,
-          setSelectedWorldInfoFolder: (value) => { selectedWorldInfoFolder = value; },
+          setSelectedWorldInfoFolder: (value) => {
+            selectedWorldInfoFolder = value;
+          },
           getWorldInfoExpandedNodes: () => worldInfoExpandedNodes,
           getCfmMultiSelectMode: () => cfmMultiSelectMode,
           getCfmMultiSelected: () => cfmMultiSelected,
@@ -10133,11 +10727,18 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
           getCfmWorldInfoNoteSelected: () => cfmWorldInfoNoteSelected,
           getCfmWorldInfoRenameMode: () => cfmWorldInfoRenameMode,
           getCfmWorldInfoRenameSelected: () => cfmWorldInfoRenameSelected,
-          getCfmWorldInfoEntryLastFocusedName: () => cfmWorldInfoEntryLastFocusedName,
-          setCfmWorldInfoEntryLastFocusedName: (value) => { cfmWorldInfoEntryLastFocusedName = value; },
+          getCfmWorldInfoEntryLastFocusedName: () =>
+            cfmWorldInfoEntryLastFocusedName,
+          setCfmWorldInfoEntryLastFocusedName: (value) => {
+            cfmWorldInfoEntryLastFocusedName = value;
+          },
           getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-          setCfmMultiSelectRangeMode: (value) => { cfmMultiSelectRangeMode = value; },
-          setCfmMultiSelectLastClicked: (value) => { cfmMultiSelectLastClicked = value; },
+          setCfmMultiSelectRangeMode: (value) => {
+            cfmMultiSelectRangeMode = value;
+          },
+          setCfmMultiSelectLastClicked: (value) => {
+            cfmMultiSelectLastClicked = value;
+          },
         },
       });
     }
@@ -10152,26 +10753,78 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   function getResourceSearchApi() {
     if (!_resourceSearchApi) {
       _resourceSearchApi = createResourceSearchApiCore({
-        $, BG_ORIENT_ICONS, BG_ORIENT_LABELS, applyBackground, applyTheme,
-        cfmBgNoteMode, cfmBgNoteSelected, cfmBgRenameMode, cfmBgRenameSelected,
-        cfmExportMode, cfmExportSelected, cfmMultiSelectLastClicked,
-        cfmMultiSelectMode, cfmMultiSelectRangeMode, cfmMultiSelected,
-        cfmResDeleteMode, cfmResDeleteSelected, cfmThemeNoteMode,
-        cfmThemeNoteSelected, cfmThemeRenameMode, cfmThemeRenameSelected,
-        cfmToastr, escapeHtml, executeBgNoteEdit, executeBgRename,
-        executeThemeNoteEdit, executeThemeRename, fuzzyMatch, getBackgroundDisplayName,
-        getBackgroundNames, getBackgroundThumbnailUrl, getBgNote, getBgOrientation,
-        getContext, getMultiDragData, getResChildFolders, getResFavorites,
-        getResFolderDisplayName, getResFolderPath, getResFolderPathNames,
-        getResFolderTree, getResourceFolders, getResourceGroups, getThemeBgBinding,
-        getThemeNames, getThemeNote, getVisibleResourceIds, handleThemeBgLink,
-        isResFavorite, pcDragEnd, pcDragStart, prependBgNoteToolbar,
-        prependBgRenameToolbar, prependExportToolbar, prependResDeleteToolbar,
-        prependThemeNoteToolbar, prependThemeRenameToolbar, renderBackgroundsView,
-        renderThemesView, selectAllVisible, selectedBgFolder, selectedThemeFolder,
-        toggleBgNoteItem, toggleBgRenameItem, toggleExportItem, toggleMultiSelectItem,
-        toggleResDeleteItem, toggleResFavorite, toggleThemeNoteItem,
-        toggleThemeRenameItem, touchDragMgr, document,
+        $,
+        BG_ORIENT_ICONS,
+        BG_ORIENT_LABELS,
+        applyBackground,
+        applyTheme,
+        cfmBgNoteMode,
+        cfmBgNoteSelected,
+        cfmBgRenameMode,
+        cfmBgRenameSelected,
+        cfmExportMode,
+        cfmExportSelected,
+        cfmMultiSelectLastClicked,
+        cfmMultiSelectMode,
+        cfmMultiSelectRangeMode,
+        cfmMultiSelected,
+        cfmResDeleteMode,
+        cfmResDeleteSelected,
+        cfmThemeNoteMode,
+        cfmThemeNoteSelected,
+        cfmThemeRenameMode,
+        cfmThemeRenameSelected,
+        cfmToastr,
+        escapeHtml,
+        executeBgNoteEdit,
+        executeBgRename,
+        executeThemeNoteEdit,
+        executeThemeRename,
+        fuzzyMatch,
+        getBackgroundDisplayName,
+        getBackgroundNames,
+        getBackgroundThumbnailUrl,
+        getBgNote,
+        getBgOrientation,
+        getContext,
+        getMultiDragData,
+        getResChildFolders,
+        getResFavorites,
+        getResFolderDisplayName,
+        getResFolderPath,
+        getResFolderPathNames,
+        getResFolderTree,
+        getResourceFolders,
+        getResourceGroups,
+        getThemeBgBinding,
+        getThemeNames,
+        getThemeNote,
+        getVisibleResourceIds,
+        handleThemeBgLink,
+        isResFavorite,
+        pcDragEnd,
+        pcDragStart,
+        prependBgNoteToolbar,
+        prependBgRenameToolbar,
+        prependExportToolbar,
+        prependResDeleteToolbar,
+        prependThemeNoteToolbar,
+        prependThemeRenameToolbar,
+        renderBackgroundsView,
+        renderThemesView,
+        selectAllVisible,
+        selectedBgFolder,
+        selectedThemeFolder,
+        toggleBgNoteItem,
+        toggleBgRenameItem,
+        toggleExportItem,
+        toggleMultiSelectItem,
+        toggleResDeleteItem,
+        toggleResFavorite,
+        toggleThemeNoteItem,
+        toggleThemeRenameItem,
+        touchDragMgr,
+        document,
       });
     }
     return _resourceSearchApi;
@@ -10239,9 +10892,13 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         autoApplyWiPresets,
         autoApplyQrPresets,
         getSortDirty: () => sortDirty,
-        setSortDirty: (v) => { sortDirty = v; },
+        setSortDirty: (v) => {
+          sortDirty = v;
+        },
         getSortSnapshot: () => sortSnapshot,
-        setSortSnapshot: (v) => { sortSnapshot = v; },
+        setSortSnapshot: (v) => {
+          sortSnapshot = v;
+        },
         cfmCharDetailExpandedAvatars,
         personaItemExpandedIds,
         cfmPresetDetailExpandedNames,
@@ -10254,32 +10911,84 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         cfmPresetDetailBatchSelected,
         cfmWorldInfoEntryBatchSelected,
         cfmRegexBatchSelected,
-        setCfmQrLastFocusedSetName: (v) => { cfmQrLastFocusedSetName = v; },
-        setCfmWorldInfoEntryLastFocusedName: (v) => { cfmWorldInfoEntryLastFocusedName = v; },
-        setCfmChatMode: (v) => { cfmChatMode = v; },
-        setCfmChatBatchMode: (v) => { cfmChatBatchMode = v; },
-        setCfmChatBatchRangeMode: (v) => { cfmChatBatchRangeMode = v; },
-        setCfmChatBatchLastClicked: (v) => { cfmChatBatchLastClicked = v; },
-        setCfmCharRegexMode: (v) => { cfmCharRegexMode = v; },
-        setCfmCharRegexTargetAvatar: (v) => { cfmCharRegexTargetAvatar = v; },
-        setCfmCharRegexHighlightPath: (v) => { cfmCharRegexHighlightPath = v; },
-        setCfmCharRegexPrevSelectedTreeNode: (v) => { cfmCharRegexPrevSelectedTreeNode = v; },
-        setCfmPresetRegexMode: (v) => { cfmPresetRegexMode = v; },
-        setCfmPresetRegexTargetName: (v) => { cfmPresetRegexTargetName = v; },
-        setCfmPresetRegexHighlightPath: (v) => { cfmPresetRegexHighlightPath = v; },
-        setCfmPresetDetailBatchMode: (v) => { cfmPresetDetailBatchMode = v; },
-        setCfmPresetDetailBatchOwnerName: (v) => { cfmPresetDetailBatchOwnerName = v; },
-        setCfmPresetDetailBatchRangeMode: (v) => { cfmPresetDetailBatchRangeMode = v; },
-        setCfmPresetDetailBatchLastClicked: (v) => { cfmPresetDetailBatchLastClicked = v; },
-        setCfmWorldInfoEntryBatchMode: (v) => { cfmWorldInfoEntryBatchMode = v; },
-        setCfmWorldInfoEntryBatchOwnerName: (v) => { cfmWorldInfoEntryBatchOwnerName = v; },
-        setCfmWorldInfoEntryBatchRangeMode: (v) => { cfmWorldInfoEntryBatchRangeMode = v; },
-        setCfmWorldInfoEntryBatchLastClicked: (v) => { cfmWorldInfoEntryBatchLastClicked = v; },
-        setCfmRegexBatchMode: (v) => { cfmRegexBatchMode = v; },
-        setCfmRegexBatchRangeMode: (v) => { cfmRegexBatchRangeMode = v; },
-        setCfmRegexBatchLastClicked: (v) => { cfmRegexBatchLastClicked = v; },
-        setCfmMultiSelectMode: (v) => { cfmMultiSelectMode = v; },
-        setCfmMultiSelectRangeMode: (v) => { cfmMultiSelectRangeMode = v; },
+        setCfmQrLastFocusedSetName: (v) => {
+          cfmQrLastFocusedSetName = v;
+        },
+        setCfmWorldInfoEntryLastFocusedName: (v) => {
+          cfmWorldInfoEntryLastFocusedName = v;
+        },
+        setCfmChatMode: (v) => {
+          cfmChatMode = v;
+        },
+        setCfmChatBatchMode: (v) => {
+          cfmChatBatchMode = v;
+        },
+        setCfmChatBatchRangeMode: (v) => {
+          cfmChatBatchRangeMode = v;
+        },
+        setCfmChatBatchLastClicked: (v) => {
+          cfmChatBatchLastClicked = v;
+        },
+        setCfmCharRegexMode: (v) => {
+          cfmCharRegexMode = v;
+        },
+        setCfmCharRegexTargetAvatar: (v) => {
+          cfmCharRegexTargetAvatar = v;
+        },
+        setCfmCharRegexHighlightPath: (v) => {
+          cfmCharRegexHighlightPath = v;
+        },
+        setCfmCharRegexPrevSelectedTreeNode: (v) => {
+          cfmCharRegexPrevSelectedTreeNode = v;
+        },
+        setCfmPresetRegexMode: (v) => {
+          cfmPresetRegexMode = v;
+        },
+        setCfmPresetRegexTargetName: (v) => {
+          cfmPresetRegexTargetName = v;
+        },
+        setCfmPresetRegexHighlightPath: (v) => {
+          cfmPresetRegexHighlightPath = v;
+        },
+        setCfmPresetDetailBatchMode: (v) => {
+          cfmPresetDetailBatchMode = v;
+        },
+        setCfmPresetDetailBatchOwnerName: (v) => {
+          cfmPresetDetailBatchOwnerName = v;
+        },
+        setCfmPresetDetailBatchRangeMode: (v) => {
+          cfmPresetDetailBatchRangeMode = v;
+        },
+        setCfmPresetDetailBatchLastClicked: (v) => {
+          cfmPresetDetailBatchLastClicked = v;
+        },
+        setCfmWorldInfoEntryBatchMode: (v) => {
+          cfmWorldInfoEntryBatchMode = v;
+        },
+        setCfmWorldInfoEntryBatchOwnerName: (v) => {
+          cfmWorldInfoEntryBatchOwnerName = v;
+        },
+        setCfmWorldInfoEntryBatchRangeMode: (v) => {
+          cfmWorldInfoEntryBatchRangeMode = v;
+        },
+        setCfmWorldInfoEntryBatchLastClicked: (v) => {
+          cfmWorldInfoEntryBatchLastClicked = v;
+        },
+        setCfmRegexBatchMode: (v) => {
+          cfmRegexBatchMode = v;
+        },
+        setCfmRegexBatchRangeMode: (v) => {
+          cfmRegexBatchRangeMode = v;
+        },
+        setCfmRegexBatchLastClicked: (v) => {
+          cfmRegexBatchLastClicked = v;
+        },
+        setCfmMultiSelectMode: (v) => {
+          cfmMultiSelectMode = v;
+        },
+        setCfmMultiSelectRangeMode: (v) => {
+          cfmMultiSelectRangeMode = v;
+        },
       });
     }
     return _mainPopupCloserApi;
@@ -10293,21 +11002,44 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   function getLeftTreeApi() {
     if (!_leftTreeApi) {
       _leftTreeApi = createLeftTreeApiCore({
-        $, cfmToastr, clearMultiSelect, countCharsInFolderRecursive,
-        escapeHtml, executeGlobalSearch, getChildFolders,
-        getFavoriteCharacters, getTagName, getTopLevelFolders,
-        getUncategorizedCharacters, handleCharDropToFolder,
-        handleFolderTargetMove, isNewlyImported, pcDragEnd, pcDragStart,
-        pcGetDropData, promptRenameFolder, removeCharFromAllFolders,
-        renderRightPane, reorderFolder, sortFolders, touchDragMgr,
+        $,
+        cfmToastr,
+        clearMultiSelect,
+        countCharsInFolderRecursive,
+        escapeHtml,
+        executeGlobalSearch,
+        getChildFolders,
+        getFavoriteCharacters,
+        getTagName,
+        getTopLevelFolders,
+        getUncategorizedCharacters,
+        handleCharDropToFolder,
+        handleFolderTargetMove,
+        isNewlyImported,
+        pcDragEnd,
+        pcDragStart,
+        pcGetDropData,
+        promptRenameFolder,
+        removeCharFromAllFolders,
+        renderRightPane,
+        reorderFolder,
+        sortFolders,
+        touchDragMgr,
         wouldCreateCycle,
         getSelectedTreeNode: () => selectedTreeNode,
-        setSelectedTreeNode: (v) => { selectedTreeNode = v; },
+        setSelectedTreeNode: (v) => {
+          selectedTreeNode = v;
+        },
         getExpandedNodes: () => expandedNodes,
         getPcDragData: () => _pcDragData,
-        getPcLastResourceFolderHoverTarget: () => _pcLastResourceFolderHoverTarget,
-        setPcLastResourceFolderHoverTarget: (v) => { _pcLastResourceFolderHoverTarget = v; },
-        setPcDropHandled: (v) => { _pcDropHandled = v; },
+        getPcLastResourceFolderHoverTarget: () =>
+          _pcLastResourceFolderHoverTarget,
+        setPcLastResourceFolderHoverTarget: (v) => {
+          _pcLastResourceFolderHoverTarget = v;
+        },
+        setPcDropHandled: (v) => {
+          _pcDropHandled = v;
+        },
         getConfig: () => config,
         getCfmCopyMode: () => cfmCopyMode,
       });
@@ -10329,31 +11061,73 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   function getRightListApi() {
     if (!_rightListApi) {
       _rightListApi = createRightListApiCore({
-        $, cfmToastr, bindTouchSafeTap, clearMultiSelect, closeMainPopup,
-        countCharsInFolderRecursive, escapeHtml, executeCharEdit,
-        executeGlobalSearch, filterHiddenChars, findCharFolderPath,
-        getCharChats, getCharacters, getCharactersInFolder, getChildFolders,
-        getContext, getFavoriteCharacters, getFolderPath, getMultiDragData,
-        getTagName, getThumbnailUrl, getUncategorizedCharacters,
-        getVisibleActions, getVisibleResourceIds, handleCharDropToFolder,
-        handleFolderTargetMove, isCharHidden, isFavorite, pcDragEnd,
-        pcDragStart, pcGetDropData, prependEditToolbar, prependExportToolbar,
-        prependResDeleteToolbar, promptRenameFolder,
-        refreshActiveViewerStateAfterSelectionChange, renderCharRegexSubList,
-        renderCharacterDetailSubList, renderChatSubList, renderLeftTree,
-        reorderFolder, selectAllVisible, sortCharacters, sortFolders,
-        toggleCharHidden, toggleEditItem, toggleExportItem, toggleFavorite,
-        toggleMultiSelectItem, toggleResDeleteItem, touchDragMgr,
+        $,
+        cfmToastr,
+        bindTouchSafeTap,
+        clearMultiSelect,
+        closeMainPopup,
+        countCharsInFolderRecursive,
+        escapeHtml,
+        executeCharEdit,
+        executeGlobalSearch,
+        filterHiddenChars,
+        findCharFolderPath,
+        getCharChats,
+        getCharacters,
+        getCharactersInFolder,
+        getChildFolders,
+        getContext,
+        getFavoriteCharacters,
+        getFolderPath,
+        getMultiDragData,
+        getTagName,
+        getThumbnailUrl,
+        getUncategorizedCharacters,
+        getVisibleActions,
+        getVisibleResourceIds,
+        handleCharDropToFolder,
+        handleFolderTargetMove,
+        isCharHidden,
+        isFavorite,
+        pcDragEnd,
+        pcDragStart,
+        pcGetDropData,
+        prependEditToolbar,
+        prependExportToolbar,
+        prependResDeleteToolbar,
+        promptRenameFolder,
+        refreshActiveViewerStateAfterSelectionChange,
+        renderCharRegexSubList,
+        renderCharacterDetailSubList,
+        renderChatSubList,
+        renderLeftTree,
+        reorderFolder,
+        selectAllVisible,
+        sortCharacters,
+        sortFolders,
+        toggleCharHidden,
+        toggleEditItem,
+        toggleExportItem,
+        toggleFavorite,
+        toggleMultiSelectItem,
+        toggleResDeleteItem,
+        touchDragMgr,
         wouldCreateCycle,
         getSelectedTreeNode: () => selectedTreeNode,
-        setSelectedTreeNode: (v) => { selectedTreeNode = v; },
+        setSelectedTreeNode: (v) => {
+          selectedTreeNode = v;
+        },
         getExpandedNodes: () => expandedNodes,
         getCfmMultiSelectMode: () => cfmMultiSelectMode,
         getCfmMultiSelected: () => cfmMultiSelected,
         getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-        setCfmMultiSelectRangeMode: (v) => { cfmMultiSelectRangeMode = v; },
+        setCfmMultiSelectRangeMode: (v) => {
+          cfmMultiSelectRangeMode = v;
+        },
         getCfmMultiSelectLastClicked: () => cfmMultiSelectLastClicked,
-        setCfmMultiSelectLastClicked: (v) => { cfmMultiSelectLastClicked = v; },
+        setCfmMultiSelectLastClicked: (v) => {
+          cfmMultiSelectLastClicked = v;
+        },
         getCfmExportMode: () => cfmExportMode,
         getCfmExportSelected: () => cfmExportSelected,
         getCfmResDeleteMode: () => cfmResDeleteMode,
@@ -10400,7 +11174,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getModalApi().createChoiceDialog(options);
   }
 
-    // ==================== 标签管理配置弹窗 ====================
+  // ==================== 标签管理配置弹窗 ====================
   let configSelectedFolderIds = new Set();
   let cfmDeleteMode = false;
   let cfmDeleteSelected = new Set();
@@ -10428,50 +11202,94 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         resConfigDeleteSelected,
         // 基础类型 getter/setter 注入
         getCfmDeleteMode: () => cfmDeleteMode,
-        setCfmDeleteMode: (v) => { cfmDeleteMode = v; },
+        setCfmDeleteMode: (v) => {
+          cfmDeleteMode = v;
+        },
         getCfmDeleteCascade: () => cfmDeleteCascade,
-        setCfmDeleteCascade: (v) => { cfmDeleteCascade = v; },
+        setCfmDeleteCascade: (v) => {
+          cfmDeleteCascade = v;
+        },
         getCfmDeleteLastClickedId: () => cfmDeleteLastClickedId,
-        setCfmDeleteLastClickedId: (v) => { cfmDeleteLastClickedId = v; },
+        setCfmDeleteLastClickedId: (v) => {
+          cfmDeleteLastClickedId = v;
+        },
         getCfmDeleteRangeMode: () => cfmDeleteRangeMode,
-        setCfmDeleteRangeMode: (v) => { cfmDeleteRangeMode = v; },
+        setCfmDeleteRangeMode: (v) => {
+          cfmDeleteRangeMode = v;
+        },
         getResConfigDeleteMode: () => resConfigDeleteMode,
-        setResConfigDeleteMode: (v) => { resConfigDeleteMode = v; },
+        setResConfigDeleteMode: (v) => {
+          resConfigDeleteMode = v;
+        },
         getResConfigDeleteCascade: () => resConfigDeleteCascade,
-        setResConfigDeleteCascade: (v) => { resConfigDeleteCascade = v; },
+        setResConfigDeleteCascade: (v) => {
+          resConfigDeleteCascade = v;
+        },
         getResConfigDeleteLastClickedId: () => resConfigDeleteLastClickedId,
-        setResConfigDeleteLastClickedId: (v) => { resConfigDeleteLastClickedId = v; },
+        setResConfigDeleteLastClickedId: (v) => {
+          resConfigDeleteLastClickedId = v;
+        },
         getResConfigDeleteRangeMode: () => resConfigDeleteRangeMode,
-        setResConfigDeleteRangeMode: (v) => { resConfigDeleteRangeMode = v; },
+        setResConfigDeleteRangeMode: (v) => {
+          resConfigDeleteRangeMode = v;
+        },
         // 基础类型 getter/setter 注入（跨模块共享）
         getCurrentResourceType: () => currentResourceType,
-        setCurrentResourceType: (v) => { currentResourceType = v; },
+        setCurrentResourceType: (v) => {
+          currentResourceType = v;
+        },
         getCfmMultiSelectMode: () => cfmMultiSelectMode,
-        setCfmMultiSelectMode: (v) => { cfmMultiSelectMode = v; },
+        setCfmMultiSelectMode: (v) => {
+          cfmMultiSelectMode = v;
+        },
         getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-        setCfmMultiSelectRangeMode: (v) => { cfmMultiSelectRangeMode = v; },
+        setCfmMultiSelectRangeMode: (v) => {
+          cfmMultiSelectRangeMode = v;
+        },
         getCfmExportMode: () => cfmExportMode,
-        setCfmExportMode: (v) => { cfmExportMode = v; },
+        setCfmExportMode: (v) => {
+          cfmExportMode = v;
+        },
         getCfmResDeleteMode: () => cfmResDeleteMode,
-        setCfmResDeleteMode: (v) => { cfmResDeleteMode = v; },
+        setCfmResDeleteMode: (v) => {
+          cfmResDeleteMode = v;
+        },
         getCfmThemeNoteMode: () => cfmThemeNoteMode,
-        setCfmThemeNoteMode: (v) => { cfmThemeNoteMode = v; },
+        setCfmThemeNoteMode: (v) => {
+          cfmThemeNoteMode = v;
+        },
         getCfmBgNoteMode: () => cfmBgNoteMode,
-        setCfmBgNoteMode: (v) => { cfmBgNoteMode = v; },
+        setCfmBgNoteMode: (v) => {
+          cfmBgNoteMode = v;
+        },
         getCfmPresetNoteMode: () => cfmPresetNoteMode,
-        setCfmPresetNoteMode: (v) => { cfmPresetNoteMode = v; },
+        setCfmPresetNoteMode: (v) => {
+          cfmPresetNoteMode = v;
+        },
         getCfmWorldInfoNoteMode: () => cfmWorldInfoNoteMode,
-        setCfmWorldInfoNoteMode: (v) => { cfmWorldInfoNoteMode = v; },
+        setCfmWorldInfoNoteMode: (v) => {
+          cfmWorldInfoNoteMode = v;
+        },
         getCfmQrNoteMode: () => cfmQrNoteMode,
-        setCfmQrNoteMode: (v) => { cfmQrNoteMode = v; },
+        setCfmQrNoteMode: (v) => {
+          cfmQrNoteMode = v;
+        },
         getCfmPersonaNoteMode: () => cfmPersonaNoteMode,
-        setCfmPersonaNoteMode: (v) => { cfmPersonaNoteMode = v; },
+        setCfmPersonaNoteMode: (v) => {
+          cfmPersonaNoteMode = v;
+        },
         getCfmPresetRenameMode: () => cfmPresetRenameMode,
-        setCfmPresetRenameMode: (v) => { cfmPresetRenameMode = v; },
+        setCfmPresetRenameMode: (v) => {
+          cfmPresetRenameMode = v;
+        },
         getCfmWorldInfoRenameMode: () => cfmWorldInfoRenameMode,
-        setCfmWorldInfoRenameMode: (v) => { cfmWorldInfoRenameMode = v; },
+        setCfmWorldInfoRenameMode: (v) => {
+          cfmWorldInfoRenameMode = v;
+        },
         getCfmQrRenameMode: () => cfmQrRenameMode,
-        setCfmQrRenameMode: (v) => { cfmQrRenameMode = v; },
+        setCfmQrRenameMode: (v) => {
+          cfmQrRenameMode = v;
+        },
         getCfmCopyMode: () => cfmCopyMode,
         // 常量
         CFM_TAB_META,
@@ -10661,25 +11479,45 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         regexConfigExpandedNodes,
         // 基础类型状态（getter/setter 注入）
         getCfmDeleteMode: () => cfmDeleteMode,
-        setCfmDeleteMode: (v) => { cfmDeleteMode = v; },
+        setCfmDeleteMode: (v) => {
+          cfmDeleteMode = v;
+        },
         getCfmDeleteCascade: () => cfmDeleteCascade,
-        setCfmDeleteCascade: (v) => { cfmDeleteCascade = v; },
+        setCfmDeleteCascade: (v) => {
+          cfmDeleteCascade = v;
+        },
         getCfmDeleteLastClickedId: () => cfmDeleteLastClickedId,
-        setCfmDeleteLastClickedId: (v) => { cfmDeleteLastClickedId = v; },
+        setCfmDeleteLastClickedId: (v) => {
+          cfmDeleteLastClickedId = v;
+        },
         getCfmDeleteRangeMode: () => cfmDeleteRangeMode,
-        setCfmDeleteRangeMode: (v) => { cfmDeleteRangeMode = v; },
+        setCfmDeleteRangeMode: (v) => {
+          cfmDeleteRangeMode = v;
+        },
         getCfmInvertScope: () => cfmInvertScope,
-        setCfmInvertScope: (v) => { cfmInvertScope = v; },
+        setCfmInvertScope: (v) => {
+          cfmInvertScope = v;
+        },
         getResConfigDeleteMode: () => resConfigDeleteMode,
-        setResConfigDeleteMode: (v) => { resConfigDeleteMode = v; },
+        setResConfigDeleteMode: (v) => {
+          resConfigDeleteMode = v;
+        },
         getResConfigDeleteCascade: () => resConfigDeleteCascade,
-        setResConfigDeleteCascade: (v) => { resConfigDeleteCascade = v; },
+        setResConfigDeleteCascade: (v) => {
+          resConfigDeleteCascade = v;
+        },
         getResConfigDeleteLastClickedId: () => resConfigDeleteLastClickedId,
-        setResConfigDeleteLastClickedId: (v) => { resConfigDeleteLastClickedId = v; },
+        setResConfigDeleteLastClickedId: (v) => {
+          resConfigDeleteLastClickedId = v;
+        },
         getResConfigDeleteRangeMode: () => resConfigDeleteRangeMode,
-        setResConfigDeleteRangeMode: (v) => { resConfigDeleteRangeMode = v; },
+        setResConfigDeleteRangeMode: (v) => {
+          resConfigDeleteRangeMode = v;
+        },
         getResConfigInvertScope: () => resConfigInvertScope,
-        setResConfigInvertScope: (v) => { resConfigInvertScope = v; },
+        setResConfigInvertScope: (v) => {
+          resConfigInvertScope = v;
+        },
         getCurrentResourceType: () => currentResourceType,
         getCfmConfigTopActiveTab: () => cfmConfigTopActiveTab,
         // 渲染依赖
@@ -10740,7 +11578,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getSettingsPageApi().renderConfigBody(defaultTab);
   }
   function renderResourceConfigBody(body, type, defaultTab = "settings") {
-    return getSettingsPageApi().renderResourceConfigBody(body, type, defaultTab);
+    return getSettingsPageApi().renderResourceConfigBody(
+      body,
+      type,
+      defaultTab,
+    );
   }
   function renderRegexConfigBody(body, defaultTab = "settings") {
     return getSettingsPageApi().renderRegexConfigBody(body, defaultTab);
@@ -10794,25 +11636,45 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         configExpandedNodes,
         // 基础类型状态（getter/setter 注入）
         getCfmDeleteMode: () => cfmDeleteMode,
-        setCfmDeleteMode: (v) => { cfmDeleteMode = v; },
+        setCfmDeleteMode: (v) => {
+          cfmDeleteMode = v;
+        },
         getCfmDeleteCascade: () => cfmDeleteCascade,
-        setCfmDeleteCascade: (v) => { cfmDeleteCascade = v; },
+        setCfmDeleteCascade: (v) => {
+          cfmDeleteCascade = v;
+        },
         getCfmDeleteLastClickedId: () => cfmDeleteLastClickedId,
-        setCfmDeleteLastClickedId: (v) => { cfmDeleteLastClickedId = v; },
+        setCfmDeleteLastClickedId: (v) => {
+          cfmDeleteLastClickedId = v;
+        },
         getCfmDeleteRangeMode: () => cfmDeleteRangeMode,
-        setCfmDeleteRangeMode: (v) => { cfmDeleteRangeMode = v; },
+        setCfmDeleteRangeMode: (v) => {
+          cfmDeleteRangeMode = v;
+        },
         getCfmInvertScope: () => cfmInvertScope,
-        setCfmInvertScope: (v) => { cfmInvertScope = v; },
+        setCfmInvertScope: (v) => {
+          cfmInvertScope = v;
+        },
         getResConfigDeleteMode: () => resConfigDeleteMode,
-        setResConfigDeleteMode: (v) => { resConfigDeleteMode = v; },
+        setResConfigDeleteMode: (v) => {
+          resConfigDeleteMode = v;
+        },
         getResConfigDeleteCascade: () => resConfigDeleteCascade,
-        setResConfigDeleteCascade: (v) => { resConfigDeleteCascade = v; },
+        setResConfigDeleteCascade: (v) => {
+          resConfigDeleteCascade = v;
+        },
         getResConfigDeleteLastClickedId: () => resConfigDeleteLastClickedId,
-        setResConfigDeleteLastClickedId: (v) => { resConfigDeleteLastClickedId = v; },
+        setResConfigDeleteLastClickedId: (v) => {
+          resConfigDeleteLastClickedId = v;
+        },
         getResConfigDeleteRangeMode: () => resConfigDeleteRangeMode,
-        setResConfigDeleteRangeMode: (v) => { resConfigDeleteRangeMode = v; },
+        setResConfigDeleteRangeMode: (v) => {
+          resConfigDeleteRangeMode = v;
+        },
         getResConfigInvertScope: () => resConfigInvertScope,
-        setResConfigInvertScope: (v) => { resConfigInvertScope = v; },
+        setResConfigInvertScope: (v) => {
+          resConfigInvertScope = v;
+        },
       });
     }
     return _batchCreateApi;
@@ -10821,7 +11683,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getBatchCreateApi().getResTypeLabel(type);
   }
   function showResDeleteConfirmDialog(type, folderIds, onConfirm) {
-    return getBatchCreateApi().showResDeleteConfirmDialog(type, folderIds, onConfirm);
+    return getBatchCreateApi().showResDeleteConfirmDialog(
+      type,
+      folderIds,
+      onConfirm,
+    );
   }
   function executeResourceMultiDelete(type) {
     return getBatchCreateApi().executeResourceMultiDelete(type);
@@ -10848,7 +11714,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getBatchCreateApi().executeMultiDelete();
   }
   function createTagsSiblings(input, parentFolderId, silent) {
-    return getBatchCreateApi().createTagsSiblings(input, parentFolderId, silent);
+    return getBatchCreateApi().createTagsSiblings(
+      input,
+      parentFolderId,
+      silent,
+    );
   }
   function showBatchCreatePopup() {
     return getBatchCreateApi().showBatchCreatePopup();
@@ -10930,32 +11800,84 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       sortResFolders,
       sortResItems,
       state: {
-        get selectedPresetFolder() { return selectedPresetFolder; },
-        set selectedPresetFolder(value) { selectedPresetFolder = value; },
-        get presetExpandedNodes() { return presetExpandedNodes; },
-        get presetRightSortMode() { return presetRightSortMode; },
-        get cfmPresetRegexMode() { return cfmPresetRegexMode; },
-        get cfmPresetRegexHighlightPath() { return cfmPresetRegexHighlightPath; },
-        get cfmPresetNoteMode() { return cfmPresetNoteMode; },
-        get cfmPresetNoteSelected() { return cfmPresetNoteSelected; },
-        get cfmPresetRenameMode() { return cfmPresetRenameMode; },
-        get cfmPresetRenameSelected() { return cfmPresetRenameSelected; },
-        get cfmPresetRegexTargetName() { return cfmPresetRegexTargetName; },
-        get cfmPresetRegexExpandedNames() { return cfmPresetRegexExpandedNames; },
-        get cfmPresetDetailExpandedNames() { return cfmPresetDetailExpandedNames; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get _pcDragData() { return _pcDragData; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
+        get selectedPresetFolder() {
+          return selectedPresetFolder;
+        },
+        set selectedPresetFolder(value) {
+          selectedPresetFolder = value;
+        },
+        get presetExpandedNodes() {
+          return presetExpandedNodes;
+        },
+        get presetRightSortMode() {
+          return presetRightSortMode;
+        },
+        get cfmPresetRegexMode() {
+          return cfmPresetRegexMode;
+        },
+        get cfmPresetRegexHighlightPath() {
+          return cfmPresetRegexHighlightPath;
+        },
+        get cfmPresetNoteMode() {
+          return cfmPresetNoteMode;
+        },
+        get cfmPresetNoteSelected() {
+          return cfmPresetNoteSelected;
+        },
+        get cfmPresetRenameMode() {
+          return cfmPresetRenameMode;
+        },
+        get cfmPresetRenameSelected() {
+          return cfmPresetRenameSelected;
+        },
+        get cfmPresetRegexTargetName() {
+          return cfmPresetRegexTargetName;
+        },
+        get cfmPresetRegexExpandedNames() {
+          return cfmPresetRegexExpandedNames;
+        },
+        get cfmPresetDetailExpandedNames() {
+          return cfmPresetDetailExpandedNames;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
       },
       toggleExportItem,
       toggleMultiSelectItem,
@@ -11023,29 +11945,75 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       wouldCreateResCycle,
       renderThemesView,
       state: {
-        get _pcDragData() { return _pcDragData; },
-        get _pcDropHandled() { return _pcDropHandled; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmMultiSelectLastClicked() { return cfmMultiSelectLastClicked; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmThemeNoteMode() { return cfmThemeNoteMode; },
-        get cfmThemeNoteSelected() { return cfmThemeNoteSelected; },
-        get cfmThemeRenameMode() { return cfmThemeRenameMode; },
-        get cfmThemeRenameSelected() { return cfmThemeRenameSelected; },
-        get selectedThemeFolder() { return selectedThemeFolder; },
-        set selectedThemeFolder(value) { selectedThemeFolder = value; },
-        get themeExpandedNodes() { return themeExpandedNodes; },
-        get themeRightSortMode() { return themeRightSortMode; },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcDropHandled() {
+          return _pcDropHandled;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmMultiSelectLastClicked() {
+          return cfmMultiSelectLastClicked;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmThemeNoteMode() {
+          return cfmThemeNoteMode;
+        },
+        get cfmThemeNoteSelected() {
+          return cfmThemeNoteSelected;
+        },
+        get cfmThemeRenameMode() {
+          return cfmThemeRenameMode;
+        },
+        get cfmThemeRenameSelected() {
+          return cfmThemeRenameSelected;
+        },
+        get selectedThemeFolder() {
+          return selectedThemeFolder;
+        },
+        set selectedThemeFolder(value) {
+          selectedThemeFolder = value;
+        },
+        get themeExpandedNodes() {
+          return themeExpandedNodes;
+        },
+        get themeRightSortMode() {
+          return themeRightSortMode;
+        },
       },
     });
   }
@@ -11100,27 +12068,69 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       sortResFolders,
       sortResItems,
       state: {
-        get selectedBgFolder() { return selectedBgFolder; },
-        set selectedBgFolder(value) { selectedBgFolder = value; },
-        get bgExpandedNodes() { return bgExpandedNodes; },
-        get bgRightSortMode() { return bgRightSortMode; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmBgNoteMode() { return cfmBgNoteMode; },
-        get cfmBgNoteSelected() { return cfmBgNoteSelected; },
-        get cfmBgRenameMode() { return cfmBgRenameMode; },
-        get cfmBgRenameSelected() { return cfmBgRenameSelected; },
-        get _pcDragData() { return _pcDragData; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
+        get selectedBgFolder() {
+          return selectedBgFolder;
+        },
+        set selectedBgFolder(value) {
+          selectedBgFolder = value;
+        },
+        get bgExpandedNodes() {
+          return bgExpandedNodes;
+        },
+        get bgRightSortMode() {
+          return bgRightSortMode;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmBgNoteMode() {
+          return cfmBgNoteMode;
+        },
+        get cfmBgNoteSelected() {
+          return cfmBgNoteSelected;
+        },
+        get cfmBgRenameMode() {
+          return cfmBgRenameMode;
+        },
+        get cfmBgRenameSelected() {
+          return cfmBgRenameSelected;
+        },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
       },
       toggleBgNoteItem,
       toggleBgRenameItem,
@@ -11557,36 +12567,96 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       getCurrentResourceType: () => currentResourceType,
       renderWorldInfoView,
       state: {
-        get _pcDragData() { return _pcDragData; },
-        get _pcDropHandled() { return _pcDropHandled; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        get _worldInfoNamesCache() { return _worldInfoNamesCache; },
-        set _worldInfoNamesCache(value) { _worldInfoNamesCache = value; },
-        get _worldInfoPreloadPromise() { return _worldInfoPreloadPromise; },
-        get _worldInfoRenderVersion() { return _worldInfoRenderVersion; },
-        set _worldInfoRenderVersion(value) { _worldInfoRenderVersion = value; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmMultiSelectLastClicked() { return cfmMultiSelectLastClicked; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmWorldInfoEntryLastFocusedName() { return cfmWorldInfoEntryLastFocusedName; },
-        set cfmWorldInfoEntryLastFocusedName(value) { cfmWorldInfoEntryLastFocusedName = value; },
-        get cfmWorldInfoNoteMode() { return cfmWorldInfoNoteMode; },
-        get cfmWorldInfoNoteSelected() { return cfmWorldInfoNoteSelected; },
-        get cfmWorldInfoRenameMode() { return cfmWorldInfoRenameMode; },
-        get cfmWorldInfoRenameSelected() { return cfmWorldInfoRenameSelected; },
-        get selectedWorldInfoFolder() { return selectedWorldInfoFolder; },
-        set selectedWorldInfoFolder(value) { selectedWorldInfoFolder = value; },
-        get worldInfoExpandedNodes() { return worldInfoExpandedNodes; },
-        get worldInfoRightSortMode() { return worldInfoRightSortMode; },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcDropHandled() {
+          return _pcDropHandled;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        get _worldInfoNamesCache() {
+          return _worldInfoNamesCache;
+        },
+        set _worldInfoNamesCache(value) {
+          _worldInfoNamesCache = value;
+        },
+        get _worldInfoPreloadPromise() {
+          return _worldInfoPreloadPromise;
+        },
+        get _worldInfoRenderVersion() {
+          return _worldInfoRenderVersion;
+        },
+        set _worldInfoRenderVersion(value) {
+          _worldInfoRenderVersion = value;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmMultiSelectLastClicked() {
+          return cfmMultiSelectLastClicked;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmWorldInfoEntryLastFocusedName() {
+          return cfmWorldInfoEntryLastFocusedName;
+        },
+        set cfmWorldInfoEntryLastFocusedName(value) {
+          cfmWorldInfoEntryLastFocusedName = value;
+        },
+        get cfmWorldInfoNoteMode() {
+          return cfmWorldInfoNoteMode;
+        },
+        get cfmWorldInfoNoteSelected() {
+          return cfmWorldInfoNoteSelected;
+        },
+        get cfmWorldInfoRenameMode() {
+          return cfmWorldInfoRenameMode;
+        },
+        get cfmWorldInfoRenameSelected() {
+          return cfmWorldInfoRenameSelected;
+        },
+        get selectedWorldInfoFolder() {
+          return selectedWorldInfoFolder;
+        },
+        set selectedWorldInfoFolder(value) {
+          selectedWorldInfoFolder = value;
+        },
+        get worldInfoExpandedNodes() {
+          return worldInfoExpandedNodes;
+        },
+        get worldInfoRightSortMode() {
+          return worldInfoRightSortMode;
+        },
       },
     });
   }
@@ -11604,7 +12674,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function filterExistingQrSetNames(setNames, existingNameSet) {
-    return getQuickReplyPresetsApi().filterExistingQrSetNames(setNames, existingNameSet);
+    return getQuickReplyPresetsApi().filterExistingQrSetNames(
+      setNames,
+      existingNameSet,
+    );
   }
 
   function sanitizeQrActivePresetState(save = false) {
@@ -11805,15 +12878,23 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         toggleResFavorite,
         state: {
           getSelectedQrFolder: () => selectedQrFolder,
-          setSelectedQrFolder: (value) => { selectedQrFolder = value; },
+          setSelectedQrFolder: (value) => {
+            selectedQrFolder = value;
+          },
           getQrExpandedNodes: () => qrExpandedNodes,
           getQrItemExpandedSets: () => qrItemExpandedSets,
-          setCfmQrLastFocusedSetName: (value) => { cfmQrLastFocusedSetName = value; },
+          setCfmQrLastFocusedSetName: (value) => {
+            cfmQrLastFocusedSetName = value;
+          },
           getCfmMultiSelectMode: () => cfmMultiSelectMode,
           getCfmMultiSelected: () => cfmMultiSelected,
           getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-          setCfmMultiSelectRangeMode: (value) => { cfmMultiSelectRangeMode = value; },
-          setCfmMultiSelectLastClicked: (value) => { cfmMultiSelectLastClicked = value; },
+          setCfmMultiSelectRangeMode: (value) => {
+            cfmMultiSelectRangeMode = value;
+          },
+          setCfmMultiSelectLastClicked: (value) => {
+            cfmMultiSelectLastClicked = value;
+          },
         },
       });
     }
@@ -11896,23 +12977,57 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       selectAllVisible,
       splitChatlogFileName,
       state: {
-        get selectedChatlogFolder() { return selectedChatlogFolder; },
-        set selectedChatlogFolder(value) { selectedChatlogFolder = value; },
-        get chatlogExpandedNodes() { return chatlogExpandedNodes; },
-        get cfmChatNotes() { return cfmChatNotes; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmChatlogNoteMode() { return cfmChatlogNoteMode; },
-        get cfmChatlogNoteSelected() { return cfmChatlogNoteSelected; },
-        get cfmChatlogRenameMode() { return cfmChatlogRenameMode; },
-        get cfmChatlogRenameSelected() { return cfmChatlogRenameSelected; },
+        get selectedChatlogFolder() {
+          return selectedChatlogFolder;
+        },
+        set selectedChatlogFolder(value) {
+          selectedChatlogFolder = value;
+        },
+        get chatlogExpandedNodes() {
+          return chatlogExpandedNodes;
+        },
+        get cfmChatNotes() {
+          return cfmChatNotes;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmChatlogNoteMode() {
+          return cfmChatlogNoteMode;
+        },
+        get cfmChatlogNoteSelected() {
+          return cfmChatlogNoteSelected;
+        },
+        get cfmChatlogRenameMode() {
+          return cfmChatlogRenameMode;
+        },
+        get cfmChatlogRenameSelected() {
+          return cfmChatlogRenameSelected;
+        },
       },
       syncChatlogPopupModeClasses,
       toggleChatlogNoteItem,
@@ -11969,30 +13084,78 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       sortResFolders,
       sortResItems,
       state: {
-        get selectedQrFolder() { return selectedQrFolder; },
-        set selectedQrFolder(value) { selectedQrFolder = value; },
-        get qrExpandedNodes() { return qrExpandedNodes; },
-        get qrRightSortMode() { return qrRightSortMode; },
-        get qrItemExpandedSets() { return qrItemExpandedSets; },
-        get cfmQrLastFocusedSetName() { return cfmQrLastFocusedSetName; },
-        set cfmQrLastFocusedSetName(value) { cfmQrLastFocusedSetName = value; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmQrNoteMode() { return cfmQrNoteMode; },
-        get cfmQrNoteSelected() { return cfmQrNoteSelected; },
-        get cfmQrRenameMode() { return cfmQrRenameMode; },
-        get cfmQrRenameSelected() { return cfmQrRenameSelected; },
-        get _pcDragData() { return _pcDragData; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
+        get selectedQrFolder() {
+          return selectedQrFolder;
+        },
+        set selectedQrFolder(value) {
+          selectedQrFolder = value;
+        },
+        get qrExpandedNodes() {
+          return qrExpandedNodes;
+        },
+        get qrRightSortMode() {
+          return qrRightSortMode;
+        },
+        get qrItemExpandedSets() {
+          return qrItemExpandedSets;
+        },
+        get cfmQrLastFocusedSetName() {
+          return cfmQrLastFocusedSetName;
+        },
+        set cfmQrLastFocusedSetName(value) {
+          cfmQrLastFocusedSetName = value;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmQrNoteMode() {
+          return cfmQrNoteMode;
+        },
+        get cfmQrNoteSelected() {
+          return cfmQrNoteSelected;
+        },
+        get cfmQrRenameMode() {
+          return cfmQrRenameMode;
+        },
+        get cfmQrRenameSelected() {
+          return cfmQrRenameSelected;
+        },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
       },
       syncQrPresetTrackingForManualToggle,
       toggleExportItem,
@@ -12020,7 +13183,13 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function saveQrActivePreset(name, sets, scope, bindChars, bindPresets) {
-    return getQuickReplyPresetsApi().saveQrActivePreset(name, sets, scope, bindChars, bindPresets);
+    return getQuickReplyPresetsApi().saveQrActivePreset(
+      name,
+      sets,
+      scope,
+      bindChars,
+      bindPresets,
+    );
   }
 
   function deleteQrActivePreset(name) {
@@ -12083,7 +13252,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function syncQrPresetTrackingForManualToggle(setName, isActive) {
-    return getQuickReplyPresetsApi().syncQrPresetTrackingForManualToggle(setName, isActive);
+    return getQuickReplyPresetsApi().syncQrPresetTrackingForManualToggle(
+      setName,
+      isActive,
+    );
   }
 
   function bindQrPresetToChar(presetIdx, charAvatar) {
@@ -12091,21 +13263,34 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function bindQrPresetToChat(presetIdx, charAvatar, chatFileName) {
-    return getQuickReplyPresetsApi().bindQrPresetToChat(presetIdx, charAvatar, chatFileName);
+    return getQuickReplyPresetsApi().bindQrPresetToChat(
+      presetIdx,
+      charAvatar,
+      chatFileName,
+    );
   }
   function bindQrPresetToPreset(presetIdx, presetName) {
-    return getQuickReplyPresetsApi().bindQrPresetToPreset(presetIdx, presetName);
+    return getQuickReplyPresetsApi().bindQrPresetToPreset(
+      presetIdx,
+      presetName,
+    );
   }
 
   function unbindQrPresetFromChar(presetIdx, charAvatar) {
-    return getQuickReplyPresetsApi().unbindQrPresetFromChar(presetIdx, charAvatar);
+    return getQuickReplyPresetsApi().unbindQrPresetFromChar(
+      presetIdx,
+      charAvatar,
+    );
   }
 
   function unbindQrPresetFromChat(presetIdx, bindKey) {
     return getQuickReplyPresetsApi().unbindQrPresetFromChat(presetIdx, bindKey);
   }
   function unbindQrPresetFromPreset(presetIdx, presetName) {
-    return getQuickReplyPresetsApi().unbindQrPresetFromPreset(presetIdx, presetName);
+    return getQuickReplyPresetsApi().unbindQrPresetFromPreset(
+      presetIdx,
+      presetName,
+    );
   }
 
   function getQrAutoApplyPresetIndices() {
@@ -12466,7 +13651,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   async function editPersonaDetailField(persona, field, options = {}) {
-    return getPersonaDetailApi().editPersonaDetailField(persona, field, options);
+    return getPersonaDetailApi().editPersonaDetailField(
+      persona,
+      field,
+      options,
+    );
   }
 
   /**
@@ -12640,7 +13829,10 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   function renderPersonaDetailSubList(personaRow, persona) {
-    return getPersonaDetailApi().renderPersonaDetailSubList(personaRow, persona);
+    return getPersonaDetailApi().renderPersonaDetailSubList(
+      personaRow,
+      persona,
+    );
   }
 
   async function renderPersonasView() {
@@ -12690,28 +13882,72 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       sortResFolders,
       sortResItems,
       state: {
-        get _personasPreloadPromise() { return _personasPreloadPromise; },
-        set _personasPreloadPromise(value) { _personasPreloadPromise = value; },
-        get selectedPersonaFolder() { return selectedPersonaFolder; },
-        set selectedPersonaFolder(value) { selectedPersonaFolder = value; },
-        get personaExpandedNodes() { return personaExpandedNodes; },
-        get _pcDragData() { return _pcDragData; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
-        get personaRightSortMode() { return personaRightSortMode; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmPersonaNoteMode() { return cfmPersonaNoteMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmPersonaNoteSelected() { return cfmPersonaNoteSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get personaItemExpandedIds() { return personaItemExpandedIds; },
+        get _personasPreloadPromise() {
+          return _personasPreloadPromise;
+        },
+        set _personasPreloadPromise(value) {
+          _personasPreloadPromise = value;
+        },
+        get selectedPersonaFolder() {
+          return selectedPersonaFolder;
+        },
+        set selectedPersonaFolder(value) {
+          selectedPersonaFolder = value;
+        },
+        get personaExpandedNodes() {
+          return personaExpandedNodes;
+        },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
+        get personaRightSortMode() {
+          return personaRightSortMode;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmPersonaNoteMode() {
+          return cfmPersonaNoteMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmPersonaNoteSelected() {
+          return cfmPersonaNoteSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get personaItemExpandedIds() {
+          return personaItemExpandedIds;
+        },
       },
       toggleExportItem,
       toggleMultiSelectItem,
@@ -12768,131 +14004,347 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   // 使用 getter/setter 惰性绑定到模块级 let 变量，避免 TDZ 问题
   const state = {
     // 当前资源类型
-    get currentResourceType() { return currentResourceType; },
-    set currentResourceType(v) { currentResourceType = v; },
+    get currentResourceType() {
+      return currentResourceType;
+    },
+    set currentResourceType(v) {
+      currentResourceType = v;
+    },
     // 配置对象
-    get config() { return config; },
-    set config(v) { config = v; },
+    get config() {
+      return config;
+    },
+    set config(v) {
+      config = v;
+    },
     // 左侧树选中节点
-    get selectedTreeNode() { return selectedTreeNode; },
-    set selectedTreeNode(v) { selectedTreeNode = v; },
-    get selectedPresetFolder() { return selectedPresetFolder; },
-    set selectedPresetFolder(v) { selectedPresetFolder = v; },
-    get selectedWorldInfoFolder() { return selectedWorldInfoFolder; },
-    set selectedWorldInfoFolder(v) { selectedWorldInfoFolder = v; },
-    get selectedThemeFolder() { return selectedThemeFolder; },
-    set selectedThemeFolder(v) { selectedThemeFolder = v; },
-    get selectedBgFolder() { return selectedBgFolder; },
-    set selectedBgFolder(v) { selectedBgFolder = v; },
-    get selectedPersonaFolder() { return selectedPersonaFolder; },
-    set selectedPersonaFolder(v) { selectedPersonaFolder = v; },
-    get selectedRegexNode() { return selectedRegexNode; },
-    set selectedRegexNode(v) { selectedRegexNode = v; },
-    get selectedQrFolder() { return selectedQrFolder; },
-    set selectedQrFolder(v) { selectedQrFolder = v; },
-    get selectedChatlogFolder() { return selectedChatlogFolder; },
-    set selectedChatlogFolder(v) { selectedChatlogFolder = v; },
-    get cfmChatlogTargetAvatar() { return cfmChatlogTargetAvatar; },
-    set cfmChatlogTargetAvatar(v) { cfmChatlogTargetAvatar = v; },
+    get selectedTreeNode() {
+      return selectedTreeNode;
+    },
+    set selectedTreeNode(v) {
+      selectedTreeNode = v;
+    },
+    get selectedPresetFolder() {
+      return selectedPresetFolder;
+    },
+    set selectedPresetFolder(v) {
+      selectedPresetFolder = v;
+    },
+    get selectedWorldInfoFolder() {
+      return selectedWorldInfoFolder;
+    },
+    set selectedWorldInfoFolder(v) {
+      selectedWorldInfoFolder = v;
+    },
+    get selectedThemeFolder() {
+      return selectedThemeFolder;
+    },
+    set selectedThemeFolder(v) {
+      selectedThemeFolder = v;
+    },
+    get selectedBgFolder() {
+      return selectedBgFolder;
+    },
+    set selectedBgFolder(v) {
+      selectedBgFolder = v;
+    },
+    get selectedPersonaFolder() {
+      return selectedPersonaFolder;
+    },
+    set selectedPersonaFolder(v) {
+      selectedPersonaFolder = v;
+    },
+    get selectedRegexNode() {
+      return selectedRegexNode;
+    },
+    set selectedRegexNode(v) {
+      selectedRegexNode = v;
+    },
+    get selectedQrFolder() {
+      return selectedQrFolder;
+    },
+    set selectedQrFolder(v) {
+      selectedQrFolder = v;
+    },
+    get selectedChatlogFolder() {
+      return selectedChatlogFolder;
+    },
+    set selectedChatlogFolder(v) {
+      selectedChatlogFolder = v;
+    },
+    get cfmChatlogTargetAvatar() {
+      return cfmChatlogTargetAvatar;
+    },
+    set cfmChatlogTargetAvatar(v) {
+      cfmChatlogTargetAvatar = v;
+    },
     // 多选模式
-    get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-    set cfmMultiSelectMode(v) { cfmMultiSelectMode = v; },
-    get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-    set cfmMultiSelectRangeMode(v) { cfmMultiSelectRangeMode = v; },
+    get cfmMultiSelectMode() {
+      return cfmMultiSelectMode;
+    },
+    set cfmMultiSelectMode(v) {
+      cfmMultiSelectMode = v;
+    },
+    get cfmMultiSelectRangeMode() {
+      return cfmMultiSelectRangeMode;
+    },
+    set cfmMultiSelectRangeMode(v) {
+      cfmMultiSelectRangeMode = v;
+    },
     // 导出模式
-    get cfmExportMode() { return cfmExportMode; },
-    set cfmExportMode(v) { cfmExportMode = v; },
-    get cfmExportRangeMode() { return cfmExportRangeMode; },
-    set cfmExportRangeMode(v) { cfmExportRangeMode = v; },
-    get cfmExportLastClicked() { return cfmExportLastClicked; },
-    set cfmExportLastClicked(v) { cfmExportLastClicked = v; },
+    get cfmExportMode() {
+      return cfmExportMode;
+    },
+    set cfmExportMode(v) {
+      cfmExportMode = v;
+    },
+    get cfmExportRangeMode() {
+      return cfmExportRangeMode;
+    },
+    set cfmExportRangeMode(v) {
+      cfmExportRangeMode = v;
+    },
+    get cfmExportLastClicked() {
+      return cfmExportLastClicked;
+    },
+    set cfmExportLastClicked(v) {
+      cfmExportLastClicked = v;
+    },
     // 删除模式
-    get cfmResDeleteMode() { return cfmResDeleteMode; },
-    set cfmResDeleteMode(v) { cfmResDeleteMode = v; },
-    get cfmResDeleteRangeMode() { return cfmResDeleteRangeMode; },
-    set cfmResDeleteRangeMode(v) { cfmResDeleteRangeMode = v; },
-    get cfmResDeleteLastClicked() { return cfmResDeleteLastClicked; },
-    set cfmResDeleteLastClicked(v) { cfmResDeleteLastClicked = v; },
+    get cfmResDeleteMode() {
+      return cfmResDeleteMode;
+    },
+    set cfmResDeleteMode(v) {
+      cfmResDeleteMode = v;
+    },
+    get cfmResDeleteRangeMode() {
+      return cfmResDeleteRangeMode;
+    },
+    set cfmResDeleteRangeMode(v) {
+      cfmResDeleteRangeMode = v;
+    },
+    get cfmResDeleteLastClicked() {
+      return cfmResDeleteLastClicked;
+    },
+    set cfmResDeleteLastClicked(v) {
+      cfmResDeleteLastClicked = v;
+    },
     // 编辑模式
-    get cfmEditMode() { return cfmEditMode; },
-    set cfmEditMode(v) { cfmEditMode = v; },
+    get cfmEditMode() {
+      return cfmEditMode;
+    },
+    set cfmEditMode(v) {
+      cfmEditMode = v;
+    },
     // 重命名模式
-    get cfmPresetRenameMode() { return cfmPresetRenameMode; },
-    set cfmPresetRenameMode(v) { cfmPresetRenameMode = v; },
-    get cfmWorldInfoRenameMode() { return cfmWorldInfoRenameMode; },
-    set cfmWorldInfoRenameMode(v) { cfmWorldInfoRenameMode = v; },
-    get cfmQrRenameMode() { return cfmQrRenameMode; },
-    set cfmQrRenameMode(v) { cfmQrRenameMode = v; },
+    get cfmPresetRenameMode() {
+      return cfmPresetRenameMode;
+    },
+    set cfmPresetRenameMode(v) {
+      cfmPresetRenameMode = v;
+    },
+    get cfmWorldInfoRenameMode() {
+      return cfmWorldInfoRenameMode;
+    },
+    set cfmWorldInfoRenameMode(v) {
+      cfmWorldInfoRenameMode = v;
+    },
+    get cfmQrRenameMode() {
+      return cfmQrRenameMode;
+    },
+    set cfmQrRenameMode(v) {
+      cfmQrRenameMode = v;
+    },
     // 主题备注模式
-    get cfmThemeNoteMode() { return cfmThemeNoteMode; },
-    set cfmThemeNoteMode(v) { cfmThemeNoteMode = v; },
-    get cfmThemeNoteRangeMode() { return cfmThemeNoteRangeMode; },
-    set cfmThemeNoteRangeMode(v) { cfmThemeNoteRangeMode = v; },
-    get cfmThemeNoteLastClicked() { return cfmThemeNoteLastClicked; },
-    set cfmThemeNoteLastClicked(v) { cfmThemeNoteLastClicked = v; },
+    get cfmThemeNoteMode() {
+      return cfmThemeNoteMode;
+    },
+    set cfmThemeNoteMode(v) {
+      cfmThemeNoteMode = v;
+    },
+    get cfmThemeNoteRangeMode() {
+      return cfmThemeNoteRangeMode;
+    },
+    set cfmThemeNoteRangeMode(v) {
+      cfmThemeNoteRangeMode = v;
+    },
+    get cfmThemeNoteLastClicked() {
+      return cfmThemeNoteLastClicked;
+    },
+    set cfmThemeNoteLastClicked(v) {
+      cfmThemeNoteLastClicked = v;
+    },
     // 背景备注模式
-    get cfmBgNoteMode() { return cfmBgNoteMode; },
-    set cfmBgNoteMode(v) { cfmBgNoteMode = v; },
-    get cfmBgNoteRangeMode() { return cfmBgNoteRangeMode; },
-    set cfmBgNoteRangeMode(v) { cfmBgNoteRangeMode = v; },
-    get cfmBgNoteLastClicked() { return cfmBgNoteLastClicked; },
-    set cfmBgNoteLastClicked(v) { cfmBgNoteLastClicked = v; },
+    get cfmBgNoteMode() {
+      return cfmBgNoteMode;
+    },
+    set cfmBgNoteMode(v) {
+      cfmBgNoteMode = v;
+    },
+    get cfmBgNoteRangeMode() {
+      return cfmBgNoteRangeMode;
+    },
+    set cfmBgNoteRangeMode(v) {
+      cfmBgNoteRangeMode = v;
+    },
+    get cfmBgNoteLastClicked() {
+      return cfmBgNoteLastClicked;
+    },
+    set cfmBgNoteLastClicked(v) {
+      cfmBgNoteLastClicked = v;
+    },
     // 主题重命名模式
-    get cfmThemeRenameMode() { return cfmThemeRenameMode; },
-    set cfmThemeRenameMode(v) { cfmThemeRenameMode = v; },
-    get cfmThemeRenameRangeMode() { return cfmThemeRenameRangeMode; },
-    set cfmThemeRenameRangeMode(v) { cfmThemeRenameRangeMode = v; },
-    get cfmThemeRenameLastClicked() { return cfmThemeRenameLastClicked; },
-    set cfmThemeRenameLastClicked(v) { cfmThemeRenameLastClicked = v; },
+    get cfmThemeRenameMode() {
+      return cfmThemeRenameMode;
+    },
+    set cfmThemeRenameMode(v) {
+      cfmThemeRenameMode = v;
+    },
+    get cfmThemeRenameRangeMode() {
+      return cfmThemeRenameRangeMode;
+    },
+    set cfmThemeRenameRangeMode(v) {
+      cfmThemeRenameRangeMode = v;
+    },
+    get cfmThemeRenameLastClicked() {
+      return cfmThemeRenameLastClicked;
+    },
+    set cfmThemeRenameLastClicked(v) {
+      cfmThemeRenameLastClicked = v;
+    },
     // 背景重命名模式
-    get cfmBgRenameMode() { return cfmBgRenameMode; },
-    set cfmBgRenameMode(v) { cfmBgRenameMode = v; },
-    get cfmBgRenameRangeMode() { return cfmBgRenameRangeMode; },
-    set cfmBgRenameRangeMode(v) { cfmBgRenameRangeMode = v; },
-    get cfmBgRenameLastClicked() { return cfmBgRenameLastClicked; },
-    set cfmBgRenameLastClicked(v) { cfmBgRenameLastClicked = v; },
+    get cfmBgRenameMode() {
+      return cfmBgRenameMode;
+    },
+    set cfmBgRenameMode(v) {
+      cfmBgRenameMode = v;
+    },
+    get cfmBgRenameRangeMode() {
+      return cfmBgRenameRangeMode;
+    },
+    set cfmBgRenameRangeMode(v) {
+      cfmBgRenameRangeMode = v;
+    },
+    get cfmBgRenameLastClicked() {
+      return cfmBgRenameLastClicked;
+    },
+    set cfmBgRenameLastClicked(v) {
+      cfmBgRenameLastClicked = v;
+    },
     // 世界书备注模式
-    get cfmWorldInfoNoteMode() { return cfmWorldInfoNoteMode; },
-    set cfmWorldInfoNoteMode(v) { cfmWorldInfoNoteMode = v; },
-    get cfmWorldInfoNoteRangeMode() { return cfmWorldInfoNoteRangeMode; },
-    set cfmWorldInfoNoteRangeMode(v) { cfmWorldInfoNoteRangeMode = v; },
-    get cfmWorldInfoNoteLastClicked() { return cfmWorldInfoNoteLastClicked; },
-    set cfmWorldInfoNoteLastClicked(v) { cfmWorldInfoNoteLastClicked = v; },
+    get cfmWorldInfoNoteMode() {
+      return cfmWorldInfoNoteMode;
+    },
+    set cfmWorldInfoNoteMode(v) {
+      cfmWorldInfoNoteMode = v;
+    },
+    get cfmWorldInfoNoteRangeMode() {
+      return cfmWorldInfoNoteRangeMode;
+    },
+    set cfmWorldInfoNoteRangeMode(v) {
+      cfmWorldInfoNoteRangeMode = v;
+    },
+    get cfmWorldInfoNoteLastClicked() {
+      return cfmWorldInfoNoteLastClicked;
+    },
+    set cfmWorldInfoNoteLastClicked(v) {
+      cfmWorldInfoNoteLastClicked = v;
+    },
     // 快速回复备注模式
-    get cfmQrNoteMode() { return cfmQrNoteMode; },
-    set cfmQrNoteMode(v) { cfmQrNoteMode = v; },
-    get cfmQrNoteRangeMode() { return cfmQrNoteRangeMode; },
-    set cfmQrNoteRangeMode(v) { cfmQrNoteRangeMode = v; },
-    get cfmQrNoteLastClicked() { return cfmQrNoteLastClicked; },
-    set cfmQrNoteLastClicked(v) { cfmQrNoteLastClicked = v; },
+    get cfmQrNoteMode() {
+      return cfmQrNoteMode;
+    },
+    set cfmQrNoteMode(v) {
+      cfmQrNoteMode = v;
+    },
+    get cfmQrNoteRangeMode() {
+      return cfmQrNoteRangeMode;
+    },
+    set cfmQrNoteRangeMode(v) {
+      cfmQrNoteRangeMode = v;
+    },
+    get cfmQrNoteLastClicked() {
+      return cfmQrNoteLastClicked;
+    },
+    set cfmQrNoteLastClicked(v) {
+      cfmQrNoteLastClicked = v;
+    },
     // 预设备注模式
-    get cfmPresetNoteMode() { return cfmPresetNoteMode; },
-    set cfmPresetNoteMode(v) { cfmPresetNoteMode = v; },
-    get cfmPresetNoteRangeMode() { return cfmPresetNoteRangeMode; },
-    set cfmPresetNoteRangeMode(v) { cfmPresetNoteRangeMode = v; },
-    get cfmPresetNoteLastClicked() { return cfmPresetNoteLastClicked; },
-    set cfmPresetNoteLastClicked(v) { cfmPresetNoteLastClicked = v; },
+    get cfmPresetNoteMode() {
+      return cfmPresetNoteMode;
+    },
+    set cfmPresetNoteMode(v) {
+      cfmPresetNoteMode = v;
+    },
+    get cfmPresetNoteRangeMode() {
+      return cfmPresetNoteRangeMode;
+    },
+    set cfmPresetNoteRangeMode(v) {
+      cfmPresetNoteRangeMode = v;
+    },
+    get cfmPresetNoteLastClicked() {
+      return cfmPresetNoteLastClicked;
+    },
+    set cfmPresetNoteLastClicked(v) {
+      cfmPresetNoteLastClicked = v;
+    },
     // User备注模式
-    get cfmPersonaNoteMode() { return cfmPersonaNoteMode; },
-    set cfmPersonaNoteMode(v) { cfmPersonaNoteMode = v; },
-    get cfmPersonaNoteRangeMode() { return cfmPersonaNoteRangeMode; },
-    set cfmPersonaNoteRangeMode(v) { cfmPersonaNoteRangeMode = v; },
-    get cfmPersonaNoteLastClicked() { return cfmPersonaNoteLastClicked; },
-    set cfmPersonaNoteLastClicked(v) { cfmPersonaNoteLastClicked = v; },
+    get cfmPersonaNoteMode() {
+      return cfmPersonaNoteMode;
+    },
+    set cfmPersonaNoteMode(v) {
+      cfmPersonaNoteMode = v;
+    },
+    get cfmPersonaNoteRangeMode() {
+      return cfmPersonaNoteRangeMode;
+    },
+    set cfmPersonaNoteRangeMode(v) {
+      cfmPersonaNoteRangeMode = v;
+    },
+    get cfmPersonaNoteLastClicked() {
+      return cfmPersonaNoteLastClicked;
+    },
+    set cfmPersonaNoteLastClicked(v) {
+      cfmPersonaNoteLastClicked = v;
+    },
     // 聊天记录备注模式
-    get cfmChatlogNoteMode() { return cfmChatlogNoteMode; },
-    set cfmChatlogNoteMode(v) { cfmChatlogNoteMode = v; },
-    get cfmChatlogNoteRangeMode() { return cfmChatlogNoteRangeMode; },
-    set cfmChatlogNoteRangeMode(v) { cfmChatlogNoteRangeMode = v; },
-    get cfmChatlogNoteLastClicked() { return cfmChatlogNoteLastClicked; },
-    set cfmChatlogNoteLastClicked(v) { cfmChatlogNoteLastClicked = v; },
+    get cfmChatlogNoteMode() {
+      return cfmChatlogNoteMode;
+    },
+    set cfmChatlogNoteMode(v) {
+      cfmChatlogNoteMode = v;
+    },
+    get cfmChatlogNoteRangeMode() {
+      return cfmChatlogNoteRangeMode;
+    },
+    set cfmChatlogNoteRangeMode(v) {
+      cfmChatlogNoteRangeMode = v;
+    },
+    get cfmChatlogNoteLastClicked() {
+      return cfmChatlogNoteLastClicked;
+    },
+    set cfmChatlogNoteLastClicked(v) {
+      cfmChatlogNoteLastClicked = v;
+    },
     // 聊天记录重命名模式
-    get cfmChatlogRenameMode() { return cfmChatlogRenameMode; },
-    set cfmChatlogRenameMode(v) { cfmChatlogRenameMode = v; },
-    get cfmChatlogRenameRangeMode() { return cfmChatlogRenameRangeMode; },
-    set cfmChatlogRenameRangeMode(v) { cfmChatlogRenameRangeMode = v; },
-    get cfmChatlogRenameLastClicked() { return cfmChatlogRenameLastClicked; },
-    set cfmChatlogRenameLastClicked(v) { cfmChatlogRenameLastClicked = v; },
+    get cfmChatlogRenameMode() {
+      return cfmChatlogRenameMode;
+    },
+    set cfmChatlogRenameMode(v) {
+      cfmChatlogRenameMode = v;
+    },
+    get cfmChatlogRenameRangeMode() {
+      return cfmChatlogRenameRangeMode;
+    },
+    set cfmChatlogRenameRangeMode(v) {
+      cfmChatlogRenameRangeMode = v;
+    },
+    get cfmChatlogRenameLastClicked() {
+      return cfmChatlogRenameLastClicked;
+    },
+    set cfmChatlogRenameLastClicked(v) {
+      cfmChatlogRenameLastClicked = v;
+    },
   };
   // --- 正则数据扫描 ---
   function getRegexGlobalScripts() {
@@ -12914,12 +14366,19 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     return getRegexGroupsApi().isSameRegexScopeList(sourceScope, targetScope);
   }
   function cloneRegexScriptsForTransfer(scripts, isCopyMode) {
-    return getRegexGroupsApi().cloneRegexScriptsForTransfer(scripts, isCopyMode);
+    return getRegexGroupsApi().cloneRegexScriptsForTransfer(
+      scripts,
+      isCopyMode,
+    );
   }
   function removeRegexScriptsByIds(scripts, idSet) {
     return getRegexGroupsApi().removeRegexScriptsByIds(scripts, idSet);
   }
-  function insertRegexScriptsAtIndex(baseScripts, insertedScripts, targetIndex) {
+  function insertRegexScriptsAtIndex(
+    baseScripts,
+    insertedScripts,
+    targetIndex,
+  ) {
     return getRegexGroupsApi().insertRegexScriptsAtIndex(
       baseScripts,
       insertedScripts,
@@ -14445,7 +15904,11 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
   // 构建正则脚本行HTML（cfm-row模式，与其他标签页一致，不直接展示正则内容）
   function buildRegexScriptRowHtml(script, scriptType, ownerLabel) {
-    return getRegexViewApi().buildRegexScriptRowHtml(script, scriptType, ownerLabel);
+    return getRegexViewApi().buildRegexScriptRowHtml(
+      script,
+      scriptType,
+      ownerLabel,
+    );
   }
 
   // 构建正则左栏树节点HTML（cfm-tnode模式，与其他标签页一致）
@@ -14932,7 +16395,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   async function showRegexPresetPanel() {
     return getRegexPresetEditApi().showRegexPresetPanel();
   }
-    let _regexPresetEditApi = null;
+  let _regexPresetEditApi = null;
   function getRegexPresetEditApi() {
     if (!_regexPresetEditApi) {
       _regexPresetEditApi = createRegexPresetEditApi({
@@ -15287,13 +16750,19 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         toggleResFavorite,
         state: {
           getSelectedRegexNode: () => selectedRegexNode,
-          setSelectedRegexNode: (value) => { selectedRegexNode = value; },
+          setSelectedRegexNode: (value) => {
+            selectedRegexNode = value;
+          },
           getRegexExpandedNodes: () => regexExpandedNodes,
           getCfmMultiSelectMode: () => cfmMultiSelectMode,
           getCfmMultiSelected: () => cfmMultiSelected,
           getCfmMultiSelectRangeMode: () => cfmMultiSelectRangeMode,
-          setCfmMultiSelectRangeMode: (value) => { cfmMultiSelectRangeMode = value; },
-          setCfmMultiSelectLastClicked: (value) => { cfmMultiSelectLastClicked = value; },
+          setCfmMultiSelectRangeMode: (value) => {
+            cfmMultiSelectRangeMode = value;
+          },
+          setCfmMultiSelectLastClicked: (value) => {
+            cfmMultiSelectLastClicked = value;
+          },
           getCfmResDeleteMode: () => cfmResDeleteMode,
           getCfmResDeleteSelected: () => cfmResDeleteSelected,
           getCfmExportMode: () => cfmExportMode,
@@ -15339,24 +16808,60 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
       selectAllVisible,
       shouldIgnoreTouchTapAfterMove,
       state: {
-        get selectedRegexNode() { return selectedRegexNode; },
-        set selectedRegexNode(value) { selectedRegexNode = value; },
-        get regexExpandedNodes() { return regexExpandedNodes; },
-        get regexAllNodeIds() { return regexAllNodeIds; },
-        set regexAllNodeIds(value) { regexAllNodeIds = value; },
-        get cfmResDeleteMode() { return cfmResDeleteMode; },
-        get cfmResDeleteSelected() { return cfmResDeleteSelected; },
-        get cfmExportMode() { return cfmExportMode; },
-        get cfmExportSelected() { return cfmExportSelected; },
-        get cfmMultiSelectMode() { return cfmMultiSelectMode; },
-        get cfmMultiSelected() { return cfmMultiSelected; },
-        get cfmMultiSelectRangeMode() { return cfmMultiSelectRangeMode; },
-        set cfmMultiSelectRangeMode(value) { cfmMultiSelectRangeMode = value; },
-        set cfmMultiSelectLastClicked(value) { cfmMultiSelectLastClicked = value; },
-        get _pcDragData() { return _pcDragData; },
-        get _pcLastResourceFolderHoverTarget() { return _pcLastResourceFolderHoverTarget; },
-        set _pcLastResourceFolderHoverTarget(value) { _pcLastResourceFolderHoverTarget = value; },
-        set _pcDropHandled(value) { _pcDropHandled = value; },
+        get selectedRegexNode() {
+          return selectedRegexNode;
+        },
+        set selectedRegexNode(value) {
+          selectedRegexNode = value;
+        },
+        get regexExpandedNodes() {
+          return regexExpandedNodes;
+        },
+        get regexAllNodeIds() {
+          return regexAllNodeIds;
+        },
+        set regexAllNodeIds(value) {
+          regexAllNodeIds = value;
+        },
+        get cfmResDeleteMode() {
+          return cfmResDeleteMode;
+        },
+        get cfmResDeleteSelected() {
+          return cfmResDeleteSelected;
+        },
+        get cfmExportMode() {
+          return cfmExportMode;
+        },
+        get cfmExportSelected() {
+          return cfmExportSelected;
+        },
+        get cfmMultiSelectMode() {
+          return cfmMultiSelectMode;
+        },
+        get cfmMultiSelected() {
+          return cfmMultiSelected;
+        },
+        get cfmMultiSelectRangeMode() {
+          return cfmMultiSelectRangeMode;
+        },
+        set cfmMultiSelectRangeMode(value) {
+          cfmMultiSelectRangeMode = value;
+        },
+        set cfmMultiSelectLastClicked(value) {
+          cfmMultiSelectLastClicked = value;
+        },
+        get _pcDragData() {
+          return _pcDragData;
+        },
+        get _pcLastResourceFolderHoverTarget() {
+          return _pcLastResourceFolderHoverTarget;
+        },
+        set _pcLastResourceFolderHoverTarget(value) {
+          _pcLastResourceFolderHoverTarget = value;
+        },
+        set _pcDropHandled(value) {
+          _pcDropHandled = value;
+        },
       },
       syncNativeRegexState,
       toggleExportItem,
@@ -15368,7 +16873,7 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   }
 
   // ==================== 导入导出功能 ====================
-    let _backupImportExportApi = null;
+  let _backupImportExportApi = null;
   function getBackupImportExportApi() {
     if (!_backupImportExportApi) {
       _backupImportExportApi = createBackupImportExportApi({
@@ -15439,7 +16944,6 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
     cfmToastr.success(`已导出${scopeLabel}数据`);
   }
 
-
   // 单例 API（惰性初始化）
   let _backupImportApi = null;
   function getBackupImportApi() {
@@ -15490,8 +16994,6 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
   async function executeImport(jsonData) {
     return getBackupImportApi().executeImport(jsonData);
   }
-
-
 
   function showImportExportPopup() {
     return getBackupImportExportApi().showImportExportPopup();
@@ -15546,35 +17048,93 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
         showWiPresetPanel,
         setTimeoutFn: window.setTimeout.bind(window),
         state: {
-          get nativeFilterChar() { return nativeFilterChar; },
-          set nativeFilterChar(v) { nativeFilterChar = v; },
-          get nativeFilterPreset() { return nativeFilterPreset; },
-          set nativeFilterPreset(v) { nativeFilterPreset = v; },
-          get nativeFilterWorldInfo() { return nativeFilterWorldInfo; },
-          set nativeFilterWorldInfo(v) { nativeFilterWorldInfo = v; },
-          get nativeFilterTheme() { return nativeFilterTheme; },
-          set nativeFilterTheme(v) { nativeFilterTheme = v; },
-          get nativeFilterBg() { return nativeFilterBg; },
-          set nativeFilterBg(v) { nativeFilterBg = v; },
-          get nativeFilterGlobalWI() { return nativeFilterGlobalWI; },
-          set nativeFilterGlobalWI(v) { nativeFilterGlobalWI = v; },
-          get nativeFilterPersona() { return nativeFilterPersona; },
-          set nativeFilterPersona(v) { nativeFilterPersona = v; },
-          get _presetDetachedOptions() { return _presetDetachedOptions; },
-          set _presetDetachedOptions(v) { _presetDetachedOptions = v; },
-          get _worldInfoDetachedOptions() { return _worldInfoDetachedOptions; },
-          set _worldInfoDetachedOptions(v) { _worldInfoDetachedOptions = v; },
-          get _themeDetachedOptions() { return _themeDetachedOptions; },
-          set _themeDetachedOptions(v) { _themeDetachedOptions = v; },
-          get _bgDetachedElements() { return _bgDetachedElements; },
-          set _bgDetachedElements(v) { _bgDetachedElements = v; },
-          get _globalWIDetachedOptions() { return _globalWIDetachedOptions; },
-          set _globalWIDetachedOptions(v) { _globalWIDetachedOptions = v; },
-          get _selectOriginalOrder() { return _selectOriginalOrder; },
-          get cfmNativePresetGroupButtonObserver() { return cfmNativePresetGroupButtonObserver; },
-          set cfmNativePresetGroupButtonObserver(v) { cfmNativePresetGroupButtonObserver = v; },
-          get cfmNativePresetGroupButtonBootObserver() { return cfmNativePresetGroupButtonBootObserver; },
-          set cfmNativePresetGroupButtonBootObserver(v) { cfmNativePresetGroupButtonBootObserver = v; },
+          get nativeFilterChar() {
+            return nativeFilterChar;
+          },
+          set nativeFilterChar(v) {
+            nativeFilterChar = v;
+          },
+          get nativeFilterPreset() {
+            return nativeFilterPreset;
+          },
+          set nativeFilterPreset(v) {
+            nativeFilterPreset = v;
+          },
+          get nativeFilterWorldInfo() {
+            return nativeFilterWorldInfo;
+          },
+          set nativeFilterWorldInfo(v) {
+            nativeFilterWorldInfo = v;
+          },
+          get nativeFilterTheme() {
+            return nativeFilterTheme;
+          },
+          set nativeFilterTheme(v) {
+            nativeFilterTheme = v;
+          },
+          get nativeFilterBg() {
+            return nativeFilterBg;
+          },
+          set nativeFilterBg(v) {
+            nativeFilterBg = v;
+          },
+          get nativeFilterGlobalWI() {
+            return nativeFilterGlobalWI;
+          },
+          set nativeFilterGlobalWI(v) {
+            nativeFilterGlobalWI = v;
+          },
+          get nativeFilterPersona() {
+            return nativeFilterPersona;
+          },
+          set nativeFilterPersona(v) {
+            nativeFilterPersona = v;
+          },
+          get _presetDetachedOptions() {
+            return _presetDetachedOptions;
+          },
+          set _presetDetachedOptions(v) {
+            _presetDetachedOptions = v;
+          },
+          get _worldInfoDetachedOptions() {
+            return _worldInfoDetachedOptions;
+          },
+          set _worldInfoDetachedOptions(v) {
+            _worldInfoDetachedOptions = v;
+          },
+          get _themeDetachedOptions() {
+            return _themeDetachedOptions;
+          },
+          set _themeDetachedOptions(v) {
+            _themeDetachedOptions = v;
+          },
+          get _bgDetachedElements() {
+            return _bgDetachedElements;
+          },
+          set _bgDetachedElements(v) {
+            _bgDetachedElements = v;
+          },
+          get _globalWIDetachedOptions() {
+            return _globalWIDetachedOptions;
+          },
+          set _globalWIDetachedOptions(v) {
+            _globalWIDetachedOptions = v;
+          },
+          get _selectOriginalOrder() {
+            return _selectOriginalOrder;
+          },
+          get cfmNativePresetGroupButtonObserver() {
+            return cfmNativePresetGroupButtonObserver;
+          },
+          set cfmNativePresetGroupButtonObserver(v) {
+            cfmNativePresetGroupButtonObserver = v;
+          },
+          get cfmNativePresetGroupButtonBootObserver() {
+            return cfmNativePresetGroupButtonBootObserver;
+          },
+          set cfmNativePresetGroupButtonBootObserver(v) {
+            cfmNativePresetGroupButtonBootObserver = v;
+          },
         },
       });
     }
@@ -15871,4 +17431,3 @@ function findNativePresetPromptRow(promptKey, promptLabel = "") {
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });
-

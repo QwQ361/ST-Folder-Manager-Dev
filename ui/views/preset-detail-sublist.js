@@ -241,12 +241,28 @@ export function createPresetDetailSublistApi(deps) {
           }
           e.preventDefault();
           e.stopPropagation();
-          const selected = Array.from(state.cfmPresetDetailBatchSelected);
+          // 按列表可见顺序重排选中项（框选/跨选可能按点击顺序插入 Set）
+          const visibleKeys = fields
+            .map((field) => String(field?.key || ""))
+            .filter(Boolean);
+          const selected = visibleKeys.filter((key) =>
+            state.cfmPresetDetailBatchSelected.has(key),
+          );
           if (selected.length === 0) {
             cfmToastr.warning("请先选择要互通的条目");
             return;
           }
-          await showEntryTransferPopup("preset", preset.name, selected);
+          const done = await showEntryTransferPopup(
+            "preset",
+            preset.name,
+            selected,
+          );
+          // 互通完成或已存入备忘录后，清空选中，便于继续选择其它条目
+          if (done) {
+            state.cfmPresetDetailBatchSelected.clear();
+            state.cfmPresetDetailBatchLastClicked = null;
+            refreshPresetPanelView();
+          }
         });
       detailCard.append(batchToolbar);
     }

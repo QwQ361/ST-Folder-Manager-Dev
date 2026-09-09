@@ -28,6 +28,7 @@ export function createBgNotePopupApi(deps) {
     getBgNote,
     getBgOrientation,
     getBackgroundDisplayName,
+    getBackgroundThumbnailUrl,
     setBgNote,
     setBgOrientation,
     renderBackgroundsView,
@@ -63,17 +64,20 @@ export function createBgNotePopupApi(deps) {
               )
               .join("") +
             `<div class="cfm-edit-name-item cfm-edit-name-more">...等共 ${bgNames.length} 个背景</div>`;
-  
+
       const individualListHtml = isBatch
         ? bgNames
             .map((n) => {
               const displayName = getBackgroundDisplayName(n);
               const currentNote = getBgNote(n);
-              return `<div class="cfm-rename-individual-row"><span class="cfm-rename-old-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
+              const thumbUrl = getBackgroundThumbnailUrl
+                ? getBackgroundThumbnailUrl(n)
+                : "";
+              return `<div class="cfm-rename-individual-row"><span class="cfm-rename-individual-thumb" style="background-image:url('${thumbUrl}');"></span><span class="cfm-rename-old-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span><span class="cfm-rename-arrow">→</span><input type="text" class="cfm-rename-new-input" placeholder="留空则不修改" data-old-name="${escapeHtml(n)}" value="${escapeHtml(currentNote)}"></div>`;
             })
             .join("")
         : "";
-  
+
       const orientOptions = [
         { value: "", label: "不修改", icon: "fa-minus" },
         {
@@ -98,7 +102,7 @@ export function createBgNotePopupApi(deps) {
             `<label class="cfm-orient-option ${defaultOrient === o.value ? "cfm-orient-active" : ""}"><input type="radio" name="cfm-bg-orient" value="${o.value}" ${defaultOrient === o.value ? "checked" : ""}><i class="fa-solid ${o.icon}"></i> ${o.label}</label>`,
         )
         .join("");
-  
+
       const popupHtml = `
         <div class="cfm-edit-popup-overlay">
           <div class="cfm-edit-popup">
@@ -141,13 +145,13 @@ export function createBgNotePopupApi(deps) {
       `;
       const overlay = $(popupHtml);
       $("body").append(overlay);
-  
+
       // 方向选项点击高亮
       overlay.find(".cfm-orient-option").on("click", function () {
         overlay.find(".cfm-orient-option").removeClass("cfm-orient-active");
         $(this).addClass("cfm-orient-active");
       });
-  
+
       if (isBatch) {
         function updateBgNoteUI() {
           const action = overlay.find("#cfm-bg-note-action").val();
@@ -174,7 +178,7 @@ export function createBgNotePopupApi(deps) {
       } else {
         overlay.find("#cfm-bg-note-input").focus();
       }
-  
+
       return new Promise((resolve) => {
         overlay.find(".cfm-edit-popup-cancel").on("click", () => {
           overlay.remove();
@@ -223,11 +227,11 @@ export function createBgNotePopupApi(deps) {
         });
       });
     }
-  
+
     async function executeBgNoteEdit(names) {
       const result = await showBgNotePopup(names);
       if (!result) return;
-  
+
       if (result.mode === "individual") {
         const { noteMap, orient } = result;
         let updated = 0;
@@ -258,7 +262,7 @@ export function createBgNotePopupApi(deps) {
         renderBackgroundsView();
         return;
       }
-  
+
       const { note, orient, clear } = result;
       const isBatch = names.length > 1;
       if (isBatch && !note && !orient && !clear) {

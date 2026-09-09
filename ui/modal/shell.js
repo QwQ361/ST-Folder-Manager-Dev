@@ -19,25 +19,26 @@ export function buildMainPopupShell(deps) {
     getPcDragData,
   } = deps;
 
-    const overlay = $('<div id="cfm-overlay"></div>');
-    if (
-      window.innerWidth <= 768 &&
-      extension_settings[extensionName].mobileTopbarAvoid !== false
-    ) {
-      overlay.addClass("cfm-topbar-avoid");
-    }
-    const visibleTabs = getVisibleTabs();
-    const menuTabs = getMenuTabs();
-    const activeVisibleTab = visibleTabs.includes(initialTab)
-      ? initialTab
-      : visibleTabs[0] || menuTabs[0] || "chars";
-    const activeMenuTab = menuTabs.includes(initialTab);
-    const popup = $(`
+  const overlay = $('<div id="cfm-overlay"></div>');
+  if (
+    window.innerWidth <= 768 &&
+    extension_settings[extensionName].mobileTopbarAvoid !== false
+  ) {
+    overlay.addClass("cfm-topbar-avoid");
+  }
+  const visibleTabs = getVisibleTabs();
+  const menuTabs = getMenuTabs();
+  const activeVisibleTab = visibleTabs.includes(initialTab)
+    ? initialTab
+    : visibleTabs[0] || menuTabs[0] || "chars";
+  const activeMenuTab = menuTabs.includes(initialTab);
+  const popup = $(`
             <div id="cfm-popup">
                 <div class="cfm-header">
                     <h3>📁 资源管理器</h3>
                     <div class="cfm-header-actions">
                         <button id="cfm-btn-copymode" class="cfm-copymode-btn ${cfmCopyMode ? "cfm-copymode-active" : ""}" title="${cfmCopyMode ? "当前：复制模式（拖拽角色会保留原位置）" : "当前：移动模式（拖拽角色会从原位置移除）"}"><i class="fa-solid fa-${cfmCopyMode ? "copy" : "arrows-turn-to-dots"}"></i> ${cfmCopyMode ? "复制" : "移动"}</button>
+                        <button id="cfm-btn-entry-memo" title="缝合备忘录"><i class="fa-solid fa-clipboard-list"></i><span class="cfm-entry-memo-badge" style="display:none;"></span></button>
                         <button id="cfm-btn-theme" title="自定义外观"><i class="fa-solid fa-palette"></i></button>
                         <button id="cfm-btn-config" title="标签管理"><i class="fa-solid fa-gear"></i></button>
                         <button id="cfm-btn-backup" title="导入/导出"><i class="fa-solid fa-arrow-right-arrow-left"></i></button>
@@ -511,8 +512,8 @@ export function buildMainPopupShell(deps) {
                 </div>
             </div>
         `);
-    overlay.append(popup);
-    $("body").append(overlay);
+  overlay.append(popup);
+  $("body").append(overlay);
 
   // 拦截插件内部拖拽冒泡到 body 上的 ST 原生 DragAndDropHandler：
   // ST 在 body 上全局绑定 dragover/dragleave/drop（见 scripts/dragdrop.js），
@@ -568,9 +569,7 @@ export function bindMainPopupMobileBehaviors(deps) {
       const leftPane = dualPane.querySelector(".cfm-left-pane");
       const rightPane = dualPane.querySelector(".cfm-right-pane");
       const pathEl = dualPane.querySelector(".cfm-right-header .cfm-rh-path");
-      const countEl = dualPane.querySelector(
-        ".cfm-right-header .cfm-rh-count",
-      );
+      const countEl = dualPane.querySelector(".cfm-right-header .cfm-rh-count");
       if (
         !leftPane ||
         !rightPane ||
@@ -597,7 +596,9 @@ export function bindMainPopupMobileBehaviors(deps) {
           extension_settings[extensionName].mobileFullscreenMode || "to-search";
         $dualPane.addClass("cfm-bottom-fullscreen");
         // 清除旧模式class，应用当前模式
-        $dualPane.removeClass("cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full");
+        $dualPane.removeClass(
+          "cfm-fs-to-search cfm-fs-to-tabs cfm-fs-true-full",
+        );
         $dualPane.addClass("cfm-fs-" + mode);
         // 在 popup 层面也添加模式class，用于控制 header/tabs/search 的显隐
         const $popup = $("#cfm-popup");
@@ -638,9 +639,7 @@ export function bindMainPopupMobileBehaviors(deps) {
         if (_fullscreenConfirmPending) return;
         _fullscreenConfirmPending = true;
         // 创建确认弹窗
-        const overlay = $(
-          '<div class="cfm-fullscreen-confirm-overlay"></div>',
-        );
+        const overlay = $('<div class="cfm-fullscreen-confirm-overlay"></div>');
         const dialog = $(`
           <div class="cfm-fullscreen-confirm-dialog">
             <div class="cfm-fullscreen-confirm-icon"><i class="fa-solid fa-expand"></i></div>
@@ -1152,6 +1151,8 @@ export function bindMainPopupHeaderEvents(popup, deps) {
     showConfigPopup,
     showImportExportPopup,
     showQuickAddFolderPopup,
+    showEntryTransferMemoPopup,
+    renderHeaderMemoBadge,
     getFolderTagIds,
     getExpandedNodes,
     renderLeftTree,
@@ -1246,10 +1247,19 @@ export function bindMainPopupHeaderEvents(popup, deps) {
         closeMainPopup();
       });
   }
+  popup.find("#cfm-btn-entry-memo").on("click touchend", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showEntryTransferMemoPopup();
+  });
   popup.find("#cfm-btn-theme").on("click touchend", (e) => {
     e.preventDefault();
     showThemeCustomizePopup();
   });
+  // 缝合备忘录角标（弹窗打开时刷新）
+  if (typeof renderHeaderMemoBadge === "function") {
+    renderHeaderMemoBadge();
+  }
   popup.find("#cfm-btn-config").on("click touchend", (e) => {
     e.preventDefault();
     showConfigPopup();
