@@ -32,7 +32,7 @@ export function scrollElementIntoViewCentered(target) {
   const getManagedScrollContainer = (node) => {
     if (!node?.closest) return null;
     return node.closest(
-      "#cfm-right-list, #cfm-preset-right-list, #cfm-worldinfo-right-list, #cfm-persona-right-list, #cfm-qr-right-list",
+      "#cfm-right-list, #cfm-preset-right-list, #cfm-worldinfo-right-list, #cfm-persona-right-list, #cfm-qr-right-list, #cfm-theme-right-list",
     );
   };
   requestAnimationFrame(() => {

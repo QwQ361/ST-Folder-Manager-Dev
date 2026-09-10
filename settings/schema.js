@@ -22,6 +22,7 @@ export function ensureResourceSettingsSchema({
   if (!settings.bgGroups) settings.bgGroups = {};
   if (!settings.personaGroups) settings.personaGroups = {};
   if (!settings.themeNotes) settings.themeNotes = {};
+  if (!settings.themeThumbnails) settings.themeThumbnails = {};
   if (!settings.presetNotes) settings.presetNotes = {};
   if (!settings.worldInfoNotes) settings.worldInfoNotes = {};
   if (!settings.bgNotes) settings.bgNotes = {};

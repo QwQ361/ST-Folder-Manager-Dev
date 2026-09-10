@@ -415,23 +415,19 @@ export function createRegexPresetEditApi(deps) {
           return;
         }
 
-        let mode = "stack";
-        if (otherApplied.length > 0) {
-          const otherNames = otherApplied
-            .map((i) => currentPresets[i].name)
-            .join("、");
-          const choice = await createChoiceDialog({
-            title: "应用方式",
-            message: `当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：`,
-            choices: [
-              { value: "cancel", label: "取消", className: "cfm-edit-popup-cancel" },
-              { value: "replace", label: "替换", className: "cfm-edit-popup-confirm", style: "background:#f38ba8;" },
-              { value: "stack", label: "叠加", className: "cfm-edit-popup-confirm" },
-            ],
-          });
-          if (choice === "cancel") return;
-          mode = choice;
-        }
+        // 每次应用分组都弹出"应用方式"询问，由用户自行选择替换或叠加。
+        // 若仅在其他已应用分组存在时才询问，用户会失去选择"替换"的机会。
+        const choice = await createChoiceDialog({
+          title: "应用方式",
+          message: `请选择「${escapeHtml(preset.name)}」的应用方式：`,
+          choices: [
+            { value: "cancel", label: "取消", className: "cfm-edit-popup-cancel" },
+            { value: "replace", label: "替换", className: "cfm-edit-popup-confirm", style: "background:#f38ba8;" },
+            { value: "stack", label: "叠加", className: "cfm-edit-popup-confirm" },
+          ],
+        });
+        if (choice === "cancel") return;
+        const mode = choice;
 
         if (mode === "replace") {
           const keepScripts = new Set(preset.scripts);

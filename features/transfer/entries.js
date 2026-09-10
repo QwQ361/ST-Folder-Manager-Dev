@@ -34,6 +34,7 @@ export function createEntryTransferApiCore(deps) {
     getWorldInfoEntrySelectionKey,
     getWorldInfoExpandedNodes,
     getWorldInfoNames,
+    getPresetExpandedNodes,
     memoApi,
     refreshPresetPanelView,
     renderHeaderMemoBadge,

@@ -252,6 +252,7 @@ export function createNativeFiltersApiCore(deps) {
       currentSelectedLabel = "当前选中",
       currentSelectedCount = null,
       onSelect,
+      zIndex = 100001,
     } = config;
 
     $(".cfm-nf-panel").remove();
@@ -308,7 +309,7 @@ export function createNativeFiltersApiCore(deps) {
     const panel = $(
       `<div class="cfm-nf-panel" data-preset-folder-panel="${escapeHtml(panelKey)}"></div>`,
     );
-    panel.css("z-index", 100001);
+    panel.css("z-index", zIndex);
     const toolbar = $(
       `<div class="cfm-nf-toolbar">
         <span class="cfm-nf-title"><i class="fa-solid fa-folder-tree"></i> 文件夹过滤</span>
@@ -942,7 +943,10 @@ export function createNativeFiltersApiCore(deps) {
   }
 
   function clearWorldInfoNativeFilter() {
-    if (!getNativeFilterWorldInfo() && getWorldInfoDetachedOptions().length === 0)
+    if (
+      !getNativeFilterWorldInfo() &&
+      getWorldInfoDetachedOptions().length === 0
+    )
       return;
     setNativeFilterWorldInfo(null);
     applyWorldInfoFilter();

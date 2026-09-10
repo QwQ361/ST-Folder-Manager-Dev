@@ -22,6 +22,8 @@ export const CFM_ACTION_META = {
   regexmode: { label: "查看正则", icon: "fa-code" },
   quickedit: { label: "快速编辑", icon: "fa-pen-to-square" },
   note: { label: "编辑备注", icon: "fa-pen-to-square" },
+  bgbind: { label: "批量绑定背景", icon: "fa-link" },
+  preview: { label: "预览缩略图", icon: "fa-images" },
   rename: { label: "重命名", icon: "fa-i-cursor" },
   export: { label: "导出", icon: "fa-file-export" },
   delete: { label: "删除", icon: "fa-trash-can" },

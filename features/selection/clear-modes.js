@@ -14,6 +14,7 @@ export function createClearModesApi(deps) {
     cfmThemeNoteSelected,
     cfmBgNoteSelected,
     cfmThemeRenameSelected,
+    cfmThemeBgBindSelected,
     cfmBgRenameSelected,
     cfmWorldInfoNoteSelected,
     cfmQrNoteSelected,
@@ -229,6 +230,20 @@ export function createClearModesApi(deps) {
         .addClass("fa-i-cursor");
       $("#cfm-chatlog-rename-btn").attr("title", "重命名聊天记录");
       $(".cfm-popup").removeClass("cfm-chatlog-rename-mode");
+    }
+    // 主题批量绑定背景模式
+    if (state.cfmThemeBgBindMode) {
+      state.cfmThemeBgBindMode = false;
+      cfmThemeBgBindSelected.clear();
+      state.cfmThemeBgBindRangeMode = false;
+      state.cfmThemeBgBindLastClicked = null;
+      $("#cfm-theme-bg-bind-btn").removeClass("cfm-edit-active");
+      $("#cfm-theme-bg-bind-btn")
+        .find("i")
+        .removeClass("fa-check")
+        .addClass("fa-link");
+      $("#cfm-theme-bg-bind-btn").attr("title", "批量绑定背景");
+      $(".cfm-popup").removeClass("cfm-theme-bg-bind-mode");
     }
   }
 

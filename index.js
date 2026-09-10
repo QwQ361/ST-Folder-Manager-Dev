@@ -249,12 +249,19 @@ import {
   applySortToFoldersCore,
   sortResItemsCore,
 } from "./features/sort/sort.js";
+import { createThemeBgBindModeApi } from "./features/themes/bg-bind.js";
 import {
   createThemeNoteModeApi,
   getThemeNoteCore,
   setThemeNoteCore,
 } from "./features/themes/notes.js";
+import { createThemePreviewApi } from "./features/themes/preview.js";
 import { createThemeRenameModeApi } from "./features/themes/rename.js";
+import {
+  deleteThemeThumbnailCore,
+  getThemeThumbnailCore,
+  setThemeThumbnailCore,
+} from "./features/themes/thumbnails.js";
 import {
   applyImportedThemeCustomCssCore,
   applyThemeCore,
@@ -266,8 +273,8 @@ import {
   syncThemeSelectOptionsWithRuntimeThemesCore,
 } from "./features/themes/view.js";
 import { createEntryTransferApiCore } from "./features/transfer/entries.js";
-import { createEntryTransferMemoApiCore } from "./features/transfer/memo.js";
 import { createEntryTransferMemoViewApiCore } from "./features/transfer/memo-view.js";
+import { createEntryTransferMemoApiCore } from "./features/transfer/memo.js";
 import {
   applyWorldInfoPresetCore,
   filterExistingWorldInfoNamesCore,
@@ -348,6 +355,7 @@ import {
   createMainPopupCloserCore,
   createResourceTabSwitcher,
 } from "./ui/modal/shell.js";
+import { bindThemeBgBindButtonEvent } from "./ui/modal/theme-bg-bind-bindings.js";
 import { createCharDetailApi } from "./ui/panels/character-detail.js";
 import {
   applyCustomIconCore,
@@ -1629,6 +1637,8 @@ jQuery(async () => {
     },
     themes: {
       import: "#cfm-import-theme-btn",
+      bgbind: "#cfm-theme-bg-bind-btn",
+      preview: "#cfm-theme-preview-btn",
       note: "#cfm-theme-note-btn",
       rename: "#cfm-theme-rename-btn",
       export: "#cfm-export-theme-btn",
@@ -2903,6 +2913,8 @@ jQuery(async () => {
       return new Set(cfmThemeNoteSelected);
     if (cfmThemeRenameMode && cfmThemeRenameSelected.size > 0)
       return new Set(cfmThemeRenameSelected);
+    if (cfmThemeBgBindMode && cfmThemeBgBindSelected.size > 0)
+      return new Set(cfmThemeBgBindSelected);
     if (cfmBgNoteMode && cfmBgNoteSelected.size > 0)
       return new Set(cfmBgNoteSelected);
     if (cfmBgRenameMode && cfmBgRenameSelected.size > 0)
@@ -2946,6 +2958,7 @@ jQuery(async () => {
         cfmThemeNoteSelected,
         cfmBgNoteSelected,
         cfmThemeRenameSelected,
+        cfmThemeBgBindSelected,
         cfmBgRenameSelected,
         cfmWorldInfoNoteSelected,
         cfmQrNoteSelected,
@@ -3207,7 +3220,9 @@ jQuery(async () => {
         getEntryTransferInsertItems: (...args) =>
           createEntryTransferApi().getEntryTransferInsertItems(...args),
         getEntryTransferMemoGroupFreshEntries: (...args) =>
-          createEntryTransferApi().getEntryTransferMemoGroupFreshEntries(...args),
+          createEntryTransferApi().getEntryTransferMemoGroupFreshEntries(
+            ...args,
+          ),
         executeEntryTransfer: (...args) =>
           createEntryTransferApi().executeEntryTransfer(...args),
         transferToPreset: (...args) =>
@@ -3215,7 +3230,9 @@ jQuery(async () => {
         transferToWorldInfo: (...args) =>
           createEntryTransferApi().transferToWorldInfo(...args),
         updateEntryTransferMemoGroupFromSource: (...args) =>
-          createEntryTransferApi().updateEntryTransferMemoGroupFromSource(...args),
+          createEntryTransferApi().updateEntryTransferMemoGroupFromSource(
+            ...args,
+          ),
       },
     });
   }
@@ -3261,6 +3278,7 @@ jQuery(async () => {
       getWorldInfoEntrySelectionKey,
       getWorldInfoExpandedNodes: () => worldInfoExpandedNodes,
       getWorldInfoNames,
+      getPresetExpandedNodes: () => presetExpandedNodes,
       memoApi: createEntryTransferMemoApi(),
       refreshPresetPanelView,
       renderHeaderMemoBadge,
@@ -3686,6 +3704,58 @@ jQuery(async () => {
     });
   }
 
+  function getThemeThumbnail(name) {
+    return getThemeThumbnailCore(name, {
+      extensionName,
+      settings: extension_settings,
+    });
+  }
+
+  function setThemeThumbnail(name, dataUrl) {
+    return setThemeThumbnailCore(name, dataUrl, {
+      extensionName,
+      saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
+      settings: extension_settings,
+    });
+  }
+
+  function deleteThemeThumbnail(name) {
+    return deleteThemeThumbnailCore(name, {
+      extensionName,
+      saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
+      settings: extension_settings,
+    });
+  }
+
+  function getThemePreviewDeps() {
+    return {
+      $,
+      applyTheme,
+      cfmToastr,
+      document: window.document,
+      escapeHtml,
+      getResFolderDisplayName,
+      getResFolderTree,
+      getResourceGroups,
+      getThemeNames,
+      getThemeThumbnail,
+      setThemeThumbnail,
+      showPresetEditFolderFilterPanel,
+    };
+  }
+
+  let _themePreviewApi = null;
+  function getThemePreviewApi() {
+    if (!_themePreviewApi) {
+      _themePreviewApi = createThemePreviewApi(getThemePreviewDeps());
+    }
+    return _themePreviewApi;
+  }
+
+  function openThemePreview() {
+    return getThemePreviewApi().openThemePreview();
+  }
+
   function getThemeNoteDeps() {
     return {
       $,
@@ -4106,6 +4176,96 @@ jQuery(async () => {
 
   async function executeThemeRename(names) {
     return getThemeRenameApi().executeThemeRename(names);
+  }
+
+  // ==================== 主题批量绑定背景模式 ====================
+  let cfmThemeBgBindMode = false;
+  let cfmThemeBgBindSelected = new Set();
+  let cfmThemeBgBindRangeMode = false;
+  let cfmThemeBgBindLastClicked = null;
+
+  function getThemeBgBindDeps() {
+    return {
+      $,
+      cfmConfirm,
+      cfmToastr,
+      clearAllExclusiveModes,
+      collectCurrentSelection,
+      escapeHtml,
+      getBackgroundDisplayName,
+      getBackgroundNames,
+      getBackgroundThumbnailUrl,
+      getResChildFolders,
+      getResFolderDisplayName,
+      getResFolderPath,
+      getResFolderTree,
+      getResTopLevelFolders,
+      getResourceGroups,
+      getThemeBgBinding,
+      getVisibleResourceIds,
+      removeThemeBgBinding,
+      renderThemesView,
+      setThemeBgBinding,
+      showPresetEditFolderFilterPanel,
+      sortResFolders,
+      state: {
+        get cfmThemeBgBindMode() {
+          return cfmThemeBgBindMode;
+        },
+        set cfmThemeBgBindMode(value) {
+          cfmThemeBgBindMode = value;
+        },
+        get cfmThemeBgBindSelected() {
+          return cfmThemeBgBindSelected;
+        },
+        set cfmThemeBgBindSelected(value) {
+          cfmThemeBgBindSelected = value;
+        },
+        get cfmThemeBgBindRangeMode() {
+          return cfmThemeBgBindRangeMode;
+        },
+        set cfmThemeBgBindRangeMode(value) {
+          cfmThemeBgBindRangeMode = value;
+        },
+        get cfmThemeBgBindLastClicked() {
+          return cfmThemeBgBindLastClicked;
+        },
+        set cfmThemeBgBindLastClicked(value) {
+          cfmThemeBgBindLastClicked = value;
+        },
+      },
+    };
+  }
+
+  function getThemeBgBindApi() {
+    return createThemeBgBindModeApi(getThemeBgBindDeps());
+  }
+
+  function enterThemeBgBindMode() {
+    return getThemeBgBindApi().enterThemeBgBindMode();
+  }
+
+  function exitThemeBgBindMode() {
+    return getThemeBgBindApi().exitThemeBgBindMode();
+  }
+
+  function toggleThemeBgBindItem(id, shiftKey) {
+    return getThemeBgBindApi().toggleThemeBgBindItem(id, shiftKey);
+  }
+
+  function prependThemeBgBindToolbar(listContainer, renderFn) {
+    return getThemeBgBindApi().prependThemeBgBindToolbar(
+      listContainer,
+      renderFn,
+    );
+  }
+
+  async function showThemeBgBindPopup(names) {
+    return getThemeBgBindApi().showThemeBgBindPopup(names);
+  }
+
+  async function executeThemeBgBind(names) {
+    return getThemeBgBindApi().executeThemeBgBind(names);
   }
 
   // ==================== 背景重命名模式 ====================
@@ -6051,7 +6211,11 @@ jQuery(async () => {
     );
   }
 
-  async function moveWorldInfoEntriesToIndex(bookName, selectionKeys, targetIndex) {
+  async function moveWorldInfoEntriesToIndex(
+    bookName,
+    selectionKeys,
+    targetIndex,
+  ) {
     return await getWorldInfoEntriesApi().moveWorldInfoEntriesToIndex(
       bookName,
       selectionKeys,
@@ -6189,12 +6353,18 @@ jQuery(async () => {
       }
     }
 
+    const appliedIndices = getPresetDetailAppliedPresetIndices(presetName);
+    const appliedSet = new Set(appliedIndices);
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
         : presets
             .map((p, idx) => {
               const presetFields = normalizePresetDetailFieldKeys(p.fields);
+              const isApplied =
+                appliedSet.has(idx) ||
+                (presetFields.length > 0 &&
+                  presetFields.every((fieldKey) => enabledSet.has(fieldKey)));
               return `
         <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
           <div class="cfm-wi-preset-item-left">
@@ -6202,7 +6372,7 @@ jQuery(async () => {
             <span class="cfm-wi-preset-item-count">${presetFields.length} 个</span>
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply" title="应用分组"></i>
+            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用分组"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
             <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
@@ -6293,37 +6463,6 @@ jQuery(async () => {
           (i) => i !== idx && currentPresets[i],
         );
 
-        let mode = "stack";
-        if (otherApplied.length > 0) {
-          const otherNames = otherApplied
-            .map((i) => currentPresets[i].name)
-            .join("、");
-          const choice = await createChoiceDialog({
-            title: "应用方式",
-            message: `当前已有分组「${escapeHtml(otherNames)}」处于应用状态。<br>请选择应用方式：`,
-            choices: [
-              {
-                value: "cancel",
-                label: "取消",
-                className: "cfm-edit-popup-cancel",
-              },
-              {
-                value: "replace",
-                label: "替换",
-                className: "cfm-edit-popup-confirm",
-                style: "background:#f38ba8;",
-              },
-              {
-                value: "stack",
-                label: "叠加",
-                className: "cfm-edit-popup-confirm",
-              },
-            ],
-          });
-          if (choice === "cancel") return;
-          mode = choice;
-        }
-
         const latestPresetData = getPresetDataForDetail(pm, presetName);
         if (!latestPresetData) {
           cfmToastr.error(`找不到预设「${presetName}」的数据`);
@@ -6331,21 +6470,48 @@ jQuery(async () => {
         }
 
         const presetFields = normalizePresetDetailFieldKeys(preset.fields);
+        const keepFields = new Set(presetFields);
+        const currentEnabled =
+          getEnabledPresetDetailFieldKeys(latestPresetData);
+
+        // 每次应用分组都弹出"应用方式"询问，由用户自行选择替换或叠加。
+        // 若由系统隐式判断（仅在有冲突字段时才询问），用户可能根本没机会
+        // 选择"替换"，导致手动/批量激活的字段残留，结果表现为仍为叠加。
+        const choice = await createChoiceDialog({
+          title: "应用方式",
+          message: `请选择「${escapeHtml(preset.name)}」的应用方式：`,
+          choices: [
+            {
+              value: "cancel",
+              label: "取消",
+              className: "cfm-edit-popup-cancel",
+            },
+            {
+              value: "replace",
+              label: "替换",
+              className: "cfm-edit-popup-confirm",
+              style: "background:#f38ba8;",
+            },
+            {
+              value: "stack",
+              label: "叠加",
+              className: "cfm-edit-popup-confirm",
+            },
+          ],
+        });
+        if (choice === "cancel") return;
+        const mode = choice;
+
         if (mode === "replace") {
-          const keepFields = new Set(presetFields);
-          for (const oi of otherApplied) {
-            const otherFields = normalizePresetDetailFieldKeys(
-              currentPresets[oi]?.fields,
-            );
-            for (const fieldKey of otherFields) {
-              if (!keepFields.has(fieldKey)) {
-                setPresetDetailFieldsEnabled(
-                  latestPresetData,
-                  [fieldKey],
-                  false,
-                );
-              }
-            }
+          // 替换语义（彻底替换）：只保留目标分组字段，关闭所有其它当前启用的条目。
+          // 包括内置骨架（main/charDescription/personaDescription 等）——当目标分组
+          // 不含某个骨架时，该骨架也应被关闭，实现"仅目标分组内条目保持激活"。
+          // 若目标分组恰好是"默认骨架组合"，则替换后自然只保留这些骨架。
+          const toDisable = currentEnabled.filter(
+            (fieldKey) => !keepFields.has(fieldKey),
+          );
+          if (toDisable.length > 0) {
+            setPresetDetailFieldsEnabled(latestPresetData, toDisable, false);
           }
         }
 
@@ -6635,7 +6801,11 @@ jQuery(async () => {
     );
   }
 
-  async function movePresetDetailFieldsToIndex(presetName, fieldKeys, targetIndex) {
+  async function movePresetDetailFieldsToIndex(
+    presetName,
+    fieldKeys,
+    targetIndex,
+  ) {
     return await createPresetDetailApi().movePresetDetailFieldsToIndex(
       presetName,
       fieldKeys,
@@ -7681,6 +7851,12 @@ jQuery(async () => {
       if (notes && notes[oldName]) {
         notes[newName] = notes[oldName];
         delete notes[oldName];
+      }
+      // 同步缩略图数据
+      const thumbnails = extension_settings[extensionName].themeThumbnails;
+      if (thumbnails && thumbnails[oldName]) {
+        thumbnails[newName] = thumbnails[oldName];
+        delete thumbnails[oldName];
       }
       // 同步背景绑定数据
       const bindings =
@@ -9461,10 +9637,41 @@ jQuery(async () => {
     return true;
   }
 
+  function revealCurrentThemeFromTabClick() {
+    const themeName = getCurrentThemeName();
+    if (!themeName || themeName === "__default__") return false;
+
+    const groups = getResourceGroups("themes");
+    const tree = getResFolderTree("themes");
+    const folderId = groups[themeName];
+    if (folderId && tree[folderId]) {
+      const path = getResFolderPath("themes", folderId);
+      for (const pid of path) themeExpandedNodes.add(pid);
+      selectedThemeFolder = folderId;
+    } else {
+      selectedThemeFolder = "__ungrouped__";
+    }
+
+    renderThemesView();
+    const themeRow = Array.from(
+      document.querySelectorAll("#cfm-theme-right-list .cfm-row[data-res-id]"),
+    ).find((el) => el.getAttribute("data-res-id") === themeName);
+    scrollElementIntoViewCentered(() => themeRow);
+    // 主题列表不像角色卡/预设那样展开详情，跳转后给当前主题行闪烁提示以便发现
+    if (themeRow) {
+      themeRow.classList.add("cfm-theme-reveal-flash");
+      setTimeout(() => {
+        themeRow.classList.remove("cfm-theme-reveal-flash");
+      }, 2000);
+    }
+    return true;
+  }
+
   function handleCurrentTabRelocate(tab) {
     if (tab === "chars") return revealCurrentCharFromTabClick();
     if (tab === "presets") return revealCurrentPresetFromTabClick();
     if (tab === "personas") return revealCurrentPersonaFromTabClick();
+    if (tab === "themes") return revealCurrentThemeFromTabClick();
     return false;
   }
 
@@ -10343,6 +10550,23 @@ jQuery(async () => {
       executeBgRename,
       exitBgRenameMode,
       enterBgRenameMode,
+    });
+
+    // 主题批量绑定背景按钮事件绑定（已模块化到 ui/modal/theme-bg-bind-bindings.js）
+    bindThemeBgBindButtonEvent(popup, {
+      cfmToastr,
+      getCfmThemeBgBindMode: () => cfmThemeBgBindMode,
+      getCfmThemeBgBindSelected: () => cfmThemeBgBindSelected,
+      executeThemeBgBind,
+      exitThemeBgBindMode,
+      enterThemeBgBindMode,
+    });
+
+    // 主题缩略图预览按钮事件绑定：点击打开集中预览弹窗
+    popup.find("#cfm-theme-preview-btn").on("click touchend", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openThemePreview();
     });
 
     // 导入按钮 + 文件选择事件绑定（已模块化到 ui/modal/import-bindings.js）
@@ -11939,9 +12163,11 @@ jQuery(async () => {
       $,
       applyTheme,
       bindTouchSafeTap,
+      cfmConfirm,
       cfmToastr,
       clearMultiSelect,
       countResItemsRecursive,
+      document: window.document,
       escapeHtml,
       executeThemeNoteEdit,
       executeThemeRename,
@@ -11968,6 +12194,7 @@ jQuery(async () => {
       pcGetDropData,
       prependExportToolbar,
       prependResDeleteToolbar,
+      prependThemeBgBindToolbar,
       prependThemeNoteToolbar,
       prependThemeRenameToolbar,
       promptRenameFolder,
@@ -11981,6 +12208,7 @@ jQuery(async () => {
       toggleMultiSelectItem,
       toggleResDeleteItem,
       toggleResFavorite,
+      toggleThemeBgBindItem,
       toggleThemeNoteItem,
       toggleThemeRenameItem,
       touchDragMgr,
@@ -12043,6 +12271,12 @@ jQuery(async () => {
         },
         get cfmThemeRenameSelected() {
           return cfmThemeRenameSelected;
+        },
+        get cfmThemeBgBindMode() {
+          return cfmThemeBgBindMode;
+        },
+        get cfmThemeBgBindSelected() {
+          return cfmThemeBgBindSelected;
         },
         get selectedThemeFolder() {
           return selectedThemeFolder;

@@ -53,7 +53,15 @@ export function createToolbarActionsApi(deps) {
         ],
         worldinfo: ["import", "note", "rename", "export", "delete"],
         presets: ["import", "regexmode", "note", "rename", "export", "delete"],
-        themes: ["import", "note", "rename", "export", "delete"],
+        themes: [
+          "import",
+          "bgbind",
+          "preview",
+          "note",
+          "rename",
+          "export",
+          "delete",
+        ],
         backgrounds: [
           "import",
           "note",

@@ -165,6 +165,12 @@ export async function executeResourceDeleteCore(deps) {
                 name
               ];
             if (
+              deps.extensionSettings[deps.extensionName].themeThumbnails?.[name]
+            )
+              delete deps.extensionSettings[deps.extensionName].themeThumbnails[
+                name
+              ];
+            if (
               deps.extensionSettings[deps.extensionName]
                 .themeBackgroundBindings?.[name]
             )

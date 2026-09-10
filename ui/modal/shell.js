@@ -358,6 +358,8 @@ export function buildMainPopupShell(deps) {
                             <span class="cfm-rh-path" id="cfm-theme-rh-path">选择左侧文件夹查看内容</span>
                             <span class="cfm-rh-count" id="cfm-theme-rh-count"></span>
                             <button class="cfm-import-btn" id="cfm-import-theme-btn" title="导入主题"><i class="fa-solid fa-file-import"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-theme-bg-bind-btn" title="批量绑定背景"><i class="fa-solid fa-link"></i></button>
+                            <button class="cfm-edit-char-btn" id="cfm-theme-preview-btn" title="预览缩略图"><i class="fa-solid fa-images"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-theme-note-btn" title="编辑备注"><i class="fa-solid fa-pen-to-square"></i></button>
                             <button class="cfm-edit-char-btn" id="cfm-theme-rename-btn" title="重命名主题"><i class="fa-solid fa-i-cursor"></i></button>
                             <input type="file" id="cfm-import-theme-file" multiple accept=".json" style="display:none;">
