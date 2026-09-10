@@ -1660,15 +1660,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 移动端：内容超高时允许滚动，避免弹窗上半部分被推出视口 */
-  overflow-y: auto;
   z-index: 100010;
   animation: cfm-fade-in 0.15s ease;
 }
 .cfm-theme-gallery {
   position: relative;
-  /* 配合 overlay 居中：正常高度时居中，超高时贴顶并可滚动到顶部 */
-  margin: auto;
   background: var(--SmartThemeBlurTintColor, #1e1e2e);
   border: 1px solid var(--SmartThemeBorderColor, #45475a);
   border-radius: 10px;
@@ -1844,12 +1840,10 @@
   align-items: center;
   justify-content: center;
   cursor: zoom-out;
-  overflow-y: auto;
   animation: cfm-fade-in 0.15s ease;
 }
 .cfm-theme-gallery-zoom-box {
   position: relative;
-  margin: auto;
   max-width: 88vw;
   max-height: 88vh;
   display: flex;
@@ -4077,8 +4071,6 @@ input.cfm-rv-search {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 移动端：内容超高时允许滚动，避免弹窗上半部分被推出视口 */
-  overflow-y: auto;
   z-index: 100000;
   animation: cfm-fade-in 0.15s ease;
 }
@@ -4195,6 +4187,30 @@ input.cfm-rv-search {
   }
   .cfm-edit-popup-expandable.cfm-edit-popup-maximized .cfm-edit-popup-actions {
     padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+  }
+}
+
+/* ========== 移动端：弹窗容器限高 + 内部滚动（修复内容超高时上半部分被推出视口） ========== */
+/* 注意：overlay 不加 overflow，规避移动端 WebView 对 fixed+overflow flex 容器的渲染 bug */
+@media (max-width: 768px) {
+  .cfm-edit-popup {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  .cfm-theme-gallery {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  .cfm-bg-picker {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  .cfm-theme-gallery-zoom-box {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  .cfm-theme-gallery-zoom-img {
+    max-height: calc(100dvh - 100px);
   }
 }
 .cfm-edit-popup-names {
@@ -9251,15 +9267,11 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 移动端：内容超高时允许滚动，避免弹窗上半部分被推出视口 */
-  overflow-y: auto;
   z-index: 100010;
   animation: cfm-fade-in 0.15s ease;
 }
 .cfm-bg-picker {
   position: relative;
-  /* 配合 overlay 居中：正常高度时居中，超高时贴顶并可滚动到顶部 */
-  margin: auto;
   background: var(--SmartThemeBlurTintColor, #1e1e2e);
   border: 1px solid var(--SmartThemeBorderColor, #45475a);
   border-radius: 10px;
