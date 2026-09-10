@@ -1,12 +1,12 @@
 // Backup Bridge 导入写入层：承接外部备份桥回写资源时的入口调度、资源类型校验与写入结果汇总；普通插件内导入保留在 features/backup/import.js。
 
 import { cloneBackupBridgeJsonValue } from "./clone.js";
+import { createBackupBridgeFingerprint } from "./digest.js";
 import {
   buildBackupBridgeReadResourceMeta,
   buildBackupBridgeResourceId,
   getBackupBridgeJsonByteSize,
 } from "./export.js";
-import { createBackupBridgeFingerprint } from "./fingerprint.js";
 import {
   getBackupBridgeFileExtension,
   getBackupBridgeMimeType,

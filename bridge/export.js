@@ -1,6 +1,6 @@
 // Backup Bridge 导出聚合层：承接面向外部备份桥的资源详情聚合与导出描述生成；普通插件内导入导出保留在 features/backup。
 
-import { createBackupBridgeFingerprint } from "./fingerprint.js";
+import { createBackupBridgeFingerprint } from "./digest.js";
 import {
   buildBackupBridgeCharFolderPath,
   buildBackupBridgeTreeFolderPath,
