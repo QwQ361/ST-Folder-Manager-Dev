@@ -4190,29 +4190,6 @@ input.cfm-rv-search {
   }
 }
 
-/* ========== 移动端：弹窗容器限高 + 内部滚动（修复内容超高时上半部分被推出视口） ========== */
-/* 注意：overlay 不加 overflow，规避移动端 WebView 对 fixed+overflow flex 容器的渲染 bug */
-@media (max-width: 768px) {
-  .cfm-edit-popup {
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-  }
-  .cfm-theme-gallery {
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-  }
-  .cfm-bg-picker {
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-  }
-  .cfm-theme-gallery-zoom-box {
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
-  }
-  .cfm-theme-gallery-zoom-img {
-    max-height: calc(100dvh - 100px);
-  }
-}
 .cfm-edit-popup-names {
   max-height: 120px;
   overflow-y: auto;
@@ -9483,4 +9460,34 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   border: 1px solid rgba(243, 139, 168, 0.25);
   color: #f38ba8;
   font-size: 12.5px;
+}
+
+/* ========== 移动端：弹窗容器限高 + 内部滚动 + 防居中溢出（放在文件末尾，确保覆盖所有基础规则） ========== */
+/* 说明：
+   1) overlay 不加 overflow，规避移动端 WebView 对 fixed+overflow flex 容器的渲染 bug；
+   2) 本媒体查询必须位于 .cfm-bg-picker 等基础规则之后，否则同特异性下基础 max-height 会覆盖它；
+   3) margin:auto 让 flex 居中容器超高时贴顶而非向上溢出（上半部分被推出视口）。 */
+@media (max-width: 768px) {
+  .cfm-edit-popup {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+  }
+  .cfm-theme-gallery {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .cfm-bg-picker {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .cfm-theme-gallery-zoom-box {
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    margin: auto;
+  }
+  .cfm-theme-gallery-zoom-img {
+    max-height: calc(100vh - 100px);
+  }
 }
