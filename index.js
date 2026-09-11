@@ -3766,39 +3766,18 @@ jQuery(async () => {
   }
 
   // 应用头像：按 kind 分发到 char / persona 的现有替换链路（含裁剪 + 上传替换）
+  // char 分支直接用 targetId（即 char.avatar）构造轻量 char 对象即可，
+  // applyCharacterAvatarFromPath 仅需 char.avatar（avatar_url 上传 + 缓存失效），
+  // 避免依赖 getCharacters() 反查（其返回结构与 CFM 角色树的 char.avatar 可能存在差异）。
   async function applyAvatarToTarget(kind, targetId, filePath) {
     if (kind === "chars") {
-      const char = await findCharacterByAvatar(targetId);
-      if (!char) {
-        cfmToastr.error("未找到对应角色，请刷新后重试");
-        return false;
-      }
       return getCharacterDetailApi().applyCharacterAvatarFromPath(
         null,
-        char,
+        { avatar: targetId },
         filePath,
       );
     }
     return getPersonaDetailApi().applyPersonaAvatarFromPath(targetId, filePath);
-  }
-
-  // 根据 char.avatar 查找角色对象（用于应用头像时定位 charRow 对应的 char 数据）
-  // 注意：SillyTavern 的 getContext().getCharacters() 是 async，返回 Promise
-  async function findCharacterByAvatar(avatar) {
-    if (!avatar) return null;
-    const ctx = getContext();
-    try {
-      if (typeof ctx.getCharacters === "function") {
-        const chars = await ctx.getCharacters();
-        if (Array.isArray(chars)) {
-          const found = chars.find((c) => c?.avatar === avatar);
-          if (found) return found;
-        }
-      }
-    } catch (e) {
-      console.warn("[CFM] 查找角色失败", e);
-    }
-    return null;
   }
 
   let _avatarManagerApi = null;
@@ -3817,6 +3796,7 @@ jQuery(async () => {
         settings: extension_settings,
         extensionName,
         avatarPathToDisplayUrl,
+        showBatchProgressOverlay,
         console,
       });
     }

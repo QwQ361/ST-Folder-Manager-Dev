@@ -1771,7 +1771,9 @@
   /* 竖版缩略图：美化截图一般为手机竖屏比例 */
   aspect-ratio: 3 / 4;
   border-radius: 5px;
-  object-fit: cover;
+  /* contain：按原图比例完整显示、不放大不裁剪，避免 cover 在比例不符时 upscale 变糊；
+     比例不符时留白处显示深色背景（见 background-color） */
+  object-fit: contain;
   object-position: center;
   display: block;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1951,6 +1953,8 @@
   /* 头像用 1:1 正方形缩略图 */
   aspect-ratio: 1 / 1;
   border-radius: 6px;
+  /* 与主题缩略图一致：contain 完整显示不放大裁剪，避免头像比例非 1:1 时 cover 放大变糊 */
+  object-fit: contain;
 }
 /* 顶部导入按钮（+），位于标题文字右侧 */
 .cfm-avatar-gallery-import {

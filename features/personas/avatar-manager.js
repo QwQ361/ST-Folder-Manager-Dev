@@ -21,6 +21,7 @@ export function createAvatarManagerApiCore(deps) {
     settings,
     extensionName,
     avatarPathToDisplayUrl,
+    showBatchProgressOverlay,
     console,
   } = deps;
 
@@ -33,7 +34,8 @@ export function createAvatarManagerApiCore(deps) {
     }
     const store = root.avatarManager;
     if (!store.chars || typeof store.chars !== "object") store.chars = {};
-    if (!store.personas || typeof store.personas !== "object") store.personas = {};
+    if (!store.personas || typeof store.personas !== "object")
+      store.personas = {};
     if (!Array.isArray(store.charFavorites)) store.charFavorites = [];
     if (!Array.isArray(store.personaFavorites)) store.personaFavorites = [];
     return store;
@@ -82,19 +84,21 @@ export function createAvatarManagerApiCore(deps) {
     });
   }
 
-  function pickImageFile() {
+  // 多选图片选择器：返回 File 数组（用户取消返回空数组），支持按住 Ctrl/Shift 多选
+  function pickImageFiles() {
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "image/*";
+      input.multiple = true;
       input.style.display = "none";
       const cleanup = () => input.remove();
       input.addEventListener(
         "change",
         () => {
-          const file = input.files?.[0] || null;
+          const files = Array.from(input.files || []);
           cleanup();
-          resolve(file);
+          resolve(files);
         },
         { once: true },
       );
@@ -102,7 +106,7 @@ export function createAvatarManagerApiCore(deps) {
         "cancel",
         () => {
           cleanup();
-          resolve(null);
+          resolve([]);
         },
         { once: true },
       );
@@ -141,7 +145,10 @@ export function createAvatarManagerApiCore(deps) {
       cfmToastr.error("读取图片失败");
       return "";
     }
-    const filePath = await uploadAvatarFile(kind === "chars" ? "char-fav" : "persona-fav", dataUrl);
+    const filePath = await uploadAvatarFile(
+      kind === "chars" ? "char-fav" : "persona-fav",
+      dataUrl,
+    );
     if (!filePath) {
       cfmToastr.error("上传头像失败，请重试");
       return "";
@@ -152,6 +159,50 @@ export function createAvatarManagerApiCore(deps) {
     }
     saveSettingsDebounced();
     return filePath;
+  }
+
+  // 批量导入（个人库）：过滤图片类型 → 逐个上传 → 汇总成功/失败，返回 { success, failed }
+  async function importAvatarBatch(kind, targetId, files) {
+    const imageFiles = Array.from(files || []).filter(
+      (f) => f && typeof f.type === "string" && f.type.startsWith("image/"),
+    );
+    if (imageFiles.length === 0) {
+      cfmToastr.warning("没有可导入的有效图片文件");
+      return { success: 0, failed: [] };
+    }
+    let success = 0;
+    const failed = [];
+    for (const file of imageFiles) {
+      const filePath = await importAvatar(kind, targetId, file);
+      if (filePath) {
+        success++;
+      } else {
+        failed.push(file.name);
+      }
+    }
+    return { success, failed };
+  }
+
+  // 批量导入（共享收藏库）：同上但进入收藏库
+  async function importFavoriteAvatarBatch(kind, files) {
+    const imageFiles = Array.from(files || []).filter(
+      (f) => f && typeof f.type === "string" && f.type.startsWith("image/"),
+    );
+    if (imageFiles.length === 0) {
+      cfmToastr.warning("没有可导入的有效图片文件");
+      return { success: 0, failed: [] };
+    }
+    let success = 0;
+    const failed = [];
+    for (const file of imageFiles) {
+      const filePath = await importFavoriteAvatar(kind, file);
+      if (filePath) {
+        success++;
+      } else {
+        failed.push(file.name);
+      }
+    }
+    return { success, failed };
   }
 
   // 删除我的头像：从个人库移除；若文件不再被任何域引用则删除文件本体
@@ -389,21 +440,58 @@ export function createAvatarManagerApiCore(deps) {
       renderGrid();
     });
 
-    // 导入：mine tab → 个人库；fav tab → 共享收藏库
+    // 导入：mine tab → 个人库；fav tab → 共享收藏库（支持多选）
     overlay.on("click touchend", ".cfm-avatar-gallery-import", async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const file = await pickImageFile();
-      if (!file) return;
-      const filePath =
-        currentTab === "mine"
+      const files = await pickImageFiles();
+      if (!files || files.length === 0) return;
+      const imageFiles = files.filter((f) =>
+        f && typeof f.type === "string" && f.type.startsWith("image/"),
+      );
+      if (imageFiles.length === 0) {
+        cfmToastr.warning("没有可导入的有效图片文件");
+        return;
+      }
+      const isMine = currentTab === "mine";
+      const batchProgress = showBatchProgressOverlay(
+        isMine ? "正在导入绑定头像" : "正在导入收藏头像",
+        imageFiles.length,
+      );
+      let success = 0;
+      const failed = [];
+      let processed = 0;
+      for (const file of imageFiles) {
+        const filePath = isMine
           ? await importAvatar(kind, targetId, file)
           : await importFavoriteAvatar(kind, file);
-      if (filePath) {
-        cfmToastr.success(
-          currentTab === "mine" ? "已导入绑定头像" : "已加入共享收藏库",
-        );
+        if (filePath) {
+          success++;
+        } else {
+          failed.push(file.name);
+        }
+        processed++;
+        batchProgress.update(processed);
+      }
+      if (success > 0) {
+        const msg =
+          (isMine ? "已导入绑定头像" : "已加入共享收藏库") +
+          `：${success} 个`;
+        if (failed.length > 0) {
+          batchProgress.done(`${msg}，${failed.length} 个失败`);
+          cfmToastr.warning(
+            `${msg}，${failed.length} 个失败：${failed.join("、")}`,
+          );
+        } else {
+          batchProgress.done(msg);
+          cfmToastr.success(msg);
+        }
         renderGrid();
+      } else if (failed.length > 0) {
+        batchProgress.done(`导入失败：${failed.length} 个`);
+        cfmToastr.error(`导入失败：${failed.length} 个（${failed.join("、")}）`);
+      } else {
+        batchProgress.remove();
       }
     });
 
@@ -431,6 +519,8 @@ export function createAvatarManagerApiCore(deps) {
     // 导出存储层方法供测试/复用
     importAvatar,
     importFavoriteAvatar,
+    importAvatarBatch,
+    importFavoriteAvatarBatch,
     deleteAvatar,
     addFavorite,
     unfavorite,
