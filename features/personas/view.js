@@ -177,7 +177,9 @@ export function createPersonaViewApiCore(deps) {
       `.cfm-row[data-avatar-id="${deps.$.escapeSelector(newAvatarId)}"]`,
       300,
     );
-    deps.cfmToastr.success(`已复制User「${sourcePersona.name || "[未命名User]"}」`);
+    deps.cfmToastr.success(
+      `已复制User「${sourcePersona.name || "[未命名User]"}」`,
+    );
   }
 
   async function getCurrentPersonas(forceRefresh = false) {
@@ -273,9 +275,9 @@ export function createPersonaViewApiCore(deps) {
     if (avatarBlock.length > 0) {
       avatarBlock.find(".avatar").trigger("click");
     } else {
-      const block = deps.$("#user_avatar_block").find(
-        `[data-avatar-id='${avatarId}']`,
-      );
+      const block = deps
+        .$("#user_avatar_block")
+        .find(`[data-avatar-id='${avatarId}']`);
       if (block.length) {
         block.trigger("click");
       }
@@ -283,6 +285,11 @@ export function createPersonaViewApiCore(deps) {
   }
 
   function refreshPersonaPanelView() {
+    const state = getState();
+    // 清空 persona 列表缓存与预加载 promise，确保编辑/删除等数据变更后重新拉取最新数据
+    state._personaListCache = null;
+    state._personaListCacheTime = 0;
+    state._personasPreloadPromise = null;
     const q = String(deps.$("#cfm-persona-global-search").val() || "").trim();
     if (q) executePersonaSearch();
     else deps.renderPersonasView();
@@ -409,9 +416,9 @@ export function createPersonaViewApiCore(deps) {
           (p.name || "").toLowerCase(),
           (p.description || "").toLowerCase(),
           (deps.getPersonaNote(p.avatarId) || "").toLowerCase(),
-          ...deps.getResFolderPathNames("personas", p.avatarId).map((s) =>
-            s.toLowerCase(),
-          ),
+          ...deps
+            .getResFolderPathNames("personas", p.avatarId)
+            .map((s) => s.toLowerCase()),
           ...connNames,
         ];
         return deps.fuzzyMatch(q, pool);
@@ -426,9 +433,9 @@ export function createPersonaViewApiCore(deps) {
       }
 
       const currentUserAvatar =
-        deps.$("#user_avatar_block .avatar-container.selected").attr(
-          "data-avatar-id",
-        ) || null;
+        deps
+          .$("#user_avatar_block .avatar-container.selected")
+          .attr("data-avatar-id") || null;
 
       for (const p of matched) {
         const isActive = p.avatarId === currentUserAvatar;
@@ -490,9 +497,8 @@ export function createPersonaViewApiCore(deps) {
           if (
             deps
               .$(e.target)
-              .closest(
-                ".cfm-row-star, .cfm-row-copy-btn, .cfm-persona-toggle",
-              ).length
+              .closest(".cfm-row-star, .cfm-row-copy-btn, .cfm-persona-toggle")
+              .length
           )
             return;
           selectPersona(p.avatarId);

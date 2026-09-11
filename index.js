@@ -174,10 +174,10 @@ import {
 import { getTabMenuConfigCore } from "./features/layout/tabs.js";
 import { createToolbarActionsApi } from "./features/layout/toolbar-actions.js";
 import { getToolbarMenuConfigCore } from "./features/layout/toolbar-config.js";
+import { createAvatarManagerApiCore } from "./features/personas/avatar-manager.js";
 import { createPersonaBindingsApiCore } from "./features/personas/bindings.js";
 import { createCharacterDetailApiCore } from "./features/personas/character-detail.js";
 import { createPersonaDetailApiCore } from "./features/personas/detail.js";
-import { createAvatarManagerApiCore } from "./features/personas/avatar-manager.js";
 import {
   addTagToCharCore,
   autoCleanRedundantTagsCore,
@@ -194,6 +194,14 @@ import {
   toggleCharHiddenCore,
 } from "./features/personas/hidden.js";
 import { createPersonaNotesApiCore } from "./features/personas/notes.js";
+import {
+  applyPersonaSnapshot,
+  createPersonaSnapshotId,
+  deletePersonaSnapshot,
+  getPersonaSnapshots,
+  pinPersonaSnapshot,
+  savePersonaSnapshot,
+} from "./features/personas/snapshots.js";
 import { createPersonaViewApiCore } from "./features/personas/view.js";
 import { createPresetDetailApiCore } from "./features/presets/detail.js";
 import { createPresetNotesApiCore } from "./features/presets/notes.js";
@@ -250,6 +258,11 @@ import {
   applySortToFoldersCore,
   sortResItemsCore,
 } from "./features/sort/sort.js";
+import {
+  avatarPathToDisplayUrlCore,
+  deleteAvatarFileCore,
+  uploadAvatarFileCore,
+} from "./features/themes/avatar-files.js";
 import { createThemeBgBindModeApi } from "./features/themes/bg-bind.js";
 import {
   createThemeNoteModeApi,
@@ -262,11 +275,6 @@ import {
   deleteThemeThumbnailFileCore,
   uploadThemeThumbnailFileCore,
 } from "./features/themes/thumbnail-files.js";
-import {
-  avatarPathToDisplayUrlCore,
-  deleteAvatarFileCore,
-  uploadAvatarFileCore,
-} from "./features/themes/avatar-files.js";
 import {
   countPendingThemeThumbnailMigrationsCore,
   deleteThemeThumbnailCore,
@@ -1451,8 +1459,11 @@ jQuery(async () => {
     openCharacterChatFunc,
     importCharacterChatFunc,
     doNewChatFunc,
+    setUserNameFunc,
     personasFilter,
     getUserAvatarsFunc,
+    setPersonaDescriptionFunc,
+    userAvatarVar,
     Popup,
     POPUP_TYPE,
     ensureImageFormatSupported,
@@ -14040,6 +14051,37 @@ jQuery(async () => {
         setTimeout: window.setTimeout.bind(window),
         clearTimeout: window.clearTimeout.bind(window),
         requestAnimationFrame: window.requestAnimationFrame.bind(window),
+        personaSnapshotApi: {
+          getPersonaSnapshots: (avatarId) =>
+            getPersonaSnapshots(extension_settings[extensionName], avatarId),
+          createPersonaSnapshotId: () => createPersonaSnapshotId(),
+          savePersonaSnapshot: (avatarId, snapId, note, content) =>
+            savePersonaSnapshot(
+              extension_settings[extensionName],
+              avatarId,
+              snapId,
+              note,
+              content,
+            ),
+          deletePersonaSnapshot: (avatarId, snapId) =>
+            deletePersonaSnapshot(
+              extension_settings[extensionName],
+              avatarId,
+              snapId,
+            ),
+          pinPersonaSnapshot: (avatarId, snapId) =>
+            pinPersonaSnapshot(
+              extension_settings[extensionName],
+              avatarId,
+              snapId,
+            ),
+          applyPersonaSnapshot: (avatarId, snapId) =>
+            applyPersonaSnapshot(
+              extension_settings[extensionName],
+              avatarId,
+              snapId,
+            ),
+        },
       });
     }
     return _personaDetailApi;
@@ -14064,6 +14106,12 @@ jQuery(async () => {
   /**
    * 在 CFM 编辑 persona 后同步酒馆原生 UI，
    * 使名称/描述等更改立即可见，无需刷新页面。
+   *
+   * 原实现通过重新点击头像触发原生 setUserAvatar，但原生对【当前已激活】的
+   * persona 会直接 return（personas.js setUserAvatar: currentUserAvatar === user_avatar
+   * 时跳过 selectCurrentPersona），导致 {{user}} 宏与「用户设定描述」不刷新。
+   * 因此对当前 persona 改为手动同步全局宏数据源（power_user.persona_description /
+   * name1），再调用已导出的 setPersonaDescription 刷新原生 UI。
    */
   let _cfmSuppressAutoClose = false;
   function syncNativePersonaUI(avatarId) {
@@ -14078,7 +14126,37 @@ jQuery(async () => {
           console.warn("[CFM] 刷新原生头像列表失败", e);
         }
       }
-      // 临时抑制移动端自动关闭，再重新选择 persona
+
+      // userAvatarVar 是 personas.js 模块命名空间对象（非快照），
+      // 其 .user_avatar 属性为 export let 活绑定，始终反映当前激活的 persona。
+      const isCurrent = userAvatarVar?.user_avatar === avatarId;
+      if (isCurrent && typeof setPersonaDescriptionFunc === "function") {
+        // 当前激活的 persona：原生点击相同头像会被跳过，需手动同步宏数据源
+        try {
+          const ctx = getContext();
+          const pu = ctx?.powerUserSettings;
+          if (pu) {
+            const personaName = pu.personas?.[avatarId];
+            if (typeof setUserNameFunc === "function" && personaName) {
+              setUserNameFunc(personaName, { toastPersonaNameChange: false });
+            }
+            // 与原生 selectCurrentPersona 一致：descriptor 缺失时也要清空全局字段，避免残留旧值
+            const descriptor = pu.persona_descriptions?.[avatarId];
+            pu.persona_description = descriptor?.description ?? "";
+            pu.persona_description_position = descriptor?.position ?? 0;
+            pu.persona_description_depth = descriptor?.depth ?? 2;
+            pu.persona_description_role = descriptor?.role ?? 0;
+            pu.persona_description_lorebook = descriptor?.lorebook ?? "";
+            setPersonaDescriptionFunc();
+            console.log("[CFM] 已手动同步当前 User 的宏数据源");
+          }
+        } catch (e) {
+          console.warn("[CFM] 手动同步当前 User 宏数据失败", e);
+        }
+        return;
+      }
+
+      // 非当前 persona：走原生点击切换（不同头像会触发完整流程）
       _cfmSuppressAutoClose = true;
       selectPersona(avatarId);
       setTimeout(() => {
@@ -14152,7 +14230,9 @@ jQuery(async () => {
           ],
           onOpen: (popup) => {
             const $cropImage = $(popup.cropImage);
-            const checkbox = popup.dlg?.querySelector?.("#cfm-avatar-free-crop");
+            const checkbox = popup.dlg?.querySelector?.(
+              "#cfm-avatar-free-crop",
+            );
             const applyRatio = () => {
               const cropper = $cropImage.data("cropper");
               if (!cropper) return;

@@ -48,6 +48,9 @@ export function createPersonaDetailApiCore(deps) {
             <button type="button" class="cfm-edit-popup-maximize" title="最大化编辑窗口" aria-pressed="false">
               <i class="fa-solid fa-expand"></i>
             </button>
+            <button type="button" class="cfm-edit-popup-snapshot" title="打开副本列表">
+              <i class="fa-solid fa-copy"></i>
+            </button>
           </div>`
                 : `<label for="cfm-persona-detail-input">${meta.label}</label>`
             }
@@ -56,6 +59,12 @@ export function createPersonaDetailApiCore(deps) {
           <div class="cfm-edit-popup-actions">
             <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
             ${currentValue ? '<button class="cfm-btn cfm-edit-popup-clear">清空</button>' : ""}
+            ${
+              canMaximize
+                ? `<button class="cfm-btn cfm-edit-popup-save-snapshot">设为副本</button>
+            <button class="cfm-btn cfm-edit-popup-update-snapshot" style="display:none;">更新</button>`
+                : ""
+            }
             <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
           </div>
         </div>
@@ -207,7 +216,10 @@ export function createPersonaDetailApiCore(deps) {
       };
       visualViewport?.addEventListener("resize", handleViewportChange);
       visualViewport?.addEventListener("scroll", handleViewportChange);
-      deps.window.addEventListener("orientationchange", handleOrientationChange);
+      deps.window.addEventListener(
+        "orientationchange",
+        handleOrientationChange,
+      );
       mobileMaximizedLock.cleanup = () => {
         visualViewport?.removeEventListener("resize", handleViewportChange);
         visualViewport?.removeEventListener("scroll", handleViewportChange);
@@ -250,6 +262,271 @@ export function createPersonaDetailApiCore(deps) {
         overlay.remove();
         resolve(result);
       };
+
+      // ===== 副本功能（仅 description 多行字段启用） =====
+      const snapshotBtn = overlay.find(".cfm-edit-popup-snapshot");
+      const saveSnapshotBtn = overlay.find(".cfm-edit-popup-save-snapshot");
+      const updateSnapshotBtn = overlay.find(".cfm-edit-popup-update-snapshot");
+      let appliedSnapId = null; // 本次弹窗内「应用」的副本 id
+      let snapshotPanelOverlay = null;
+
+      const getSnapshotApi = () => deps.personaSnapshotApi || null;
+      const getCurrentText = () => String(input.val() || "");
+
+      const readSnapshotContent = (snapId) => {
+        const api = getSnapshotApi();
+        if (!api || !snapId) return null;
+        return api.applyPersonaSnapshot(persona.avatarId, snapId);
+      };
+
+      const getAppliedSnapshotNote = () => {
+        const api = getSnapshotApi();
+        if (!api || !appliedSnapId) return null;
+        const list = api.getPersonaSnapshots(persona.avatarId);
+        const item = list?.items?.[appliedSnapId];
+        return item?.note || null;
+      };
+
+      const updateSnapshotBtnState = () => {
+        if (!updateSnapshotBtn.length) return;
+        if (!appliedSnapId) {
+          updateSnapshotBtn.hide();
+          return;
+        }
+        const appliedContent = readSnapshotContent(appliedSnapId);
+        const current = getCurrentText();
+        if (appliedContent !== null && current !== appliedContent) {
+          const note = getAppliedSnapshotNote();
+          updateSnapshotBtn
+            .attr("title", note ? `更新副本「${note}」` : "更新副本")
+            .show();
+        } else {
+          updateSnapshotBtn.hide();
+        }
+      };
+
+      const openSnapshotNotePopup = (defaultNote) =>
+        new Promise((noteResolve) => {
+          const noteOverlay = deps.$(`
+            <div class="cfm-edit-popup-overlay" id="cfm-persona-snapshot-note-overlay">
+              <div class="cfm-edit-popup">
+                <div class="cfm-edit-popup-title">副本备注</div>
+                <div class="cfm-edit-popup-field">
+                  <label for="cfm-persona-snapshot-note-input">备注名</label>
+                  <input type="text" class="cfm-edit-input" id="cfm-persona-snapshot-note-input" value="${deps.escapeHtml(defaultNote || "")}" placeholder="为这个副本起一个备注名">
+                </div>
+                <div class="cfm-edit-popup-actions">
+                  <button class="cfm-btn cfm-edit-popup-cancel">取消</button>
+                  <button class="cfm-btn cfm-edit-popup-confirm">确认</button>
+                </div>
+              </div>
+            </div>
+          `);
+          deps.$("body").append(noteOverlay);
+          const noteInput = noteOverlay.find(
+            "#cfm-persona-snapshot-note-input",
+          );
+          const finish = (value) => {
+            noteOverlay.remove();
+            noteResolve(value);
+          };
+          noteInput.trigger("focus");
+          noteOverlay
+            .find(".cfm-edit-popup-cancel")
+            .on("click", () => finish(null));
+          noteOverlay.find(".cfm-edit-popup-confirm").on("click", () => {
+            finish(String(noteInput.val() || "").trim());
+          });
+          noteOverlay.on("click", (e) => {
+            if (deps.$(e.target).hasClass("cfm-edit-popup-overlay"))
+              finish(null);
+          });
+          noteInput.on("keydown", (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              noteOverlay.find(".cfm-edit-popup-confirm").trigger("click");
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              finish(null);
+            }
+          });
+        });
+
+      const doSaveSnapshot = async (snapId, note, content) => {
+        const api = getSnapshotApi();
+        if (!api) {
+          deps.cfmToastr.error("副本功能不可用");
+          return false;
+        }
+        api.savePersonaSnapshot(persona.avatarId, snapId, note, content);
+        deps.saveSettingsDebounced();
+        return true;
+      };
+
+      const renderSnapshotPanel = () => {
+        const api = getSnapshotApi();
+        if (!snapshotPanelOverlay || !snapshotPanelOverlay[0]?.isConnected)
+          return;
+        const list = api ? api.getPersonaSnapshots(persona.avatarId) : null;
+        const order = list?.order || [];
+        const items = list?.items || {};
+        const rowsHtml = order.length
+          ? order
+              .map((id) => {
+                const item = items[id] || {};
+                const note = item.note || "未命名副本";
+                const active = id === appliedSnapId;
+                const pinned = order[0] === id;
+                return `
+              <div class="cfm-snapshot-row ${active ? "cfm-snapshot-row-active" : ""}" data-snap-id="${deps.escapeHtml(id)}">
+                <span class="cfm-snapshot-note" title="${deps.escapeHtml(note)}">${deps.escapeHtml(note)}</span>
+                ${active ? '<span class="cfm-snapshot-active-mark">已应用</span>' : ""}
+                <div class="cfm-snapshot-actions">
+                  <button type="button" class="cfm-snapshot-pin ${pinned ? "cfm-snapshot-pin-active" : ""}" title="置顶"><i class="fa-solid fa-thumbtack"></i></button>
+                  <button type="button" class="cfm-snapshot-apply" title="应用"><i class="fa-solid fa-play"></i></button>
+                  <button type="button" class="cfm-snapshot-del" title="删除"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            `;
+              })
+              .join("")
+          : '<div class="cfm-snapshot-empty">暂无副本</div>';
+        const listEl = snapshotPanelOverlay.find(".cfm-snapshot-list");
+        listEl.html(rowsHtml);
+      };
+
+      const openSnapshotPanel = () => {
+        if (snapshotPanelOverlay && snapshotPanelOverlay[0]?.isConnected) {
+          renderSnapshotPanel();
+          return;
+        }
+        snapshotPanelOverlay = deps.$(`
+          <div class="cfm-edit-popup-overlay" id="cfm-persona-snapshot-panel-overlay">
+            <div class="cfm-edit-popup cfm-snapshot-panel">
+              <div class="cfm-edit-popup-title"><i class="fa-solid fa-copy" style="margin-right:6px;"></i>具体设定副本</div>
+              <div class="cfm-snapshot-list"></div>
+              <div class="cfm-edit-popup-actions">
+                <button class="cfm-btn cfm-edit-popup-cancel">关闭</button>
+              </div>
+            </div>
+          </div>
+        `);
+        deps.$("body").append(snapshotPanelOverlay);
+        snapshotPanelOverlay.find(".cfm-edit-popup-cancel").on("click", () => {
+          snapshotPanelOverlay.remove();
+          snapshotPanelOverlay = null;
+        });
+        snapshotPanelOverlay.on("click", (e) => {
+          if (deps.$(e.target).hasClass("cfm-edit-popup-overlay")) {
+            snapshotPanelOverlay.remove();
+            snapshotPanelOverlay = null;
+          }
+        });
+
+        snapshotPanelOverlay.on("click", ".cfm-snapshot-pin", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const api = getSnapshotApi();
+          const id = deps.$(this).closest(".cfm-snapshot-row").data("snapId");
+          if (!api || !id) return;
+          api.pinPersonaSnapshot(persona.avatarId, id);
+          deps.saveSettingsDebounced();
+          renderSnapshotPanel();
+        });
+
+        snapshotPanelOverlay.on("click", ".cfm-snapshot-apply", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const api = getSnapshotApi();
+          const id = deps.$(this).closest(".cfm-snapshot-row").data("snapId");
+          if (!api || !id) return;
+          const content = api.applyPersonaSnapshot(persona.avatarId, id);
+          if (content === null) return;
+          input.val(content);
+          appliedSnapId = id;
+          updateSnapshotBtnState();
+          const note = api.getPersonaSnapshots(persona.avatarId)?.items?.[id]
+            ?.note;
+          deps.cfmToastr.success(note ? `已应用副本「${note}」` : "已应用副本");
+          snapshotPanelOverlay.remove();
+          snapshotPanelOverlay = null;
+          input.trigger("focus");
+        });
+
+        snapshotPanelOverlay.on("click", ".cfm-snapshot-del", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const api = getSnapshotApi();
+          const id = deps.$(this).closest(".cfm-snapshot-row").data("snapId");
+          if (!api || !id) return;
+          const note =
+            api.getPersonaSnapshots(persona.avatarId)?.items?.[id]?.note ||
+            "未命名副本";
+          if (!deps.cfmConfirm(`确认删除副本「${note}」吗？`)) return;
+          api.deletePersonaSnapshot(persona.avatarId, id);
+          deps.saveSettingsDebounced();
+          if (appliedSnapId === id) appliedSnapId = null;
+          updateSnapshotBtnState();
+          renderSnapshotPanel();
+        });
+
+        renderSnapshotPanel();
+      };
+
+      if (snapshotBtn.length) {
+        snapshotBtn.on("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openSnapshotPanel();
+        });
+      }
+      if (saveSnapshotBtn.length) {
+        saveSnapshotBtn.on("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const content = getCurrentText().trim();
+          if (!content) {
+            deps.cfmToastr.warning("内容为空，无法设为副本");
+            return;
+          }
+          const note = await openSnapshotNotePopup("");
+          if (note === null) return;
+          if (!note) {
+            deps.cfmToastr.warning("请输入副本备注名");
+            return;
+          }
+          const api = getSnapshotApi();
+          if (!api) return;
+          const snapId = api.createPersonaSnapshotId
+            ? api.createPersonaSnapshotId()
+            : "snap_" + Date.now().toString(36);
+          const ok = await doSaveSnapshot(snapId, note, content);
+          if (!ok) return;
+          deps.cfmToastr.success(`已设为副本「${note}」`);
+        });
+      }
+      if (updateSnapshotBtn.length) {
+        updateSnapshotBtn.on("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!appliedSnapId) return;
+          const content = getCurrentText().trim();
+          if (!content) {
+            deps.cfmToastr.warning("内容为空，无法更新副本");
+            return;
+          }
+          const note = getAppliedSnapshotNote() || "未命名副本";
+          if (!deps.cfmConfirm(`确认更新副本「${note}」吗？`)) return;
+          const ok = await doSaveSnapshot(appliedSnapId, note, content);
+          if (!ok) return;
+          deps.cfmToastr.success(`已更新副本「${note}」`);
+          updateSnapshotBtnState();
+        });
+      }
+      input.on("input", () => {
+        updateSnapshotBtnState();
+      });
       maximizeBtn.on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -317,7 +594,9 @@ export function createPersonaDetailApiCore(deps) {
       });
       overlay.find(".cfm-edit-popup-cancel").on("click", () => close(null));
       overlay.on("mousedown touchstart", (e) => {
-        const isOverlayTarget = deps.$(e.target).hasClass("cfm-edit-popup-overlay");
+        const isOverlayTarget = deps
+          .$(e.target)
+          .hasClass("cfm-edit-popup-overlay");
         const elapsed = Date.now() - openedAt;
         const isPrimaryPress =
           e.type === "touchstart" ||
@@ -327,7 +606,9 @@ export function createPersonaDetailApiCore(deps) {
           isOverlayTarget && elapsed >= overlayCloseGuardMs && isPrimaryPress;
       });
       overlay.on("click", (e) => {
-        const clickedOverlay = deps.$(e.target).hasClass("cfm-edit-popup-overlay");
+        const clickedOverlay = deps
+          .$(e.target)
+          .hasClass("cfm-edit-popup-overlay");
         const elapsed = Date.now() - openedAt;
         if (
           clickedOverlay &&
@@ -424,7 +705,9 @@ export function createPersonaDetailApiCore(deps) {
       return false;
     }
     const fileName = String(filePath).split("/").pop() || "avatar.png";
-    const file = new deps.File([blob], fileName, { type: blob.type || "image/png" });
+    const file = new deps.File([blob], fileName, {
+      type: blob.type || "image/png",
+    });
 
     const prepared = await deps.prepareDetailAvatarUpload(file);
     if (!prepared?.file) return false;
@@ -468,7 +751,9 @@ export function createPersonaDetailApiCore(deps) {
     const personaName = persona?.name || "User";
     const note = deps.getPersonaNote(persona.avatarId) || "";
     const bindStates = deps.getPersonaBindStates(persona);
-    const characterBindHtml = deps.buildPersonaConnHtml(persona?.connections || []);
+    const characterBindHtml = deps.buildPersonaConnHtml(
+      persona?.connections || [],
+    );
     const chatBindHtml = deps.buildPersonaChatBindHtml(persona.avatarId);
     const bindDetailHtml = [
       characterBindHtml ? `<div>${characterBindHtml}</div>` : "",

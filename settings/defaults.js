@@ -30,6 +30,13 @@ export function ensureSettingsDefaults({
   ) {
     settings.entryTransferMemo = { groups: [] };
   }
+  // User 具体设定副本（personaSnapshots: { avatarId: { order, items } }）
+  if (
+    !settings.personaSnapshots ||
+    typeof settings.personaSnapshots !== "object"
+  ) {
+    settings.personaSnapshots = {};
+  }
 
   migrateLegacyFolderConfig({ settings, storageKey });
 

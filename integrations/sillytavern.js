@@ -1,4 +1,4 @@
-﻿// SillyTavern 集成适配层：承接 getContext、原生 API、角色/预设/世界书/聊天等外部接口的薄封装，避免 feature 直接散落访问全局对象。
+// SillyTavern 集成适配层：承接 getContext、原生 API、角色/预设/世界书/聊天等外部接口的薄封装，避免 feature 直接散落访问全局对象。
 
 /**
  * 获取 SillyTavern 全局上下文句柄
@@ -24,6 +24,7 @@ export async function loadStCoreModules() {
   let openCharacterChatFunc = null;
   let importCharacterChatFunc = null;
   let doNewChatFunc = null;
+  let setUserNameFunc = null;
   try {
     const scriptModule = await import("../../../../../script.js");
     entitiesFilter = scriptModule.entitiesFilter;
@@ -34,6 +35,7 @@ export async function loadStCoreModules() {
     openCharacterChatFunc = scriptModule.openCharacterChat;
     importCharacterChatFunc = scriptModule.importCharacterChat;
     doNewChatFunc = scriptModule.doNewChat;
+    setUserNameFunc = scriptModule.setUserName;
     console.log(
       "[CFM] 成功获取 entitiesFilter, printCharactersDebounced 和聊天记录管理 API",
     );
@@ -48,10 +50,17 @@ export async function loadStCoreModules() {
   // 用于在分页前进行数据级过滤，修复 Persona 文件夹过滤与分页不兼容的问题
   let personasFilter = null;
   let getUserAvatarsFunc = null;
+  let setPersonaDescriptionFunc = null;
+  let userAvatarVar = null;
   try {
     const personasModule = await import("../../../../personas.js");
     personasFilter = personasModule.personasFilter;
     getUserAvatarsFunc = personasModule.getUserAvatars;
+    setPersonaDescriptionFunc = personasModule.setPersonaDescription;
+    // ⚠️ 注意：user_avatar 是原生模块的 export let 活绑定（live binding），
+    // 命名空间对象上的属性值会随原生模块内部赋值而更新，
+    // 因此必须保留模块命名空间引用以在后续读取当前值，不能只取值快照。
+    userAvatarVar = personasModule;
     console.log("[CFM] 成功获取 personasFilter 和 getUserAvatars");
   } catch (e) {
     console.warn(
@@ -91,8 +100,11 @@ export async function loadStCoreModules() {
     openCharacterChatFunc,
     importCharacterChatFunc,
     doNewChatFunc,
+    setUserNameFunc,
     personasFilter,
     getUserAvatarsFunc,
+    setPersonaDescriptionFunc,
+    userAvatarVar,
     Popup,
     POPUP_TYPE,
     ensureImageFormatSupported,
