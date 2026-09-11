@@ -177,6 +177,7 @@ import { getToolbarMenuConfigCore } from "./features/layout/toolbar-config.js";
 import { createPersonaBindingsApiCore } from "./features/personas/bindings.js";
 import { createCharacterDetailApiCore } from "./features/personas/character-detail.js";
 import { createPersonaDetailApiCore } from "./features/personas/detail.js";
+import { createAvatarManagerApiCore } from "./features/personas/avatar-manager.js";
 import {
   addTagToCharCore,
   autoCleanRedundantTagsCore,
@@ -258,8 +259,19 @@ import {
 import { createThemePreviewApi } from "./features/themes/preview.js";
 import { createThemeRenameModeApi } from "./features/themes/rename.js";
 import {
+  deleteThemeThumbnailFileCore,
+  uploadThemeThumbnailFileCore,
+} from "./features/themes/thumbnail-files.js";
+import {
+  avatarPathToDisplayUrlCore,
+  deleteAvatarFileCore,
+  uploadAvatarFileCore,
+} from "./features/themes/avatar-files.js";
+import {
+  countPendingThemeThumbnailMigrationsCore,
   deleteThemeThumbnailCore,
   getThemeThumbnailCore,
+  migrateThemeThumbnailsToFilesCore,
   setThemeThumbnailCore,
 } from "./features/themes/thumbnails.js";
 import {
@@ -3670,6 +3682,7 @@ jQuery(async () => {
       setPresetDetachedOptions: (value) => {
         _presetDetachedOptions = value;
       },
+      deleteThemeThumbnailFile,
       setThemeDetachedOptions: (value) => {
         _themeDetachedOptions = value;
       },
@@ -3711,19 +3724,147 @@ jQuery(async () => {
     });
   }
 
+  // 上传缩略图文件本体（/api/files/upload → files/ 相对路径）
+  function uploadThemeThumbnailFile(name, dataUrl) {
+    return uploadThemeThumbnailFileCore(name, dataUrl, {
+      console,
+      fetch: window.fetch.bind(window),
+      getRequestHeaders: () => getContext().getRequestHeaders(),
+    });
+  }
+
+  // 删除缩略图文件本体（/api/files/delete），幂等（404 视为成功）
+  function deleteThemeThumbnailFile(filePath) {
+    return deleteThemeThumbnailFileCore(filePath, {
+      console,
+      fetch: window.fetch.bind(window),
+      getRequestHeaders: () => getContext().getRequestHeaders(),
+    });
+  }
+
+  // 上传头像文件本体（/api/files/upload → files/ 相对路径），seed 为 char.avatar / persona.avatarId 用于文件名哈希
+  function uploadAvatarFile(seed, dataUrl) {
+    return uploadAvatarFileCore(seed, dataUrl, {
+      console,
+      fetch: window.fetch.bind(window),
+      getRequestHeaders: () => getContext().getRequestHeaders(),
+    });
+  }
+
+  // 删除头像文件本体（/api/files/delete），幂等（404 视为成功）
+  function deleteAvatarFile(filePath) {
+    return deleteAvatarFileCore(filePath, {
+      console,
+      fetch: window.fetch.bind(window),
+      getRequestHeaders: () => getContext().getRequestHeaders(),
+    });
+  }
+
+  // 头像文件相对路径 → 显示 URL（/user/files/xxx.png）
+  function avatarPathToDisplayUrl(filePath) {
+    return avatarPathToDisplayUrlCore(filePath);
+  }
+
+  // 应用头像：按 kind 分发到 char / persona 的现有替换链路（含裁剪 + 上传替换）
+  async function applyAvatarToTarget(kind, targetId, filePath) {
+    if (kind === "chars") {
+      const char = await findCharacterByAvatar(targetId);
+      if (!char) {
+        cfmToastr.error("未找到对应角色，请刷新后重试");
+        return false;
+      }
+      return getCharacterDetailApi().applyCharacterAvatarFromPath(
+        null,
+        char,
+        filePath,
+      );
+    }
+    return getPersonaDetailApi().applyPersonaAvatarFromPath(targetId, filePath);
+  }
+
+  // 根据 char.avatar 查找角色对象（用于应用头像时定位 charRow 对应的 char 数据）
+  // 注意：SillyTavern 的 getContext().getCharacters() 是 async，返回 Promise
+  async function findCharacterByAvatar(avatar) {
+    if (!avatar) return null;
+    const ctx = getContext();
+    try {
+      if (typeof ctx.getCharacters === "function") {
+        const chars = await ctx.getCharacters();
+        if (Array.isArray(chars)) {
+          const found = chars.find((c) => c?.avatar === avatar);
+          if (found) return found;
+        }
+      }
+    } catch (e) {
+      console.warn("[CFM] 查找角色失败", e);
+    }
+    return null;
+  }
+
+  let _avatarManagerApi = null;
+  function getAvatarManagerApi() {
+    if (!_avatarManagerApi) {
+      _avatarManagerApi = createAvatarManagerApiCore({
+        $,
+        document: window.document,
+        escapeHtml,
+        cfmToastr,
+        cfmConfirm,
+        uploadAvatarFile,
+        deleteAvatarFile,
+        applyAvatarToTarget,
+        saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
+        settings: extension_settings,
+        extensionName,
+        avatarPathToDisplayUrl,
+        console,
+      });
+    }
+    return _avatarManagerApi;
+  }
+
+  // 打开头像管理器弹窗（char/user 详情「修改图像」入口共用）
+  function openAvatarManager(options) {
+    return getAvatarManagerApi().openAvatarManager(options);
+  }
+
   function setThemeThumbnail(name, dataUrl) {
     return setThemeThumbnailCore(name, dataUrl, {
+      deleteThemeThumbnailFile,
+      extensionName,
+      saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
+      settings: extension_settings,
+      toastr: cfmToastr,
+      uploadThemeThumbnailFile,
+    });
+  }
+
+  function deleteThemeThumbnail(name) {
+    return deleteThemeThumbnailCore(name, {
+      deleteThemeThumbnailFile,
       extensionName,
       saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
       settings: extension_settings,
     });
   }
 
-  function deleteThemeThumbnail(name) {
-    return deleteThemeThumbnailCore(name, {
+  // 旧版 dataURL 缩略图 → 文件化存储迁移（自动迁移入口 + 设置页手动重试共用）
+  function countPendingThemeThumbnailMigrations() {
+    return countPendingThemeThumbnailMigrationsCore({
+      extensionName,
+      settings: extension_settings,
+    });
+  }
+
+  function migrateThemeThumbnailsToFiles() {
+    return migrateThemeThumbnailsToFilesCore({
+      console,
+      deleteThemeThumbnailFile,
       extensionName,
       saveSettingsDebounced: () => getContext().saveSettingsDebounced(),
       settings: extension_settings,
+      toastr: cfmToastr,
+      uploadThemeThumbnailFile,
     });
   }
 
@@ -11786,6 +11927,9 @@ jQuery(async () => {
         },
         getCurrentResourceType: () => currentResourceType,
         getCfmConfigTopActiveTab: () => cfmConfigTopActiveTab,
+        // 旧版缩略图迁移（themes 页手动重试按钮）
+        countPendingThemeThumbnailMigrations,
+        migrateThemeThumbnailsToFiles,
         // 渲染依赖
         renderConfigTreeItem,
         renderButtonModeSection,
@@ -13885,6 +14029,7 @@ jQuery(async () => {
       _personaDetailApi = createPersonaDetailApiCore({
         $,
         FormData: window.FormData,
+        File: window.File,
         window,
         document,
         cfmConfirm,
@@ -13907,6 +14052,8 @@ jQuery(async () => {
         pickDetailAvatarFile,
         prepareDetailAvatarUpload,
         bustDetailThumbnailCache,
+        openAvatarManager,
+        avatarPathToDisplayUrl,
         getTextOffsetFromPoint,
         flashTextareaCaretSelection,
         revealTextareaCaret,
@@ -14012,7 +14159,30 @@ jQuery(async () => {
         "Set the crop position of the avatar image",
         POPUP_TYPE.CROP,
         "",
-        { cropImage: dataUrl },
+        {
+          cropImage: dataUrl,
+          // 自由裁剪开关：默认勾选，允许拖动裁剪框四角自由调整上下左右；取消勾选则锁定默认 2:3 比例
+          customInputs: [
+            {
+              id: "cfm-avatar-free-crop",
+              type: "checkbox",
+              label: "自由裁剪（可拖动调整上下左右）",
+              defaultState: true,
+            },
+          ],
+          onOpen: (popup) => {
+            const $cropImage = $(popup.cropImage);
+            const checkbox = popup.dlg?.querySelector?.("#cfm-avatar-free-crop");
+            const applyRatio = () => {
+              const cropper = $cropImage.data("cropper");
+              if (!cropper) return;
+              // NaN 表示不锁定比例，Cropper.js 据此解锁四角自由拖拽
+              cropper.setAspectRatio(checkbox?.checked ? NaN : 2 / 3);
+            };
+            applyRatio();
+            checkbox?.addEventListener("change", applyRatio);
+          },
+        },
       );
       const croppedImage = await dlg.show();
       if (!croppedImage) {
@@ -14049,6 +14219,7 @@ jQuery(async () => {
         window,
         document,
         FormData: window.FormData,
+        File: window.File,
         cfmConfirm,
         cfmToastr,
         console,
@@ -14059,6 +14230,8 @@ jQuery(async () => {
         pickDetailAvatarFile,
         prepareDetailAvatarUpload,
         bustDetailThumbnailCache,
+        openAvatarManager,
+        avatarPathToDisplayUrl,
         getTextOffsetFromPoint,
         flashTextareaCaretSelection,
         revealTextareaCaret,
@@ -17704,6 +17877,25 @@ jQuery(async () => {
       "qr",
     ],
   });
+
+  // 旧版 dataURL 缩略图 → 文件化存储自动迁移（后台串行，不阻塞 UI；失败项下次启动重试）
+  const _pendingThumbnailMigrations = countPendingThemeThumbnailMigrations();
+  if (_pendingThumbnailMigrations > 0) {
+    console.log(
+      `[${extensionName}] 检测到 ${_pendingThumbnailMigrations} 个旧版缩略图，开始自动迁移到文件化存储…`,
+    );
+    migrateThemeThumbnailsToFiles().then((result) => {
+      if (result && result.failed > 0) {
+        console.warn(
+          `[${extensionName}] 缩略图迁移完成：成功 ${result.migrated}，失败 ${result.failed}（可在设置页手动重试）`,
+        );
+      } else if (result && result.migrated > 0) {
+        console.log(
+          `[${extensionName}] 缩略图迁移完成：成功 ${result.migrated} 个`,
+        );
+      }
+    });
+  }
 
   console.log(`[${extensionName}] 酒馆资源管理器已加载`);
 });

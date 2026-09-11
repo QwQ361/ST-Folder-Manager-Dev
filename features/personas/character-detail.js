@@ -6,6 +6,7 @@ export function createCharacterDetailApiCore(deps) {
     window,
     document,
     FormData,
+    File,
     cfmConfirm,
     cfmToastr,
     console,
@@ -16,6 +17,8 @@ export function createCharacterDetailApiCore(deps) {
     pickDetailAvatarFile,
     prepareDetailAvatarUpload,
     bustDetailThumbnailCache,
+    openAvatarManager,
+    avatarPathToDisplayUrl,
     getTextOffsetFromPoint,
     flashTextareaCaretSelection,
     revealTextareaCaret,
@@ -25,17 +28,42 @@ export function createCharacterDetailApiCore(deps) {
     requestAnimationFrame,
   } = deps;
 
-async function replaceCharacterDetailAvatar(charRow, char) {
+// 「修改图像」→ 打开头像管理器弹窗；「应用头像」内部走 applyCharacterAvatarFromPath（含裁剪 + 上传替换）
+function replaceCharacterDetailAvatar(charRow, char) {
     if (!char?.avatar) {
       cfmToastr.error("无法获取角色头像信息");
       return;
     }
+    openAvatarManager({
+      kind: "chars",
+      targetId: char.avatar,
+      targetName: char?.name || "角色",
+    });
+  }
 
-    const file = await pickDetailAvatarFile();
-    if (!file) return;
+  // 应用头像：文件路径 → fetch blob → File → 复用现有 prepareDetailAvatarUpload（含裁剪）→ /api/characters/edit-avatar
+  async function applyCharacterAvatarFromPath(charRow, char, filePath) {
+    if (!char?.avatar || !filePath) return false;
+    const displayUrl = avatarPathToDisplayUrl(filePath);
+    if (!displayUrl) {
+      cfmToastr.error("头像路径无效");
+      return false;
+    }
+    let blob;
+    try {
+      const resp = await fetch(displayUrl, { cache: "no-cache" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      blob = await resp.blob();
+    } catch (e) {
+      console.error("[CFM] 读取头像文件失败:", e);
+      cfmToastr.error("读取头像文件失败");
+      return false;
+    }
+    const fileName = String(filePath).split("/").pop() || "avatar.png";
+    const file = new File([blob], fileName, { type: blob.type || "image/png" });
 
     const prepared = await prepareDetailAvatarUpload(file);
-    if (!prepared?.file) return;
+    if (!prepared?.file) return false;
 
     const ctx = getContext();
     const formData = new FormData();
@@ -68,6 +96,7 @@ async function replaceCharacterDetailAvatar(charRow, char) {
       }
       cfmToastr.success("已更新角色头像");
       rerenderCurrentView();
+      return true;
     } catch (e) {
       console.error("[CFM] 更新角色头像失败:", e);
       cfmToastr.error("角色头像更新失败");
@@ -75,6 +104,7 @@ async function replaceCharacterDetailAvatar(charRow, char) {
         renderCharacterDetailSubList(charRow, char);
         charRow.next(".cfm-char-detail-sublist").show();
       }
+      return false;
     }
   }
 
@@ -1169,6 +1199,7 @@ function renderCharacterDetailSubList(charRow, char) {
 
   return {
     replaceCharacterDetailAvatar,
+    applyCharacterAvatarFromPath,
     getCharacterDetailFieldValue,
     showCharacterDetailFieldPopup,
     editCharacterDetailField,

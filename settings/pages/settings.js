@@ -55,6 +55,9 @@ export function createSettingsPageCore(deps) {
     setResConfigInvertScope,
     getCurrentResourceType,
     getCfmConfigTopActiveTab,
+    // 旧版缩略图迁移（themes 页手动重试按钮）
+    countPendingThemeThumbnailMigrations,
+    migrateThemeThumbnailsToFiles,
     // 渲染依赖
     renderConfigTreeItem,
     renderButtonModeSection,
@@ -313,10 +316,10 @@ export function createSettingsPageCore(deps) {
     });
     batchSection.find("#cfm-batch-delete-btn").on("click touchend", (e) => {
       e.preventDefault();
-      setCfmDeleteMode( !getCfmDeleteMode());
+      setCfmDeleteMode(!getCfmDeleteMode());
       cfmDeleteSelected.clear();
-      setCfmDeleteCascade( false);
-      setCfmDeleteLastClickedId( null);
+      setCfmDeleteCascade(false);
+      setCfmDeleteLastClickedId(null);
       renderConfigBody();
     });
     createBody.append(batchSection);
@@ -380,17 +383,17 @@ export function createSettingsPageCore(deps) {
       });
       deleteBar.find("#cfm-cascade-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setCfmDeleteCascade( !getCfmDeleteCascade());
+        setCfmDeleteCascade(!getCfmDeleteCascade());
         renderConfigBody();
       });
       deleteBar.find("#cfm-range-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setCfmDeleteRangeMode( !getCfmDeleteRangeMode());
-        if (getCfmDeleteRangeMode()) setCfmDeleteLastClickedId( null);
+        setCfmDeleteRangeMode(!getCfmDeleteRangeMode());
+        if (getCfmDeleteRangeMode()) setCfmDeleteLastClickedId(null);
         renderConfigBody();
       });
       deleteBar.find("#cfm-invert-scope").on("change", function (e) {
-        setCfmInvertScope( $(this).val());
+        setCfmInvertScope($(this).val());
       });
       deleteBar.find("#cfm-invert-select").on("click touchend", (e) => {
         e.preventDefault();
@@ -518,6 +521,54 @@ export function createSettingsPageCore(deps) {
     // 0.7 自定义布局（共享函数）
     renderCustomLayoutSection(layoutBody);
 
+    // 0.8 旧版缩略图迁移按钮（仅主题页显示；自动迁移失败的 dataURL 可在此手动重试）
+    if (type === "themes") {
+      const pendingThumbCount = countPendingThemeThumbnailMigrations();
+      const migrateSection = $(`
+        <div class="cfm-config-section">
+          <label>旧版缩略图迁移</label>
+          <div class="cfm-create-tag-row">
+            <button id="cfm-thumb-migrate-btn" class="cfm-btn" ${pendingThumbCount === 0 ? "disabled" : ""}>
+              <i class="fa-solid fa-arrow-up-from-bracket"></i> 迁移旧版缩略图${pendingThumbCount > 0 ? `（待迁移 ${pendingThumbCount} 个）` : "（已全部迁移）"}
+            </button>
+          </div>
+          <div class="cfm-create-tag-hint">旧版缩略图以 base64 内嵌在设置中，会占用大量空间。点击可将其转存为图片文件（自动迁移失败的可在此手动重试）。</div>
+        </div>
+      `);
+      migrateSection
+        .find("#cfm-thumb-migrate-btn")
+        .on("click touchend", async (e) => {
+          e.preventDefault();
+          if (e.type === "touchend") e.preventDefault();
+          const btn = migrateSection.find("#cfm-thumb-migrate-btn");
+          const pending = countPendingThemeThumbnailMigrations();
+          if (pending === 0) {
+            cfmToastr.info("没有需要迁移的旧版缩略图");
+            return;
+          }
+          if (!cfmConfirm(`确定将 ${pending} 个旧版缩略图迁移为图片文件吗？`))
+            return;
+          btn.prop("disabled", true);
+          btn.text("迁移中…");
+          try {
+            const result = await migrateThemeThumbnailsToFiles();
+            const migrated = result?.migrated ?? 0;
+            const failed = result?.failed ?? 0;
+            if (failed > 0) {
+              cfmToastr.error(
+                `迁移完成：成功 ${migrated} 个，失败 ${failed} 个（可再次点击重试）`,
+              );
+            } else {
+              cfmToastr.success(`已迁移 ${migrated} 个旧版缩略图`);
+            }
+            renderResourceConfigBody(body.empty(), type, "settings");
+          } catch (err) {
+            cfmToastr.error("迁移失败，请稍后重试");
+          }
+        });
+      settingsBody.append(migrateSection);
+    }
+
     // 1. 创建新文件夹（支持空格分隔批量创建）
     const resSelectedHintText =
       resConfigSelectedFolderIds.size > 0
@@ -592,11 +643,11 @@ export function createSettingsPageCore(deps) {
     });
     batchSection.find("#cfm-res-batch-delete-btn").on("click touchend", (e) => {
       e.preventDefault();
-      setResConfigDeleteMode( !getResConfigDeleteMode());
+      setResConfigDeleteMode(!getResConfigDeleteMode());
       resConfigDeleteSelected.clear();
-      setResConfigDeleteCascade( false);
-      setResConfigDeleteLastClickedId( null);
-      setResConfigDeleteRangeMode( false);
+      setResConfigDeleteCascade(false);
+      setResConfigDeleteLastClickedId(null);
+      setResConfigDeleteRangeMode(false);
       renderResourceConfigBody(body.empty(), type, "create");
     });
     createBody.append(batchSection);
@@ -646,17 +697,18 @@ export function createSettingsPageCore(deps) {
       });
       deleteBar.find("#cfm-res-cascade-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setResConfigDeleteCascade( !getResConfigDeleteCascade());
+        setResConfigDeleteCascade(!getResConfigDeleteCascade());
         renderResourceConfigBody(body.empty(), type, "create");
       });
       deleteBar.find("#cfm-res-range-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setResConfigDeleteRangeMode( !getResConfigDeleteRangeMode());
-        if (getResConfigDeleteRangeMode()) setResConfigDeleteLastClickedId( null);
+        setResConfigDeleteRangeMode(!getResConfigDeleteRangeMode());
+        if (getResConfigDeleteRangeMode())
+          setResConfigDeleteLastClickedId(null);
         renderResourceConfigBody(body.empty(), type, "create");
       });
       deleteBar.find("#cfm-res-invert-scope").on("change", function () {
-        setResConfigInvertScope( $(this).val());
+        setResConfigInvertScope($(this).val());
       });
       deleteBar.find("#cfm-res-invert-select").on("click touchend", (e) => {
         e.preventDefault();
@@ -686,9 +738,9 @@ export function createSettingsPageCore(deps) {
       deleteBar.find("#cfm-res-confirm-delete").on("click touchend", (e) => {
         e.preventDefault();
         executeResourceMultiDelete(type);
-        setResConfigDeleteCascade( false);
-        setResConfigDeleteLastClickedId( null);
-        setResConfigDeleteRangeMode( false);
+        setResConfigDeleteCascade(false);
+        setResConfigDeleteLastClickedId(null);
+        setResConfigDeleteRangeMode(false);
         renderResourceConfigBody(body.empty(), type, "create");
       });
       createBody.append(deleteBar);
@@ -808,7 +860,9 @@ export function createSettingsPageCore(deps) {
               getResConfigDeleteLastClickedId()
             ) {
               const flatList = getResFlatFolderList(type);
-              const lastIdx = flatList.indexOf(getResConfigDeleteLastClickedId());
+              const lastIdx = flatList.indexOf(
+                getResConfigDeleteLastClickedId(),
+              );
               const curIdx = flatList.indexOf(folderId);
               if (lastIdx >= 0 && curIdx >= 0) {
                 const start = Math.min(lastIdx, curIdx);
@@ -829,7 +883,7 @@ export function createSettingsPageCore(deps) {
             } else {
               toggleResFolder(folderId);
             }
-            setResConfigDeleteLastClickedId( folderId);
+            setResConfigDeleteLastClickedId(folderId);
             renderResourceConfigBody(body.empty(), type, "create");
           };
           item.on("click touchend", handleResDeleteClick);
@@ -1028,11 +1082,11 @@ export function createSettingsPageCore(deps) {
       .find("#cfm-regex-batch-delete-btn")
       .on("click touchend", (e) => {
         e.preventDefault();
-        setResConfigDeleteMode( !getResConfigDeleteMode());
+        setResConfigDeleteMode(!getResConfigDeleteMode());
         resConfigDeleteSelected.clear();
-        setResConfigDeleteCascade( false);
-        setResConfigDeleteLastClickedId( null);
-        setResConfigDeleteRangeMode( false);
+        setResConfigDeleteCascade(false);
+        setResConfigDeleteLastClickedId(null);
+        setResConfigDeleteRangeMode(false);
         renderRegexConfigBody(body.empty(), "create");
       });
     createBody.append(batchSection);
@@ -1053,13 +1107,14 @@ export function createSettingsPageCore(deps) {
       });
       deleteBar.find("#cfm-regex-cascade-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setResConfigDeleteCascade( !getResConfigDeleteCascade());
+        setResConfigDeleteCascade(!getResConfigDeleteCascade());
         renderRegexConfigBody(body.empty(), "create");
       });
       deleteBar.find("#cfm-regex-range-toggle").on("click touchend", (e) => {
         e.preventDefault();
-        setResConfigDeleteRangeMode( !getResConfigDeleteRangeMode());
-        if (getResConfigDeleteRangeMode()) setResConfigDeleteLastClickedId( null);
+        setResConfigDeleteRangeMode(!getResConfigDeleteRangeMode());
+        if (getResConfigDeleteRangeMode())
+          setResConfigDeleteLastClickedId(null);
         renderRegexConfigBody(body.empty(), "create");
       });
       deleteBar.find("#cfm-regex-invert-select").on("click touchend", (e) => {
@@ -1093,7 +1148,7 @@ export function createSettingsPageCore(deps) {
           if (folderTree[fid]) removeRegexFolderConf(fid);
         }
         resConfigDeleteSelected.clear();
-        setResConfigDeleteMode( false);
+        setResConfigDeleteMode(false);
         cfmToastr.success(`已删除 ${toDelete.length} 个正则文件夹`);
         renderRegexConfigBody(body.empty(), "create");
       });
@@ -1191,7 +1246,9 @@ export function createSettingsPageCore(deps) {
               getResConfigDeleteLastClickedId()
             ) {
               const flatList = getRegexFlatConf();
-              const lastIdx = flatList.indexOf(getResConfigDeleteLastClickedId());
+              const lastIdx = flatList.indexOf(
+                getResConfigDeleteLastClickedId(),
+              );
               const curIdx = flatList.indexOf(folderId);
               if (lastIdx >= 0 && curIdx >= 0) {
                 const start = Math.min(lastIdx, curIdx);
@@ -1202,7 +1259,7 @@ export function createSettingsPageCore(deps) {
             } else {
               toggleFn(folderId);
             }
-            setResConfigDeleteLastClickedId( folderId);
+            setResConfigDeleteLastClickedId(folderId);
             renderRegexConfigBody(body.empty(), "create");
           });
         } else {

@@ -164,12 +164,29 @@ export async function executeResourceDeleteCore(deps) {
               delete deps.extensionSettings[deps.extensionName].themeNotes[
                 name
               ];
-            if (
-              deps.extensionSettings[deps.extensionName].themeThumbnails?.[name]
-            )
+            const thumbVal =
+              deps.extensionSettings[deps.extensionName].themeThumbnails?.[
+                name
+              ];
+            if (thumbVal !== undefined) {
               delete deps.extensionSettings[deps.extensionName].themeThumbnails[
                 name
               ];
+              // 清理缩略图文件本体（/user/files/、user/files/ 或 files/ 开头的相对路径）避免残留孤儿文件
+              if (
+                typeof thumbVal === "string" &&
+                (thumbVal.startsWith("user/files/") ||
+                  thumbVal.startsWith("/user/files/") ||
+                  thumbVal.startsWith("files/")) &&
+                typeof deps.deleteThemeThumbnailFile === "function"
+              ) {
+                try {
+                  await deps.deleteThemeThumbnailFile(thumbVal);
+                } catch (e) {
+                  deps.warn(`[CFM] 清理缩略图文件失败 ${thumbVal}`, e);
+                }
+              }
+            }
             if (
               deps.extensionSettings[deps.extensionName]
                 .themeBackgroundBindings?.[name]

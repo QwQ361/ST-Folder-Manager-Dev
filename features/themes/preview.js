@@ -58,6 +58,7 @@ export function createThemePreviewApi(deps) {
   // ==================== 缩略图导入 ====================
 
   // 打开文件选择器导入缩略图（FileReader → dataURL），成功后回调
+  // 注意：setThemeThumbnail 为异步（先上传文件再存路径），导入按钮需在成功后再刷新网格
   function importThumbnailImage(name, onDone) {
     const input = document.createElement("input");
     input.type = "file";
@@ -74,11 +75,13 @@ export function createThemePreviewApi(deps) {
         return;
       }
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         const dataUrl = typeof reader.result === "string" ? reader.result : "";
         if (dataUrl) {
-          setThemeThumbnail(name, dataUrl);
-          cfmToastr.success(`已设置主题「${name}」的缩略图`);
+          const saved = await setThemeThumbnail(name, dataUrl);
+          if (saved) {
+            cfmToastr.success(`已设置主题「${name}」的缩略图`);
+          }
         }
         cleanup();
         if (typeof onDone === "function") onDone(dataUrl);
@@ -90,6 +93,19 @@ export function createThemePreviewApi(deps) {
       reader.readAsDataURL(file);
     });
     input.click();
+  }
+
+  // 统一的缩略图加载失败占位回退：文件缺失（换设备/清 data 目录）时显示灰色占位
+  function bindThumbnailErrorFallback(img) {
+    img.onerror = function () {
+      this.classList.add("cfm-theme-gallery-img-broken");
+      this.src =
+        "data:image/svg+xml;charset=UTF-8," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="267"><rect width="100%" height="100%" fill="#2a2e3a"/><text x="50%" y="50%" fill="#6c7086" font-size="14" text-anchor="middle" dominant-baseline="middle">缩略图缺失</text></svg>',
+        );
+    };
+    return img;
   }
 
   // ==================== 放大预览弹窗 ====================
@@ -108,6 +124,7 @@ export function createThemePreviewApi(deps) {
         </div>
       </div>
     `);
+    bindThumbnailErrorFallback(overlay.find(".cfm-theme-gallery-zoom-img")[0]);
     document.body.appendChild(overlay[0]);
 
     const close = () => {
@@ -139,7 +156,11 @@ export function createThemePreviewApi(deps) {
         e.stopPropagation();
         importThumbnailImage(name, (newDataUrl) => {
           if (!newDataUrl) return;
-          overlay.find(".cfm-theme-gallery-zoom-img").attr("src", newDataUrl);
+          // 上传成功后重新从存储读取（此时已存为文件相对路径）
+          const stored = getThemeThumbnail(name);
+          overlay
+            .find(".cfm-theme-gallery-zoom-img")
+            .attr("src", stored || newDataUrl);
           if (typeof refreshGrid === "function") refreshGrid();
         });
       });
@@ -202,7 +223,7 @@ export function createThemePreviewApi(deps) {
             name,
             dataUrl,
           }) => `<div class="cfm-theme-gallery-item" data-name="${escapeHtml(name)}" title="${escapeHtml(name)}">
-            <div class="cfm-theme-gallery-thumb" style="background-image:url('${dataUrl}');"></div>
+            <img class="cfm-theme-gallery-thumb" src="${dataUrl}" alt="" loading="lazy">
             <div class="cfm-theme-gallery-name">${escapeHtml(name)}</div>
           </div>`,
         )
@@ -228,6 +249,10 @@ export function createThemePreviewApi(deps) {
           : "");
 
       grid.html(sectionHtml);
+      // 为网格内所有缩略图绑定加载失败占位回退（文件缺失时不显示破图）
+      grid.find(".cfm-theme-gallery-thumb").each(function () {
+        bindThumbnailErrorFallback(this);
+      });
     }
 
     function updateFilterUi() {

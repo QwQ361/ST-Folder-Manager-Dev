@@ -1771,11 +1771,16 @@
   /* 竖版缩略图：美化截图一般为手机竖屏比例 */
   aspect-ratio: 3 / 4;
   border-radius: 5px;
-  background-size: cover;
-  background-position: center;
+  object-fit: cover;
+  object-position: center;
+  display: block;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.35);
   background-color: rgba(0, 0, 0, 0.3);
+}
+/* 缩略图加载失败（文件缺失/被清理）时的灰色占位 */
+.cfm-theme-gallery-img-broken {
+  opacity: 0.6;
 }
 .cfm-theme-gallery-item .cfm-theme-gallery-name {
   font-size: 11px;
@@ -1924,6 +1929,117 @@
     right: -14px;
     width: 28px;
     height: 28px;
+  }
+}
+
+/* ========== 头像管理器弹窗（char/user 共用，复用主题画廊基础样式） ========== */
+.cfm-avatar-gallery {
+  width: min(720px, 94vw) !important;
+}
+.cfm-avatar-gallery .cfm-theme-gallery-grid {
+  max-height: 52vh;
+}
+.cfm-avatar-gallery .cfm-theme-gallery-section {
+  /* 头像为正方形比例，PC 一行 5 个 */
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+}
+.cfm-avatar-gallery .cfm-theme-gallery-item {
+  padding: 5px;
+}
+.cfm-avatar-gallery .cfm-theme-gallery-item .cfm-theme-gallery-thumb {
+  /* 头像用 1:1 正方形缩略图 */
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+}
+/* 顶部导入按钮（+），位于标题文字右侧 */
+.cfm-avatar-gallery-import {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(166, 227, 161, 0.2);
+  color: #a6e3a1;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.cfm-avatar-gallery-import:hover {
+  background: rgba(166, 227, 161, 0.4);
+}
+/* 标题 + 导入按钮组（+ 紧挨标题文字，与关闭按钮保持距离） */
+.cfm-avatar-gallery-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* tabs 栏 */
+.cfm-avatar-gallery-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cfm-avatar-gallery-tab {
+  flex: 1;
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #a6adc8;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.cfm-avatar-gallery-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.cfm-avatar-gallery-tab-active {
+  border-color: rgba(137, 180, 250, 0.5);
+  background: rgba(137, 180, 250, 0.18);
+  color: #cdd6f4;
+}
+/* 放大预览操作按钮配色 */
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply {
+  border-color: rgba(137, 180, 250, 0.5);
+  background: rgba(137, 180, 250, 0.2);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply:hover {
+  background: rgba(137, 180, 250, 0.35);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav {
+  border-color: rgba(250, 179, 135, 0.5);
+  background: rgba(250, 179, 135, 0.18);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav:hover {
+  background: rgba(250, 179, 135, 0.35);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav {
+  border-color: rgba(245, 194, 66, 0.5);
+  background: rgba(245, 194, 66, 0.18);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav:hover {
+  background: rgba(245, 194, 66, 0.35);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del {
+  border-color: rgba(243, 139, 168, 0.5);
+  background: rgba(243, 139, 168, 0.18);
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del:hover {
+  background: rgba(243, 139, 168, 0.35);
+}
+@media (max-width: 768px) {
+  .cfm-avatar-gallery .cfm-theme-gallery-section {
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: 8px;
   }
 }
 

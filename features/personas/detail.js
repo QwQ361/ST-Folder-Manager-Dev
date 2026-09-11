@@ -392,22 +392,47 @@ export function createPersonaDetailApiCore(deps) {
     deps.syncNativePersonaUI(persona.avatarId);
   }
 
-  async function replacePersonaDetailAvatar(persona) {
+  // 「修改图像」→ 打开头像管理器弹窗；「应用头像」内部走 applyAvatarToTarget（含裁剪 + 上传替换）
+  function replacePersonaDetailAvatar(persona) {
     if (!persona?.avatarId) {
       deps.cfmToastr.error("无法获取User头像信息");
       return;
     }
+    deps.openAvatarManager({
+      kind: "personas",
+      targetId: persona.avatarId,
+      targetName: persona?.name || "User",
+    });
+  }
 
-    const file = await deps.pickDetailAvatarFile();
-    if (!file) return;
+  // 应用头像：文件路径 → fetch blob → File → 复用现有 prepareDetailAvatarUpload（含裁剪）→ /api/avatars/upload
+  async function applyPersonaAvatarFromPath(avatarId, filePath) {
+    if (!avatarId || !filePath) return false;
+    const displayUrl = deps.avatarPathToDisplayUrl(filePath);
+    if (!displayUrl) {
+      deps.cfmToastr.error("头像路径无效");
+      return false;
+    }
+    let blob;
+    try {
+      const resp = await deps.fetch(displayUrl, { cache: "no-cache" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      blob = await resp.blob();
+    } catch (e) {
+      deps.console.error("[CFM] 读取头像文件失败:", e);
+      deps.cfmToastr.error("读取头像文件失败");
+      return false;
+    }
+    const fileName = String(filePath).split("/").pop() || "avatar.png";
+    const file = new deps.File([blob], fileName, { type: blob.type || "image/png" });
 
     const prepared = await deps.prepareDetailAvatarUpload(file);
-    if (!prepared?.file) return;
+    if (!prepared?.file) return false;
 
     const ctx = deps.getContext();
     const formData = new deps.FormData();
     formData.append("avatar", prepared.file);
-    formData.append("overwrite_name", persona.avatarId);
+    formData.append("overwrite_name", avatarId);
 
     let url = "/api/avatars/upload";
     if (prepared.cropData !== undefined) {
@@ -424,13 +449,15 @@ export function createPersonaDetailApiCore(deps) {
         throw new Error((await response.text()) || `HTTP ${response.status}`);
       }
 
-      await deps.bustDetailThumbnailCache("persona", persona.avatarId);
+      await deps.bustDetailThumbnailCache("persona", avatarId);
       deps.cfmToastr.success("已更新User头像");
       deps.refreshPersonaPanelView();
-      deps.syncNativePersonaUI(persona.avatarId);
+      deps.syncNativePersonaUI(avatarId);
+      return true;
     } catch (e) {
       deps.console.error("[CFM] 更新User头像失败:", e);
       deps.cfmToastr.error("User头像更新失败");
+      return false;
     }
   }
 
@@ -636,6 +663,7 @@ export function createPersonaDetailApiCore(deps) {
     showPersonaDetailFieldPopup,
     editPersonaDetailField,
     replacePersonaDetailAvatar,
+    applyPersonaAvatarFromPath,
     renderPersonaDetailSubList,
   };
 }
