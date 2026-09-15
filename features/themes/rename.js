@@ -3,16 +3,20 @@
 export function createThemeRenameModeApi(deps) {
   const {
     $,
+    applyTheme,
+    bypassCacheFetch,
     cfmToastr,
     clearAllExclusiveModes,
     collectCurrentSelection,
     console,
     escapeHtml,
     fetch,
+    getNativeThemeRuntimeReloadPromise,
     getNativeThemesArray,
     getRequestHeaders,
     getThemeNames,
     getVisibleResourceIds,
+    reloadNativeThemeRuntime,
     renderThemesView,
     showBatchProgressOverlay,
     structuredClone,
@@ -20,7 +24,6 @@ export function createThemeRenameModeApi(deps) {
   } = deps;
   const state = deps.state;
   const themes = getNativeThemesArray();
-
 
   function enterThemeRenameMode() {
     const prev = collectCurrentSelection();
@@ -55,7 +58,10 @@ export function createThemeRenameModeApi(deps) {
   }
 
   function toggleThemeRenameItem(id, shiftKey) {
-    if ((shiftKey || state.cfmThemeRenameRangeMode) && state.cfmThemeRenameLastClicked) {
+    if (
+      (shiftKey || state.cfmThemeRenameRangeMode) &&
+      state.cfmThemeRenameLastClicked
+    ) {
       const visible = getVisibleResourceIds();
       const lastIdx = visible.indexOf(state.cfmThemeRenameLastClicked);
       const curIdx = visible.indexOf(id);
@@ -66,7 +72,8 @@ export function createThemeRenameModeApi(deps) {
           state.cfmThemeRenameSelected.add(visible[i]);
       }
     } else {
-      if (state.cfmThemeRenameSelected.has(id)) state.cfmThemeRenameSelected.delete(id);
+      if (state.cfmThemeRenameSelected.has(id))
+        state.cfmThemeRenameSelected.delete(id);
       else state.cfmThemeRenameSelected.add(id);
     }
     state.cfmThemeRenameLastClicked = id;
@@ -84,7 +91,8 @@ export function createThemeRenameModeApi(deps) {
     toolbar.find(".cfm-edit-selectall").on("click touchend", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (allSel) visible.forEach((id) => state.cfmThemeRenameSelected.delete(id));
+      if (allSel)
+        visible.forEach((id) => state.cfmThemeRenameSelected.delete(id));
       else visible.forEach((id) => state.cfmThemeRenameSelected.add(id));
       renderFn();
     });
@@ -273,12 +281,13 @@ export function createThemeRenameModeApi(deps) {
     const headers = getRequestHeaders();
     let allThemes = [];
     try {
-      const resp = await fetch("/api/settings/get", {
+      // 绕过 baibaoku 缓存（rawFetch），确保拿到磁盘最新主题数据
+      const resp = await bypassCacheFetch("/api/settings/get", {
         method: "POST",
         headers,
         body: JSON.stringify({}),
       });
-      if (resp.ok) {
+      if (resp && resp.ok) {
         const data = await resp.json();
         allThemes = data.themes || [];
       }
@@ -290,6 +299,102 @@ export function createThemeRenameModeApi(deps) {
         (th) => (typeof th === "object" ? th.name : th) === name,
       );
       return t && typeof t === "object" ? structuredClone(t) : null;
+    }
+    // 同步 ST 原生内存 themes 数组（power-user.js 模块私有 let themes）：
+    // 原生 applyTheme 用 themes.find(name) 查找主题，若不同步则重命名后点击新名无法切换。
+    // 优先 reloadNativeThemeRuntime：它通过 loadPowerUserSettings 把服务器最新 data.themes
+    // 整体替换原生数组并重建 #themes 下拉框，最干净（无旧名残留）。
+    // 兜底：ST 提供 window.baibaokuHydrateTheme 按 name 追加/替换注入。
+    // renamePairs: 重命名映射数组 [{ oldName, newName }]，用于重命名了「当前正在应用的主题」
+    // 时在 reload 后重新应用新名（原生 #themes change 会同步 power_user.theme 并落盘）。
+    async function syncNativeThemeMemory(renamePairs = []) {
+      const currentThemeBeforeReload = String($("#themes").val() || "");
+      // 若已有进行中的 reload（例如重命名前刚导入/同步主题触发），必须先等它完成：
+      // 该 promise 的 fetch 是在 save/delete 之前发起的，拿到的是旧数据，
+      // 若直接复用会用它重建 #themes 下拉框 → 视图仍显示旧名（需再重命名一次才刷新）。
+      // 等旧 reload 结束后再发起新 reload，保证新 fetch 在落盘之后、拿到最新主题列表。
+      try {
+        const pendingReload = getNativeThemeRuntimeReloadPromise?.();
+        if (pendingReload) {
+          await pendingReload;
+        }
+      } catch (e) {
+        console.warn("[CFM] 等待进行中的主题重载完成失败", e);
+      }
+      if (typeof reloadNativeThemeRuntime === "function") {
+        try {
+          await reloadNativeThemeRuntime();
+        } catch (e) {
+          console.warn("[CFM] 重载原生主题运行时失败，尝试 hydrate 兜底", e);
+          await hydrateNativeThemeMemoryFallback();
+        }
+      } else {
+        await hydrateNativeThemeMemoryFallback();
+      }
+      // reload 会重建下拉框并清空选中值；若当前应用的主题恰被重命名，
+      // 重新应用新名，让原生 change 链同步 power_user.theme 与磁盘。
+      if (typeof applyTheme === "function") {
+        const pair = renamePairs.find(
+          (p) => p && p.oldName === currentThemeBeforeReload,
+        );
+        if (pair && pair.newName) {
+          try {
+            applyTheme(pair.newName);
+          } catch (e) {
+            console.warn("[CFM] 重新应用重命名后的当前主题失败", e);
+          }
+        }
+      }
+    }
+    async function hydrateNativeThemeMemoryFallback() {
+      try {
+        // 绕过 baibaoku 缓存（rawFetch），避免 watch 竞态返回旧主题列表
+        const all = await bypassCacheFetch("/api/settings/get", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        });
+        if (!all || !all.ok) return;
+        const data = await all.json();
+        const arr = data.themes || [];
+        // 用最新主题列表重建 #themes 下拉框（清空旧名 option，避免视图残留旧名）
+        const themeSelect = $("#themes");
+        if (themeSelect.length) {
+          const placeholderOptions = themeSelect
+            .find("option")
+            .filter(function () {
+              return String($(this).val() ?? "") === "";
+            })
+            .map(function () {
+              return $(this).clone();
+            })
+            .get();
+          themeSelect.empty();
+          if (placeholderOptions.length > 0) {
+            themeSelect.append(placeholderOptions);
+          }
+          for (const t of arr) {
+            if (t && typeof t === "object" && t.name) {
+              themeSelect.append(
+                $("<option></option>").val(t.name).text(t.name),
+              );
+            }
+          }
+        }
+        // 同步 ST 原生内存 themes 数组（追加/替换注入）
+        if (
+          typeof window !== "undefined" &&
+          typeof window.baibaokuHydrateTheme === "function"
+        ) {
+          for (const t of arr) {
+            if (t && typeof t === "object" && t.name) {
+              window.baibaokuHydrateTheme(t);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[CFM] 同步原生主题内存失败", e);
+      }
     }
     if (result.mode === "single") {
       const oldName = names[0],
@@ -337,6 +442,7 @@ export function createThemeRenameModeApi(deps) {
             themes[idx].name = newName;
         }
         updateSettingsAfterRename("themes", oldName, newName);
+        await syncNativeThemeMemory([{ oldName, newName }]);
         cfmToastr.success(`已将「${oldName}」重命名为「${newName}」`);
       } catch (e) {
         console.error("[CFM] 主题重命名失败", e);
@@ -358,6 +464,7 @@ export function createThemeRenameModeApi(deps) {
         names.length,
       );
       let processed = 0;
+      const renamePairs = [];
       for (const oldName of names) {
         let newName;
         if (action === "add-prefix") newName = text + oldName;
@@ -426,6 +533,7 @@ export function createThemeRenameModeApi(deps) {
           updateSettingsAfterRename("themes", oldName, newName);
           existingThemes.delete(oldName);
           existingThemes.add(newName);
+          renamePairs.push({ oldName, newName });
           success++;
         } catch (e) {
           console.warn(`[CFM] 重命名主题 ${oldName} 失败`, e);
@@ -434,6 +542,7 @@ export function createThemeRenameModeApi(deps) {
         processed++;
         batchProgress.update(processed);
       }
+      await syncNativeThemeMemory(renamePairs);
       let msg = `已重命名 ${success} 个主题`;
       if (skipped > 0) msg += `，${skipped} 个因前/后缀不匹配或名称冲突而跳过`;
       if (failed > 0) msg += `，${failed} 个失败`;
@@ -458,6 +567,7 @@ export function createThemeRenameModeApi(deps) {
         entries.length,
       );
       let processed = 0;
+      const renamePairs = [];
       for (const [oldName, newName] of entries) {
         if (newName === oldName) {
           skipped++;
@@ -508,6 +618,7 @@ export function createThemeRenameModeApi(deps) {
           updateSettingsAfterRename("themes", oldName, newName);
           existingThemes.delete(oldName);
           existingThemes.add(newName);
+          renamePairs.push({ oldName, newName });
           success++;
         } catch (e) {
           console.warn(`[CFM] 重命名主题 ${oldName} 失败`, e);
@@ -516,6 +627,7 @@ export function createThemeRenameModeApi(deps) {
         processed++;
         batchProgress.update(processed);
       }
+      await syncNativeThemeMemory(renamePairs);
       let msg = `已重命名 ${success} 个主题`;
       const totalSkipped = names.length - entries.length + skipped;
       if (totalSkipped > 0) msg += `，${totalSkipped} 个未修改（留空或跳过）`;
@@ -526,8 +638,6 @@ export function createThemeRenameModeApi(deps) {
     }
     renderThemesView();
   }
-
-
 
   return {
     enterThemeRenameMode,

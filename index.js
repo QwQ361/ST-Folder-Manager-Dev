@@ -341,6 +341,7 @@ import {
   saveWiActivePresetCore,
 } from "./features/worldinfo/presets.js";
 import { createWorldInfoRenameApiCore } from "./features/worldinfo/rename.js";
+import { bypassCacheFetch as bypassCacheFetchCore } from "./integrations/baibaoku-compat.js";
 import {
   getButtonModeCore,
   initButtonCore,
@@ -429,6 +430,7 @@ jQuery(async () => {
     return {
       $,
       backupBridgeVersion: BACKUP_BRIDGE_VERSION,
+      bypassCacheFetch: bypassCacheFetchCore,
       config,
       extensionName,
       extensionSettings: extension_settings,
@@ -1029,8 +1031,9 @@ jQuery(async () => {
     return getWorldInfoNamesCore(forceRefresh, {
       $,
       detachedOptions: _worldInfoDetachedOptions,
+      // 绕过 baibaoku fast-get 缓存竞态，确保世界书列表最新
       fetchSettings: () =>
-        fetch("/api/settings/get", {
+        bypassCacheFetchCore("/api/settings/get", {
           method: "POST",
           headers: getContext().getRequestHeaders(),
           body: JSON.stringify({}),
@@ -1073,8 +1076,11 @@ jQuery(async () => {
     return reloadNativeThemeRuntimeCore({
       console,
       document,
+      // 绕过 baibaoku 的 fast-get 服务端 payload 缓存竞态：
+      // 重命名主题后立即 reload 时，baibaoku 依赖异步 watch 事件标记 payload dirty，
+      // 若 watch 尚未触发会返回旧主题列表。rawFetch 直达 ST 原生端点，保证最新。
       fetchSettings: () =>
-        fetch("/api/settings/get", {
+        bypassCacheFetchCore("/api/settings/get", {
           method: "POST",
           headers: getContext().getRequestHeaders(),
           body: JSON.stringify({}),
@@ -3550,6 +3556,7 @@ jQuery(async () => {
         getResourceGroups,
         renderPersonasView,
         showBatchProgressOverlay,
+        bypassCacheFetch: bypassCacheFetchCore,
       });
     }
     return _resourceExportApi;
@@ -4235,17 +4242,23 @@ jQuery(async () => {
   function getThemeRenameDeps() {
     return {
       $,
+      applyTheme,
       cfmToastr,
       clearAllExclusiveModes,
       collectCurrentSelection,
       console,
       escapeHtml,
       fetch: window.fetch.bind(window),
+      // 绕过 baibaoku 缓存读取 /api/settings/get（mutation 请求仍走 window.fetch）
+      bypassCacheFetch: bypassCacheFetchCore,
+      getNativeThemeRuntimeReloadPromise: () =>
+        _nativeThemeRuntimeReloadPromise,
       getNativeThemesArray: () =>
         typeof themes !== "undefined" ? themes : null,
       getRequestHeaders: () => getContext().getRequestHeaders(),
       getThemeNames,
       getVisibleResourceIds,
+      reloadNativeThemeRuntime,
       renderThemesView,
       showBatchProgressOverlay,
       structuredClone,
@@ -7867,13 +7880,14 @@ jQuery(async () => {
       // 方案 1：尝试用 loadOpenAISettings 重载预设（最可靠）
       let reloaded = false;
       try {
-        const resp = await fetch("/api/settings/get", {
+        // 绕过 baibaoku fast-get 缓存竞态，确保读取最新 settings
+        const resp = await bypassCacheFetchCore("/api/settings/get", {
           method: "POST",
           headers: getContext().getRequestHeaders(),
           body: JSON.stringify({}),
           cache: "no-cache",
         });
-        if (resp.ok) {
+        if (resp && resp.ok) {
           const data = await resp.json();
           const settings =
             data && data.settings ? JSON.parse(data.settings) : null;

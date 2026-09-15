@@ -712,13 +712,20 @@ export async function readBackupBridgeResource(request = {}, deps = {}) {
         throw new Error(`找不到预设: ${item.displayName}`);
       }
     } else if (item.resourceType === "themes") {
-      const resp = await fetch("/api/settings/get", {
+      // 绕过 baibaoku fast-get 缓存竞态（rawFetch 直达 ST 原生端点），确保读取最新主题数据
+      const themeFetch =
+        typeof deps.bypassCacheFetch === "function"
+          ? deps.bypassCacheFetch
+          : fetch;
+      const resp = await themeFetch("/api/settings/get", {
         method: "POST",
         headers: deps.getContext().getRequestHeaders(),
         body: JSON.stringify({}),
       });
-      if (!resp.ok) {
-        throw new Error(`获取主题数据失败: HTTP ${resp.status}`);
+      if (!resp || !resp.ok) {
+        throw new Error(
+          `获取主题数据失败: HTTP ${resp ? resp.status : "无响应"}`,
+        );
       }
       const settingsData = await resp.json();
       const allThemes = Array.isArray(settingsData?.themes)

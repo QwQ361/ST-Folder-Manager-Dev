@@ -60,6 +60,7 @@ export function createResourceExportApi(deps) {
     showBatchProgressOverlay,
     getResourceGroups,
     renderPersonasView,
+    bypassCacheFetch = fetch,
   } = deps;
 
   // 角色卡导出
@@ -371,12 +372,13 @@ export function createResourceExportApi(deps) {
     // 通过 POST /api/settings/get 获取完整主题数据（themes 变量是 power-user.js 模块私有的，无法直接访问）
     let allThemes = [];
     try {
-      const resp = await fetch("/api/settings/get", {
+      // 绕过 baibaoku fast-get 缓存竞态（rawFetch 直达 ST 原生端点），确保导出最新主题数据
+      const resp = await bypassCacheFetch("/api/settings/get", {
         method: "POST",
         headers,
         body: JSON.stringify({}),
       });
-      if (resp.ok) {
+      if (resp && resp.ok) {
         const data = await resp.json();
         allThemes = data.themes || [];
       }
