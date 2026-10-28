@@ -10051,10 +10051,14 @@ jQuery(async () => {
     } else if (defaultPage !== "last") {
       initialTab = defaultPage;
     }
-    // 如果选中的标签页被隐藏了，回退到第一个可见标签页
+    // 如果选中的标签页被隐藏了（既不在可见标签页，也不在标签页收纳菜单），回退到第一个可见标签页
     const visibleTabIds = getVisibleTabs();
-    if (!visibleTabIds.includes(initialTab)) {
-      initialTab = visibleTabIds[0] || "chars";
+    const menuTabIds = getMenuTabs();
+    if (
+      !visibleTabIds.includes(initialTab) &&
+      !menuTabIds.includes(initialTab)
+    ) {
+      initialTab = visibleTabIds[0] || menuTabIds[0] || "chars";
     }
     currentResourceType = initialTab;
     selectedTreeNode = null;

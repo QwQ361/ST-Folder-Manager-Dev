@@ -28,9 +28,8 @@ export function buildMainPopupShell(deps) {
   }
   const visibleTabs = getVisibleTabs();
   const menuTabs = getMenuTabs();
-  const activeVisibleTab = visibleTabs.includes(initialTab)
-    ? initialTab
-    : visibleTabs[0] || menuTabs[0] || "chars";
+  // 仅当初始标签位于可见标签栏时高亮；若在收纳菜单中，可见标签均不高亮（由菜单项高亮）
+  const activeVisibleTab = visibleTabs.includes(initialTab) ? initialTab : null;
   const activeMenuTab = menuTabs.includes(initialTab);
   const popup = $(`
             <div id="cfm-popup">
