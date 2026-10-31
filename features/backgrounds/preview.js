@@ -23,12 +23,20 @@ export function createBgPreviewApi(deps) {
     return img;
   }
 
+  // 模块级：当前打开的预览弹窗（单例）
+  let currentOverlay = null;
+
   /**
    * 打开单个背景的放大预览弹窗
    * @param {string} bgfile 背景文件名（含扩展名，如 bg1.jpg）
    */
   function openBgPreview(bgfile) {
     if (!bgfile) return;
+    // 单例：若已有预览弹窗（未关闭时再次点击其他背景），先关闭旧的再打开，避免叠加
+    if (currentOverlay) {
+      currentOverlay.remove();
+      currentOverlay = null;
+    }
     const displayName = getBackgroundDisplayName(bgfile);
     const imgUrl = getBackgroundThumbnailUrl
       ? getBackgroundThumbnailUrl(bgfile)
@@ -72,8 +80,10 @@ export function createBgPreviewApi(deps) {
     const originalRemove = overlay.remove.bind(overlay);
     overlay.remove = function () {
       $(document).off("keydown", onKeydown);
+      if (currentOverlay === this) currentOverlay = null;
       return originalRemove();
     };
+    currentOverlay = overlay;
   }
 
   return { openBgPreview };

@@ -1938,6 +1938,11 @@
 .cfm-bg-preview-overlay {
   position: fixed;
   inset: 0;
+  /* SillyTavern 全局样式给 html 设置了 transform: translateZ(0) + perspective，
+     会使 fixed 定位的包含块变为 html（移动端 html 高度解析为 0），
+     因此必须用 vh/vw 显式撑满视口（vh/vw 始终基于视口计算，不受影响） */
+  width: 100vw;
+  height: 100vh;
   z-index: 100020;
   background-color: rgba(0, 0, 0, 0.8);
   display: flex;
