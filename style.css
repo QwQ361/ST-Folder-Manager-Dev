@@ -1934,6 +1934,86 @@
   }
 }
 
+/* ========== 背景图放大预览弹窗 ========== */
+.cfm-bg-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100020;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  animation: cfm-fade-in 0.15s ease;
+}
+.cfm-bg-preview-box {
+  position: relative;
+  max-width: 88vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.cfm-bg-preview-img {
+  max-width: 88vw;
+  max-height: calc(88vh - 56px);
+  border-radius: 6px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+  object-fit: contain;
+  cursor: zoom-out;
+}
+.cfm-bg-preview-img.cfm-bg-preview-img-broken {
+  width: min(640px, 80vw);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+.cfm-bg-preview-name {
+  max-width: 80vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #cdd6f4;
+  font-size: 13px;
+  opacity: 0.9;
+  padding: 4px 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 6px;
+}
+.cfm-bg-preview-close {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  z-index: 2;
+  transition: background 0.15s;
+}
+.cfm-bg-preview-close:hover {
+  background-color: rgba(0, 0, 0, 0.85);
+}
+@media (max-width: 768px) {
+  .cfm-bg-preview-close {
+    top: -14px;
+    right: -14px;
+    width: 28px;
+    height: 28px;
+  }
+  .cfm-bg-preview-img {
+    max-height: calc(88vh - 50px);
+  }
+}
+
 /* ========== 头像管理器弹窗（char/user 共用，复用主题画廊基础样式） ========== */
 .cfm-avatar-gallery {
   width: min(720px, 94vw) !important;

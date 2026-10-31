@@ -50,6 +50,7 @@ import {
   getBgOrientationCore,
   setBgOrientationCore,
 } from "./features/backgrounds/orientation.js";
+import { createBgPreviewApi } from "./features/backgrounds/preview.js";
 import {
   enterBgRenameModeCore,
   executeBgRenameCore,
@@ -4231,6 +4232,26 @@ jQuery(async () => {
   // 执行背景备注编辑
   async function executeBgNoteEdit(names) {
     return getBgNotePopupApi().executeBgNoteEdit(names);
+  }
+
+  // ==================== 背景预览弹窗（已模块化到 features/backgrounds/preview.js） ====================
+  let _bgPreviewApi = null;
+  function getBgPreviewApi() {
+    if (!_bgPreviewApi) {
+      _bgPreviewApi = createBgPreviewApi({
+        $,
+        document,
+        escapeHtml,
+        getBackgroundDisplayName,
+        getBackgroundThumbnailUrl,
+      });
+    }
+    return _bgPreviewApi;
+  }
+
+  // 打开单个背景的放大预览弹窗
+  function openBgPreview(bgfile) {
+    return getBgPreviewApi().openBgPreview(bgfile);
   }
 
   // ==================== 主题重命名模式 ====================
@@ -12481,6 +12502,7 @@ jQuery(async () => {
       getVisibleResourceIds,
       handleFolderTargetMove,
       isResFavorite,
+      openBgPreview,
       pcDragEnd,
       pcDragStart,
       pcGetDropData,
