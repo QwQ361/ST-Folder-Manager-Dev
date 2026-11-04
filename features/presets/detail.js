@@ -6,9 +6,11 @@ export function createPresetDetailApiCore(deps) {
     const presetKey = String(presetName || "");
     if (!presetKey) return [];
     const store =
-      deps.extensionSettings[deps.extensionName].presetDetailActivePresets || {};
+      deps.extensionSettings[deps.extensionName].presetDetailActivePresets ||
+      {};
     if (!Array.isArray(store[presetKey])) store[presetKey] = [];
-    deps.extensionSettings[deps.extensionName].presetDetailActivePresets = store;
+    deps.extensionSettings[deps.extensionName].presetDetailActivePresets =
+      store;
     return store[presetKey];
   }
 
@@ -17,9 +19,12 @@ export function createPresetDetailApiCore(deps) {
     const presetKey = String(presetName || "");
     if (!presetKey) return [];
     const store =
-      deps.extensionSettings[deps.extensionName]._presetDetailAppliedPresetIndices || {};
+      deps.extensionSettings[deps.extensionName]
+        ._presetDetailAppliedPresetIndices || {};
     if (!Array.isArray(store[presetKey])) store[presetKey] = [];
-    deps.extensionSettings[deps.extensionName]._presetDetailAppliedPresetIndices = store;
+    deps.extensionSettings[
+      deps.extensionName
+    ]._presetDetailAppliedPresetIndices = store;
     return store[presetKey];
   }
 
@@ -28,7 +33,8 @@ export function createPresetDetailApiCore(deps) {
     const presetKey = String(presetName || "");
     if (!presetKey) return;
     const store =
-      deps.extensionSettings[deps.extensionName]._presetDetailAppliedPresetIndices || {};
+      deps.extensionSettings[deps.extensionName]
+        ._presetDetailAppliedPresetIndices || {};
     store[presetKey] = Array.from(
       new Set(
         (Array.isArray(indices) ? indices : []).filter(
@@ -36,7 +42,9 @@ export function createPresetDetailApiCore(deps) {
         ),
       ),
     );
-    deps.extensionSettings[deps.extensionName]._presetDetailAppliedPresetIndices = store;
+    deps.extensionSettings[
+      deps.extensionName
+    ]._presetDetailAppliedPresetIndices = store;
     deps.saveSettingsDebounced();
   }
 
@@ -57,6 +65,33 @@ export function createPresetDetailApiCore(deps) {
         .map((field) => String(field.key || ""))
         .filter(Boolean),
     );
+  }
+
+  /**
+   * 清洗柏宝箱分组供电快照：只保留 `{ [groupId]: { name, enabled } }` 形状。
+   *
+   * 该字段是可选附加信息（CFM 自身不依赖它工作），因此任何异常形状一律
+   * 收敛为 null，避免污染 settings 与后续保存流程。
+   *
+   * @param {*} value
+   * @returns {{ [groupId: string]: { name: string, enabled: boolean } }|null}
+   */
+  function normalizeBaibaiGroupSnapshot(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    const snapshot = {};
+    let count = 0;
+    for (const [groupIdRaw, meta] of Object.entries(value)) {
+      const groupId = String(groupIdRaw || "").trim();
+      if (!groupId) continue;
+      snapshot[groupId] = {
+        name: typeof meta?.name === "string" ? meta.name : "",
+        enabled: meta?.enabled !== false,
+      };
+      count++;
+    }
+    return count > 0 ? snapshot : null;
   }
 
   function sanitizePresetDetailGroupState(
@@ -86,6 +121,19 @@ export function createPresetDetailApiCore(deps) {
         preset.fields = nextFields;
         presetChanged = true;
       }
+      // 柏宝箱分组快照：存在时清洗形状，畸形数据直接剔除（避免把坏数据写回）。
+      if (Object.prototype.hasOwnProperty.call(preset, "baibaiGroups")) {
+        const normalized = normalizeBaibaiGroupSnapshot(preset.baibaiGroups);
+        if (normalized === null) {
+          delete preset.baibaiGroups;
+          presetChanged = true;
+        } else if (
+          JSON.stringify(normalized) !== JSON.stringify(preset.baibaiGroups)
+        ) {
+          preset.baibaiGroups = normalized;
+          presetChanged = true;
+        }
+      }
       presetIdx++;
     }
     const applied = getPresetDetailAppliedPresetIndices(presetName);
@@ -110,14 +158,42 @@ export function createPresetDetailApiCore(deps) {
     };
   }
 
-  function savePresetDetailActivePreset(presetName, name, fieldKeys) {
+  /**
+   * 保存/覆盖一个激活分组。
+   *
+   * @param {string} presetName
+   * @param {string} name 分组名
+   * @param {string[]} fieldKeys 包含的条目字段键（`prompts.<identifier>`）
+   * @param {{ [groupId: string]: { name: string, enabled: boolean } }|null} [baibaiGroups]
+   *        柏宝箱分组供电快照。传 undefined 表示「不改动已有快照」，
+   *        传 null 表示「清空该分组的柏宝箱快照」。
+   */
+  function savePresetDetailActivePreset(
+    presetName,
+    name,
+    fieldKeys,
+    baibaiGroups,
+  ) {
     const presets = getPresetDetailActivePresets(presetName);
     const normalizedKeys = normalizePresetDetailFieldKeys(fieldKeys);
+    const snapshot =
+      typeof baibaiGroups === "undefined"
+        ? undefined
+        : normalizeBaibaiGroupSnapshot(baibaiGroups);
     const existing = presets.find((p) => p.name === name);
     if (existing) {
       existing.fields = normalizedKeys;
+      if (typeof snapshot !== "undefined") {
+        if (snapshot === null) {
+          delete existing.baibaiGroups;
+        } else {
+          existing.baibaiGroups = snapshot;
+        }
+      }
     } else {
-      presets.push({ name, fields: normalizedKeys });
+      const nextPreset = { name, fields: normalizedKeys };
+      if (snapshot) nextPreset.baibaiGroups = snapshot;
+      presets.push(nextPreset);
     }
     deps.saveSettingsDebounced();
   }
@@ -227,7 +303,45 @@ export function createPresetDetailApiCore(deps) {
     });
   }
 
-function getPresetDataForDetail(pm, name) {
+  /**
+   * 判断一个值是否为「可参与合并的普通对象」。
+   * @param {*} value
+   * @returns {boolean}
+   */
+  function isPlainMergeableObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  /**
+   * 把 source 深度合并进 target（source 优先），用于合并 extensions 等结构化数据。
+   *
+   * 语义：对象递归合并、数组与标量直接以 source 覆盖；target 中 source 未覆盖的
+   * 键会被保留，避免丢失本插件自己写入的字段（如 regex_scripts）。
+   *
+   * @param {*} target
+   * @param {*} source
+   * @returns {*}
+   */
+  function mergeDeepOverride(target, source) {
+    if (!isPlainMergeableObject(source)) return target;
+    const base = isPlainMergeableObject(target) ? target : {};
+    const result = { ...base };
+    for (const [key, sourceValue] of Object.entries(source)) {
+      if (
+        isPlainMergeableObject(sourceValue) &&
+        isPlainMergeableObject(base[key])
+      ) {
+        result[key] = mergeDeepOverride(base[key], sourceValue);
+      } else if (typeof sourceValue === "undefined") {
+        // 跳过 undefined，避免误删已有字段
+      } else {
+        result[key] = sourceValue;
+      }
+    }
+    return result;
+  }
+
+  function getPresetDataForDetail(pm, name) {
     const data = deps.getPresetDataForRename(pm, name);
     if (!data) return data;
 
@@ -251,6 +365,16 @@ function getPresetDataForDetail(pm, name) {
           if (Array.isArray(settings.prompts)) {
             data.prompts = deps.structuredClone(settings.prompts);
           }
+          // 同步 extensions：第三方插件（如柏宝箱的分组）把权威数据写在运行时
+          // oai_settings.extensions 上，而预设缓存 presets[idx] 可能尚未包含最新内容。
+          // 若此处不从运行时补齐，后续保存会把「缺少分组」的快照写回磁盘，
+          // 导致柏宝箱的预设条目分组永久丢失。
+          if (isPlainMergeableObject(settings.extensions)) {
+            data.extensions = mergeDeepOverride(
+              deps.structuredClone(data.extensions || {}),
+              deps.structuredClone(settings.extensions),
+            );
+          }
         }
       }
     } catch (e) {
@@ -263,9 +387,7 @@ function getPresetDataForDetail(pm, name) {
     return data;
   }
 
-
-
-function getPresetDetailFields(preset) {
+  function getPresetDetailFields(preset) {
     if (!preset || typeof preset !== "object") return [];
 
     const promptMap = deps.getPresetPromptMap(preset);
@@ -328,9 +450,7 @@ function getPresetDetailFields(preset) {
     return fields;
   }
 
-
-
-function setPresetPromptEnabled(presetData, promptKey, enabled) {
+  function setPresetPromptEnabled(presetData, promptKey, enabled) {
     if (!presetData || !promptKey) return;
 
     deps.sanitizePresetPromptStructure(presetData);
@@ -360,9 +480,7 @@ function setPresetPromptEnabled(presetData, promptKey, enabled) {
     });
   }
 
-
-
-async function togglePresetDetailFieldActivation(
+  async function togglePresetDetailFieldActivation(
     presetName,
     fieldKey,
     activate,
@@ -393,9 +511,7 @@ async function togglePresetDetailFieldActivation(
     }
   }
 
-
-
-function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
+  function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
     const normalizedFields = Array.isArray(fields) ? fields : [];
     const visibleKeys = normalizedFields
       .map((field) => String(field?.key || ""))
@@ -415,10 +531,13 @@ function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
         const start = Math.min(lastIdx, curIdx);
         const end = Math.max(lastIdx, curIdx);
         for (let i = start; i <= end; i++) {
-          if (visibleKeys[i]) deps.state.cfmPresetDetailBatchSelected.add(visibleKeys[i]);
+          if (visibleKeys[i])
+            deps.state.cfmPresetDetailBatchSelected.add(visibleKeys[i]);
         }
       }
-    } else if (deps.state.cfmPresetDetailBatchSelected.has(normalizedFieldKey)) {
+    } else if (
+      deps.state.cfmPresetDetailBatchSelected.has(normalizedFieldKey)
+    ) {
       deps.state.cfmPresetDetailBatchSelected.delete(normalizedFieldKey);
     } else {
       deps.state.cfmPresetDetailBatchSelected.add(normalizedFieldKey);
@@ -427,9 +546,7 @@ function togglePresetDetailBatchItem(fieldKey, shiftKey, fields) {
     deps.state.cfmPresetDetailBatchLastClicked = normalizedFieldKey;
   }
 
-
-
-async function applyPresetDetailBatchActivation(
+  async function applyPresetDetailBatchActivation(
     presetName,
     fieldKeys,
     activate,
@@ -485,9 +602,7 @@ async function applyPresetDetailBatchActivation(
     }
   }
 
-
-
-async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
+  async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
     const normalizedOrderedFieldKeys = Array.isArray(orderedFieldKeys)
       ? orderedFieldKeys
           .map((item) => String(item || "").trim())
@@ -580,7 +695,10 @@ async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
         orderItem && typeof orderItem === "object"
           ? deps.structuredClone(orderItem)
           : { identifier: promptId };
-      orderItem = deps.normalizePresetPromptOrderItemKeyFields(orderItem, promptId);
+      orderItem = deps.normalizePresetPromptOrderItemKeyFields(
+        orderItem,
+        promptId,
+      );
 
       const promptValue = promptMap.get(promptId);
       if (
@@ -614,9 +732,7 @@ async function savePresetDetailPromptOrder(presetName, orderedFieldKeys) {
     }
   }
 
-
-
-async function reorderPresetDetailField(
+  async function reorderPresetDetailField(
     presetName,
     sourceFieldKey,
     targetFieldKey,
@@ -652,9 +768,7 @@ async function reorderPresetDetailField(
     return savePresetDetailPromptOrder(presetName, orderedFieldKeys);
   }
 
-
-
-async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
+  async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
     const normalizedFieldKey = String(fieldKey || "").trim();
     const normalizedStep = Number(step);
     if (
@@ -689,9 +803,7 @@ async function movePresetDetailFieldByStep(presetName, fieldKey, step) {
     );
   }
 
-
-
-async function duplicatePresetDetailField(presetName, fieldKey) {
+  async function duplicatePresetDetailField(presetName, fieldKey) {
     if (!String(fieldKey || "").startsWith("prompts.")) return;
     const promptKey = fieldKey.slice("prompts.".length);
 
@@ -780,7 +892,10 @@ async function duplicatePresetDetailField(presetName, fieldKey) {
       duplicatedPrompt.name = newPromptLabel;
     }
 
-    const sourcePromptIndex = deps.getPresetPromptIndexByKey(presetData, promptKey);
+    const sourcePromptIndex = deps.getPresetPromptIndexByKey(
+      presetData,
+      promptKey,
+    );
     const promptList = deps.ensurePresetPromptList(presetData);
     if (sourcePromptIndex === -1) {
       promptList.push(duplicatedPrompt);
@@ -843,9 +958,11 @@ async function duplicatePresetDetailField(presetName, fieldKey) {
     }
   }
 
-
-
-async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = false) {
+  async function batchDeletePresetDetailFields(
+    presetName,
+    fieldKeys,
+    silent = false,
+  ) {
     const normalizedKeys = Array.from(
       new Set(
         (Array.isArray(fieldKeys) ? fieldKeys : [])
@@ -879,14 +996,18 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
     const blockedCount = normalizedKeys.length - deletableKeys.length;
 
     if (!deletableKeys.length) {
-      deps.cfmToastr.warning("所选条目均为内置条目（来自角色卡/世界书），不可删除");
+      deps.cfmToastr.warning(
+        "所选条目均为内置条目（来自角色卡/世界书），不可删除",
+      );
       return 0;
     }
 
     if (!silent) {
       const confirmed = deps.cfmConfirm(
         `确定要删除选中的 ${deletableKeys.length} 个预设条目吗？\n此操作不可撤销！${
-          blockedCount > 0 ? `\n（另有 ${blockedCount} 个内置条目不可删除，已跳过）` : ""
+          blockedCount > 0
+            ? `\n（另有 ${blockedCount} 个内置条目不可删除，已跳过）`
+            : ""
         }`,
       );
       if (!confirmed) return 0;
@@ -902,7 +1023,9 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
     }
 
     const deletableKeySet = new Set(deletableKeys);
-    for (const container of deps.ensurePresetPromptOrderContainers(presetData)) {
+    for (const container of deps.ensurePresetPromptOrderContainers(
+      presetData,
+    )) {
       if (!Array.isArray(container?.order)) continue;
       container.order = container.order.filter((item) => {
         const identifier = deps.getPresetPromptOrderIdentifier(item);
@@ -930,7 +1053,11 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
     }
   }
 
-  async function movePresetDetailFieldsToIndex(presetName, fieldKeys, targetIndex) {
+  async function movePresetDetailFieldsToIndex(
+    presetName,
+    fieldKeys,
+    targetIndex,
+  ) {
     const normalizedKeys = Array.from(
       new Set(
         (Array.isArray(fieldKeys) ? fieldKeys : [])
@@ -986,7 +1113,11 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
       Math.min(normalizedTargetIndex, remainingKeys.length),
     );
     const nextOrderedFieldKeys = Array.from(remainingKeys);
-    nextOrderedFieldKeys.splice(clampedTargetIndex, 0, ...selectedInVisibleOrder);
+    nextOrderedFieldKeys.splice(
+      clampedTargetIndex,
+      0,
+      ...selectedInVisibleOrder,
+    );
 
     const orderChanged =
       currentOrderedFieldKeys.length === nextOrderedFieldKeys.length &&
@@ -998,7 +1129,16 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
       return false;
     }
 
-    return savePresetDetailPromptOrder(presetName, nextOrderedFieldKeys);
+    const moved = await savePresetDetailPromptOrder(
+      presetName,
+      nextOrderedFieldKeys,
+    );
+    if (moved) {
+      deps.cfmToastr.success(
+        `已移动 ${selectedInVisibleOrder.length} 个预设条目到新位置`,
+      );
+    }
+    return moved;
   }
 
   async function deletePresetDetailField(presetName, fieldKey) {
@@ -1039,7 +1179,9 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
       promptList.splice(promptIndex, 1);
     }
 
-    for (const container of deps.ensurePresetPromptOrderContainers(presetData)) {
+    for (const container of deps.ensurePresetPromptOrderContainers(
+      presetData,
+    )) {
       if (!Array.isArray(container?.order)) continue;
       container.order = container.order.filter(
         (item) => deps.getPresetPromptOrderIdentifier(item) !== promptKey,
@@ -1061,14 +1203,13 @@ async function batchDeletePresetDetailFields(presetName, fieldKeys, silent = fal
     }
   }
 
-
-
   return {
     getPresetDetailActivePresets,
     getPresetDetailAppliedPresetIndices,
     setPresetDetailAppliedPresetIndices,
     normalizePresetDetailFieldKeys,
     getAvailablePresetDetailFieldKeySet,
+    normalizeBaibaiGroupSnapshot,
     sanitizePresetDetailGroupState,
     savePresetDetailActivePreset,
     deletePresetDetailActivePreset,

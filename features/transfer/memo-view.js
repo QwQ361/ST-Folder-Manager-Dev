@@ -3,7 +3,8 @@
 // 数据层在 memo.js，互通执行在 entries.js。
 // 依赖注入：$、escapeHtml、cfmToastr、memoApi、entriesApi（executeEntryTransfer、
 // openEntryTransferTargetDialog、openEntryTransferInsertDialog、transferToPreset、
-// transferToWorldInfo）、renderHeaderMemoBadge、revealEntryTransferTargetResource。
+// transferToWorldInfo、showBatchProgressOverlay）、renderHeaderMemoBadge、
+// revealEntryTransferTargetResource。
 
 export function createEntryTransferMemoViewApiCore(deps) {
   const { $, escapeHtml, cfmToastr, memoApi, entriesApi } = deps;
@@ -93,8 +94,7 @@ export function createEntryTransferMemoViewApiCore(deps) {
     function checkMemoGroupFreshness(group, card) {
       const updateBtn = card.find(".cfm-entry-memo-card-update");
       if (!updateBtn.length) return;
-      const isAttached = () =>
-        updateBtn[0] && document.contains(updateBtn[0]);
+      const isAttached = () => updateBtn[0] && document.contains(updateBtn[0]);
       entriesApi
         .getEntryTransferMemoGroupFreshEntries(group)
         .then((result) => {
@@ -344,6 +344,19 @@ export function createEntryTransferMemoViewApiCore(deps) {
 
     // ==================== 快速更新标签页 ====================
 
+    // 缓冲遮罩：缝合期间给用户明确反馈（备忘录弹窗遮罩层级 100000，需 elevated 覆盖其上）
+    function createElevatedProgress(label, total) {
+      if (typeof entriesApi?.showBatchProgressOverlay !== "function")
+        return null;
+      try {
+        return entriesApi.showBatchProgressOverlay(label, total, {
+          elevated: true,
+        });
+      } catch {
+        return null;
+      }
+    }
+
     // 渲染快速更新面板：选择旧/新预设 → 点击"对比并预览" → 展示待缝合条目块 → 确认执行
     function renderQuickUpdatePanel() {
       const panel = dialog.find(".cfm-entry-memo-quickupdate-panel");
@@ -524,13 +537,26 @@ export function createEntryTransferMemoViewApiCore(deps) {
           btn
             .prop("disabled", true)
             .html('<i class="fa-solid fa-spinner fa-spin"></i> 更新中...');
+          const batchProgress = createElevatedProgress(
+            "正在快速更新预设条目",
+            blocks.length,
+          );
           try {
             const result = await entriesApi.executePresetQuickUpdate(
               analysis.oldName,
               analysis.newName,
               blocks,
+              {
+                onProgress: (index, total) => {
+                  batchProgress?.update(
+                    index + 1,
+                    `正在缝合第 ${index + 1}/${total} 块…`,
+                  );
+                },
+              },
             );
             if (result?.error) {
+              batchProgress?.remove();
               cfmToastr.error(result.error);
               btn.prop("disabled", false).html(oldText);
               return;
@@ -538,17 +564,23 @@ export function createEntryTransferMemoViewApiCore(deps) {
             const doneCount = Array.isArray(result.blockResults)
               ? result.blockResults.filter((b) => b.status === "done").length
               : 0;
+            batchProgress?.done(
+              `快速更新完成：${doneCount}/${result.totalBlocks} 块`,
+            );
             if (result.insertedTotal > 0) {
               cfmToastr.success(
                 `快速更新完成：成功 ${doneCount}/${result.totalBlocks} 块，共缝合 ${result.insertedTotal} 条`,
               );
             } else {
-              cfmToastr.warning("快速更新完成，但没有条目被缝合（可能都跳过了）");
+              cfmToastr.warning(
+                "快速更新完成，但没有条目被缝合（可能都跳过了）",
+              );
             }
             // 清空分析结果，提示用户可重新对比
             quickUpdateAnalysis = null;
             renderQuickUpdatePanel();
           } catch (err) {
+            batchProgress?.remove();
             console.error("[CFM] 快速更新执行失败", err);
             cfmToastr.error(`快速更新失败：${String(err?.message || err)}`);
             btn.prop("disabled", false).html(oldText);
@@ -633,6 +665,7 @@ export function createEntryTransferMemoViewApiCore(deps) {
         group.entries,
         target.targetType,
         target.targetName,
+        { elevated: true },
       );
       if (!result) return;
 
@@ -831,78 +864,107 @@ export function createEntryTransferMemoViewApiCore(deps) {
       let successCount = 0;
       let insertedTotal = 0;
 
+      // 批量缝合缓冲遮罩：逐组执行时给用户明确进度反馈（elevated 覆盖在备忘录弹窗之上）
+      const batchProgress = createElevatedProgress("正在缝合分组", total);
+      let progressReleased = false;
+      const releaseProgress = () => {
+        if (progressReleased) return;
+        progressReleased = true;
+        // 成功时短暂显示完成态再自动移除；全部失败则立即移除
+        if (successCount > 0) {
+          batchProgress?.done(`全部缝合完成：${successCount}/${total} 组`);
+        } else {
+          batchProgress?.remove();
+        }
+      };
+      const updateProgress = (index, group) => {
+        const summary = String(group?.summary || "");
+        const notePart = group?.note ? ` · ${group.note}` : "";
+        batchProgress?.update(index + 1, `正在缝合：${summary}${notePart}`);
+      };
+
       // 记录每个目标已缝合的次数，用于索引偏移补偿
       const targetInsertedCount = {};
 
-      for (let i = 0; i < total; i++) {
-        const plan = plans[i];
-        const { group, targetType, targetName, insertIndex, append } = plan;
+      try {
+        for (let i = 0; i < total; i++) {
+          const plan = plans[i];
+          const { group, targetType, targetName, insertIndex, append } = plan;
 
-        // 每组缝合前重新读取目标当前条目数，得到最新基线
-        let currentItems = [];
-        try {
-          currentItems = await entriesApi.getEntryTransferInsertItems(
-            targetType,
-            targetName,
-          );
-        } catch (err) {
-          console.error("[CFM] 全部缝合-读取目标条目失败", err);
-          cfmToastr.error(
-            `「${group.summary}」读取目标失败：${err?.message || "未知错误"}`,
-          );
-          continue;
-        }
+          updateProgress(i, group);
 
-        const key = `${targetType}::${targetName}`;
-        const alreadyInserted = targetInsertedCount[key] || 0;
-        targetInsertedCount[key] = alreadyInserted + 1;
-
-        // 计算实际插入位置（仅数字位置需补偿，append 不受影响）
-        let finalIndex;
-        if (append) {
-          finalIndex = currentItems.length;
-        } else {
-          const normalized = Number.isInteger(insertIndex)
-            ? insertIndex
-            : currentItems.length;
-          finalIndex = normalized + alreadyInserted;
-          // 不超过当前目标条目总数（含此前已插入）
-          const maxIndex = currentItems.length + alreadyInserted;
-          if (finalIndex > maxIndex) finalIndex = maxIndex;
-        }
-
-        let transferResult = null;
-        try {
-          if (targetType === "preset") {
-            transferResult = await entriesApi.transferToPreset(
-              group.sourceType,
-              group.entries,
+          // 每组缝合前重新读取目标当前条目数，得到最新基线
+          let currentItems = [];
+          try {
+            currentItems = await entriesApi.getEntryTransferInsertItems(
+              targetType,
               targetName,
-              finalIndex,
             );
-          } else if (targetType === "worldinfo") {
-            transferResult = await entriesApi.transferToWorldInfo(
-              group.sourceType,
-              group.entries,
-              targetName,
-              finalIndex,
+          } catch (err) {
+            console.error("[CFM] 全部缝合-读取目标条目失败", err);
+            cfmToastr.error(
+              `「${group.summary}」读取目标失败：${err?.message || "未知错误"}`,
             );
+            continue;
           }
-        } catch (err) {
-          console.error("[CFM] 全部缝合-执行失败", err);
-          cfmToastr.error(
-            `「${group.summary}」缝合失败：${err?.message || "未知错误"}`,
-          );
-          continue;
+
+          const key = `${targetType}::${targetName}`;
+          const alreadyInserted = targetInsertedCount[key] || 0;
+          targetInsertedCount[key] = alreadyInserted + 1;
+
+          // 计算实际插入位置（仅数字位置需补偿，append 不受影响）
+          let finalIndex;
+          if (append) {
+            finalIndex = currentItems.length;
+          } else {
+            const normalized = Number.isInteger(insertIndex)
+              ? insertIndex
+              : currentItems.length;
+            finalIndex = normalized + alreadyInserted;
+            // 不超过当前目标条目总数（含此前已插入）
+            const maxIndex = currentItems.length + alreadyInserted;
+            if (finalIndex > maxIndex) finalIndex = maxIndex;
+          }
+
+          let transferResult = null;
+          try {
+            if (targetType === "preset") {
+              transferResult = await entriesApi.transferToPreset(
+                group.sourceType,
+                group.entries,
+                targetName,
+                finalIndex,
+              );
+            } else if (targetType === "worldinfo") {
+              transferResult = await entriesApi.transferToWorldInfo(
+                group.sourceType,
+                group.entries,
+                targetName,
+                finalIndex,
+              );
+            }
+          } catch (err) {
+            console.error("[CFM] 全部缝合-执行失败", err);
+            cfmToastr.error(
+              `「${group.summary}」缝合失败：${err?.message || "未知错误"}`,
+            );
+            continue;
+          }
+
+          if (!transferResult) continue;
+
+          successCount++;
+          insertedTotal += Number(transferResult.insertedCount || 0);
+
+          // 缝合成功：临时组移除、收藏组保留
+          memoApi.removePendingTransferMemoGroups([group.id]);
         }
-
-        if (!transferResult) continue;
-
-        successCount++;
-        insertedTotal += Number(transferResult.insertedCount || 0);
-
-        // 缝合成功：临时组移除、收藏组保留
-        memoApi.removePendingTransferMemoGroups([group.id]);
+      } catch (err) {
+        console.error("[CFM] 全部缝合-批量执行异常", err);
+        cfmToastr.error(`全部缝合异常：${err?.message || "未知错误"}`);
+      } finally {
+        // 无论成功、失败还是异常，都确保缓冲遮罩被释放，避免残留
+        releaseProgress();
       }
 
       renderHeaderMemoBadge();

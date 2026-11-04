@@ -1,5 +1,10 @@
 // 世界书自动应用功能文件：负责根据当前角色、聊天和预设的匹配结果，自动计算应启用或关闭的世界书分组，并处理自动应用状态追踪与提示反馈逻辑。
 
+import {
+  getGroupMatchState,
+  getGroupMatchTitle,
+} from "../shared/group-match.js";
+
 export function getAutoApplyPresetIndicesCore(deps) {
   const presets = deps.getWiActivePresets();
   const currentChar = deps.getCurrentCharAvatar();
@@ -112,7 +117,8 @@ export async function autoApplyWiPresetsCore(silent = false, deps) {
         const currentChatName = deps.getCurrentChatFileName();
         if (currentChatName) reasons.push(`聊天「${currentChatName}」`);
       }
-      if (d.charMatch && currentCharName) reasons.push(`角色「${currentCharName}」`);
+      if (d.charMatch && currentCharName)
+        reasons.push(`角色「${currentCharName}」`);
       if (d.presetMatch && currentPresetName)
         reasons.push(`预设「${currentPresetName}」`);
       return reasons.length > 0 ? `（匹配${reasons.join("和")}）` : "";
@@ -192,21 +198,36 @@ function updateWiPresetPanelApplyButtons(deps, presets, activeSet) {
       const idx = parseInt(deps.$(this).attr("data-preset-idx"), 10);
       const preset = presets[idx];
       if (!preset) return;
-      const fullyApplied = preset.books.every((b) => activeSet.has(b));
+      // 与面板首次渲染使用同一套三态口径，避免"打开时黄色、手动切换后变绿"。
+      const matchState = getGroupMatchState(preset.books, activeSet);
       const btn = deps.$(this).find(".cfm-wi-preset-apply");
-      btn.toggleClass("cfm-wi-preset-apply-active", fullyApplied);
-      btn.attr("title", fullyApplied ? "当前已激活" : "应用到全局");
+      btn.removeClass("cfm-wi-preset-apply-active cfm-wi-preset-apply-partial");
+      if (matchState === "full") {
+        btn.addClass("cfm-wi-preset-apply-active");
+      } else if (matchState === "partial") {
+        btn.addClass("cfm-wi-preset-apply-partial");
+      }
       btn.attr(
-        "style",
-        fullyApplied
-          ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);"
-          : "",
+        "title",
+        getGroupMatchTitle(matchState, {
+          full: "完全符合：当前激活的世界书与该分组完全一致",
+          partial:
+            "不完全符合：该分组的世界书已全部激活，但当前还激活了分组之外的世界书",
+          none: "分组内仍有世界书未激活",
+        }),
       );
+      // 颜色统一交给 CSS 三态规则，这里清掉历史内联样式，避免盖住状态类。
+      btn.attr("style", "");
+      deps.$(this).attr("data-match-state", matchState);
     });
   }
 }
 
-export function syncWiPresetTrackingForManualToggleCore(bookName, isActive, deps) {
+export function syncWiPresetTrackingForManualToggleCore(
+  bookName,
+  isActive,
+  deps,
+) {
   const presets = deps.getWiActivePresets();
   const settings = deps.extensionSettings[deps.extensionName];
   const applied = settings._wiAppliedPresetIndices || [];

@@ -1,4 +1,11 @@
 // 正则激活分组：面板 showRegexPresetPanel（保存/应用/绑定/删除）+ 编辑弹窗 showRegexPresetEditPopup。
+
+import {
+  getGroupMatchClassName,
+  getGroupMatchState,
+  getGroupMatchTitle,
+} from "../shared/group-match.js";
+
 export function createRegexPresetEditApi(deps) {
   const {
     $,
@@ -88,7 +95,10 @@ export function createRegexPresetEditApi(deps) {
     const overlay = $(`
       <div class="cfm-edit-popup-overlay" id="cfm-regex-preset-edit-overlay">
         <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
-          <div class="cfm-edit-popup-title">编辑正则激活分组</div>
+          <div class="cfm-edit-popup-title cfm-wi-preset-edit-title">
+            <span>编辑正则激活分组</span>
+            <button type="button" class="cfm-wi-preset-edit-refresh" title="用当前激活的正则脚本替换下方勾选"><i class="fa-solid fa-rotate"></i> 刷新</button>
+          </div>
           <div class="cfm-edit-field">
             <label>分组名称</label>
             <input type="text" class="cfm-edit-input" id="cfm-regex-preset-edit-name" value="${escapeHtml(preset.name || "未命名分组")}">
@@ -220,6 +230,17 @@ export function createRegexPresetEditApi(deps) {
     });
     overlay.find("#cfm-regex-preset-edit-filter").on("input", applyEditFilters);
     applyEditFilters();
+    overlay.find(".cfm-wi-preset-edit-refresh").on("click", () => {
+      if (!cfmConfirm("是否用当前激活状态替换下方勾选？")) return;
+      const enabledSet = new Set(getEnabledRegexScriptIds());
+      overlay.find(".cfm-wi-preset-edit-item input").each(function () {
+        $(this).prop("checked", enabledSet.has(String($(this).val() || "")));
+      });
+      applyEditFilters();
+      cfmToastr.info(
+        `已载入当前激活状态（${enabledSet.size} 个正则脚本），点击「保存」生效`,
+      );
+    });
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -281,9 +302,6 @@ export function createRegexPresetEditApi(deps) {
       }
     }
 
-    const appliedPresetIndices = new Set(
-      extension_settings[extensionName]._regexAppliedPresetIndices || [],
-    );
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
@@ -294,12 +312,18 @@ export function createRegexPresetEditApi(deps) {
                 (p.bindChars && p.bindChars.length > 0) ||
                 (p.bindPresets && p.bindPresets.length > 0) ||
                 (p.bindChats && p.bindChats.length > 0);
-              const isApplied =
-                appliedPresetIndices.has(idx) ||
-                (p.scripts.length > 0 &&
-                  p.scripts.every((id) => enabledSet.has(id)));
+              // 三态：绿=分组脚本全启用且与当前启用完全一致；黄=分组脚本全启用但多出额外脚本；
+              // 无色=分组内存在未启用的脚本（整组不成立）。只看启用状态，不看历史应用记录。
+              const matchState = getGroupMatchState(p.scripts, enabledSet);
+              const applyClass = getGroupMatchClassName(matchState);
+              const applyTitle = getGroupMatchTitle(matchState, {
+                full: "完全符合：当前启用的正则脚本与该分组完全一致",
+                partial:
+                  "不完全符合：该分组的正则脚本已全部启用，但当前还启用了分组之外的脚本",
+                none: "分组内仍有正则脚本未启用",
+              });
               return `
-        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}" data-match-state="${matchState}">
           <div class="cfm-wi-preset-item-left">
             <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name || "未命名分组")}</span>
             <span class="cfm-wi-preset-scope-tag" style="color:${scopeColors[scope]};border-color:${scopeColors[scope]}40;background:${scopeColors[scope]}15;">${scopeLabels[scope]}</span>
@@ -307,7 +331,7 @@ export function createRegexPresetEditApi(deps) {
             ${hasBindings ? '<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>' : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用到全局"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
+            <i class="fa-solid fa-play ${applyClass}" title="${applyTitle}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-link cfm-regex-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
@@ -421,9 +445,22 @@ export function createRegexPresetEditApi(deps) {
           title: "应用方式",
           message: `请选择「${escapeHtml(preset.name)}」的应用方式：`,
           choices: [
-            { value: "cancel", label: "取消", className: "cfm-edit-popup-cancel" },
-            { value: "replace", label: "替换", className: "cfm-edit-popup-confirm", style: "background:#f38ba8;" },
-            { value: "stack", label: "叠加", className: "cfm-edit-popup-confirm" },
+            {
+              value: "cancel",
+              label: "取消",
+              className: "cfm-edit-popup-cancel",
+            },
+            {
+              value: "replace",
+              label: "替换",
+              className: "cfm-edit-popup-confirm",
+              style: "background:#f38ba8;",
+            },
+            {
+              value: "stack",
+              label: "叠加",
+              className: "cfm-edit-popup-confirm",
+            },
           ],
         });
         if (choice === "cancel") return;

@@ -1,5 +1,11 @@
 // 世界书分组功能文件：负责世界书激活分组的创建、重命名、删除、保存、读取与面板数据组织，是世界书分组管理功能的主要入口模块。
 
+import {
+  getGroupMatchClassName,
+  getGroupMatchState,
+  getGroupMatchTitle,
+} from "../shared/group-match.js";
+
 export function normalizeWorldInfoNameListCore(names) {
   const result = [];
   const seen = new Set();
@@ -129,7 +135,14 @@ export function getWiActivePresetsCore(deps) {
   return deps.extensionSettings[deps.extensionName].wiActivePresets || [];
 }
 
-export function saveWiActivePresetCore(name, books, scope, bindChars, bindPresets, deps) {
+export function saveWiActivePresetCore(
+  name,
+  books,
+  scope,
+  bindChars,
+  bindPresets,
+  deps,
+) {
   const presets = deps.getWiActivePresets();
   const existing = presets.find((p) => p.name === name);
   if (existing) {
@@ -166,7 +179,6 @@ export function renameWiActivePresetCore(oldName, newName, deps) {
     deps.saveSettingsDebounced();
   }
 }
-
 
 // ===== showWiPresetPanel 拆分（世界书激活分组面板） =====
 export function createWiPresetPanelApi(deps) {
@@ -240,15 +252,17 @@ export function createWiPresetPanelApi(deps) {
     const scopeColors = { global: "#a6e3a1", bound: "#cba6f7" };
 
     // 构建已有分组列表（用索引定位）
-    const appliedPresetIndices = new Set(
-      extension_settings[extensionName]._wiAppliedPresetIndices || [],
-    );
+    // 以 DOM 选中项为判色基准（与界面所见一致）；若 DOM 尚未渲染出选项，
+    // 回退到世界书模块的 selected_world_info，避免所有分组都被判成「未关联」。
     const currentWiActiveSet = new Set();
     $("#world_info")
       .find("option:selected")
       .each(function () {
         currentWiActiveSet.add($(this).text());
       });
+    if (currentWiActiveSet.size === 0 && wiActiveSet.size > 0) {
+      for (const name of wiActiveSet) currentWiActiveSet.add(name);
+    }
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
@@ -260,11 +274,18 @@ export function createWiPresetPanelApi(deps) {
                 (p.bindPresets && p.bindPresets.length > 0) ||
                 (p.bindChats && p.bindChats.length > 0);
               const bindSummary = getWiPresetBindSummary(p);
-              const isApplied =
-                appliedPresetIndices.has(idx) ||
-                p.books.every((b) => currentWiActiveSet.has(b));
+              // 三态：绿=分组条目全激活且与当前激活完全一致；黄=分组条目全激活但多出额外条目；
+              // 无色=分组内存在未激活条目（整组不成立）。只看条目激活情况，不看历史应用记录。
+              const matchState = getGroupMatchState(p.books, currentWiActiveSet);
+              const applyClass = getGroupMatchClassName(matchState);
+              const applyTitle = getGroupMatchTitle(matchState, {
+                full: "完全符合：当前激活的世界书与该分组完全一致",
+                partial:
+                  "不完全符合：该分组的世界书已全部激活，但当前还激活了分组之外的世界书",
+                none: "分组内仍有世界书未激活",
+              });
               return `
-        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}" data-match-state="${matchState}">
           <div class="cfm-wi-preset-item-left">
             <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name || "未命名分组")}</span>
             <span class="cfm-wi-preset-scope-tag" style="color:${scopeColors[scope]};border-color:${scopeColors[scope]}40;background:${scopeColors[scope]}15;">${scopeLabels[scope]}</span>
@@ -272,7 +293,7 @@ export function createWiPresetPanelApi(deps) {
             ${hasBindings ? `<span class="cfm-wi-preset-bind-toggle" title="查看绑定"><i class="fa-solid fa-caret-down"></i></span>` : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用到全局"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
+            <i class="fa-solid fa-play ${applyClass}" title="${applyTitle}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-link cfm-wi-preset-bind" title="绑定管理"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
@@ -381,9 +402,22 @@ export function createWiPresetPanelApi(deps) {
           title: "应用方式",
           message: `请选择「${escapeHtml(preset.name)}」的应用方式：`,
           choices: [
-            { value: "cancel", label: "取消", className: "cfm-edit-popup-cancel" },
-            { value: "replace", label: "替换", className: "cfm-edit-popup-confirm", style: "background:#f38ba8;" },
-            { value: "stack", label: "叠加", className: "cfm-edit-popup-confirm" },
+            {
+              value: "cancel",
+              label: "取消",
+              className: "cfm-edit-popup-cancel",
+            },
+            {
+              value: "replace",
+              label: "替换",
+              className: "cfm-edit-popup-confirm",
+              style: "background:#f38ba8;",
+            },
+            {
+              value: "stack",
+              label: "叠加",
+              className: "cfm-edit-popup-confirm",
+            },
           ],
         });
         if (choice === "cancel") return;

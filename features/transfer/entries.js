@@ -312,7 +312,9 @@ export function createEntryTransferApiCore(deps) {
     oldPresetName,
     newPresetName,
     blocks,
+    options = {},
   ) {
+    const { onProgress } = options || {};
     const pm = getContext().getPresetManager();
     if (!pm) return { error: "无法获取预设管理器" };
     if (!Array.isArray(blocks) || blocks.length === 0) {
@@ -335,7 +337,11 @@ export function createEntryTransferApiCore(deps) {
       const blockResults = [];
       let insertedTotal = 0;
 
-      for (const block of blocks) {
+      for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+        const block = blocks[blockIndex];
+        try {
+          onProgress?.(blockIndex, blocks.length, block);
+        } catch {}
         const entries = Array.isArray(block?.entries) ? block.entries : [];
         if (entries.length === 0) continue;
 
@@ -1226,11 +1232,12 @@ export function createEntryTransferApiCore(deps) {
    * @param {number} total - 总数
    * @returns {{ update: (current: number, customText?: string) => void, done: (resultText?: string) => void, remove: () => void }}
    */
-  function showBatchProgressOverlay(actionLabel, total) {
+  function showBatchProgressOverlay(actionLabel, total, options = {}) {
+    const { elevated = false } = options || {};
     // 移除可能残留的上一个
     $(".cfm-batch-progress-overlay").remove();
     const overlay = $(
-      `<div class="cfm-batch-progress-overlay" aria-live="polite" aria-busy="true">
+      `<div class="cfm-batch-progress-overlay${elevated ? " cfm-batch-progress-overlay-elevated" : ""}" aria-live="polite" aria-busy="true">
         <div class="cfm-batch-progress-box">
           <i class="fa-solid fa-spinner fa-spin"></i>
           <span class="cfm-batch-progress-text">${escapeHtml(actionLabel)}</span>
@@ -1269,16 +1276,22 @@ export function createEntryTransferApiCore(deps) {
     sourceEntries,
     targetType,
     targetName,
+    options = {},
   ) {
-    const host = $("#cfm-overlay");
+    const { elevated = false } = options || {};
+    // elevated：挂到 body 并抬高 z-index，避免被缝合备忘录弹窗遮罩（100000）盖住
+    const host = elevated ? $("body") : $("#cfm-overlay");
     if (!host.length) return null;
 
     host.find(".cfm-entry-transfer-progress-loading").remove();
 
     const entryCount = Array.isArray(sourceEntries) ? sourceEntries.length : 0;
     const targetTypeLabel = targetType === "worldinfo" ? "世界书" : "预设";
+    const loadingClass = elevated
+      ? "cfm-preset-detail-opening-loading cfm-preset-detail-opening-loading-elevated cfm-entry-transfer-progress-loading"
+      : "cfm-preset-detail-opening-loading cfm-entry-transfer-progress-loading";
     const loading = $(
-      `<div class="cfm-preset-detail-opening-loading cfm-entry-transfer-progress-loading" aria-live="polite" aria-busy="true">
+      `<div class="${loadingClass}" aria-live="polite" aria-busy="true">
         <div class="cfm-preset-detail-opening-loading-box">
           <i class="fa-solid fa-spinner fa-spin"></i>
           <span>正在将 ${entryCount} 个条目缝合到${targetTypeLabel}「${escapeHtml(targetName)}」...</span>
@@ -1517,6 +1530,7 @@ export function createEntryTransferApiCore(deps) {
     sourceEntries,
     targetType,
     targetName,
+    options = {},
   ) {
     const existingItems = await getEntryTransferInsertItems(
       targetType,
@@ -1538,6 +1552,7 @@ export function createEntryTransferApiCore(deps) {
       sourceEntries,
       targetType,
       targetName,
+      options,
     );
 
     let transferResult = null;
@@ -1589,6 +1604,151 @@ export function createEntryTransferApiCore(deps) {
     }
 
     return transferResult;
+  }
+
+  /**
+   * 读取柏宝箱（ST-BaiBai-Tools）的预设条目分组状态。
+   *
+   * 数据结构写在 extensions.baibaiToolkit.presetPromptGroups：
+   *   {
+   *     version: 1,
+   *     groups: [{ id, name, order, collapsed, enabled }],
+   *     prompts: { <promptIdentifier>: { groupId } },
+   *   }
+   *
+   * @param {object} presetData 预设详情数据
+   * @returns {{groups: object[], prompts: object, version: *}|null} 无分组定义时返回 null
+   */
+  function getPresetPromptGroupsState(presetData) {
+    const state = presetData?.extensions?.baibaiToolkit?.presetPromptGroups;
+    if (!state || typeof state !== "object" || Array.isArray(state))
+      return null;
+    const groups = Array.isArray(state.groups) ? state.groups : [];
+    if (!groups.length) return null;
+    const prompts =
+      state.prompts &&
+      typeof state.prompts === "object" &&
+      !Array.isArray(state.prompts)
+        ? state.prompts
+        : {};
+    return { groups, prompts, version: state.version };
+  }
+
+  /**
+   * 判断插入点是否落在某个分组内部，并返回该分组 id。
+   *
+   * 判定规则：仅当插入点「前后紧邻的两个条目同属一个分组」时，视为组内插入。
+   * 以顺序 [1-1, 1-2, 2-1, 2-2] 为例：
+   *   - 插入到 1-1 / 1-2 之间 → 组 1（组内）
+   *   - 插入到 1-2 / 2-1 之间 → 不入组（跨组边界）
+   *   - 插入到 2-1 / 2-2 之间 → 组 2（组内）
+   *   - 插入到列表首位之前 / 末位之后 → 不入组
+   *
+   * @param {object} presetData
+   * @param {string[]} orderedFieldKeys 当前条目顺序（形如 prompts.<identifier>）
+   * @param {number} insertIndex 插入点下标（新条目将位于该下标处）
+   * @returns {string|null} 目标分组 id，不入组时返回 null
+   */
+  function resolveInsertTargetGroupId(
+    presetData,
+    orderedFieldKeys,
+    insertIndex,
+  ) {
+    const state = getPresetPromptGroupsState(presetData);
+    if (!state) return null;
+    if (!Array.isArray(orderedFieldKeys)) return null;
+
+    const groupIds = new Set(
+      state.groups.map((group) => String(group?.id ?? "")).filter(Boolean),
+    );
+    if (!groupIds.size) return null;
+
+    const toGroupId = (fieldKey) => {
+      if (!fieldKey) return null;
+      const raw = String(fieldKey);
+      const identifier = raw.startsWith("prompts.")
+        ? raw.slice("prompts.".length)
+        : raw;
+      if (!identifier) return null;
+      const rawGroupId = state.prompts?.[identifier]?.groupId;
+      const groupId =
+        rawGroupId === null || rawGroupId === undefined
+          ? ""
+          : String(rawGroupId);
+      return groupId && groupIds.has(groupId) ? groupId : null;
+    };
+
+    const prevGroupId = toGroupId(orderedFieldKeys[insertIndex - 1]);
+    const nextGroupId = toGroupId(orderedFieldKeys[insertIndex]);
+    if (!prevGroupId || !nextGroupId) return null;
+    return prevGroupId === nextGroupId ? prevGroupId : null;
+  }
+
+  /**
+   * 把缝合条目的 identifier 写入柏宝箱的成员映射，使其归入指定分组。
+   *
+   * 只就地补充 prompts 映射，不改动 groups 定义，也不影响 extensions 命名空间下
+   * 其它键（如 presetPromptFavorites）。写入后由 saveNormalizedPresetData 负责落盘，
+   * 并借助其 extensions 合并/回写逻辑同步到柏宝箱的运行时状态。
+   *
+   * @param {object} presetData
+   * @param {string[]} identifiers 待归组的条目 identifier
+   * @param {string} groupId 目标分组 id
+   * @returns {boolean} 是否发生变更
+   */
+  function assignEntriesToPresetPromptGroup(presetData, identifiers, groupId) {
+    if (!groupId) return false;
+    if (!Array.isArray(identifiers) || !identifiers.length) return false;
+    const state = getPresetPromptGroupsState(presetData);
+    if (!state) return false;
+
+    if (
+      !presetData.extensions ||
+      typeof presetData.extensions !== "object" ||
+      Array.isArray(presetData.extensions)
+    ) {
+      presetData.extensions = {};
+    }
+    const toolkit = presetData.extensions.baibaiToolkit;
+    if (!toolkit || typeof toolkit !== "object" || Array.isArray(toolkit)) {
+      presetData.extensions.baibaiToolkit = {};
+    }
+    const toolkitRef = presetData.extensions.baibaiToolkit;
+
+    const existingState = toolkitRef.presetPromptGroups;
+    if (
+      !existingState ||
+      typeof existingState !== "object" ||
+      Array.isArray(existingState)
+    ) {
+      toolkitRef.presetPromptGroups = {
+        version: state.version === undefined ? 1 : state.version,
+        groups: structuredClone(state.groups),
+        prompts: {},
+      };
+    }
+    const groupState = toolkitRef.presetPromptGroups;
+    if (
+      !groupState.prompts ||
+      typeof groupState.prompts !== "object" ||
+      Array.isArray(groupState.prompts)
+    ) {
+      groupState.prompts = {};
+    }
+
+    const targetGroupId = String(groupId);
+    let changed = false;
+    for (const identifier of identifiers) {
+      const normalized = String(identifier || "").trim();
+      if (!normalized) continue;
+      const currentGroupId = String(
+        groupState.prompts[normalized]?.groupId ?? "",
+      );
+      if (currentGroupId === targetGroupId) continue;
+      groupState.prompts[normalized] = { groupId: targetGroupId };
+      changed = true;
+    }
+    return changed;
   }
 
   /**
@@ -1682,6 +1842,14 @@ export function createEntryTransferApiCore(deps) {
               role: entry.role || "system",
               injection_position: 0,
               injection_depth: 4,
+              // 酒馆构建发送内容时用 `false === prompt.system_prompt` 严格判定
+              // 「用户条目」（openai.js populateChatCompletion 的 userRelativePrompts 过滤）。
+              // Prompt 构造器只做原样透传、不补默认值，缺失该字段时
+              // false === undefined 为假，条目不会被加入 chatCompletion，
+              // 表现为原生预设页可见可编辑、实际却不发送给 AI。
+              // 原生新建条目（PromptManager.addPrompt）同样显式写入 false。
+              system_prompt: false,
+              marker: false,
             };
           }
           const promptEnabled = entry.enabled !== false;
@@ -1717,6 +1885,23 @@ export function createEntryTransferApiCore(deps) {
       );
       const shouldReorder =
         normalizedInsertIndex < currentOrderedFieldKeys.length;
+
+      // 柏宝箱兼容：若插入点落在某个分组内部（前后相邻条目同属一组），
+      // 把本次缝合的条目一并归入该组，避免新条目散落在分组之外。
+      // 必须在首次保存前写入，才能让 saveNormalizedPresetData 的 extensions
+      // 合并/回写逻辑把映射同步到柏宝箱的运行时状态。
+      const targetGroupId = resolveInsertTargetGroupId(
+        presetData,
+        currentOrderedFieldKeys,
+        normalizedInsertIndex,
+      );
+      if (targetGroupId) {
+        assignEntriesToPresetPromptGroup(
+          presetData,
+          insertedPrompts.map((prompt) => getPresetPromptIdentifier(prompt)),
+          targetGroupId,
+        );
+      }
 
       await saveNormalizedPresetData(pm, targetPresetName, presetData);
       if (shouldReorder && nextOrderedFieldKeys.length > 1) {

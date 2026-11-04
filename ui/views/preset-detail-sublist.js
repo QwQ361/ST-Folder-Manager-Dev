@@ -7,6 +7,8 @@ export function createPresetDetailSublistApi(deps) {
     $,
     applyPresetDetailBatchActivation,
     batchDeletePresetDetailFields,
+    captureBaibaiGroupSnapshot,
+    cfmConfirm,
     cfmIsTouchDevice,
     cfmToastr,
     deletePresetDetailActivePreset,
@@ -16,7 +18,10 @@ export function createPresetDetailSublistApi(deps) {
     ensureCurrentAppliedPreset,
     escapeHtml,
     flashDraggedElement,
+    formatBaibaiPresetGroupCompact,
+    formatBaibaiPresetGroupSnapshot,
     getContext,
+    getCurrentBaibaiPresetGroups,
     getEntryTransferInsertItems,
     getPresetDataForDetail,
     getPresetDetailActivePresets,
@@ -24,6 +29,7 @@ export function createPresetDetailSublistApi(deps) {
     isCurrentAppliedPreset,
     movePresetDetailFieldByStep,
     movePresetDetailFieldsToIndex,
+    normalizeBaibaiGroupSnapshot,
     normalizePresetDetailFieldKeys,
     openEntryTransferInsertDialog,
     recordTouchTapStart,
@@ -662,10 +668,20 @@ export function createPresetDetailSublistApi(deps) {
             })
             .join("");
 
+    // 柏宝箱供电快照不再在弹窗里展示/勾选；改为顶部「刷新」按钮一次性采集。
+    // 语义：undefined = 保留原有快照；对象/null = 覆盖为当前供电状态。
+    const savedBaibaiSnapshot = normalizeBaibaiGroupSnapshot(
+      preset?.baibaiGroups,
+    );
+    let refreshedBaibaiSnapshot;
+
     const overlay = $(`
       <div class="cfm-edit-popup-overlay" id="cfm-preset-detail-group-edit-overlay">
         <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
-          <div class="cfm-edit-popup-title">编辑预设条目激活分组</div>
+          <div class="cfm-edit-popup-title cfm-wi-preset-edit-title">
+            <span>编辑预设条目激活分组</span>
+            <button type="button" class="cfm-wi-preset-edit-refresh" title="用当前激活的条目（含柏宝箱分组供电）替换下方勾选"><i class="fa-solid fa-rotate"></i> 刷新</button>
+          </div>
           <div class="cfm-edit-popup-names"><div class="cfm-edit-name-item">${escapeHtml(presetName)}</div></div>
           <div class="cfm-edit-field">
             <label>分组名称</label>
@@ -703,6 +719,33 @@ export function createPresetDetailSublistApi(deps) {
       .find("#cfm-preset-detail-group-edit-filter")
       .on("input", applyEditFilters);
     applyEditFilters();
+    overlay.find(".cfm-wi-preset-edit-refresh").on("click", () => {
+      if (
+        !cfmConfirm(
+          "是否用当前激活状态替换下方勾选？\n（预设条目分组会同时记录当前柏宝箱分组供电状态）",
+        )
+      ) {
+        return;
+      }
+      // 刷新时重新读取预设数据，确保反映弹窗打开后发生的激活变化
+      const latestPresetData = getPresetDataForDetail(pm, presetName) || presetData;
+      const currentKeys = new Set(
+        getPresetDetailFields(latestPresetData)
+          .filter(
+            (field) =>
+              String(field?.key || "").startsWith("prompts.") && !!field?.enabled,
+          )
+          .map((field) => String(field?.key || "")),
+      );
+      overlay.find(".cfm-wi-preset-edit-item input").each(function () {
+        $(this).prop("checked", currentKeys.has(String($(this).val() || "")));
+      });
+      refreshedBaibaiSnapshot = captureBaibaiGroupSnapshot(pm);
+      applyEditFilters();
+      cfmToastr.info(
+        `已载入当前激活状态（${currentKeys.size} 个条目），点击「保存」生效`,
+      );
+    });
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -735,9 +778,27 @@ export function createPresetDetailSublistApi(deps) {
       if (newName !== preset.name) {
         renamePresetDetailActivePreset(presetName, preset.name, newName);
       }
-      savePresetDetailActivePreset(presetName, newName, newFields);
+      // 第 4 参数语义：undefined = 保留原有快照；对象/null = 覆盖为当前状态。
+      // 点过「刷新」→ 用刷新时采集的快照；否则维持旧行为：原本没有快照才采集。
+      const nextBaibaiSnapshot =
+        typeof refreshedBaibaiSnapshot !== "undefined"
+          ? refreshedBaibaiSnapshot
+          : savedBaibaiSnapshot
+            ? undefined
+            : captureBaibaiGroupSnapshot(pm);
+      savePresetDetailActivePreset(
+        presetName,
+        newName,
+        newFields,
+        nextBaibaiSnapshot,
+      );
+      const recaptureSummary =
+        typeof nextBaibaiSnapshot !== "undefined"
+          ? formatBaibaiPresetGroupCompact(nextBaibaiSnapshot)
+          : "";
       cfmToastr.success(
-        `已更新激活分组「${newName}」（${newFields.length} 个预设条目）`,
+        `已更新激活分组「${newName}」（${newFields.length} 个预设条目）` +
+          (recaptureSummary ? `；已记录（${recaptureSummary}）` : ""),
       );
       overlay.remove();
     });

@@ -7155,8 +7155,29 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   padding: 2px;
   transition: color 0.15s;
 }
-.cfm-wi-preset-item-actions .cfm-wi-preset-apply:hover {
+/* 分组符合度三态：绿色=完全符合，黄色=不完全符合，默认色=未关联。
+   世界书 / 正则 / 预设条目使用 .cfm-wi-preset-apply，快速回复使用 .cfm-qr-preset-apply，
+   两套主类共用同一组状态类（.cfm-wi-preset-apply-active / -partial），颜色规则在此统一。 */
+.cfm-wi-preset-item-actions .cfm-wi-preset-apply.cfm-wi-preset-apply-active,
+.cfm-wi-preset-item-actions .cfm-qr-preset-apply.cfm-wi-preset-apply-active {
   color: #a6e3a1;
+  text-shadow: 0 0 8px rgba(166, 227, 161, 0.55);
+}
+.cfm-wi-preset-item-actions .cfm-wi-preset-apply.cfm-wi-preset-apply-partial,
+.cfm-wi-preset-item-actions .cfm-qr-preset-apply.cfm-wi-preset-apply-partial {
+  color: #f9e2af;
+  text-shadow: 0 0 8px rgba(249, 226, 175, 0.5);
+}
+.cfm-wi-preset-item-actions .cfm-wi-preset-apply:hover,
+.cfm-wi-preset-item-actions .cfm-qr-preset-apply:hover {
+  color: #a6e3a1;
+}
+/* 不完全符合时 hover 保持黄色，不要被通用 hover 规则染绿 */
+.cfm-wi-preset-item-actions
+  .cfm-wi-preset-apply.cfm-wi-preset-apply-partial:hover,
+.cfm-wi-preset-item-actions
+  .cfm-qr-preset-apply.cfm-wi-preset-apply-partial:hover {
+  color: #f9e2af;
 }
 .cfm-wi-preset-item-actions .cfm-wi-preset-unapply:hover {
   color: #fab387;
@@ -7279,6 +7300,44 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
 .cfm-wi-preset-edit-popup {
   max-width: 500px;
   width: 90vw;
+}
+/* 编辑弹窗标题栏：标题文字 + 右侧「刷新」按钮 */
+.cfm-wi-preset-edit-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cfm-wi-preset-edit-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(137, 180, 250, 0.35);
+  background: rgba(137, 180, 250, 0.12);
+  color: #89b4fa;
+  font-size: 12px;
+  font-weight: normal;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+.cfm-wi-preset-edit-refresh:hover {
+  background: rgba(137, 180, 250, 0.22);
+  border-color: rgba(137, 180, 250, 0.5);
+  color: #a6c8ff;
+}
+.cfm-wi-preset-edit-refresh:active {
+  transform: scale(0.96);
+}
+.cfm-wi-preset-edit-refresh i {
+  font-size: 11px;
 }
 .cfm-wi-preset-edit-hint {
   font-size: 11px;
@@ -8056,6 +8115,51 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   color: #89b4fa;
   flex: 0 0 auto;
 }
+/* 提升层级版本：挂到 body 使用，需高于缝合备忘录弹窗(100000)与互通弹窗(100001) */
+.cfm-preset-detail-opening-loading-elevated {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 17, 27, 0.52);
+  backdrop-filter: blur(1.5px);
+  z-index: 100002;
+  pointer-events: auto;
+}
+.cfm-preset-detail-opening-loading-elevated
+  .cfm-preset-detail-opening-loading-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 200px;
+  padding: 12px 18px;
+  max-width: min(calc(100vw - 32px), 440px);
+  border-radius: 999px;
+  background: rgba(24, 24, 37, 0.98);
+  border: 1px solid rgba(137, 180, 250, 0.28);
+  color: #eef4ff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+}
+.cfm-preset-detail-opening-loading-elevated
+  .cfm-preset-detail-opening-loading-box
+  i {
+  color: #89b4fa;
+  flex: 0 0 auto;
+}
 /* ==================== 批量操作进度覆盖层 ==================== */
 .cfm-batch-progress-overlay {
   position: fixed;
@@ -8072,6 +8176,10 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   backdrop-filter: blur(1.5px);
   z-index: 10020;
   pointer-events: auto;
+}
+/* 提升层级版本：批量缝合等需覆盖在缝合备忘录弹窗(100000)之上 */
+.cfm-batch-progress-overlay-elevated {
+  z-index: 100002;
 }
 .cfm-batch-progress-box {
   display: flex;

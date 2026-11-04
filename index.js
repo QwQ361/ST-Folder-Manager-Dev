@@ -344,6 +344,15 @@ import {
 import { createWorldInfoRenameApiCore } from "./features/worldinfo/rename.js";
 import { bypassCacheFetch as bypassCacheFetchCore } from "./integrations/baibaoku-compat.js";
 import {
+  applyBaibaiPresetGroupSnapshot,
+  createBaibaiPresetGroupSnapshot,
+  formatBaibaiPresetGroupCompact,
+  formatBaibaiPresetGroupSnapshot,
+  getBaibaiPresetGroupState,
+  getCurrentBaibaiPresetGroups,
+  isBaibaiPresetGroupSnapshotMatched,
+} from "./integrations/baibaoku-preset-groups.js";
+import {
   getButtonModeCore,
   initButtonCore,
   setButtonModeCore,
@@ -3263,6 +3272,8 @@ jQuery(async () => {
           createEntryTransferApi().updateEntryTransferMemoGroupFromSource(
             ...args,
           ),
+        showBatchProgressOverlay: (...args) =>
+          createEntryTransferApi().showBatchProgressOverlay(...args),
       },
     });
   }
@@ -3363,10 +3374,11 @@ jQuery(async () => {
     return createEntryTransferApi().setEntryTransferPostActionMode(mode, save);
   }
 
-  function showBatchProgressOverlay(actionLabel, total) {
+  function showBatchProgressOverlay(actionLabel, total, options) {
     return createEntryTransferApi().showBatchProgressOverlay(
       actionLabel,
       total,
+      options,
     );
   }
 
@@ -3374,11 +3386,13 @@ jQuery(async () => {
     sourceEntries,
     targetType,
     targetName,
+    options,
   ) {
     return createEntryTransferApi().showEntryTransferProgressLoading(
       sourceEntries,
       targetType,
       targetName,
+      options,
     );
   }
 
@@ -5165,7 +5179,10 @@ jQuery(async () => {
     const overlay = $(`
       <div class="cfm-edit-popup-overlay" id="cfm-wi-preset-edit-overlay">
         <div class="cfm-edit-popup cfm-wi-preset-edit-popup">
-          <div class="cfm-edit-popup-title">编辑激活分组</div>
+          <div class="cfm-edit-popup-title cfm-wi-preset-edit-title">
+            <span>编辑激活分组</span>
+            <button type="button" class="cfm-wi-preset-edit-refresh" title="用当前激活的世界书替换下方勾选"><i class="fa-solid fa-rotate"></i> 刷新</button>
+          </div>
           <div class="cfm-edit-field">
             <label>分组名称</label>
             <input type="text" class="cfm-edit-input" id="cfm-wi-preset-edit-name" value="${escapeHtml(preset.name || "未命名分组")}">
@@ -5295,6 +5312,21 @@ jQuery(async () => {
     });
     overlay.find("#cfm-wi-preset-edit-filter").on("input", applyEditFilters);
     applyEditFilters();
+    overlay.find(".cfm-wi-preset-edit-refresh").on("click", async () => {
+      if (!cfmConfirm("是否用当前激活状态替换下方勾选？")) return;
+      const activeSet = await getActiveWorldInfoSet();
+      overlay.find(".cfm-wi-preset-edit-item input").each(function () {
+        const name = String($(this).val() || "");
+        $(this).prop("checked", activeSet.has(name) && !charBound.has(name));
+      });
+      applyEditFilters();
+      const checkedCount = overlay.find(
+        ".cfm-wi-preset-edit-item input:checked",
+      ).length;
+      cfmToastr.info(
+        `已载入当前激活状态（${checkedCount} 个世界书），点击「保存」生效`,
+      );
+    });
     overlay.find(".cfm-edit-popup-cancel").on("click", () => overlay.remove());
     overlay.on("click", (e) => {
       if ($(e.target).is(overlay)) overlay.remove();
@@ -6011,6 +6043,56 @@ jQuery(async () => {
     }
   }
 
+  /**
+   * 判断一个值是否为可参与深度合并的普通对象。
+   * @param {*} value
+   * @returns {boolean}
+   */
+  function isPlainMergeableObject(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  /**
+   * 深度合并：source 优先，保留 target 中 source 未覆盖的键。
+   *
+   * 主要用于 extensions 字段。第三方插件（如柏宝箱的预设条目分组
+   * extensions.baibaiToolkit.presetPromptGroups）把权威数据写在运行时
+   * oai_settings.extensions 上，可能与 presets 缓存中的快照不同步。
+   * 直接整体覆盖会丢失数据，因此这里采用「只增不减」的合并策略。
+   *
+   * @param {*} target
+   * @param {*} source
+   * @returns {*}
+   */
+  function mergeExtensionObjects(target, source) {
+    if (!isPlainMergeableObject(source)) return target;
+    const base = isPlainMergeableObject(target) ? target : {};
+    const result = { ...base };
+    for (const [key, sourceValue] of Object.entries(source)) {
+      if (typeof sourceValue === "undefined") continue;
+      if (
+        isPlainMergeableObject(sourceValue) &&
+        isPlainMergeableObject(base[key])
+      ) {
+        result[key] = mergeExtensionObjects(base[key], sourceValue);
+      } else if (
+        Array.isArray(sourceValue) &&
+        Array.isArray(base[key]) &&
+        !sourceValue.length &&
+        base[key].length
+      ) {
+        // 数组不参与深度合并，直接赋值会被空数组整体覆盖。
+        // 典型场景：第三方插件（柏宝箱）的 presetPromptGroups.groups 在运行时
+        // 被陈旧快照短暂清空，若照抄就会把磁盘上正确的分组定义永久抹掉。
+        // 这里保留 target 的非空数组，避免不可逆的数据丢失。
+        result[key] = base[key];
+      } else {
+        result[key] = sourceValue;
+      }
+    }
+    return result;
+  }
+
   async function saveNormalizedPresetData(pm, presetName, presetData) {
     sanitizePresetPromptStructure(presetData);
 
@@ -6020,6 +6102,28 @@ jQuery(async () => {
     );
     const preservedPresetName = String(preservedPreset?.name || "").trim();
     const isCurrentPreset = preservedPresetName === presetName;
+
+    // 保存前把运行时 extensions 合并进待保存数据，避免第三方插件写在运行时的
+    // 权威数据（如柏宝箱的条目分组）被陈旧快照覆盖而永久丢失。
+    try {
+      const presetList =
+        typeof pm.getPresetList === "function"
+          ? pm.getPresetList.call(pm)
+          : null;
+      const runtimeSettings = presetList?.settings;
+      if (
+        isCurrentPreset &&
+        runtimeSettings &&
+        isPlainMergeableObject(runtimeSettings.extensions)
+      ) {
+        presetData.extensions = mergeExtensionObjects(
+          structuredClone(presetData.extensions || {}),
+          structuredClone(runtimeSettings.extensions),
+        );
+      }
+    } catch (e) {
+      console.warn("[CFM] 合并运行时 extensions 失败", e);
+    }
 
     if (isCurrentPreset) {
       // 当前预设：正常保存并触发 updateList（含 change 事件）
@@ -6043,6 +6147,18 @@ jQuery(async () => {
               presetData.prompt_order,
             );
           }
+          // 同步 extensions：保存过程中 pm.savePreset 会触发 updateList →
+          // onSettingsPresetChange，用 presets 缓存整体替换运行时 extensions。
+          // 若此处不把合并后的结果写回运行时，柏宝箱等插件在运行时的分组数据
+          // 会被陈旧快照回滚，后续 normalize 会将其永久剔除。
+          if (isPlainMergeableObject(presetData.extensions)) {
+            runtimeSettings.extensions = mergeExtensionObjects(
+              isPlainMergeableObject(runtimeSettings.extensions)
+                ? runtimeSettings.extensions
+                : {},
+              structuredClone(presetData.extensions),
+            );
+          }
         }
       } catch (e) {
         console.warn("[CFM] 同步当前预设运行时详情数据失败", e);
@@ -6061,7 +6177,11 @@ jQuery(async () => {
       syncCurrentPresetSelection(pm, preservedPresetName, preservedSelectValue);
     } else {
       // 非当前预设：使用 skipUpdate 避免触发 PRESET_CHANGED 事件，
-      // 然后手动更新内存中的预设数据
+      // 然后手动更新内存中的预设数据。
+      //
+      // 说明：此处不做额外的 extensions 兜底。非当前预设的 extensions 本来就来自
+      // presets 缓存的克隆，原样写回不会引入数据损失；柏宝箱的分组只写入「当前预设」，
+      // 因此其权威数据已在上面 isCurrentPreset 分支合并完成。
       await pm.savePreset(presetName, presetData, { skipUpdate: true });
 
       // 手动更新内存中的预设列表数据
@@ -6445,11 +6565,93 @@ jQuery(async () => {
     );
   }
 
-  function savePresetDetailActivePreset(presetName, name, fieldKeys) {
+  function savePresetDetailActivePreset(
+    presetName,
+    name,
+    fieldKeys,
+    baibaiGroups,
+  ) {
     return getPresetDetailApi().savePresetDetailActivePreset(
       presetName,
       name,
       fieldKeys,
+      baibaiGroups,
+    );
+  }
+
+  function normalizeBaibaiGroupSnapshot(value) {
+    return getPresetDetailApi().normalizeBaibaiGroupSnapshot(value);
+  }
+
+  /**
+   * 读取当前预设运行时 extensions（柏宝箱分组的权威来源）。
+   * @param {object} pm
+   * @returns {object|null}
+   */
+  function getCurrentPresetRuntimeExtensions(pm) {
+    try {
+      const list =
+        typeof pm?.getPresetList === "function"
+          ? pm.getPresetList.call(pm)
+          : null;
+      const extensions = list?.settings?.extensions;
+      return isPlainMergeableObject(extensions) ? extensions : null;
+    } catch (e) {
+      console.warn("[CFM] 读取运行时 extensions 失败", e);
+      return null;
+    }
+  }
+
+  /**
+   * 采集当前预设的柏宝箱分组供电快照（未安装/无分组时返回 null）。
+   * @param {object} pm
+   * @returns {{ [groupId: string]: { name: string, enabled: boolean } }|null}
+   */
+  function captureBaibaiGroupSnapshot(pm) {
+    try {
+      return createBaibaiPresetGroupSnapshot(
+        getCurrentPresetRuntimeExtensions(pm),
+      );
+    } catch (e) {
+      console.warn("[CFM] 采集柏宝箱分组快照失败", e);
+      return null;
+    }
+  }
+
+  /**
+   * 把分组里保存的柏宝箱供电状态写回柏宝箱。
+   * @param {object} preset 激活分组对象
+   * @param {object} pm
+   * @returns {Promise<{ total: number, changed: number, viaDom: number, viaRuntime: number, skipped: number }|null>}
+   */
+  async function restoreBaibaiGroupSnapshot(preset, pm) {
+    const snapshot = normalizeBaibaiGroupSnapshot(preset?.baibaiGroups);
+    if (!snapshot) return null;
+    return await applyBaibaiPresetGroupSnapshot(snapshot, {
+      document: typeof document !== "undefined" ? document : null,
+      getRuntimeExtensions: () => getCurrentPresetRuntimeExtensions(pm),
+    });
+  }
+
+  /**
+   * 把柏宝箱分组快照写回预设 extensions（供后续保存落盘）。
+   *
+   * 只在开关不可见、走了运行时降级路径时才有意义；点击路径下柏宝箱
+   * 自己会维护 extensions，无需 CFM 干预。
+   *
+   * @param {object} pm
+   * @param {object} presetData 待保存的预设数据
+   */
+  function syncBaibaiGroupSnapshotToPresetData(pm, presetData) {
+    const runtimeExtensions = getCurrentPresetRuntimeExtensions(pm);
+    if (!runtimeExtensions || !presetData) return;
+    const runtimeState = getBaibaiPresetGroupState(runtimeExtensions);
+    if (!runtimeState) return;
+    presetData.extensions = mergeExtensionObjects(
+      isPlainMergeableObject(presetData.extensions)
+        ? presetData.extensions
+        : {},
+      { baibaiToolkit: { presetPromptGroups: runtimeState } },
     );
   }
 
@@ -6507,38 +6709,80 @@ jQuery(async () => {
       true,
     );
     const enabledSet = new Set(enabledIds);
+    // 柏宝箱分组快照的展示基准：当前预设运行时里的分组（用于标注失效 id 与符合度）。
+    const currentBaibaiGroups = getCurrentBaibaiPresetGroups(pm);
+
+    /**
+     * 计算一个激活分组与当前预设状态的符合度。
+     *
+     * - `none`（无色）：分组内**存在未激活**的条目。整组不成立，不看供电与历史记录。
+     * - `partial`（黄色）：分组条目**全部**激活，但当前激活的条目比分组多。
+     * - `full`（绿色）：条目集合与当前激活条目「完全一致」（双向相等），
+     *   并且柏宝箱分组供电状态也与快照一致。
+     *
+     * @param {object} preset
+     * @returns {"full"|"partial"|"none"}
+     */
+    const getGroupMatchState = (preset) => {
+      const presetFields = normalizePresetDetailFieldKeys(preset?.fields);
+      if (!presetFields.length) return "none";
+      const allGroupFieldsEnabled = presetFields.every((fieldKey) =>
+        enabledSet.has(fieldKey),
+      );
+      // 只要有一条未激活，整组就不成立（无色优先于黄色）。
+      if (!allGroupFieldsEnabled) return "none";
+      const exactSameItems = presetFields.length === enabledIds.length;
+      const baibaiMatched = isBaibaiPresetGroupSnapshotMatched(
+        normalizeBaibaiGroupSnapshot(preset?.baibaiGroups),
+        currentBaibaiGroups,
+      );
+      if (exactSameItems && baibaiMatched) return "full";
+      return "partial";
+    };
+
     let matchedPresetName = null;
     for (const p of presets) {
-      const presetFields = normalizePresetDetailFieldKeys(p.fields);
-      if (
-        presetFields.length === enabledIds.length &&
-        presetFields.every((fieldKey) => enabledSet.has(fieldKey))
-      ) {
+      if (getGroupMatchState(p) === "full") {
         matchedPresetName = p.name;
         break;
       }
     }
-
-    const appliedIndices = getPresetDetailAppliedPresetIndices(presetName);
-    const appliedSet = new Set(appliedIndices);
     const presetsHtml =
       presets.length === 0
         ? `<div class="cfm-wi-preset-empty">暂无已保存的分组</div>`
         : presets
             .map((p, idx) => {
               const presetFields = normalizePresetDetailFieldKeys(p.fields);
-              const isApplied =
-                appliedSet.has(idx) ||
-                (presetFields.length > 0 &&
-                  presetFields.every((fieldKey) => enabledSet.has(fieldKey)));
+              const matchState = getGroupMatchState(p);
+              const baibaiSnapshot = normalizeBaibaiGroupSnapshot(p.baibaiGroups);
+              const baibaiSummary = formatBaibaiPresetGroupCompact(baibaiSnapshot);
+              const baibaiSummaryDetail = formatBaibaiPresetGroupSnapshot(
+                baibaiSnapshot,
+                currentBaibaiGroups,
+              );
+              // 三态视觉：绿=分组条目全激活且与当前激活完全一致（含供电）；
+              // 黄=条目全激活但当前激活更多，或柏宝箱供电与记录不同；无色=分组内有条目未激活。
+              const matchClass =
+                matchState === "full"
+                  ? "cfm-wi-preset-apply cfm-wi-preset-apply-active"
+                  : matchState === "partial"
+                    ? "cfm-wi-preset-apply cfm-wi-preset-apply-partial"
+                    : "cfm-wi-preset-apply";
+              const matchTitle =
+                matchState === "full"
+                  ? "完全符合：条目与柏宝箱供电都与该分组一致"
+                  : matchState === "partial"
+                    ? "不完全符合：条目已全部激活但当前更多，或柏宝箱供电与记录不同"
+                    : "分组内仍有条目未激活";
               return `
-        <div class="cfm-wi-preset-item" data-preset-idx="${idx}">
+        <div class="cfm-wi-preset-item" data-preset-idx="${idx}" data-match-state="${matchState}">
           <div class="cfm-wi-preset-item-left">
             <span class="cfm-wi-preset-item-name"><i class="fa-solid fa-layer-group"></i> ${escapeHtml(p.name || "未命名分组")}</span>
             <span class="cfm-wi-preset-item-count">${presetFields.length} 个</span>
+            ${baibaiSummary ? `<span class="cfm-wi-preset-item-count" title="${escapeHtml(baibaiSummaryDetail)}"><i class="fa-solid fa-plug"></i> ${escapeHtml(baibaiSummary)}</span>` : ""}
           </div>
           <span class="cfm-wi-preset-item-actions">
-            <i class="fa-solid fa-play cfm-wi-preset-apply ${isApplied ? "cfm-wi-preset-apply-active" : ""}" title="${isApplied ? "当前已激活" : "应用分组"}" style="${isApplied ? "color:#a6e3a1;text-shadow:0 0 8px rgba(166,227,161,.55);" : ""}"></i>
+            <i class="fa-solid fa-play ${matchClass}" title="${matchTitle}"></i>
             <i class="fa-solid fa-stop cfm-wi-preset-unapply" title="取消应用"></i>
             <i class="fa-solid fa-pen cfm-wi-preset-edit" title="编辑"></i>
             <i class="fa-solid fa-trash cfm-wi-preset-del" title="删除"></i>
@@ -6602,9 +6846,19 @@ jQuery(async () => {
       if (existing) {
         if (!cfmConfirm(`分组「${name}」已存在，是否覆盖？`)) return;
       }
-      savePresetDetailActivePreset(presetName, name, enabledIds);
+      // 顺带把柏宝箱各分组的供电状态一起记进这个激活分组，
+      // 应用分组时才能把"哪些分组断供"一并还原。
+      const baibaiSnapshot = captureBaibaiGroupSnapshot(pm);
+      savePresetDetailActivePreset(
+        presetName,
+        name,
+        enabledIds,
+        baibaiSnapshot,
+      );
+      const baibaiSummary = formatBaibaiPresetGroupCompact(baibaiSnapshot);
       cfmToastr.success(
-        `已保存激活分组「${name}」（${enabledIds.length} 个预设条目）`,
+        `已保存激活分组「${name}」（${enabledIds.length} 个预设条目）` +
+          (baibaiSummary ? `；已记录（${baibaiSummary}）` : ""),
       );
       overlay.remove();
     });
@@ -6682,6 +6936,13 @@ jQuery(async () => {
         }
 
         setPresetDetailFieldsEnabled(latestPresetData, presetFields, true);
+
+        // 先还原柏宝箱的分组供电状态，再保存预设数据：
+        // 这样 saveNormalizedPresetData 合并运行时 extensions 时读到的是
+        // 还原后的状态，不会把旧供电状态写回磁盘。
+        const baibaiResult = await restoreBaibaiGroupSnapshot(preset, pm);
+        syncBaibaiGroupSnapshotToPresetData(pm, latestPresetData);
+
         await saveNormalizedPresetData(pm, presetName, latestPresetData);
 
         const newApplied =
@@ -6690,8 +6951,15 @@ jQuery(async () => {
             : [...otherApplied.filter((i) => i !== idx), idx];
         setPresetDetailAppliedPresetIndices(presetName, newApplied);
 
+        const baibaiSuffix =
+          baibaiResult && baibaiResult.changed > 0
+            ? `；已同步柏宝箱分组供电 ${baibaiResult.changed} 项`
+            : baibaiResult && baibaiResult.skipped > 0
+              ? `；柏宝箱分组有 ${baibaiResult.skipped} 项无法还原`
+              : "";
         cfmToastr.success(
-          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」`,
+          `已${mode === "replace" ? "替换" : "叠加"}应用分组「${preset.name}」` +
+            baibaiSuffix,
         );
         overlay.remove();
         refreshPresetPanelView();
@@ -6812,6 +7080,8 @@ jQuery(async () => {
         $,
         applyPresetDetailBatchActivation,
         batchDeletePresetDetailFields,
+        captureBaibaiGroupSnapshot,
+        cfmConfirm,
         cfmIsTouchDevice,
         cfmToastr,
         deletePresetDetailActivePreset,
@@ -6821,7 +7091,10 @@ jQuery(async () => {
         ensureCurrentAppliedPreset,
         escapeHtml,
         flashDraggedElement,
+        formatBaibaiPresetGroupCompact,
+        formatBaibaiPresetGroupSnapshot,
         getContext,
+        getCurrentBaibaiPresetGroups,
         getEntryTransferInsertItems,
         getPresetDataForDetail,
         getPresetDetailActivePresets,
@@ -6829,6 +7102,7 @@ jQuery(async () => {
         isCurrentAppliedPreset,
         movePresetDetailFieldByStep,
         movePresetDetailFieldsToIndex,
+        normalizeBaibaiGroupSnapshot,
         normalizePresetDetailFieldKeys,
         openEntryTransferInsertDialog,
         recordTouchTapStart,
