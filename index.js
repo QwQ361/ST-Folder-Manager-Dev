@@ -14511,6 +14511,9 @@ jQuery(async () => {
     });
   }
 
+  // 「从不缩放头像」导致的跳过提示每次页面加载只弹一次，避免连续应用头像时反复打扰
+  let cfmCropSkipNoticeShown = false;
+
   /**
    * 头像上传前处理：格式校验 + 裁剪。
    * 注意：早期实现里当 Popup/裁剪依赖不可用时会「静默跳过裁剪」直接返回原图，
@@ -14531,14 +14534,21 @@ jQuery(async () => {
     let cropData;
 
     if (!shouldCrop) {
-      // 酒馆设置 power_user.never_resize_avatars = true 时原生也会跳过裁剪，
-      // 这里同样跳过，但给出可感知的说明，避免用户误以为是扩展 bug。
-      console.warn(
-        "[CFM] 已跳过头像裁剪：酒馆设置「从不缩放头像」(never_resize_avatars) 处于开启状态",
-      );
-      cfmToastr.info(
-        "当前酒馆设置开启了「从不缩放头像」，已跳过裁剪直接应用；如需裁剪请在用户设置中关闭该选项",
-      );
+      // 酒馆设置 power_user.never_resize_avatars = true 时原生同样跳过裁剪
+      // （该选项语义就是「不缩放/不裁切头像」），因此这里的跳过行为与旧版一致，
+      // 并非本扩展引入的缺陷。为便于排查，仅在每次页面加载后首次应用头像时
+      // 给出一次可感知的说明，后续只留 debug 日志，避免反复打扰。
+      const skipMsg =
+        "[CFM] 已跳过头像裁剪：酒馆设置「从不缩放头像」(never_resize_avatars) 处于开启状态";
+      if (!cfmCropSkipNoticeShown) {
+        cfmCropSkipNoticeShown = true;
+        console.warn(skipMsg);
+        cfmToastr.info(
+          "当前酒馆设置开启了「从不缩放头像」，应用头像时会跳过裁剪；如需自由裁剪请在用户设置中关闭该选项（本次提示每页仅出现一次）",
+        );
+      } else {
+        console.debug(skipMsg);
+      }
       return { file: uploadFile, cropData };
     }
 
@@ -14569,36 +14579,15 @@ jQuery(async () => {
     // 这里统一捕获：先明确告警，再按原图继续应用，保证功能可用且原因可见。
     try {
       const dataUrl = await getBase64Async(uploadFile);
+      // 与酒馆原生（personas.js / popup.js）和本扩展旧版完全一致的调用方式：
+      // 只传 cropImage，不追加 customInputs、不修改 cropper 比例（原生固定 2:3）。
+      // 这样裁剪弹窗的 DOM、交互与裁剪结果都与「之前的版本」一致，
+      // 本次改动只负责容错与提示，不会改变裁剪行为本身。
       const dlg = new Popup(
         "Set the crop position of the avatar image",
         POPUP_TYPE.CROP,
         "",
-        {
-          cropImage: dataUrl,
-          // 自由裁剪开关：默认勾选，允许拖动裁剪框四角自由调整上下左右；取消勾选则锁定默认 2:3 比例
-          customInputs: [
-            {
-              id: "cfm-avatar-free-crop",
-              type: "checkbox",
-              label: "自由裁剪（可拖动调整上下左右）",
-              defaultState: true,
-            },
-          ],
-          onOpen: (popup) => {
-            const $cropImage = $(popup.cropImage);
-            const checkbox = popup.dlg?.querySelector?.(
-              "#cfm-avatar-free-crop",
-            );
-            const applyRatio = () => {
-              const cropper = $cropImage.data("cropper");
-              if (!cropper) return;
-              // NaN 表示不锁定比例，Cropper.js 据此解锁四角自由拖拽
-              cropper.setAspectRatio(checkbox?.checked ? NaN : 2 / 3);
-            };
-            applyRatio();
-            checkbox?.addEventListener("change", applyRatio);
-          },
-        },
+        { cropImage: dataUrl },
       );
       const croppedImage = await dlg.show();
       if (!croppedImage) {

@@ -312,15 +312,23 @@ export function createAvatarManagerApiCore(deps) {
         // 落到原按钮自身、或在放大预览容器内的 click 一律放行：
         //  - 原按钮的合成 click 交给时间窗去重（避免影响「连点收藏/取消收藏」）；
         //  - 预览遮罩的关闭逻辑自身有 applying 保护，不需要吞掉事件。
-        // 只有落在「原按钮之外、且不在预览容器内」的 click 才视为幽灵 click
-        // —— 移动端真正的元凶就是它落到了 touchend 之后才弹出的裁剪 dialog 按钮上。
         const inOverlay =
           target?.closest?.(".cfm-theme-gallery-zoom-overlay") ||
           target?.closest?.("#cfm_avatar_gallery, .cfm-avatar-gallery");
         if (target === el || inOverlay) {
           return;
         }
+        // 只有落到 ST 弹窗上的 click 才是需要吞掉的幽灵 click
+        // （原生 dialog.popup，或 dialog-polyfill 降级出的 .poly_dialog）。
+        // 其它位置的 click 一律放行并立即解除守卫，避免在 350ms 窗口内
+        // 误吞用户紧接着的真实点击（例如连点另一个缩略图）。
+        const inStDialog = target?.closest?.(
+          "dialog, .popup, .poly_dialog, ._poly_dialog_overlay",
+        );
         cleanup();
+        if (!inStDialog) {
+          return;
+        }
         ev.preventDefault();
         ev.stopPropagation();
         if (typeof ev.stopImmediatePropagation === "function") {
