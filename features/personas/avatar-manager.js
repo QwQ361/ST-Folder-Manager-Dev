@@ -272,6 +272,93 @@ export function createAvatarManagerApiCore(deps) {
 
   // ==================== 放大预览 + 操作按钮 ====================
 
+  /**
+   * 绑定「一次轻点 = 一次动作」的点击处理。
+   *
+   * 移动端（Android WebView / Termux 部署）对同一次轻点会先后派发 touchend 和一次合成 click，
+   * 部分环境即使对 touchend 调用 preventDefault 也仍会派发合成 click。这里有两类后果：
+   *  1) 动作被执行两次（例如「应用头像」被连点两次，发出两次上传请求）；
+   *  2) 更隐蔽：合成 click 的事件目标是在 touchend 之后才按触点位置重新解析的。
+   *     「应用头像」在 touchend 阶段已经 await 打开裁剪弹窗（ST 原生 dialog 以 showModal
+   *     进入顶层），于是这次幽灵 click 会落到刚弹出的 dialog 默认按钮上，
+   *     使裁剪弹窗「刚打开就被确认」→ 表现为「点击应用头像直接生效、不弹裁剪窗」。
+   * 因此这里同时做两件事：
+   *  - 时间窗去重 + 执行中标记，保证一次轻点只触发一次动作；
+   *  - touchend 触发后在极短时间窗内拦截 document 上的下一次 click（幽灵 click），
+   *    阻止它落到新出现的弹窗按钮上。命中或超时即自行解绑，不做长期全局拦截。
+   *
+   * @param {JQuery<HTMLElement>} $el 目标按钮
+   * @param {(e: JQuery.Event) => Promise<void>|void} handler 实际动作
+   */
+  function bindTapOnce($el, handler) {
+    if (!$el || !$el.length) return;
+    let lastAt = 0;
+    let inFlight = false;
+    const el = $el[0];
+
+    // 拦截 touchend 之后紧跟的幽灵 click（捕获阶段，只拦一次，超时自动解除）
+    const swallowGhostClick = () => {
+      if (typeof document === "undefined") return;
+      let timer = null;
+      const cleanup = () => {
+        document.removeEventListener("click", guard, true);
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      };
+      const guard = (ev) => {
+        const target = ev.target;
+        // 落到原按钮自身、或在放大预览容器内的 click 一律放行：
+        //  - 原按钮的合成 click 交给时间窗去重（避免影响「连点收藏/取消收藏」）；
+        //  - 预览遮罩的关闭逻辑自身有 applying 保护，不需要吞掉事件。
+        // 只有落在「原按钮之外、且不在预览容器内」的 click 才视为幽灵 click
+        // —— 移动端真正的元凶就是它落到了 touchend 之后才弹出的裁剪 dialog 按钮上。
+        const inOverlay =
+          target?.closest?.(".cfm-theme-gallery-zoom-overlay") ||
+          target?.closest?.("#cfm_avatar_gallery, .cfm-avatar-gallery");
+        if (target === el || inOverlay) {
+          return;
+        }
+        cleanup();
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof ev.stopImmediatePropagation === "function") {
+          ev.stopImmediatePropagation();
+        }
+      };
+      document.addEventListener("click", guard, true);
+      // 幽灵 click 在 touchend 后数十毫秒内派发，350ms 足够覆盖，
+      // 又不会明显影响用户后续的真实点击
+      timer = setTimeout(cleanup, 350);
+    };
+
+    const run = async (e) => {
+      const now = Date.now();
+      // 同一轻点的 touchend + 合成 click 间隔极短，落在此窗口内的直接丢弃
+      if (now - lastAt < 600) return;
+      // 上一次动作仍在执行（例如裁剪弹窗尚未结束）时不重复触发
+      if (inFlight) return;
+      lastAt = now;
+      e.preventDefault();
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+      e.stopPropagation();
+      if (e.type === "touchend") {
+        swallowGhostClick();
+      }
+      inFlight = true;
+      try {
+        await handler(e);
+      } finally {
+        inFlight = false;
+      }
+    };
+    $el.on("touchend", run);
+    $el.on("click", run);
+  }
+
   // tab: "mine" | "fav"
   function openZoomPreview(path, kind, targetId, tab, refreshGrid) {
     const displayUrl = avatarPathToDisplayUrl(path);
@@ -297,7 +384,13 @@ export function createAvatarManagerApiCore(deps) {
 
     const close = () => overlay.remove();
 
+    // 应用头像进行中：禁止遮罩点击关闭。
+    // 原因：移动端合成 click 可能在 fetch/裁剪弹窗就绪之前落到遮罩上，
+    // 若此时允许关闭，会出现「预览闪一下消失、裁剪窗随后弹出」的怪异表现。
+    let applying = false;
+
     overlay.on("click", (e) => {
+      if (applying) return;
       if (
         $(e.target).hasClass("cfm-theme-gallery-zoom-overlay") ||
         $(e.target).closest(".cfm-theme-gallery-zoom-close").length > 0 ||
@@ -307,24 +400,26 @@ export function createAvatarManagerApiCore(deps) {
       }
     });
 
-    overlay
-      .find(".cfm-avatar-gallery-btn-apply")
-      .on("click touchend", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        try {
-          const ok = await applyAvatarToTarget(kind, targetId, path);
-          if (ok) {
-            close();
-          }
-        } catch (err) {
-          console?.warn?.("[CFM] 应用头像失败", err);
+    bindTapOnce(overlay.find(".cfm-avatar-gallery-btn-apply"), async () => {
+      applying = true;
+      // 裁剪弹窗（ST 原生 .popup，z-index 9999）在不支持 <dialog>.showModal 的
+      // 环境里会走 dialog-polyfill，此时它不是 top layer，会被本预览遮罩(100020) 盖住。
+      // 申请期间把遮罩降到 9998，保证任何环境下裁剪窗都能显示在最上层。
+      overlay.addClass("cfm-zoom-overlay-behind");
+      try {
+        const ok = await applyAvatarToTarget(kind, targetId, path);
+        if (ok) {
+          close();
         }
-      });
+      } catch (err) {
+        console?.warn?.("[CFM] 应用头像失败", err);
+      } finally {
+        applying = false;
+        overlay.removeClass("cfm-zoom-overlay-behind");
+      }
+    });
 
-    overlay.find(".cfm-avatar-gallery-btn-fav").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTapOnce(overlay.find(".cfm-avatar-gallery-btn-fav"), () => {
       if (addFavorite(kind, path)) {
         cfmToastr.success("已加入共享收藏库");
       } else {
@@ -332,35 +427,29 @@ export function createAvatarManagerApiCore(deps) {
       }
     });
 
-    overlay.find(".cfm-avatar-gallery-btn-unfav").on("click touchend", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTapOnce(overlay.find(".cfm-avatar-gallery-btn-unfav"), () => {
       unfavorite(kind, targetId, path);
       cfmToastr.success("已取消收藏，头像保留在当前个人库");
       close();
       if (typeof refreshGrid === "function") refreshGrid();
     });
 
-    overlay
-      .find(".cfm-avatar-gallery-btn-del")
-      .on("click touchend", async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const confirmed = cfmConfirm(
-          tab === "mine"
-            ? "确定从当前个人库删除该头像？\n（若仍被共享收藏库引用则保留文件）"
-            : "确定从共享收藏库删除该头像？\n（若仍被个人库引用则保留文件）",
-        );
-        if (!confirmed) return;
-        if (tab === "mine") {
-          await deleteAvatar(kind, targetId, path);
-        } else {
-          await deleteFavorite(kind, path);
-        }
-        cfmToastr.success("已删除头像");
-        close();
-        if (typeof refreshGrid === "function") refreshGrid();
-      });
+    bindTapOnce(overlay.find(".cfm-avatar-gallery-btn-del"), async () => {
+      const confirmed = await cfmConfirm(
+        tab === "mine"
+          ? "确定从当前个人库删除该头像？\n（若仍被共享收藏库引用则保留文件）"
+          : "确定从共享收藏库删除该头像？\n（若仍被个人库引用则保留文件）",
+      );
+      if (!confirmed) return;
+      if (tab === "mine") {
+        await deleteAvatar(kind, targetId, path);
+      } else {
+        await deleteFavorite(kind, path);
+      }
+      cfmToastr.success("已删除头像");
+      close();
+      if (typeof refreshGrid === "function") refreshGrid();
+    });
   }
 
   // ==================== 主弹窗 ====================
@@ -446,8 +535,8 @@ export function createAvatarManagerApiCore(deps) {
       e.stopPropagation();
       const files = await pickImageFiles();
       if (!files || files.length === 0) return;
-      const imageFiles = files.filter((f) =>
-        f && typeof f.type === "string" && f.type.startsWith("image/"),
+      const imageFiles = files.filter(
+        (f) => f && typeof f.type === "string" && f.type.startsWith("image/"),
       );
       if (imageFiles.length === 0) {
         cfmToastr.warning("没有可导入的有效图片文件");
@@ -475,8 +564,7 @@ export function createAvatarManagerApiCore(deps) {
       }
       if (success > 0) {
         const msg =
-          (isMine ? "已导入绑定头像" : "已加入共享收藏库") +
-          `：${success} 个`;
+          (isMine ? "已导入绑定头像" : "已加入共享收藏库") + `：${success} 个`;
         if (failed.length > 0) {
           batchProgress.done(`${msg}，${failed.length} 个失败`);
           cfmToastr.warning(
@@ -489,7 +577,9 @@ export function createAvatarManagerApiCore(deps) {
         renderGrid();
       } else if (failed.length > 0) {
         batchProgress.done(`导入失败：${failed.length} 个`);
-        cfmToastr.error(`导入失败：${failed.length} 个（${failed.join("、")}）`);
+        cfmToastr.error(
+          `导入失败：${failed.length} 个（${failed.join("、")}）`,
+        );
       } else {
         batchProgress.remove();
       }

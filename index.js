@@ -6754,8 +6754,11 @@ jQuery(async () => {
             .map((p, idx) => {
               const presetFields = normalizePresetDetailFieldKeys(p.fields);
               const matchState = getGroupMatchState(p);
-              const baibaiSnapshot = normalizeBaibaiGroupSnapshot(p.baibaiGroups);
-              const baibaiSummary = formatBaibaiPresetGroupCompact(baibaiSnapshot);
+              const baibaiSnapshot = normalizeBaibaiGroupSnapshot(
+                p.baibaiGroups,
+              );
+              const baibaiSummary =
+                formatBaibaiPresetGroupCompact(baibaiSnapshot);
               const baibaiSummaryDetail = formatBaibaiPresetGroupSnapshot(
                 baibaiSnapshot,
                 currentBaibaiGroups,
@@ -14508,6 +14511,13 @@ jQuery(async () => {
     });
   }
 
+  /**
+   * 头像上传前处理：格式校验 + 裁剪。
+   * 注意：早期实现里当 Popup/裁剪依赖不可用时会「静默跳过裁剪」直接返回原图，
+   * 造成移动端（Termux 部署，扩展目录层级与 PC 不同导致 import 失败）表现为
+   * 「点应用头像直接生效、不弹裁剪窗」且毫无提示，极难排查。
+   * 现在改为：依赖缺失时明确告警（console + toastr）并说明降级原因，不再静默。
+   */
   async function prepareDetailAvatarUpload(file) {
     if (!(file instanceof File)) return null;
 
@@ -14520,12 +14530,44 @@ jQuery(async () => {
     const shouldCrop = !ctx?.powerUserSettings?.never_resize_avatars;
     let cropData;
 
-    if (
-      shouldCrop &&
-      typeof Popup === "function" &&
-      POPUP_TYPE?.CROP !== undefined &&
-      typeof getBase64Async === "function"
-    ) {
+    if (!shouldCrop) {
+      // 酒馆设置 power_user.never_resize_avatars = true 时原生也会跳过裁剪，
+      // 这里同样跳过，但给出可感知的说明，避免用户误以为是扩展 bug。
+      console.warn(
+        "[CFM] 已跳过头像裁剪：酒馆设置「从不缩放头像」(never_resize_avatars) 处于开启状态",
+      );
+      cfmToastr.info(
+        "当前酒馆设置开启了「从不缩放头像」，已跳过裁剪直接应用；如需裁剪请在用户设置中关闭该选项",
+      );
+      return { file: uploadFile, cropData };
+    }
+
+    const cropUnavailable = [];
+    if (typeof Popup !== "function") cropUnavailable.push("Popup");
+    if (POPUP_TYPE?.CROP === undefined) cropUnavailable.push("POPUP_TYPE.CROP");
+    if (typeof getBase64Async !== "function")
+      cropUnavailable.push("getBase64Async");
+
+    if (cropUnavailable.length > 0) {
+      const msg = `[CFM] 头像裁剪弹窗不可用（缺少 ${cropUnavailable.join(
+        ", ",
+      )}），已按原图直接应用。`;
+      console.error(msg);
+      console.error(
+        "[CFM] 若正在移动端/Termux 部署，请确认 public/scripts/popup.js 与 utils.js 可被本扩展动态 import（详见控制台此前的「无法导入 popup.js / utils.js」日志）。",
+      );
+      cfmToastr.error(
+        "裁剪弹窗组件加载失败，本次已按原图应用头像（未裁剪）。请查看控制台日志。",
+        "头像裁剪不可用",
+      );
+      return { file: uploadFile, cropData };
+    }
+
+    // 裁剪流程本身也可能抛错（缺 #popup_template、getBase64Async 失败、
+    // Cropper.js 在移动端初始化异常等）。早期实现没有兜底，
+    // 异常会一路抛到调用方，表现为「点了应用头像没反应 / 直接应用了」。
+    // 这里统一捕获：先明确告警，再按原图继续应用，保证功能可用且原因可见。
+    try {
       const dataUrl = await getBase64Async(uploadFile);
       const dlg = new Popup(
         "Set the crop position of the avatar image",
@@ -14560,12 +14602,20 @@ jQuery(async () => {
       );
       const croppedImage = await dlg.show();
       if (!croppedImage) {
+        // 用户主动取消裁剪
         return null;
       }
       cropData = dlg.cropData;
-    }
 
-    return { file: uploadFile, cropData };
+      return { file: uploadFile, cropData };
+    } catch (e) {
+      console.error("[CFM] 头像裁剪流程异常，已改按原图应用:", e);
+      cfmToastr.error(
+        `头像裁剪弹窗打开失败（${e?.message || e}），本次已按原图应用头像`,
+        "头像裁剪异常",
+      );
+      return { file: uploadFile, cropData };
+    }
   }
 
   async function bustDetailThumbnailCache(type, file) {

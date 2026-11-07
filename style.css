@@ -1841,13 +1841,20 @@
 .cfm-theme-gallery-zoom-overlay {
   position: fixed;
   inset: 0;
+  /* 与 .cfm-bg-preview-overlay 同理：SillyTavern 全局给 html 设置了 transform，
+     移动端下 fixed 定位的包含块高度会解析为 0，inset: 0 无法铺满视口，
+     导致遮罩盖不住底层页面、半透明按钮与底层文字重叠。这里用 vw/vh 显式撑满。 */
+  width: 100vw;
+  height: 100vh;
   z-index: 100020;
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: rgba(0, 0, 0, 0.92);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: zoom-out;
   animation: cfm-fade-in 0.15s ease;
+  box-sizing: border-box;
+  padding: 12px 0;
 }
 .cfm-theme-gallery-zoom-box {
   position: relative;
@@ -1890,7 +1897,16 @@
 .cfm-theme-gallery-zoom-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 92vw;
+  /* 按钮所在区域必须有实底，移动端不能半透明叠在底层文字上 */
+  background-color: #11131c;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
 }
 .cfm-theme-gallery-zoom-actions .cfm-btn {
   padding: 7px 18px;
@@ -1898,28 +1914,75 @@
   border-radius: 7px;
   cursor: pointer;
   border: 1px solid var(--SmartThemeBorderColor, #45475a);
-  background: rgba(255, 255, 255, 0.07);
-  color: #cdd6f4;
+  /* 不透明底色 + 色调由各按钮覆盖，保证任何背景下都清晰可读 */
+  background-color: #1c1f2b;
+  color: #e6ebf5;
+  /* 关键：禁止文字被压缩成竖排换行（移动端「应用头/像」问题的直接原因） */
+  white-space: nowrap;
+  flex: 0 0 auto;
+  line-height: 1.4;
+  font-weight: 600;
   transition:
-    background 0.15s,
+    background-color 0.15s,
     border-color 0.15s;
 }
 .cfm-theme-gallery-zoom-actions .cfm-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background-color: #2a2f40;
 }
-.cfm-theme-gallery-zoom-actions .cfm-theme-gallery-zoom-apply {
-  border-color: rgba(137, 180, 250, 0.5);
-  background: rgba(137, 180, 250, 0.2);
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply {
+  border-color: rgba(137, 180, 250, 0.75);
+  background-color: #1e2c46;
 }
-.cfm-theme-gallery-zoom-actions .cfm-theme-gallery-zoom-apply:hover {
-  background: rgba(137, 180, 250, 0.35);
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply:hover {
+  background-color: #27395b;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav {
+  border-color: rgba(250, 179, 135, 0.75);
+  background-color: #3a2a1e;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav:hover {
+  background-color: #4d382a;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav {
+  border-color: rgba(245, 194, 66, 0.75);
+  background-color: #3a3218;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav:hover {
+  background-color: #4d431f;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del {
+  border-color: rgba(243, 139, 168, 0.75);
+  background-color: #3d2029;
+}
+.cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del:hover {
+  background-color: #522a36;
 }
 .cfm-theme-gallery-zoom-actions .cfm-theme-gallery-zoom-replace {
-  border-color: rgba(166, 227, 161, 0.5);
-  background: rgba(166, 227, 161, 0.18);
+  border-color: rgba(166, 227, 161, 0.75);
+  background-color: #1f3322;
 }
 .cfm-theme-gallery-zoom-actions .cfm-theme-gallery-zoom-replace:hover {
-  background: rgba(166, 227, 161, 0.35);
+  background-color: #2a452e;
+}
+/* 应用头像进行中：把预览遮罩压到 ST 原生裁剪弹窗(.popup, z-index 9999)之下。
+   仅在不支持 <dialog>.showModal 的环境（移动端部分 WebView）需要，
+   此时 ST 原生弹窗走 dialog-polyfill，不是 top layer，会被 100020 遮罩盖住，
+   表现为「点了应用头像后画面没有任何变化」。 */
+.cfm-theme-gallery-zoom-overlay.cfm-zoom-overlay-behind {
+  z-index: 9998;
+}
+/* dialog-polyfill 兜底：.poly_dialog / .backdrop / ._poly_dialog_overlay 在 ST 与
+   dialog-polyfill.css 里都没有 z-index（等价于 auto），会被本扩展 1000xx 级别的
+   遮罩盖住。这里仅对 polyfill 专属类名提层（原生 showModal 走 top layer，z-index
+   不生效，因此不影响正常浏览器），保证裁剪弹窗在任何环境都能显示在最上层。 */
+._poly_dialog_overlay {
+  z-index: 100026;
+}
+.poly_dialog + .backdrop {
+  z-index: 100027;
+}
+.poly_dialog {
+  z-index: 100030;
 }
 @media (max-width: 768px) {
   .cfm-theme-gallery-section {
@@ -2096,34 +2159,34 @@
   background: rgba(137, 180, 250, 0.18);
   color: #cdd6f4;
 }
-/* 放大预览操作按钮配色 */
+/* 放大预览操作按钮配色：使用不透明底色，避免移动端叠在底层页面文字上时糊成一片 */
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply {
-  border-color: rgba(137, 180, 250, 0.5);
-  background: rgba(137, 180, 250, 0.2);
+  border-color: rgba(137, 180, 250, 0.8);
+  background-color: #1e2c46;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-apply:hover {
-  background: rgba(137, 180, 250, 0.35);
+  background-color: #27395b;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav {
-  border-color: rgba(250, 179, 135, 0.5);
-  background: rgba(250, 179, 135, 0.18);
+  border-color: rgba(250, 179, 135, 0.8);
+  background-color: #3a2a1e;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-fav:hover {
-  background: rgba(250, 179, 135, 0.35);
+  background-color: #4d382a;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav {
-  border-color: rgba(245, 194, 66, 0.5);
-  background: rgba(245, 194, 66, 0.18);
+  border-color: rgba(245, 194, 66, 0.8);
+  background-color: #3a3218;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-unfav:hover {
-  background: rgba(245, 194, 66, 0.35);
+  background-color: #4d431f;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del {
-  border-color: rgba(243, 139, 168, 0.5);
-  background: rgba(243, 139, 168, 0.18);
+  border-color: rgba(243, 139, 168, 0.8);
+  background-color: #3d2029;
 }
 .cfm-theme-gallery-zoom-actions .cfm-avatar-gallery-btn-del:hover {
-  background: rgba(243, 139, 168, 0.35);
+  background-color: #522a36;
 }
 @media (max-width: 768px) {
   .cfm-avatar-gallery .cfm-theme-gallery-section {
@@ -9948,10 +10011,42 @@ input[type="number"].cfm-wi-de-input::-webkit-outer-spin-button {
   }
   .cfm-theme-gallery-zoom-box {
     max-height: calc(100vh - 24px);
+    /* 移动端浏览器地址栏收起/展开时 vh 不准，能用 dvh 时用 dvh */
+    max-height: calc(100dvh - 24px);
     overflow-y: auto;
     margin: auto;
+    gap: 10px;
+    box-sizing: border-box;
   }
+  /* 注意：box 有了 overflow-y: auto 后，绝对定位在 box 外侧的关闭按钮会被裁掉，
+     小屏下改为贴在 box 内部右上角。 */
+  .cfm-theme-gallery-zoom-close {
+    top: 6px;
+    right: 6px;
+  }
+  /* 放大预览：小屏务必让操作按钮完整可见，图片让位 */
   .cfm-theme-gallery-zoom-img {
-    max-height: calc(100vh - 100px);
+    max-height: calc(100vh - 150px);
+    max-height: calc(100dvh - 160px);
+  }
+  /* 「应用头像 / 收藏 / 删除头像」三个按钮在 360px 宽内尽量单行排列。
+     注意此处特异性(0,2,0)高于通用移动端 .cfm-btn(0,1,0)，不会被后者放大覆盖。 */
+  .cfm-theme-gallery-zoom-actions {
+    gap: 8px;
+    padding: 6px;
+    max-width: 94vw;
+  }
+  .cfm-theme-gallery-zoom-actions .cfm-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 40px;
+    letter-spacing: 0;
+  }
+  /* 底部安全区：避免按钮被移动端浏览器工具栏/手势区压住 */
+  .cfm-theme-gallery-zoom-overlay {
+    padding-top: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    height: 100vh;
+    height: 100dvh;
   }
 }
